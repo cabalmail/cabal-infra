@@ -7,8 +7,8 @@ import CabalmailKit
 // stored properties are kept internal precisely so these same-module
 // extensions can reach them). `move(...)` brackets the server round trip with
 // `onMoveInFlight` so the list shields the optimistically-pruned row from a
-// concurrent refresh; on success it posts `signalDisposed` so the list prunes
-// the row and advances selection exactly as archive/trash does.
+// concurrent refresh; on success it posts `.removed` so the list prunes the
+// row and advances selection exactly as archive/trash does.
 extension MessageDetailView {
     @ViewBuilder
     var moveSheet: some View {
@@ -31,11 +31,11 @@ extension MessageDetailView {
         await model.move(
             to: destination,
             onSuccess: {
-                // Match dispose's signal so MessageListView prunes the row
-                // and advances selection to the next unread message — same
-                // optimistic UX, just routed through `signalDisposed` since
-                // the row is gone from the source folder either way.
-                appState.mailStore.signals.signalDisposed(movedRef)
+                // Match dispose's event so every list prunes the row and this
+                // window's selection advances to the next unread message —
+                // same optimistic UX, just posted as `.removed` since the row
+                // is gone from the source folder either way.
+                appState.mailStore.events.post(.removed([movedRef]), from: commandWindowID)
             },
             onFailure: { error in
                 appState.showToast(Toast(

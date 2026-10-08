@@ -89,6 +89,10 @@ struct MessageListView: View {
     /// This list's identity, carried on the drags it starts so that only
     /// it performs the move a sidebar drop posts (`MessageMoveRequest`).
     @State var dragSourceID = UUID()
+    /// How far this view has applied its model's selection reactions
+    /// (`ListSelectionReactions.tick`). Kept per view, since a model can be
+    /// shown by two windows at once (the shared search model).
+    @State var appliedSelectionReactions = 0
     /// List-row height. Rows are pinned to this so the virtualized list
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
@@ -152,7 +156,7 @@ struct MessageListView: View {
     @FocusState var listFocused: Bool
 
     // `body` was a single ~200-line modifier chain; once the sheets, the
-    // purge confirmation, and the signal observers were all attached,
+    // purge confirmation, and the observers were all attached,
     // Swift's type checker timed out on the one expression. Splitting it
     // into layered computed properties keeps each expression small enough
     // to check: chrome -> presentation (sheets / dialogs) -> lifecycle
@@ -475,8 +479,11 @@ extension MessageListView {
                 if isSearchScope {
                     // Parent owns the search model (its query is bound by the
                     // external search input). No folder load / watcher here — it
-                    // populates only when a search runs.
+                    // populates only when a search runs. Every window shares it,
+                    // so this view applies its selection reactions from here
+                    // on, not another window's from before it opened.
                     model = injectedSearchModel
+                    appliedSelectionReactions = injectedSearchModel?.selectionReactions.tick ?? 0
                 } else {
                     model = MessageListViewModel(
                         scope: scope,
@@ -536,9 +543,9 @@ extension MessageListView {
         }
     }
 
-    /// Signal observers: `AppState`'s menu / shortcut ticks, the mail
-    /// store's detail-view dispose and flag signals, selection routing, and
-    /// drag-and-drop move requests.
+    /// Observers: `AppState`'s menu / shortcut ticks, the selection
+    /// reactions the model queues from mail events, and drag-and-drop move
+    /// requests.
     private var observersLayer: some View {
         lifecycleLayer
         // macOS Commands menu (Mailbox → Refresh) and keyboard shortcuts
@@ -570,81 +577,14 @@ extension MessageListView {
         .onWindowCommand(appState.moveSelectionRequestTick) {
             if let model { moveSelection(model: model) }
         }
-        .onChange(of: appState.mailStore.signals.lastDisposedEnvelope) { _, signal in
-            // Detail view archived / trashed the current message. Advance
-            // the split-view selection per the user's after-dispose
-            // preference (so the user can keep triaging without bouncing
-            // back to the list), then prune the matching row so it
-            // disappears immediately. Other folders ignore the signal.
-            guard let signal, let model else { return }
-            let refs = Set(signal.refs.filter { $0.folder == folder.path })
-            guard !refs.isEmpty else { return }
-            // A send-from-draft names every copy its compose session held in
-            // Drafts (#1071); whichever of them this list actually loaded is
-            // the row on screen -- the first in list order, should it hold
-            // more than one -- so that's the one the advance walks from.
-            let current = model.envelopes.first { refs.contains(model.rowRef(for: $0)) }
-            let currentRef = current.map(model.rowRef(for:))
-            // Drop the rest first: they're stale copies of the same draft,
-            // and leaving one in place would let the advance walk onto a row
-            // that's about to disappear.
-            for ref in refs where ref != currentRef {
-                model.pruneEnvelope(ref)
-            }
-            // Compute the advance target before pruning - every advance
-            // policy walks from `current`'s index, which disappears once
-            // it's pruned.
-            let next = current.flatMap {
-                model.advanceTarget(after: $0, following: preferences.disposeAdvance)
-            }
-            if let currentRef {
-                model.pruneEnvelope(currentRef)
-            }
-            if isWideLayout {
-                // Wide layouts drive the reading pane off `selectedRefs`;
-                // advancing the set re-derives `selection` via the list's
-                // `.onChange(of: selectedRefs)` below.
-                model.selectedRefs = next.map { [model.rowRef(for: $0)] } ?? []
-            } else {
-                selection = next
-            }
-        }
-        .onChange(of: appState.mailStore.signals.lastFailedRemoval) { _, signal in
-            // The reader's dispose / move / purge failed after the handler
-            // above pruned its row: put the row back. The selection stays
-            // where the advance left it, as with a failed swipe.
-            guard let signal, signal.ref.folder == folder.path else { return }
-            model?.restorePrunedEnvelope(signal.ref, markUnread: signal.markUnread)
-        }
-        .onChange(of: appState.mailStore.signals.lastDraftReplaced) { _, signal in
-            // A compose session saved over a Drafts copy this list may be
-            // showing. Handler in `+Actions.swift`; other folders ignore it.
-            guard let signal, signal.folderPath == folder.path else { return }
-            handleDraftReplaced(signal.replacement)
-        }
-        .onChange(of: appState.mailStore.signals.lastReadAdvanceRequest) { _, signal in
-            // Detail view marked the current message read with a move-to
-            // option. Advance the selection like the dispose handler above,
-            // but never prune (the row is still here, just read now) and
-            // never clear the selection — no candidate means stay put.
-            guard let signal, signal.ref.folder == folder.path, let model,
-                  let current = model.envelope(for: signal.ref),
-                  let next = model.markReadAdvanceTarget(after: current, following: signal.advance)
-            else { return }
-            if isWideLayout {
-                model.selectedRefs = [model.rowRef(for: next)]
-            } else {
-                selection = next
-            }
-        }
-        .onChange(of: appState.mailStore.signals.lastEnvelopeFlagChange) { _, signal in
-            // Detail view toggled \Seen (or another flag in the future).
-            // Apply it directly to the matching row so the bold styling +
-            // unread dot flip without waiting for the next refresh. The
-            // model decides which signals are this list's: its own folder's,
-            // or on the search surface the row's (#1859).
-            guard let signal else { return }
-            model?.applyReaderFlagChange(signal)
+        // What the reader's and the composer's changes ask of this list's
+        // selection. The model hears the mail events itself, for its whole
+        // life, and drops or restores the rows; it queues what the selection
+        // should do (worked out before the rows left) for this view, which
+        // owns the selection on compact layouts. Every queued reaction is
+        // applied, in order (`applySelectionReactions`, in `+Actions`).
+        .onChange(of: model?.selectionReactions.tick) { _, _ in
+            if let model { applySelectionReactions(model: model) }
         }
         // A folder row in the sidebar received a dropped message (or
         // selection). The drop handler posts the destination + payload on

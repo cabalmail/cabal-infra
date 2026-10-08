@@ -324,12 +324,19 @@ final class MessageListViewModel {
     /// message (`MessageRowIdentity`) rather than by slot.
     var rowGenerations: [MessageRef: Int] = [:]
 
+    /// What the mail events this list heard ask of its selection, for its
+    /// view to apply (`receive(_:)`, `MailEventSelectionPolicy`).
+    let selectionReactions = ListSelectionReactions()
+
     init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore) {
         self.scope = scope
         self.folder = scope.folder
         self.client = client
         self.preferences = preferences
         self.mailStore = mailStore
+        // For the model's whole life, not the view's: a list under a pushed
+        // reader has had `.onDisappear` and still has to hear its archive.
+        mailStore.events.subscribe(self)
     }
 
     /// Start the watcher-driven auto-refresh loop. Called from the view's
@@ -660,10 +667,11 @@ extension MessageListViewModel {
     }
 
     /// Drop a message's row from the in-memory envelope list after it was
-    /// disposed elsewhere (currently: the detail-view archive button). The
-    /// detail view model already pruned the envelope + body caches; this
-    /// only touches the list's in-memory copy so the row disappears
-    /// immediately without a server round trip.
+    /// disposed elsewhere (a `.removed` event: the reader's archive, move or
+    /// purge, or a send from Drafts). The detail view model prunes the
+    /// envelope + body caches once the server confirms; this only touches the
+    /// list's in-memory copy so the row disappears immediately without a
+    /// server round trip.
     func pruneEnvelope(_ ref: MessageRef) {
         if readerFailedRefs.remove(ref) != nil { return }
         let removedIndex = index(of: ref)
@@ -673,18 +681,18 @@ extension MessageListViewModel {
         }
         let loadedBefore = envelopes.count
         if let removedIndex { envelopes.remove(at: removedIndex) }
-        // Only adjust when a row really left the window: a signal for a
+        // Only adjust when a row really left the window: an event for a
         // message we never had loaded says nothing reliable about the folder
         // total.
         adjustTotalMessages(by: envelopes.count - loadedBefore)
         // Same for the Unread pill, which otherwise only moves on a flag flip
         // against a loaded row: the reader's dispose folds the `\Seen` marking
-        // into the move server-side, and its flag signal reaches the list in
-        // the same render pass as this prune -- once the row is gone
+        // into the move server-side, and its flag change reaches the list
+        // right beside this prune -- once the row is gone
         // `applyOptimisticFlag` no-ops, so the count keeps counting a message
         // that left the folder. Adjusting on the row that actually departed
-        // holds whichever order the two signals arrive in: if the flag signal
-        // wins the race the row is already `\Seen` here and this is a no-op.
+        // holds whichever order the two events arrive in: if the flag change
+        // comes first the row is already `\Seen` here and this is a no-op.
         if let removed, !removed.flags.contains(.seen) {
             unseen = max(0, unseen - 1)
         }
@@ -693,24 +701,15 @@ extension MessageListViewModel {
         invalidateBottomPrefetch()
     }
 
-    /// Apply a flag toggle that originated outside the list (currently: the
-    /// detail view's Mark-as-read toggle). Updates the in-memory envelope so
-    /// the row's bold styling and unread dot match the new state without
-    /// waiting for a refresh. No-op when the message isn't currently in the
-    /// window.
+    /// Apply a flag toggle that originated outside the list (a
+    /// `.flagsChanged` event: the reader's toggles, a reply's `\Answered`).
+    /// Updates the in-memory envelope so the row's bold styling and unread
+    /// dot match the new state without waiting for a refresh. No-op when the
+    /// message isn't currently in the window; matched by the row's ref, so
+    /// on the search surface it reaches whichever row names the message
+    /// (#1859).
     func applyFlagChange(_ ref: MessageRef, flag: Flag, added: Bool) {
         applyOptimisticFlag(ref, flag: flag, add: added)
-    }
-
-    /// The list's half of the reader's flag signal
-    /// (`MessageSignals.lastEnvelopeFlagChange`). A folder list takes only its own
-    /// folder's signals. The search surface's `folder` is a sentinel and its
-    /// rows come from many folders, so it takes the signal for whichever row
-    /// it names, matched by the row's ref (#1859); a signal for a message it
-    /// doesn't list changes nothing.
-    func applyReaderFlagChange(_ signal: EnvelopeFlagChange) {
-        guard isSearchScope || signal.ref.folder == folder.path else { return }
-        applyFlagChange(signal.ref, flag: signal.flag, added: signal.added)
     }
 
     /// The identity of `envelope`'s row. Every row this model loads carries
@@ -845,6 +844,116 @@ extension MessageListViewModel {
         if alignment.needsSettleLoad {
             alignment.needsSettleLoad = false
             scheduleEnsureLoaded()
+        }
+    }
+}
+
+// MARK: - Mail events
+
+// The list's half of the mail store's events (`MailEvents`): what the reader
+// and the composer changed, matched against this list's own rows by ref. A
+// folder list's rows all carry its folder; the search surface's come from
+// many, and an event reaches whichever of them it names (#1877). Whatever
+// the selection should do about one is queued for the view, which owns the
+// selection on compact layouts (`selectionReactions`).
+extension MessageListViewModel: MailEventSubscriber {
+    func receive(_ event: MailEvent) {
+        switch event.change {
+        case .removed(let refs):
+            applyRemoval(of: refs, from: event.origin)
+        case .restored(let ref, let markUnread):
+            // The selection stays where the removal's advance left it, as
+            // with a failed swipe.
+            restorePrunedEnvelope(ref, markUnread: markUnread)
+        case .flagsChanged(let refs, let flag, let added):
+            for ref in refs {
+                applyFlagChange(ref, flag: flag, added: added)
+            }
+        case .draftReplaced(let folderPath, let replacement):
+            applyDraftReplacement(replacement, in: folderPath, from: event.origin)
+        case .readAdvance(let ref, let advance):
+            // The row stays (it is only read now), so nothing is pruned.
+            guard let current = envelope(for: ref) else { return }
+            let next = markReadAdvanceTarget(after: current, following: advance)
+            selectionReactions.append(ListSelectionReaction(
+                kind: .readAdvance, rows: [ref], target: next.map(rowRef(for:)), origin: event.origin
+            ))
+        }
+    }
+
+    /// Drops the rows `refs` names. A folder list takes every ref in its
+    /// folder, loaded or not, since one it never loaded still moved the rows
+    /// a staged bottom window holds (`pruneEnvelope`); the search surface
+    /// takes the rows it lists.
+    ///
+    /// A send from Drafts names every copy its compose session held (#1071);
+    /// whichever of them this list loaded is the row on screen -- the first
+    /// in list order, should it hold more than one -- so that's the one the
+    /// advance walks from. The rest go first: they're stale copies of the
+    /// same draft, and leaving one in place would let the advance walk onto
+    /// a row that's about to disappear. The advance target is worked out
+    /// before the row goes, since every advance policy walks from its index.
+    func applyRemoval(of refs: [MessageRef], from origin: UUID?) {
+        var seen = Set<MessageRef>()
+        let named = refs.filter {
+            (isSearchScope ? index(of: $0) != nil : $0.folder == folder.path) && seen.insert($0).inserted
+        }
+        guard !named.isEmpty else { return }
+        let current = envelopes.first { seen.contains(rowRef(for: $0)) }
+        let currentRef = current.map(rowRef(for:))
+        for ref in named where ref != currentRef {
+            pruneEnvelope(ref)
+        }
+        let next = current.flatMap { advanceTarget(after: $0, following: preferences.disposeAdvance) }
+        if let currentRef {
+            pruneEnvelope(currentRef)
+        }
+        selectionReactions.append(ListSelectionReaction(
+            kind: .removal, rows: seen, target: next.map(rowRef(for:)), origin: origin
+        ))
+    }
+
+    /// Swaps this list -- and whatever reader it is driving -- from the
+    /// Drafts copies a compose session just retired onto the one that
+    /// survived.
+    ///
+    /// The prune is the easy half. The half that matters is the selection:
+    /// the reader Save Draft returns to still holds the retired copy's
+    /// fetched body, and Edit Draft from there seeds the pre-edit content
+    /// and pins the send's discard to an expunged UID, so the edit is
+    /// dropped and the saved copy orphaned (#1078). Re-pointing rebuilds
+    /// the reader against the survivor (the detail column is keyed on the
+    /// UID), which re-fetches and shows what was actually saved.
+    ///
+    /// The refresh comes first because the survivor landed under a UID this
+    /// list has never seen. Nothing else surfaces it promptly: the watcher
+    /// on an open folder has no real IDLE behind it, so it re-reads
+    /// `folderStatus` every 30 s and the row arrives somewhere in that
+    /// window (measured at t+5 s and t+32 s on two runs -- #1083).
+    ///
+    /// A first save is that refresh and nothing else: no retired UID to
+    /// prune, and `DraftReplacementPolicy.resolve` reads an empty chain as
+    /// `.ignore`, so whatever the user was reading is left where it was. The
+    /// search surface acts only when it lists one of the retired copies, so
+    /// a draft saved while results show doesn't re-run the search.
+    func applyDraftReplacement(_ replacement: DraftReplacement, in folderPath: String, from origin: UUID?) {
+        let retired = replacement.retiredUIDs.map { MessageRef(folder: folderPath, uid: $0) }
+        if isSearchScope {
+            guard retired.contains(where: { index(of: $0) != nil }) else { return }
+        } else {
+            guard folder.path == folderPath else { return }
+        }
+        for ref in retired {
+            pruneEnvelope(ref)
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await refresh()
+            let loadedUIDs = envelopes.map(rowRef(for:)).filter { $0.folder == folderPath }.map(\.uid)
+            selectionReactions.append(ListSelectionReaction(
+                kind: .draftReplacement(replacement, loadedUIDs: loadedUIDs),
+                rows: Set(retired), target: nil, origin: origin
+            ))
         }
     }
 }
