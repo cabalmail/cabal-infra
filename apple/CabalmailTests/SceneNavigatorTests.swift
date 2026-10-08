@@ -82,6 +82,51 @@ final class SceneNavigatorTests: XCTestCase {
         XCTAssertEqual(coordinator.pendingRestore?.uid, 7)
     }
 
+    /// Tapping Resume supersedes a request still parked for the window's
+    /// first landing, as writing over the request slot used to.
+    func testANavigationSupersedesAParkedRequest() async throws {
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        coordinator.navigateRequest = NavState(folder: "Lists", uid: 3, clientID: "push")
+
+        navigator.navigate(to: NavState(folder: "Archive", uid: 7, clientID: "other-install"))
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+
+        XCTAssertNil(coordinator.navigateRequest)
+        XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
+        XCTAssertEqual(coordinator.pendingRestore?.uid, 7)
+    }
+
+    /// On the wide layout a navigation moves the tab a swap opens on, but
+    /// the section is the folder record's to move, as before: a jump within
+    /// the folder on screen leaves the session's section alone.
+    func testAWideNavigationLeavesTheSessionSectionToTheFolderRecord() async throws {
+        let coordinator = try makeCoordinator()
+        let (navigator, _) = await landed(coordinator)
+        navigator.showTab(.settings)
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        // Another window opened a feed scope.
+        coordinator.recordFeedScope(.all)
+        XCTAssertEqual(coordinator.session.section, .feeds)
+
+        navigator.navigate(to: NavState(folder: "INBOX", uid: 4, clientID: "push"))
+
+        XCTAssertEqual(navigator.compactTab, .mail)
+        XCTAssertEqual(coordinator.session.section, .feeds)
+    }
+
+    /// Re-selecting the tab already on screen notes nothing.
+    func testReselectingTheTabOnScreenNotesNothing() async throws {
+        let coordinator = try makeCoordinator()
+        let (navigator, _) = await landed(coordinator)
+        navigator.showTab(.feeds)
+        coordinator.noteSection(.mail)
+
+        navigator.showTab(.feeds)
+
+        XCTAssertEqual(coordinator.session.section, .mail)
+    }
+
     /// A navigation opens the Mail tab, whichever tab was showing.
     func testANavigationOpensTheMailTab() async throws {
         let coordinator = try makeCoordinator()

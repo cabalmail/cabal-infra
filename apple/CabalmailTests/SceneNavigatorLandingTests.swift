@@ -229,9 +229,10 @@ final class SceneNavigatorLandingTests: XCTestCase {
     }
 
     /// #1664: a compact stack is never handed a list and a reader in one
-    /// update. A tree the swap has just built sees the folder's list and no
-    /// message until it has appeared, and after that the message comes back
-    /// only when its list selects the parked restore.
+    /// update. A tree the swap has just built sees no folder and no message
+    /// until it has taken over, so its list mounts only once the restore is
+    /// parked and its gated initial load applies it; the message comes back
+    /// only when that list selects it.
     func testARebuiltTreeNeverSeesAListAndAReaderInOneUpdate() async throws {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
@@ -242,10 +243,13 @@ final class SceneNavigatorLandingTests: XCTestCase {
         XCTAssertEqual(navigator.compactColumn(in: first), .detail)
 
         let rebuilt = UUID()
+        XCTAssertNil(navigator.folder(in: rebuilt), "no list may mount before the restore is parked")
         XCTAssertNil(navigator.envelope(in: rebuilt))
-        XCTAssertEqual(navigator.compactColumn(in: rebuilt), .content)
+        XCTAssertEqual(navigator.compactColumn(in: rebuilt), .sidebar)
 
         _ = await navigator.mailTreeAppeared(rebuilt, isWide: false, showingFeeds: false)
+        XCTAssertEqual(navigator.folder(in: rebuilt), inbox)
+        XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
         XCTAssertNil(navigator.envelope(in: rebuilt))
         XCTAssertEqual(navigator.compactColumn(in: rebuilt), .content)
 
@@ -291,6 +295,47 @@ final class SceneNavigatorLandingTests: XCTestCase {
         XCTAssertEqual(coordinator.session.uid, 9, "nothing the old tree wrote was recorded")
         XCTAssertNil(navigator.envelope(in: rebuilt))
         XCTAssertEqual(navigator.compactColumn(in: rebuilt), .content)
+    }
+
+    /// A wide tree rebuilt in the feeds section that has no scope to reopen
+    /// shows mail, so the section — and the tab a swap back opens — moves to
+    /// mail, as the old re-landing's folder record moved it.
+    func testAWideRebuildWithNoFeedScopeMovesTheSectionToMail() async throws {
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        navigator.foldersLoaded([inbox])
+        navigator.showTab(.feeds)
+        XCTAssertEqual(coordinator.session.section, .feeds)
+
+        let scope = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+
+        XCTAssertNil(scope)
+        XCTAssertEqual(navigator.selectedFolder, inbox)
+        XCTAssertEqual(navigator.route.section, .mail)
+        XCTAssertEqual(navigator.compactTab, .mail)
+        XCTAssertEqual(coordinator.session.section, .mail)
+    }
+
+    /// A utility tab survives a round trip through the split with nothing
+    /// picked — the hand-off's restore re-selecting the open message is not a
+    /// pick — but a pick in the split moves it to that section.
+    func testAUtilityTabSurvivesARoundTripUnlessSomethingIsPicked() async throws {
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        let compact = UUID()
+        _ = await navigator.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        navigator.foldersLoaded([inbox, archive])
+        navigator.selectMessage(message, isSearching: false, from: compact)
+        navigator.showTab(.settings)
+
+        let wide = UUID()
+        _ = await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false)
+        navigator.selectMessage(message, isSearching: false, from: wide)
+        XCTAssertEqual(navigator.compactTab, .settings)
+
+        navigator.selectFolder(archive)
+        XCTAssertEqual(navigator.compactTab, .mail)
     }
 
     /// #1644: the tab survives a rebuild in each direction, utility tabs

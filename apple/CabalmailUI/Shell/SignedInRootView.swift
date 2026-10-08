@@ -72,6 +72,9 @@ struct SignedInRootView: View {
     var body: some View {
         sectionLayout
             .environment(navigator)
+            // A new navigator — a new sign-in — gets new trees, which land
+            // on it rather than keep the last account's.
+            .id(ObjectIdentifier(navigator))
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.width
             } action: { width in
@@ -104,6 +107,13 @@ struct SignedInRootView: View {
             // folder, and modal state; see ComposeRequestRouter.
             .composeRequestRouter()
             .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
+            #if os(iOS)
+            .onChange(of: layoutChoice, initial: true) { _, layout in
+                navigator.layoutIsWide = layout == .regularSplit
+            }
+            #elseif os(macOS)
+            .onAppear { navigator.layoutIsWide = true }
+            #endif
             // A new sign-in gets a new navigator, as it gets a new
             // coordinator: nothing of the last account's place carries over.
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {

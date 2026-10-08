@@ -24,7 +24,7 @@ struct MailRootView: View {
     /// a tree the open message only once it has appeared, and ignores writes
     /// from a tree a layout swap is tearing down (`SceneNavigator`).
     @State var tree = UUID()
-    var selectedFolder: Folder? { navigator.selectedFolder }
+    var selectedFolder: Folder? { navigator.folder(in: tree) }
     var selectedEnvelope: Envelope? { navigator.envelope(in: tree) }
     /// Feeds section selection (RSS plan, phase 5). Mutually exclusive with
     /// `selectedFolder`: picking a feed clears the mail folder and the
@@ -419,7 +419,7 @@ struct MailRootView: View {
             if let scope = await navigator.mailTreeAppeared(
                 tree, isWide: isWideSidebar, showingFeeds: selectedFeedScope != nil
             ) {
-                feedSidebarSelection.wrappedValue = scope
+                openFeedScope(scope)
             }
             // Shared with the compact Search tab so a layout swap keeps the
             // query and results (#1654); this split anchors it to the folder.
