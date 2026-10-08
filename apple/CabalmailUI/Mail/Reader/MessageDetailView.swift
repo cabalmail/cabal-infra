@@ -366,19 +366,26 @@ extension MessageDetailView {
         // without waiting for the next refresh.
         let ref = model.ref
         let client = model.client
+        let writes = ReaderFlagWrites()
         // The flag and move callbacks below can also fire once the
         // write fails, after the session has ended: not then (#1851).
         model.onFlagChanged = { [weak mailStore] flag, added in
+            writes.latest = MessageShields.FlagWrite(flag: flag, added: added)
             guard mailStore?.acceptsCounts(from: client) == true else { return }
             mailStore?.postFlagChange(ref, flag: flag, added: added, from: origin)
         }
-        // Bracket each flag write so the list shields the optimistic
-        // flag from a refresh that lands before the write resolves
-        // (the cross-view analogue of the list's own pending-flag
-        // shield). Keyed by ref so a UID collision across mailboxes
-        // can't mis-shield an unrelated row.
+        // Bracket each flag write in the store's record, so every list's
+        // merge keeps the optimistic flag from a refresh that lands before
+        // the write resolves, and a STATUS asked meanwhile can't put the
+        // unread count back (#1880). Keyed by ref so a UID collision across
+        // mailboxes can't mis-shield an unrelated row.
         model.onFlagWriteInFlight = { [weak mailStore] inFlight in
-            mailStore?.shields.setFlagWrite(ref, inFlight: inFlight)
+            guard let mailStore else { return }
+            if inFlight {
+                writes.begin(ref, in: mailStore.shields)
+            } else {
+                writes.end(ref, in: mailStore.shields)
+            }
         }
         // Likewise bracket archive / trash / move so the list keeps
         // the optimistically-pruned row gone until the move resolves,
@@ -396,5 +403,47 @@ extension MessageDetailView {
             guard mailStore?.acceptsCounts(from: client) == true else { return }
             mailStore?.postRemovalFailed(ref, markUnread: markUnread, from: origin)
         }
+    }
+}
+
+/// Which flags a reader's writes in flight are writing, for their brackets
+/// in the store's record. The reader announces a write (`onFlagChanged`) just
+/// before it brackets the STORE (`onFlagWriteInFlight`), so the latest change
+/// names the write each bracket opens. An ending bracket doesn't say which
+/// write it ends, and overlapping STOREs can answer in any order, so every
+/// write stays in the record until the last of them ends: an overlap keeps
+/// both directions bounded for its whole length, which over-bounds a moment
+/// but never ends a write still out. Until C routes the reader's writes
+/// through the mutation service, which brackets each write itself.
+@MainActor
+private final class ReaderFlagWrites {
+    var latest: MessageShields.FlagWrite?
+    private var open: [MessageShields.FlagWrite] = []
+    private var unresolved = 0
+
+    func begin(_ ref: MessageRef, in shields: MessageShields) {
+        let write = latest ?? MessageShields.FlagWrite(flag: nil, added: true)
+        open.append(write)
+        unresolved += 1
+        if let flag = write.flag {
+            shields.beginFlagWrite([ref], flag: flag, added: write.added)
+        } else {
+            shields.setFlagWrite(ref, inFlight: true)
+        }
+    }
+
+    func end(_ ref: MessageRef, in shields: MessageShields) {
+        guard unresolved > 0 else { return }
+        unresolved -= 1
+        guard unresolved == 0 else { return }
+        let now = ContinuousClock.now
+        for write in open {
+            if let flag = write.flag {
+                shields.endFlagWrite([ref], flag: flag, added: write.added, at: now)
+            } else {
+                shields.setFlagWrite(ref, inFlight: false)
+            }
+        }
+        open.removeAll()
     }
 }

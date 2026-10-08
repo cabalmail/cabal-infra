@@ -16,10 +16,11 @@ extension MessageListViewModel {
         let ref = rowRef(for: envelope)
         let source = ref.folder
         applyOptimisticFlag(ref, flag: flag, add: add)
-        // Shield the optimistic flag from a concurrent refresh until our own
-        // write resolves; the next refresh after that carries server truth.
-        pendingFlagRefs.insert(ref)
-        defer { pendingFlagRefs.remove(ref) }
+        // Shield the optimistic flag from a concurrent refresh, and bound the
+        // counts a STATUS asked meanwhile may report, until our own write
+        // resolves; the next refresh after that carries server truth.
+        mailStore.shields.beginFlagWrite([ref], flag: flag, added: add)
+        defer { mailStore.shields.endFlagWrite([ref], flag: flag, added: add) }
         // Mirror the optimistic flag flip onto the source folder's unread
         // count when `.seen` changes — adding `.seen` to an unread message
         // drops one from the badge, removing it adds one back. Only fires
@@ -150,8 +151,21 @@ extension MessageListViewModel {
     /// (see `replaceRows(showing:)`).
     func dispose(_ envelope: Envelope) async {
         let ref = rowRef(for: envelope)
-        guard pendingRemovedRefs.insert(ref).inserted else { return }
-        defer { pendingRemovedRefs.remove(ref) }
+        // A message already on its way out short-circuits: a duplicate
+        // rapid-swipe tap here, preventing re-entrant `ForEach(model.envelopes)`
+        // diffing while several in-flight moves are still returning, or a
+        // removal another list or the reader already has out. In that case
+        // this row isn't fading, and a full swipe that got here holds it slid
+        // open for the deletion it announced; only a new row lets go of that
+        // (`replaceRows(showing:)`).
+        guard !mailStore.shields.isRemoving(ref) else {
+            if rowDisposalPhases[ref] == nil {
+                replaceRows(showing: [ref])
+            }
+            return
+        }
+        mailStore.shields.beginRemoval([ref])
+        defer { mailStore.shields.endRemoval([ref]) }
 
         let destination = preferences.disposeAction.destinationFolder
         let source = ref.folder
@@ -230,8 +244,8 @@ extension MessageListViewModel {
     /// The server confirmed `uids` gone from `folder` (a dispose, move or
     /// purge succeeded): record it so a refresh that was already in flight
     /// can't bring them back (see `MessageShields.confirmedRemovals`), then prune
-    /// the caches. Called only on success, while the messages are still in
-    /// `pendingRemovedRefs`, so the two shields overlap rather than leave a
+    /// the caches. Called only on success, while the removal is still in
+    /// flight in the record, so the two shields overlap rather than leave a
     /// gap between them.
     func confirmRemoval(from folder: String, uids: [UInt32]) async {
         mailStore.shields.recordConfirmedRemovals(uids.map { MessageRef(folder: folder, uid: $0) })

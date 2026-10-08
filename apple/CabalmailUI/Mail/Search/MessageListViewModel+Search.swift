@@ -181,7 +181,9 @@ extension MessageListViewModel {
                 status = try? await client.folderStatus(path: folder.path, flagged: true)
             }
             if let status {
-                _ = applyStatusCounts(status, mayPredateRemoval: removalMayPostdate(startedAt))
+                _ = applyStatusCounts(
+                    status, mayPredateRemoval: removalMayPostdate(startedAt), askedAt: startedAt
+                )
             }
         }
         guard !Task.isCancelled else { return }
@@ -265,6 +267,7 @@ extension MessageListViewModel {
         totalMessages = 0
         unseen = 0
         flagged = 0
+        hasCountedStatus = false
         savedMessageCount = nil
         hasMore = true
         resetWindow()

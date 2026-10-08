@@ -189,6 +189,12 @@ final class MessageListViewModel {
     // count. Reset alongside `totalMessages` on folder/search change.
     var unseen: Int = 0
     var flagged: Int = 0
+    /// Whether `unseen` and `flagged` come from a STATUS this list applied
+    /// (moved since only by its own and others' optimistic changes), rather
+    /// than a guess: zero before any, or the counts saved in an earlier
+    /// launch. A STATUS is bounded by the writes it may predate only against
+    /// a counted base (`applyStatusCounts`).
+    var hasCountedStatus = false
     /// The All pill's count until a STATUS answers this session: the folder
     /// total last saved (`seedSavedCounts`). Kept apart from `totalMessages`,
     /// which also sizes the list, where a total nothing can load offline
@@ -271,43 +277,33 @@ final class MessageListViewModel {
     /// one refresh by gating on elapsed time.
     private var lastRefreshFromWatcher: Date = .distantPast
 
-    // The two pending-write sets below shield optimistic UI from a stale
-    // refresh. A refresh dispatched just before a local write lands returns
-    // the row's pre-write server state; applying it verbatim would resurrect
-    // a row we just moved or revert a flag we just toggled, leaving the user
-    // staring at an apparent no-op until the next refresh. While a message
-    // sits in either set, `mergeFetched` (and the cache persist) refuse to
-    // apply the fetched copy for it; the sets clear when the write resolves,
-    // so the following refresh carries server truth. Internal (not `private`)
-    // so the write paths in the sibling extensions (`+Optimistic`, `+Move`,
-    // `+Bulk`) and the merge in `+Refresh` can reach them.
+    // A refresh dispatched just before a write lands returns the row's
+    // pre-write server state; applying it verbatim would resurrect a row
+    // just moved or revert a flag just toggled. Every write, this list's or
+    // anyone's, is bracketed in the mail store's one record
+    // (`MessageShields`), which `shieldFetched`, the refresh's STATUS bounds
+    // and the paging gate ask.
 
-    /// Messages on their way out of `envelopes` (dispose or move) whose
-    /// server-side move is still in flight — including, on the dispose path,
-    /// the few hundred milliseconds where the row is still present but
-    /// animating out (`rowDisposalPhases`). Besides the merge shield this
-    /// doubles as `dispose(_:)`'s re-entrance guard: a duplicate rapid-swipe
-    /// tap whose message is already enqueued short-circuits, preventing
-    /// re-entrant `ForEach(model.envelopes)` diffing while several in-flight
-    /// moves are still returning.
-    var pendingRemovedRefs: Set<MessageRef> = []
+    /// The removals in flight that touch this list: its folder's, from any
+    /// writer, or on the search surface any. It includes, on the dispose
+    /// path, the few hundred milliseconds where the row is still present but
+    /// animating out (`rowDisposalPhases`). Paging waits while it is
+    /// non-empty, since a removal moves every row below it up a place.
+    var pendingRemovedRefs: Set<MessageRef> {
+        let removing = mailStore.shields.pendingMoveRefs
+        return isSearchScope ? removing : removing.filter { $0.folder == folder.path }
+    }
 
     /// Rows `pruneEnvelope(_:)` took out for a reader dispose / move /
     /// purge that is still in flight, with the index each held, so a failed
-    /// server write can put the row back (`restorePrunedEnvelope`).
-    /// Only in-flight removals are kept, so it holds a handful at most.
+    /// server write can put the row back (`restorePrunedEnvelope`). The rows
+    /// are this list's own (rows stay in each list); whether their removal is
+    /// still in flight is the record's. Only in-flight removals are kept, so
+    /// it holds a handful at most.
     @ObservationIgnored var readerPrunedEnvelopes: [MessageRef: (envelope: Envelope, index: Int)] = [:]
-    /// Reader removals that failed before their prune ran; the prune skips
-    /// them. See `restorePrunedEnvelope(_:markUnread:)`.
+    /// Reader removals whose failure reached this list before their prune
+    /// did; the prune skips them. See `restorePrunedEnvelope(_:markUnread:)`.
     @ObservationIgnored var readerFailedRefs: Set<MessageRef> = []
-
-    /// Messages with an in-flight flag write (`\Seen` / `\Flagged`) that this
-    /// view model issued. While a message sits here `mergeFetched` keeps the
-    /// optimistic flags rather than letting a stale fetch revert them. Flag
-    /// writes that originate in the detail view are tracked separately, in
-    /// the shared `MessageShields.pendingFlagWriteRefs` (its write lifecycle lives
-    /// in the detail view model); `shieldFetched` consults both.
-    var pendingFlagRefs: Set<MessageRef> = []
 
     /// Rows mid-disposal animation. A disposed row stays in `envelopes`
     /// while it fades and then collapses (see `beginRowDisposal` in
@@ -490,7 +486,7 @@ final class MessageListViewModel {
             // STATUS drives the All/Unread/Flagged pill counts and the
             // pagination gate; helper lives in +Refresh to keep this body lean.
             let mayPredate = removalMayPostdate(startedAt)
-            _ = applyStatusCounts(status, mayPredateRemoval: mayPredate)
+            _ = applyStatusCounts(status, mayPredateRemoval: mayPredate, askedAt: startedAt)
             let reading = windowReading(status, askedAt: startedAt,
                                         mayPredateRemoval: mayPredate, generation: generation)
             // Whether the loaded rows still sit where the server has them

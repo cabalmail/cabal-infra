@@ -5,7 +5,8 @@ import CabalmailKit
 /// The mail state the folder list, message list, reader and composer share
 /// for the signed-in account, in parts that each own a piece of it:
 /// `counts`, the folder badges and the Inbox count behind the app badge;
-/// `shields`, what keeps a list refresh from undoing a write made elsewhere;
+/// `shields`, the one record of writes in flight, which keeps a refresh from
+/// undoing a write made anywhere and a STATUS from counting it twice;
 /// and `events`, the changes the reader and composer post for every message
 /// list. The parts know nothing of each other; what spans two of them (a
 /// change that moves a count, a reply's shielded `\Answered`) is sent through
@@ -56,9 +57,51 @@ public final class MailSessionStore {
     /// if `acceptsCounts(from:)` still takes it. The intent used to write it
     /// straight to `counts`, so a STATUS that answered after a sign-out put
     /// the signed-out account's count back on the badge (#1892).
+    ///
+    /// It is bounded by the writes it may predate, as the badge poller's is.
+    /// The intent doesn't say when it asked, so it is taken to have asked as
+    /// long ago as a request can stay out (`MessageShields.longestRequest`).
     public func setInboxUnread(_ count: Int, fetchedThrough client: CabalmailClient) {
         guard acceptsCounts(from: client) else { return }
-        counts.setInboxUnread(count)
+        counts.setInboxUnread(polledInboxUnread(count, askedAt: .now - MessageShields.longestRequest))
+    }
+
+    /// The badge's Inbox unread count for a STATUS asked at `askedAt`,
+    /// bounded by the writes it may predate: a mark-read still going out
+    /// then, or landed since, may be missing from it, and it may not put the
+    /// badge back up (#1880). Only a count a STATUS set is a base to bound
+    /// against: the first poll of a session takes its answer as it is, and
+    /// makes the badge's count a counted one. The badge poller asks this
+    /// (`SessionPollers.boundInboxUnread`).
+    func polledInboxUnread(_ count: Int, askedAt: ContinuousClock.Instant) -> Int {
+        defer { counts.inboxUnreadIsCounted = true }
+        guard counts.inboxUnreadIsCounted else { return count }
+        return shields.unreadBound(folderPath: "INBOX", askedAt: askedAt).bound(count, from: counts.inboxUnreadCount)
+    }
+
+    /// A folder's unread and total counts from a STATUS asked at `askedAt`,
+    /// bounded by the writes that reply may predate: a `\Seen` change, or a
+    /// removal, in flight then or since (`MessageShields.unreadBound`). Each
+    /// is bounded against what the sidebar shows now, when that came from a
+    /// STATUS this session (`MailCounts.countedFolders`); a guessed or seeded
+    /// count, or none, takes the reply as it is. What every writer of a
+    /// fetched STATUS sets the sidebar from (#1880).
+    func boundedFolderCounts(
+        unread: Int,
+        total: Int,
+        folderPath: String,
+        askedAt: ContinuousClock.Instant
+    ) -> (unread: Int, total: Int) {
+        let unreadBound = shields.unreadBound(folderPath: folderPath, askedAt: askedAt)
+        let removing = shields.hasRemovalInFlight(folderPath: folderPath)
+            || shields.removalConfirmed(folderPath: folderPath, after: askedAt)
+        let counted = counts.countedFolders.contains(folderPath)
+        let shownUnread = counted ? counts.folderUnreadCounts[folderPath] : nil
+        let shownTotal = counted ? counts.folderTotalCounts[folderPath] : nil
+        return (
+            shownUnread.map { unreadBound.bound(unread, from: $0) } ?? unread,
+            removing ? shownTotal.map { min(total, $0) } ?? total : total
+        )
     }
 
     /// The reader changed a flag on `ref` (or a reply marked it
@@ -94,9 +137,9 @@ public final class MailSessionStore {
     func markAnswered(_ ref: MessageRef, client: CabalmailClient?) {
         postFlagChange(ref, flag: .answered, added: true, from: nil)
         guard let client else { return }
-        shields.setFlagWrite(ref, inFlight: true)
+        shields.beginFlagWrite([ref], flag: .answered, added: true)
         Task {
-            defer { shields.setFlagWrite(ref, inFlight: false) }
+            defer { shields.endFlagWrite([ref], flag: .answered, added: true) }
             try? await client.imapClient.setFlags(
                 folder: ref.folder,
                 uids: [ref.uid],

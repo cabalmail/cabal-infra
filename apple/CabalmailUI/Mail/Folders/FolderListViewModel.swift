@@ -379,15 +379,19 @@ final class FolderListViewModel {
     private func fetchAndPublishCount(path: String) async -> FolderStatus? {
         refreshingPaths.insert(path)
         defer { refreshingPaths.remove(path) }
+        let askedAt = ContinuousClock.now
         guard let status = try? await client.folderStatus(path: path) else {
             return nil
         }
         // A reply for a session that has started ending is the last
         // account's (#1848).
         guard mailStore.acceptsCounts(from: client) else { return status }
-        let unread = status.unseen ?? 0
-        let total = status.messages ?? 0
-        mailStore.counts.setFolderCounts(folderPath: path, unread: unread, total: total)
+        // Bounded by the writes it may predate, so a reply asked before a
+        // mark-read landed can't put the badge back up (#1880).
+        let counts = mailStore.boundedFolderCounts(
+            unread: status.unseen ?? 0, total: status.messages ?? 0, folderPath: path, askedAt: askedAt
+        )
+        mailStore.counts.setFolderCounts(folderPath: path, unread: counts.unread, total: counts.total)
         return status
     }
 

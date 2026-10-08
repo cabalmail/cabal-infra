@@ -11,8 +11,8 @@ import CabalmailKit
 //
 // Re-entrance: the sheet binding gates double-fire at the UI layer
 // (one envelope owns one sheet at a time), so we skip the
-// `pendingRemovedRefs` guard that `dispose(_:)` uses for rapid-swipe
-// protection.
+// `MessageShields.isRemoving` guard that `dispose(_:)` uses for
+// rapid-swipe protection.
 extension MessageListViewModel {
     func moveTo(_ envelope: Envelope, destination: String) async {
         let ref = rowRef(for: envelope)
@@ -29,8 +29,8 @@ extension MessageListViewModel {
         // Shield the removal from a concurrent refresh: until the move lands
         // the source folder still returns this UID, and an unshielded merge
         // would resurrect the row.
-        pendingRemovedRefs.insert(ref)
-        defer { pendingRemovedRefs.remove(ref) }
+        mailStore.shields.beginRemoval([ref])
+        defer { mailStore.shields.endRemoval([ref]) }
         if wasUnread {
             mailStore.counts.applyUnreadDelta(folderPath: source, delta: -1)
             mailStore.counts.applyUnreadDelta(folderPath: destination, delta: 1)
@@ -119,8 +119,8 @@ extension MessageListViewModel {
         let loadedBefore = envelopes.count
         envelopes.removeAll { movingRefs.contains(rowRef(for: $0)) }
         adjustTotalMessages(by: envelopes.count - loadedBefore)
-        pendingRemovedRefs.formUnion(movingRefs)
-        defer { pendingRemovedRefs.subtract(movingRefs) }
+        mailStore.shields.beginRemoval(movingRefs)
+        defer { mailStore.shields.endRemoval(movingRefs) }
         for (source, count) in unreadBySource {
             mailStore.counts.applyUnreadDelta(folderPath: source, delta: -count)
             if !markSeenFirst {
