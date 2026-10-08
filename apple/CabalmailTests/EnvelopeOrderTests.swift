@@ -87,12 +87,12 @@ final class EnvelopeOrderTests: XCTestCase {
     func testFromSortsByDisplayNameAndFallsBackToTheAddress() {
         let rows = [
             row(1, from: EmailAddress(name: "\"Zed\"", mailbox: "z", host: "x")),
-            row(2, from: EmailAddress(name: "", mailbox: "alice", host: "b.com")),
+            row(2, from: EmailAddress(name: "", mailbox: "carol", host: "b.com")),
             row(3),
             row(4, from: EmailAddress(name: "Bob", mailbox: "q", host: "x")),
         ]
 
-        XCTAssertEqual(uids(rows, .from, .ascending), [3, 2, 4, 1], "none, alice@b.com, Bob, Zed")
+        XCTAssertEqual(uids(rows, .from, .ascending), [3, 4, 2, 1], "none, Bob, carol@b.com, Zed")
     }
 
     func testFromAndSubjectIgnoreCase() {
@@ -104,6 +104,17 @@ final class EnvelopeOrderTests: XCTestCase {
 
         XCTAssertEqual(uids(rows, .from, .ascending), [2, 3, 1])
         XCTAssertEqual(uids(rows, .subject, .ascending), [2, 3, 1])
+
+        // Keys that differ only in case are equal, so the higher UID leads
+        // either way.
+        let caseOnly = [
+            row(5, subject: "hello", from: EmailAddress(name: "hello", mailbox: "h", host: "x")),
+            row(9, subject: "HELLO", from: EmailAddress(name: "HELLO", mailbox: "h", host: "x")),
+        ]
+        for direction in SortCriterion.Direction.allCases {
+            XCTAssertEqual(uids(caseOnly, .subject, direction), [9, 5], "subject, \(direction)")
+            XCTAssertEqual(uids(caseOnly, .from, direction), [9, 5], "from, \(direction)")
+        }
     }
 
     func testSubjectIgnoresReplyAndForwardPrefixes() {
