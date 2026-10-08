@@ -69,7 +69,7 @@ struct VisionSectionView: View {
         // tab's own list loads lazily on first appearance, so the folder list
         // that finishes the landing is fetched from here.
         .task {
-            _ = await navigator.mailTreeAppeared(tree, isWide: false, showingFeeds: false)
+            await navigator.mailTreeAppeared(tree, isWide: false)
             await loadFoldersIfNeeded()
         }
         // ⌘, opens Settings — its own tab here, rather than the iPad sheet.
@@ -79,11 +79,6 @@ struct VisionSectionView: View {
         // For the menus that share a chord across mail and feeds
         // (`SharedChordPolicy`).
         .reportsActiveSection(navigator.compactTab.resumeSection)
-        // The cross-device probe lives on `SignedInRootView`. A tapped feed
-        // toast opens the Feeds tab, whose `FeedRootView` follows the request.
-        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
-            if request != nil { navigator.showTab(.feeds) }
-        }
     }
 
     /// Folders tab: the shared `FolderListView` bound to the window's folder.

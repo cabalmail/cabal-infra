@@ -60,9 +60,10 @@ public final class NavStateCoordinator {
     /// position; consumed by the reader after the message loads.
     private(set) var pendingScrollRestore: PendingScrollRestore?
 
-    /// A feed item to select once its scope is on screen (the launch restore
-    /// of the feed reader). Consumed by the feed navigation's
-    /// `onChange(of: selectedScope)` — see `consumeFeedItemRestore`.
+    /// A feed item to select once its scope's list is on screen and loaded:
+    /// the feed reader's launch restore, a tapped feed banner, or a layout
+    /// swap's hand-off (`SceneNavigator`). Consumed by `FeedItemListView`
+    /// through `consumeFeedItemRestore`.
     struct PendingFeedRestore: Equatable, Sendable {
         let scope: RssItemScope
         let item: RssItem
@@ -106,16 +107,6 @@ public final class NavStateCoordinator {
     /// very cursor the probe is about to look for.
     var serverWritesHeld = true
     var heldSnapshot: NavState?
-
-    /// A feed position the views should open (a tapped cross-device feed
-    /// toast). The item itself is parked as `pendingFeedRestore`.
-    struct FeedNavigateRequest: Equatable, Sendable {
-        let scope: RssItemScope
-        let tick: Int
-    }
-
-    var feedNavigateRequest: FeedNavigateRequest?
-    var feedNavigateTick = 0
 
     // Local resume layer (see the `+Session` extension).
     let store: ResumeSessionStore

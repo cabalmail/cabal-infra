@@ -44,7 +44,7 @@ final class SceneNavigatorTests: XCTestCase {
     ) async -> (navigator: SceneNavigator, tree: UUID) {
         let navigator = makeNavigator(coordinator)
         let tree = UUID()
-        _ = await navigator.mailTreeAppeared(tree, isWide: isWide, showingFeeds: false)
+        await navigator.mailTreeAppeared(tree, isWide: isWide)
         navigator.foldersLoaded([inbox, archive])
         return (navigator, tree)
     }
@@ -90,7 +90,7 @@ final class SceneNavigatorTests: XCTestCase {
         coordinator.navigateRequest = NavState(folder: "Lists", uid: 3, clientID: "push")
 
         navigator.navigate(to: NavState(folder: "Archive", uid: 7, clientID: "other-install"))
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
 
         XCTAssertNil(coordinator.navigateRequest)
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
@@ -104,7 +104,7 @@ final class SceneNavigatorTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let (navigator, _) = await landed(coordinator)
         navigator.showTab(.settings)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
         // Another window opened a feed scope.
         coordinator.recordFeedScope(.all)
         XCTAssertEqual(coordinator.session.section, .feeds)
@@ -192,7 +192,7 @@ final class SceneNavigatorTests: XCTestCase {
         let (navigator, tree) = await landed(coordinator, isWide: true)
         navigator.selectMessage(message, isSearching: false, from: tree)
 
-        navigator.showFeeds()
+        navigator.showFeeds(.all)
 
         XCTAssertNil(navigator.selectedFolder)
         XCTAssertNil(navigator.envelope(in: tree))
@@ -207,7 +207,7 @@ final class SceneNavigatorTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let (navigator, _) = await landed(coordinator, isWide: true)
 
-        navigator.showFeeds()
+        navigator.showFeeds(.all)
         XCTAssertEqual(navigator.compactTab, .feeds)
 
         navigator.selectFolder(archive)

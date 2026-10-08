@@ -8,17 +8,17 @@ import CabalmailKit
 /// `SignedInRootView` owns one per window in `@State`, the lowest view that
 /// survives the swap between the compact tab tree and the regular split, and
 /// hands it down in the environment. The route (`AppRoute`) names the place
-/// by ID; beside it the navigator keeps the resolved `Folder` and `Envelope`
-/// the views still take, the compact column and tab, the sidebar's fetched
-/// folders, and the launch landing's flags. Before this, all of it was
-/// `@State` on `MailRootView` and went with each tree: a fold or a narrowed
-/// iPad window re-landed the new tree from the per-install resume session,
-/// which another window may have written since.
+/// by ID; beside it the navigator keeps the resolved `Folder`, `Envelope` and
+/// `RssItem` the views still take, the compact column and tab, the sidebar's
+/// fetched folders, and the landing flags. Before this, all of it was
+/// `@State` on the views and went with each tree: a fold or a narrowed iPad
+/// window re-landed the new tree from the per-install resume session, which
+/// another window may have written since.
 ///
 /// **Trees.** Each `MailRootView` instance is a tree with an identity of its
 /// own (`mailTreeAppeared`), and so is visionOS's tab view, which has no
-/// layout swap and so only ever one. The first tree in a window lands — on a parked
-/// navigate request, else the launch snapshot of the resume session. A tree
+/// layout swap and so only ever one. The first tree in a window lands — on a
+/// parked navigate request, else the launch snapshot of the resume session. A tree
 /// built later by a layout swap renders the window's route instead: the
 /// folder stays, and an open message is re-parked through
 /// `NavStateCoordinator.scheduleRestore`, so the new list selects it once it
@@ -29,10 +29,16 @@ import CabalmailKit
 /// handed a list and a reader in one update (#1664). Once a new tree has
 /// appeared, writes from the tree a swap is tearing down are dropped.
 ///
-/// Every transition does what the `MailRootView` handler it replaced did,
-/// cursor recording included. Search stays the view's (a transition that
-/// reads it takes `isSearching`), and so does the wide layout's feed
-/// selection, whose landing the navigator hands back as a scope to open.
+/// **Feeds** follow the same pattern with trees of their own: `FeedRootView`
+/// (the Feeds tab on the compact layout and visionOS) and the wide
+/// `MailRootView`, which hosts feeds beside mail (`feedTreeAppeared`,
+/// `FeedNavigationState`). The wide split shows feeds while the window is in
+/// the feeds section with a list open (`splitShowsFeeds`); mail in that split
+/// leaves the compact Feeds tab's place where it was.
+///
+/// Every transition does what the view handler it replaced did, cursor
+/// recording included. Search stays the view's (a transition that reads it
+/// takes `isSearching`).
 @Observable
 @MainActor
 final class SceneNavigator {
@@ -61,6 +67,14 @@ final class SceneNavigator {
     /// `compactColumn(in:)`. Stored rather than derived from the route
     /// because backing out to the folder list leaves the folder selected.
     private var compactColumn: NavigationSplitViewColumn = .sidebar
+
+    /// The window's place in the feed reader, read and written by the feed
+    /// trees (`FeedNavigationState`).
+    private(set) var feeds = FeedNavigationState()
+
+    /// Counts the feed banners this window has followed, so the wide split
+    /// can end a search for one as it does for a feed pick (`navigateFeeds`).
+    private(set) var feedNavigations = 0
 
     /// The compact layout's tab, or visionOS's. Seeded from the resume
     /// session when the window is created and kept from then on, so a swap
@@ -92,12 +106,9 @@ final class SceneNavigator {
     /// recorded whatever tab was up, so this never goes back to false.
     private var hasShownMail: Bool
 
-    /// The tree that owns the window's folder, message and column.
-    private var mountedTree: UUID?
-    /// The tree that appeared last. It takes over as `mountedTree` once its
-    /// landing or hand-off has run; meanwhile neither it nor the tree it
-    /// replaces can write.
-    private var appearingTree: UUID?
+    /// The tree that owns the window's folder, message and column
+    /// (`TreeGate`).
+    private var mailTrees = TreeGate()
 
     private let coordinator: @MainActor () -> NavStateCoordinator?
     private let hasClient: @MainActor () -> Bool
@@ -112,7 +123,7 @@ final class SceneNavigator {
     ///     was. Read from the stored session rather than the coordinator, so
     ///     building a navigator observes nothing (the host's initializer
     ///     runs inside its parent's body).
-    ///   - feedsLaunchTarget: the feed scope a wide landing reopens; the
+    ///   - feedsLaunchTarget: the feed scope a landing in feeds reopens; the
     ///     coordinator's local-store lookup, replaceable in tests.
     init(
         coordinator: @escaping @MainActor () -> NavStateCoordinator?,
@@ -143,46 +154,43 @@ final class SceneNavigator {
     /// The sidebar folder as `tree` should draw it: none until the tree has
     /// taken over (see the type's doc).
     func folder(in tree: UUID) -> Folder? {
-        tree == mountedTree ? selectedFolder : nil
+        mailTrees.shows(tree) ? selectedFolder : nil
     }
 
     /// The open message as `tree` should draw it: none until the tree has
     /// taken over.
     func envelope(in tree: UUID) -> Envelope? {
-        tree == mountedTree ? selectedEnvelope : nil
+        mailTrees.shows(tree) ? selectedEnvelope : nil
     }
 
     /// The compact column as `tree` should draw it: the folder list until the
     /// tree has taken over.
     func compactColumn(in tree: UUID) -> NavigationSplitViewColumn {
-        tree == mountedTree ? compactColumn : .sidebar
+        mailTrees.shows(tree) ? compactColumn : .sidebar
     }
 
     /// A mail tree appeared: a `MailRootView`, or visionOS's tab view, which
     /// lands whichever tab it opens on. The first tree in the window lands;
     /// a tree built after it by a layout swap takes over the window's route;
     /// the same tree appearing again (a tab switch) changes nothing once the
-    /// window has landed. Returns a feed scope for a wide tree to open, when
-    /// that is where the window goes.
-    func mailTreeAppeared(_ tree: UUID, isWide: Bool, showingFeeds: Bool) async -> RssItemScope? {
-        let isRebuild = mountedTree != nil && mountedTree != tree
-        appearingTree = tree
+    /// window has landed. A wide tree hosts the feed reader too.
+    func mailTreeAppeared(_ tree: UUID, isWide: Bool) async {
+        let isRebuild = mailTrees.appear(tree)
         layoutIsWide = isWide
-        if isWide { hasShownMail = true }
-        guard isRebuild, didLand else {
-            mountedTree = tree
-            let scope = await landIfNeeded(tree, isWide: isWide, showingFeeds: showingFeeds)
-            guard isCurrent(tree, isWide: isWide), scope != nil else { return nil }
-            enterFeeds()
-            return scope
+        if isWide {
+            hasShownMail = true
+            feedTreeArrived(tree, showsReader: route.section == .feeds)
         }
-        let scope = await rehand(tree, isWide: isWide)
+        guard isRebuild, didLand else {
+            mailTrees.mount(tree)
+            await landIfNeeded(tree, isWide: isWide)
+            return
+        }
+        await rehand(tree, isWide: isWide)
         // A tree that a second swap replaced while this one waited on the
         // feed store takes nothing over.
-        guard isCurrent(tree, isWide: isWide) else { return nil }
-        mountedTree = tree
-        if scope != nil { enterFeeds() }
-        return scope
+        guard isCurrent(tree, isWide: isWide) else { return }
+        mailTrees.mount(tree)
     }
 
     /// A rebuilt tree renders the route: the folder stays, an open message is
@@ -191,17 +199,22 @@ final class SceneNavigator {
     /// and the compact column starts on that folder's list. Where the route
     /// has no mail folder (the user backed out to the folder list, or the
     /// wide layout cleared it for a feed), the tree lands on the live session,
-    /// as every rebuilt tree used to. The feed reader is not on the navigator
-    /// yet, so a wide tree in the feeds section re-opens the session's scope.
-    private func rehand(_ tree: UUID, isWide: Bool) async -> RssItemScope? {
+    /// as every rebuilt tree used to. A wide tree in the feeds section shows
+    /// the window's feed list; a window that never landed in feeds reopens
+    /// the session's scope; with neither, the split shows mail.
+    private func rehand(_ tree: UUID, isWide: Bool) async {
         selectedEnvelope = nil
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
-        guard let coordinator = coordinator() else { return nil }
+        guard let coordinator = coordinator() else { return }
         if isWide, route.section == .feeds {
-            let scope = await feedsLaunchTarget(coordinator)
-            guard isCurrent(tree, isWide: isWide) else { return nil }
-            if let scope { return scope }
-            // No scope to open, so the split shows mail: the section moves,
+            if feeds.scope != nil {
+                // The split shows the window's feed list, so the mail side
+                // clears, as for a feed pick.
+                enterFeeds()
+                return
+            }
+            if !feeds.didLand, await landsInFeeds(tree, coordinator) { return }
+            // No list to show, so the split shows mail: the section moves,
             // as the landing's folder record used to move it.
             moveSection(to: .mail)
             coordinator.noteSection(.mail)
@@ -217,14 +230,13 @@ final class SceneNavigator {
             // it, which a bare re-park would replace.
             coordinator.scheduleRestore(for: message)
         }
-        return nil
     }
 
     /// Whether `tree` is still the one taking the window over, in the layout
     /// it appeared in: a second swap during a feed-store wait may have built
     /// another tree, or gone back to a compact tab that has no mail tree.
     private func isCurrent(_ tree: UUID, isWide: Bool) -> Bool {
-        appearingTree == tree && layoutIsWide == isWide
+        mailTrees.isAppearing(tree) && layoutIsWide == isWide
     }
 
     // MARK: Landing
@@ -241,22 +253,25 @@ final class SceneNavigator {
     /// the list to reselect. The folder list's first load swaps the fetched
     /// folder in (`foldersLoaded`). Seeded as subscribed so the list doesn't
     /// flash the unsubscribed-folder banner before the real state arrives.
-    private func landIfNeeded(_ tree: UUID, isWide: Bool, showingFeeds: Bool) async -> RssItemScope? {
-        guard let coordinator = coordinator() else { return nil }
+    private func landIfNeeded(_ tree: UUID, isWide: Bool) async {
+        guard let coordinator = coordinator() else { return }
         if let request = coordinator.navigateRequest {
             navigate(to: request)
         }
-        guard !didLand, selectedFolder == nil, !showingFeeds, hasClient() else { return nil }
+        guard !didLand, selectedFolder == nil else { return }
+        if isWide, splitShowsFeeds {
+            // The Feeds tab landed before the window widened: the window has
+            // landed, in the feed reader, and the folder list's first load
+            // must not land mail behind it.
+            didLand = true
+            return
+        }
+        guard hasClient() else { return }
         didLand = true
-        if isWide, coordinator.launchSection == .feeds {
-            let scope = await feedsLaunchTarget(coordinator)
-            // Swapped away during the lookup: the tree that takes over
-            // lands instead.
-            guard isCurrent(tree, isWide: isWide) else { return nil }
-            if let scope { return scope }
+        if isWide, coordinator.launchSection == .feeds, !feeds.didLand, await landsInFeeds(tree, coordinator) {
+            return
         }
         landOnSessionFolder(coordinator)
-        return nil
     }
 
     /// The provisional mail landing: the session's folder (the launch
@@ -369,16 +384,12 @@ final class SceneNavigator {
 
     /// A sidebar pick, or the list's folder-switch menu. A pick of the folder
     /// already selected still comes through here, which is what lets the
-    /// view end a search on it (#1217).
+    /// view end a search on it (#1217). On the wide split, a folder picked
+    /// while it shows feeds closes the feed list, and that is recorded.
     func selectFolder(_ folder: Folder?) {
+        if folder != nil, layoutIsWide, splitShowsFeeds { record(feeds.selectScope(nil)) }
         setFolder(folder)
         if folder != nil { followSplit() }
-    }
-
-    /// A feed pick on the wide layout, where feeds and mail share one split.
-    func showFeeds() {
-        enterFeeds()
-        followSplit()
     }
 
     /// The list's selection from `tree` — a tap, a restore, an advance after
@@ -417,7 +428,7 @@ final class SceneNavigator {
     // MARK: Transitions
 
     private func canWrite(from tree: UUID) -> Bool {
-        tree == mountedTree && tree == appearingTree
+        mailTrees.canWrite(tree)
     }
 
     /// The wide split switching to feeds: the mail folder and message clear.
@@ -488,5 +499,131 @@ final class SceneNavigator {
     /// utility tab survives a round trip with nothing picked.
     private func followSplit() {
         if layoutIsWide { compactTab = CompactTab.initial(for: route.section) }
+    }
+}
+
+// The feed reader's half, in the same file so it reaches the window's private
+// state and keeps the class body under the type-length cap.
+extension SceneNavigator {
+    /// Whether the wide split shows the feed reader rather than mail: the
+    /// window is in the feeds section with a list open.
+    var splitShowsFeeds: Bool {
+        route.section == .feeds && feeds.scope != nil
+    }
+
+    /// A `FeedRootView` appeared. The window's first feed tree lands — the
+    /// session's scope, its open item parked for the list (the launch
+    /// snapshot on the window's first landing, the live session after it);
+    /// one a layout swap built takes the reader over (`feedTreeArrived`).
+    func feedTreeAppeared(_ tree: UUID) async {
+        feedTreeArrived(tree, showsReader: true)
+        guard !feeds.didLand, feeds.scope == nil, let coordinator = coordinator() else { return }
+        let scope = await feedsLaunchTarget(coordinator)
+        // A tree a swap replaced during the lookup lands nothing; one that
+        // took over meanwhile may have landed already.
+        guard feeds.isAppearing(tree), !feeds.didLand else { return }
+        feeds.markLanded()
+        if let scope { record(feeds.selectScope(scope)) }
+    }
+
+    /// A feed pick on the wide layout, where feeds and mail share one split:
+    /// the mail folder and message clear. A scope held while the split showed
+    /// mail (the compact Feeds tab's place) opens afresh.
+    func showFeeds(_ scope: RssItemScope?) {
+        let wasShowing = splitShowsFeeds
+        guard scope != nil || wasShowing else { return }
+        if scope != nil {
+            enterFeeds()
+            followSplit()
+        }
+        record(wasShowing ? feeds.selectScope(scope) : feeds.openScope(scope))
+    }
+
+    /// A scope picked in the Feeds tab's sidebar or its list's switcher.
+    func selectFeedScope(_ scope: RssItemScope?) {
+        record(feeds.selectScope(scope))
+    }
+
+    /// The feed list's selection from `tree`: a tap, or the parked item it
+    /// applied once loaded. A different item in the wide split moves the
+    /// compact tab, as a message does.
+    func selectFeedItem(_ item: RssItem?, from tree: UUID) {
+        let before = route
+        record(feeds.selectItem(item, from: tree))
+        if route != before { followSplit() }
+    }
+
+    /// The collapsed Feeds split moved column from `tree` (the back gesture).
+    func setFeedColumn(_ column: NavigationSplitViewColumn, from tree: UUID) {
+        record(feeds.setColumn(column, from: tree))
+    }
+
+    /// A tapped feed banner: this window opens the scope its item was parked
+    /// for (`NavStateCoordinator.requestFeedNavigation`), which the list
+    /// selects once it has appeared and loaded, or at once when it is already
+    /// on screen.
+    func navigateFeeds(to scope: RssItemScope) {
+        feeds.markLanded()
+        feedNavigations += 1
+        if layoutIsWide {
+            showFeeds(scope)
+        } else {
+            showTab(.feeds)
+            record(feeds.selectScope(scope))
+        }
+    }
+
+    /// The wide split's landing in feeds: the session's scope, when it is
+    /// still in the store, clearing the mail side as a feed pick does.
+    /// Returns whether that settled the tree: it opened the scope, or a swap
+    /// replaced it during the lookup and the tree that takes over lands
+    /// instead. False sends it on to mail.
+    private func landsInFeeds(_ tree: UUID, _ coordinator: NavStateCoordinator) async -> Bool {
+        let scope = await feedsLaunchTarget(coordinator)
+        guard isCurrent(tree, isWide: true) else { return true }
+        feeds.markLanded()
+        guard let scope else { return false }
+        enterFeeds()
+        record(feeds.openScope(scope))
+        return true
+    }
+
+    /// A tree that hosts feeds appeared: `FeedRootView`, or a wide
+    /// `MailRootView`. One a layout swap built takes the reader over. When it
+    /// shows the reader, the open item is parked for its list to select once
+    /// it has appeared and loaded (#1664), unless the list is already waiting
+    /// on one (a banner's); a wide split showing mail keeps the item for the
+    /// compact Feeds tab.
+    private func feedTreeArrived(_ tree: UUID, showsReader: Bool) {
+        if feeds.appear(tree), showsReader, let scope = feeds.scope,
+           let item = feeds.takeItemForHandOff(),
+           let coordinator = coordinator(), coordinator.pendingFeedRestore?.scope != scope {
+            coordinator.pendingFeedRestore = .init(scope: scope, item: item)
+        }
+        feeds.mount(tree)
+    }
+
+    /// Records a feed transition on the resume session and the route.
+    private func record(_ records: [FeedNavigationState.Record]) {
+        for record in records {
+            switch record {
+            case .scope(let scope):
+                route.feeds = AppRoute.Feeds(scope: scope)
+                coordinator()?.recordFeedScope(scope)
+                // An item parked for another list is stale now: the list
+                // would otherwise open it the next time it comes back.
+                if let parked = coordinator()?.pendingFeedRestore?.scope, parked != scope {
+                    _ = coordinator()?.consumeFeedItemRestore(for: parked)
+                }
+            case .item(let item):
+                route.feeds.item = item.map(AppRoute.Item.init)
+                coordinator()?.recordFeedItem(item)
+                // Picked before the list applied the item parked for it:
+                // the pick wins, and a later hand-off parks the pick.
+                if item != nil, let scope = feeds.scope {
+                    _ = coordinator()?.consumeFeedItemRestore(for: scope)
+                }
+            }
+        }
     }
 }

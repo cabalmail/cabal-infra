@@ -5,10 +5,9 @@ import CabalmailKit
 /// `HTMLBodyView` the mail reader uses, or the publisher's page in
 /// `ArticleWebView` on the subscription's own web-view storage. Which one
 /// opens first, and whether reader styling is on, come from the
-/// subscription's stored preferences.
+/// subscription's stored preferences, which this view looks up itself.
 struct FeedItemDetailView: View {
     let item: RssItem
-    let subscription: RssSubscription?
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
@@ -35,7 +34,7 @@ struct FeedItemDetailView: View {
                 ProgressView()
             }
         }
-        .navigationTitle((model?.subscription ?? subscription)?.displayTitle ?? "Feed")
+        .navigationTitle(model?.subscription?.displayTitle ?? "Feed")
         #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -53,19 +52,13 @@ struct FeedItemDetailView: View {
             let client = appState.client
             let preferences = preferences
             let item = item
-            let parentSubscription = subscription
             Task { @MainActor in
-                // Resolve the subscription here rather than trusting the
-                // parent's copy. The parent looks it up asynchronously
-                // *after* the selection changes, so on a first open — or any
-                // open after the reader was popped — it is still nil at this
-                // point, and a model built from it would silently fall back
+                // The subscription is looked up here, before the model is
+                // built: a model built without it would silently fall back
                 // to the default open mode, styling, and remote-content
                 // policy instead of the feed's own. Local, fast.
                 let resolved: RssSubscription?
-                if let parentSubscription {
-                    resolved = parentSubscription
-                } else if let store = client?.rssStore {
+                if let store = client?.rssStore {
                     resolved = (try? await store.subscription(id: item.subscriptionId)) ?? nil
                 } else {
                     resolved = nil
@@ -174,7 +167,7 @@ struct FeedItemDetailView: View {
                 .accessibilityIdentifier("feed.reader.openInBrowser")
             }
             HStack(spacing: 8) {
-                if let feed = subscription?.displayTitle, !feed.isEmpty {
+                if let feed = model.subscription?.displayTitle, !feed.isEmpty {
                     Text(feed)
                         .lineLimit(1)
                 }
