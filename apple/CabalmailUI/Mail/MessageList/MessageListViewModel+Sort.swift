@@ -65,7 +65,9 @@ extension MessageListViewModel {
         // probe's counts are applied rather than dropped (#1822).
         if isSearchActive {
             if let probe {
-                _ = applyStatusCounts(probe.status, mayPredateRemoval: removalMayPostdate(probe.askedAt))
+                _ = applyStatusCounts(
+                    probe.status, mayPredateRemoval: removalMayPostdate(probe.askedAt), askedAt: probe.askedAt
+                )
             }
             return
         }

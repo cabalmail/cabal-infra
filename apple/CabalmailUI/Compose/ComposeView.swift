@@ -240,12 +240,12 @@ struct ComposeView: View {
                 // — and the reader this dismissal returns to — is still
                 // holding. Say so, or the row survives and Edit Draft on it
                 // reopens the discarded draft with Send live (#1081). Same
-                // signal as Save Draft; the replacement has no survivor, so
+                // event as Save Draft; the replacement has no survivor, so
                 // the policy drops the reader rather than re-pointing it.
                 if let replacement = model.retiredDraftReplacement {
-                    appState.mailStore.signals.signalDraftReplaced(
-                        folderPath: "Drafts",
-                        replacement: replacement
+                    appState.mailStore.events.post(
+                        .draftReplaced(folderPath: "Drafts", replacement: replacement),
+                        from: nil
                     )
                 }
             }
@@ -265,9 +265,9 @@ struct ComposeView: View {
                 // first save reports the survivor with nothing retired, and
                 // rides the same refresh into the list (#1083).
                 if didClose, let replacement = model.retiredDraftReplacement {
-                    appState.mailStore.signals.signalDraftReplaced(
-                        folderPath: "Drafts",
-                        replacement: replacement
+                    appState.mailStore.events.post(
+                        .draftReplaced(folderPath: "Drafts", replacement: replacement),
+                        from: nil
                     )
                 }
                 #if os(macOS)
@@ -320,8 +320,8 @@ struct ComposeView: View {
                     guard sent else { return }
                     // Sending from a draft discards the server copy, so the
                     // Drafts list is showing a message that no longer
-                    // exists. Prune it through the same signal the reader's
-                    // archive/move actions use instead of waiting for the
+                    // exists. Prune it through the same event the reader's
+                    // archive/move actions post instead of waiting for the
                     // next background reconcile (the folder is unsubscribed
                     // by default, so that took over a minute). "Drafts" is
                     // the mailbox `/save_draft` pins every draft to; see
@@ -329,9 +329,8 @@ struct ComposeView: View {
                     // Every UID the session held, not just the last: a 60s
                     // autosave replaces the copy under a new UID and the
                     // open list is still rendering the old one (#1071).
-                    appState.mailStore.signals.signalDisposed(
-                        model.supersededDraftUIDs.map { MessageRef(folder: FolderTree.draftsPath, uid: $0) }
-                    )
+                    let retired = model.supersededDraftUIDs.map { MessageRef(folder: FolderTree.draftsPath, uid: $0) }
+                    appState.mailStore.events.post(.removed(retired), from: nil)
                     // A reply left the device (or the outbox owns it now):
                     // mark the original `\Answered` so the list's replied
                     // arrow appears without waiting for a refresh.

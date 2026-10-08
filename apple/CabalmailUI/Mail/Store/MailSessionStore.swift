@@ -5,21 +5,22 @@ import CabalmailKit
 /// The mail state the folder list, message list, reader and composer share
 /// for the signed-in account, in parts that each own a piece of it:
 /// `counts`, the folder badges and the Inbox count behind the app badge;
-/// `shields`, what keeps a list refresh from undoing a write made elsewhere;
-/// and `signals`, what the reader and composer tell the message list. The
-/// parts know nothing of each other; what spans two of them (a signal that
-/// moves a count, a reply's shielded `\Answered`) is sent through the store.
+/// `shields`, the one record of writes in flight, which keeps a refresh from
+/// undoing a write made anywhere and a STATUS from counting it twice;
+/// and `events`, the changes the reader and composer post for every message
+/// list. The parts know nothing of each other; what spans two of them (a
+/// change that moves a count, a reply's shielded `\Answered`) is sent through
+/// the store.
 ///
 /// `AppState` owns one (`mailStore`) for its whole life and resets it in place
 /// at sign-out (`forgetAccount()`), so a view model, or a reader callback that
-/// outlives a session, never writes into a store nobody reads, and the
-/// signals' ticks keep counting up across sessions.
+/// outlives a session, never writes into a store nobody reads.
 @Observable
 @MainActor
 public final class MailSessionStore {
     public let counts = MailCounts()
     let shields = MessageShields()
-    let signals = MessageSignals()
+    let events = MailEvents()
 
     /// The session lifecycle's record of which clients' sessions have ended
     /// (`AppState.teardownGate`, which marks a client ended before sign-out
@@ -56,45 +57,89 @@ public final class MailSessionStore {
     /// if `acceptsCounts(from:)` still takes it. The intent used to write it
     /// straight to `counts`, so a STATUS that answered after a sign-out put
     /// the signed-out account's count back on the badge (#1892).
+    ///
+    /// It is bounded by the writes it may predate, as the badge poller's is.
+    /// The intent doesn't say when it asked, so it is taken to have asked as
+    /// long ago as a request can stay out (`MessageShields.longestRequest`).
     public func setInboxUnread(_ count: Int, fetchedThrough client: CabalmailClient) {
         guard acceptsCounts(from: client) else { return }
-        counts.setInboxUnread(count)
+        counts.setInboxUnread(polledInboxUnread(count, askedAt: .now - MessageShields.longestRequest))
+    }
+
+    /// The badge's Inbox unread count for a STATUS asked at `askedAt`,
+    /// bounded by the writes it may predate: a mark-read still going out
+    /// then, or landed since, may be missing from it, and it may not put the
+    /// badge back up (#1880). Only a count a STATUS set is a base to bound
+    /// against: the first poll of a session takes its answer as it is, and
+    /// makes the badge's count a counted one. The badge poller asks this
+    /// (`SessionPollers.boundInboxUnread`).
+    func polledInboxUnread(_ count: Int, askedAt: ContinuousClock.Instant) -> Int {
+        defer { counts.inboxUnreadIsCounted = true }
+        guard counts.inboxUnreadIsCounted else { return count }
+        return shields.unreadBound(folderPath: "INBOX", askedAt: askedAt).bound(count, from: counts.inboxUnreadCount)
+    }
+
+    /// A folder's unread and total counts from a STATUS asked at `askedAt`,
+    /// bounded by the writes that reply may predate: a `\Seen` change, or a
+    /// removal, in flight then or since (`MessageShields.unreadBound`). Each
+    /// is bounded against what the sidebar shows now, when that came from a
+    /// STATUS this session (`MailCounts.countedFolders`); a guessed or seeded
+    /// count, or none, takes the reply as it is. What every writer of a
+    /// fetched STATUS sets the sidebar from (#1880).
+    func boundedFolderCounts(
+        unread: Int,
+        total: Int,
+        folderPath: String,
+        askedAt: ContinuousClock.Instant
+    ) -> (unread: Int, total: Int) {
+        let unreadBound = shields.unreadBound(folderPath: folderPath, askedAt: askedAt)
+        let removing = shields.hasRemovalInFlight(folderPath: folderPath)
+            || shields.removalConfirmed(folderPath: folderPath, after: askedAt)
+        let counted = counts.countedFolders.contains(folderPath)
+        let shownUnread = counted ? counts.folderUnreadCounts[folderPath] : nil
+        let shownTotal = counted ? counts.folderTotalCounts[folderPath] : nil
+        return (
+            shownUnread.map { unreadBound.bound(unread, from: $0) } ?? unread,
+            removing ? shownTotal.map { min(total, $0) } ?? total : total
+        )
     }
 
     /// The reader changed a flag on `ref` (or a reply marked it
-    /// `\Answered`): tell the list, and for `\Seen` move the folder's unread
-    /// count with it.
-    func signalFlagChange(_ ref: MessageRef, flag: Flag, added: Bool) {
-        signals.postFlagChange(ref, flag: flag, added: added)
+    /// `\Answered`): post it for the lists, and for `\Seen` move the folder's
+    /// unread count with it. `origin` is the reader's window.
+    func postFlagChange(_ ref: MessageRef, flag: Flag, added: Bool, from origin: UUID?) {
+        events.post(.flagsChanged([ref], flag: flag, added: added), from: origin)
         if flag == .seen {
             counts.applyUnreadDelta(folderPath: ref.folder, delta: added ? -1 : 1)
         }
     }
 
     /// The reader's dispose, move or purge of `ref` failed on the server, so
-    /// the row its optimistic `signalDisposed` pruned should come back.
-    /// `markUnread` hands back the unread count the dispose's read mark took.
-    func signalRemovalFailed(_ ref: MessageRef, markUnread: Bool = false) {
-        signals.postRemovalFailed(ref, markUnread: markUnread)
+    /// the row its `.removed` dropped comes back (`.restored`). `markUnread`
+    /// hands back the unread count the dispose's read mark took.
+    func postRemovalFailed(_ ref: MessageRef, markUnread: Bool = false, from origin: UUID?) {
+        events.post(.restored(ref, markUnread: markUnread), from: origin)
         if markUnread {
             counts.applyUnreadDelta(folderPath: ref.folder, delta: 1)
         }
     }
 
-    /// Marks a replied-to message `\Answered` after its reply sends: signal
-    /// the list optimistically (so the replied arrow appears at once), then
-    /// STORE the flag best-effort through `client`, the session's client
-    /// when the reply sent (`AppState.client`; nil skips the STORE but not
-    /// the signal). Shielded via `setFlagWrite` so a refresh landing
-    /// mid-write can't revert the row. No revert on failure — unlike the
-    /// detail view's toggles there's no surface left to show an error on
-    /// (the composer is gone), and the next full refresh restores truth.
+    /// Marks a replied-to message `\Answered` after its reply sends: post the
+    /// change for the lists optimistically (so the replied arrow appears at
+    /// once), then STORE the flag best-effort through `client`, the
+    /// session's client when the reply sent (`AppState.client`; nil skips the
+    /// STORE but not the event). Shielded via `setFlagWrite` so a refresh
+    /// landing mid-write can't revert the row. No revert on failure — unlike
+    /// the detail view's toggles there's no surface left to show an error on
+    /// (the composer is gone), and the next full refresh restores truth. It
+    /// comes from the composer, not from a main window's reader or list, so
+    /// the change names no window.
     func markAnswered(_ ref: MessageRef, client: CabalmailClient?) {
-        signalFlagChange(ref, flag: .answered, added: true)
+        postFlagChange(ref, flag: .answered, added: true, from: nil)
         guard let client else { return }
-        shields.setFlagWrite(ref, inFlight: true)
+        shields.beginFlagWrite([ref], flag: .answered, added: true)
         Task {
-            defer { shields.setFlagWrite(ref, inFlight: false) }
+            defer { shields.endFlagWrite([ref], flag: .answered, added: true) }
             try? await client.imapClient.setFlags(
                 folder: ref.folder,
                 uids: [ref.uid],
@@ -111,9 +156,8 @@ public final class MailSessionStore {
     }
 
     /// Sign-out: what the store knows about the account goes, so the next
-    /// account starts from none of it (#1825). The signals stay: each is a
-    /// one-shot that has already been delivered, and their ticks must keep
-    /// rising so the next session's first signal still fires `.onChange`.
+    /// account starts from none of it (#1825). The events have nothing to
+    /// forget: each was delivered when it was posted, and none is kept.
     func forgetAccount() {
         counts.reset()
         shields.reset()

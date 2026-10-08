@@ -216,6 +216,7 @@ final class SearchCopyRowActionTests: XCTestCase {
                                                   markAsRead: .onOpen)
         try await fixture.seedSnapshot(reader)
         let appState = AppState()
+        let events = MailEventRecorder(appState.mailStore)
         MessageDetailView.relayOutcomes(of: reader, to: appState.mailStore)
 
         await reader.load()
@@ -227,7 +228,7 @@ final class SearchCopyRowActionTests: XCTestCase {
         XCTAssertEqual(calls.map(\.uids), [[9], [9]])
         XCTAssertEqual(reader.ref, inbox)
         XCTAssertEqual(
-            appState.mailStore.signals.lastEnvelopeFlagChange?.ref, inbox, "the list is told about the INBOX copy"
+            events.flagChangeRefs, [[inbox], [inbox]], "the lists are told about the INBOX copy, both times"
         )
     }
 }

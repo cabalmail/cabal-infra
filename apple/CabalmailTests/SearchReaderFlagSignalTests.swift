@@ -6,12 +6,11 @@ import CabalmailKit
 // search surface's `folder` is a sentinel (path ""), and its rows come from
 // many folders, so the list's flag observer, which took only the signals that
 // named its own folder, dropped every one of them there: the row kept its dot
-// until the next search. The observer now hands the signal to
-// `applyReaderFlagChange`, which on the search surface matches it by the row's
-// ref. Every signal here is sent the way the reader sends it, through
-// `MailSessionStore.signalFlagChange` (or the reader itself, wired by
-// `MessageDetailView.relayOutcomes`), and handed to the list as its observer
-// does.
+// until the next search. The list now hears the store's mail events itself
+// (`MessageListViewModel.receive`) and matches each flag change by the row's
+// ref. Every change here is posted the way the reader posts it, through
+// `MailSessionStore.postFlagChange` (or the reader itself, wired by
+// `MessageDetailView.relayOutcomes`); nothing hands it to the list.
 @MainActor
 final class SearchReaderFlagSignalTests: XCTestCase {
     private let inbox = MessageRef(folder: "INBOX", uid: 525)
@@ -62,20 +61,12 @@ final class SearchReaderFlagSignalTests: XCTestCase {
         !(try XCTUnwrap(model.envelope(for: ref), "\(ref) is listed")).flags.contains(.seen)
     }
 
-    /// Hands the latest flag signal to `model`, as the list's `.onChange`
-    /// observer does.
-    private func deliver(_ appState: AppState, to model: MessageListViewModel) throws {
-        let signal = appState.mailStore.signals.lastEnvelopeFlagChange
-        model.applyReaderFlagChange(try XCTUnwrap(signal, "the reader sent a signal"))
-    }
-
     func testReadingAResultClearsItsUnreadDot() async throws {
         let imap = FakeImapClient()
         let appState = AppState()
         let model = try await searchModel(imap: imap, appState: appState)
 
-        appState.mailStore.signalFlagChange(inbox, flag: .seen, added: true)
-        try deliver(appState, to: model)
+        appState.mailStore.postFlagChange(inbox, flag: .seen, added: true, from: nil)
 
         XCTAssertFalse(try isUnread(inbox, in: model), "the result the reader opened is read")
         XCTAssertTrue(try isUnread(sent, in: model), "the same UID in Sent is another message")
@@ -87,24 +78,23 @@ final class SearchReaderFlagSignalTests: XCTestCase {
         let appState = AppState()
         let model = try await searchModel(imap: imap, appState: appState)
 
-        appState.mailStore.signalFlagChange(archive, flag: .seen, added: true)
-        try deliver(appState, to: model)
+        appState.mailStore.postFlagChange(archive, flag: .seen, added: true, from: nil)
         XCTAssertFalse(try isUnread(archive, in: model))
 
-        appState.mailStore.signalFlagChange(archive, flag: .seen, added: false)
-        try deliver(appState, to: model)
+        appState.mailStore.postFlagChange(archive, flag: .seen, added: false, from: nil)
         XCTAssertTrue(try isUnread(archive, in: model), "the reader's Mark as Unread reaches the row too")
     }
 
-    func testASignalForAMessageTheSearchDoesNotListChangesNothing() async throws {
+    func testAChangeToAMessageTheSearchDoesNotListChangesNothing() async throws {
         let imap = FakeImapClient()
         let appState = AppState()
         let model = try await searchModel(imap: imap, appState: appState)
         let before = model.envelopes
+        let events = MailEventRecorder(appState.mailStore)
 
-        appState.mailStore.signalFlagChange(MessageRef(folder: "Drafts", uid: 525), flag: .seen, added: true)
-        try deliver(appState, to: model)
+        appState.mailStore.postFlagChange(MessageRef(folder: "Drafts", uid: 525), flag: .seen, added: true, from: nil)
 
+        XCTAssertEqual(events.changes.count, 1, "precondition: the change was posted")
         XCTAssertEqual(model.envelopes, before)
     }
 
@@ -121,20 +111,20 @@ final class SearchReaderFlagSignalTests: XCTestCase {
             imap: imap, envelope: result, folderPath: folder.path, markAsRead: .onOpen
         )
         try await fixture.seedSnapshot(reader)
+        let events = MailEventRecorder(appState.mailStore)
         MessageDetailView.relayOutcomes(of: reader, to: appState.mailStore)
 
         await reader.load()
         try await waitUntil { await !imap.flagCalls.isEmpty }
-        try await waitUntilOnMainActor { appState.mailStore.signals.lastEnvelopeFlagChange != nil }
-        try deliver(appState, to: model)
+        try await waitUntilOnMainActor { !events.flagChangeRefs.isEmpty }
 
-        XCTAssertEqual(appState.mailStore.signals.lastEnvelopeFlagChange?.ref, inbox)
+        XCTAssertEqual(events.flagChangeRefs, [[inbox]])
         XCTAssertFalse(try isUnread(inbox, in: model), "back on the results, the opened row is read")
         XCTAssertTrue(try isUnread(sent, in: model))
     }
 
-    /// A folder list still takes only its own folder's signals.
-    func testAFolderListTakesOnlyItsOwnFoldersSignals() async throws {
+    /// A folder list still takes only its own folder's changes.
+    func testAFolderListTakesOnlyItsOwnFoldersChanges() async throws {
         let imap = FakeImapClient()
         let appState = AppState()
         let model = try TestFixtures.makeModel(
@@ -144,12 +134,10 @@ final class SearchReaderFlagSignalTests: XCTestCase {
             mailStore: appState.mailStore
         )
 
-        appState.mailStore.signalFlagChange(sent, flag: .seen, added: true)
-        try deliver(appState, to: model)
+        appState.mailStore.postFlagChange(sent, flag: .seen, added: true, from: nil)
         XCTAssertTrue(try isUnread(inbox, in: model), "Sent's UID 525 is not this row")
 
-        appState.mailStore.signalFlagChange(inbox, flag: .seen, added: true)
-        try deliver(appState, to: model)
+        appState.mailStore.postFlagChange(inbox, flag: .seen, added: true, from: nil)
         XCTAssertFalse(try isUnread(inbox, in: model))
     }
 }

@@ -126,8 +126,8 @@ extension MessageListViewModel {
         for ref in loaded {
             applyOptimisticFlag(ref, flag: .seen, add: shouldBeSeen)
         }
-        pendingFlagRefs.formUnion(loaded)
-        defer { pendingFlagRefs.subtract(loaded) }
+        mailStore.shields.beginFlagWrite(loaded, flag: .seen, added: shouldBeSeen)
+        defer { mailStore.shields.endFlagWrite(loaded, flag: .seen, added: shouldBeSeen) }
         for (source, groupUIDs) in grouping {
             let applied = await applyFlagGroup(
                 folder: source, uids: groupUIDs,
@@ -155,8 +155,8 @@ extension MessageListViewModel {
         for ref in loaded {
             applyOptimisticFlag(ref, flag: .flagged, add: shouldBeFlagged)
         }
-        pendingFlagRefs.formUnion(loaded)
-        defer { pendingFlagRefs.subtract(loaded) }
+        mailStore.shields.beginFlagWrite(loaded, flag: .flagged, added: shouldBeFlagged)
+        defer { mailStore.shields.endFlagWrite(loaded, flag: .flagged, added: shouldBeFlagged) }
         for (source, groupUIDs) in grouping {
             _ = await applyFlagGroup(
                 folder: source, uids: groupUIDs,

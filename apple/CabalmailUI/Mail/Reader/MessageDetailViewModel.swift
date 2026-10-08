@@ -110,12 +110,15 @@ final class MessageDetailViewModel {
     /// decoupled from `AppState`.
     var onFlagChanged: ((Flag, Bool) -> Void)?
 
-    /// Brackets an in-flight flag write so the list can shield its optimistic
-    /// flag from a concurrent refresh: `true` when the STORE is dispatched,
-    /// `false` when it resolves (success or failure). Wired to
-    /// `MessageShields.setFlagWrite` in `MessageDetailView`; left nil in tests and
-    /// in the dispose path (the row leaves the list, so there's nothing to
-    /// shield). Same decoupling rationale as `onFlagChanged`.
+    /// Brackets an in-flight flag write so every list can shield its
+    /// optimistic flag from a concurrent refresh, and a STATUS asked meanwhile
+    /// can't count the write twice: `true` when the STORE is dispatched,
+    /// `false` when it resolves (success or failure). Wired to the store's
+    /// record (`MessageShields.beginFlagWrite`, through `MessageDetailView`'s
+    /// `ReaderFlagWrites`, which names the write from the `onFlagChanged`
+    /// just before it); left nil in tests and in the dispose path (the row
+    /// leaves the list, so there's nothing to shield). Same decoupling
+    /// rationale as `onFlagChanged`.
     var onFlagWriteInFlight: ((Bool) -> Void)?
 
     /// Brackets an in-flight archive / trash / move so the list can shield the
@@ -139,7 +142,7 @@ final class MessageDetailViewModel {
     /// is true when a dispose had marked an unread message read, so the row
     /// comes back unread; it rides this one call rather than a separate
     /// `onFlagChanged`, which could reach the list before the row does.
-    /// Wired to `MailSessionStore.signalRemovalFailed` in `MessageDetailView`; nil
+    /// Wired to `MailSessionStore.postRemovalFailed` in `MessageDetailView`; nil
     /// in tests.
     var onMoveFailed: ((Bool) -> Void)?
 
