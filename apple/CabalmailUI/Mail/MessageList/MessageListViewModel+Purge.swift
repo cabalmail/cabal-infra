@@ -54,8 +54,8 @@ extension MessageListViewModel {
 
         envelopes.removeAll { condemnedRefs.contains(rowRef(for: $0)) }
         adjustTotalMessages(by: -condemned.count)
-        pendingRemovedRefs.formUnion(condemnedRefs)
-        defer { pendingRemovedRefs.subtract(condemnedRefs) }
+        mailStore.shields.beginRemoval(condemnedRefs)
+        defer { mailStore.shields.endRemoval(condemnedRefs) }
         if unreadCount > 0 {
             mailStore.counts.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: -unreadCount)
         }

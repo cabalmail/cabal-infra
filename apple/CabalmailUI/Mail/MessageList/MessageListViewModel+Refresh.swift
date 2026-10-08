@@ -56,6 +56,7 @@ extension MessageListViewModel {
         guard !isSearchScope, let saved = await client.savedFolderStatus(path: folder.path) else { return }
         unseen = max(0, saved.unseen ?? 0)
         flagged = max(0, saved.flagged ?? 0)
+        hasCountedStatus = false
         savedMessageCount = saved.messages.map { max(0, $0) }
     }
 
@@ -75,7 +76,17 @@ extension MessageListViewModel {
     /// departed message again, so it may lower the counts but not raise them
     /// (new mail waits for the next STATUS), and it isn't published to the
     /// sidebar badge.
-    func applyStatusCounts(_ status: FolderStatus, mayPredateRemoval: Bool = false) -> UInt32 {
+    ///
+    /// `askedAt` is when the STATUS was asked for. A flag write in flight then,
+    /// or since, may be missing from it: a mark-read still going out leaves
+    /// the message counted unread. So the Unread and Flagged counts may move
+    /// only the way those writes move them (`MessageShields.unreadBound`),
+    /// here and in the sidebar, rather than bounce back (#1880).
+    func applyStatusCounts(
+        _ status: FolderStatus,
+        mayPredateRemoval: Bool = false,
+        askedAt: ContinuousClock.Instant = .now
+    ) -> UInt32 {
         let serverMessages = UInt32(max(0, status.messages ?? 0))
         var messages = serverMessages
         var fetchedUnseen = max(0, status.unseen ?? unseen)
@@ -85,6 +96,14 @@ extension MessageListViewModel {
             fetchedUnseen = min(fetchedUnseen, unseen)
             fetchedFlagged = min(fetchedFlagged, flagged)
         }
+        if !isSearchScope, hasCountedStatus {
+            let shields = mailStore.shields
+            fetchedUnseen = shields.unreadBound(folderPath: folder.path, askedAt: askedAt)
+                .bound(fetchedUnseen, from: unseen)
+            fetchedFlagged = shields.flaggedBound(folderPath: folder.path, askedAt: askedAt)
+                .bound(fetchedFlagged, from: flagged)
+        }
+        if status.unseen != nil { hasCountedStatus = true }
         // A changed folder size shifts every absolute index, so a bottom window
         // staged against the old total is no longer aligned -- drop it (the
         // stamp check in `performLoadWindow` is the backstop for the window
@@ -99,7 +118,7 @@ extension MessageListViewModel {
         // (#1848).
         guard mailStore.acceptsCounts(from: client) else { return serverMessages }
         if !mayPredateRemoval {
-            publishFolderCounts(status)
+            publishFolderCounts(status, askedAt: askedAt)
         } else if !isSearchScope {
             // `client.folderStatus` saved this reply as it came, but it may
             // count a message already removed here: save what is shown.
@@ -112,11 +131,10 @@ extension MessageListViewModel {
 
     /// True when a STATUS or fetch issued at `startedAt` may have been
     /// answered from this folder as it stood before a removal the list has
-    /// already applied: one is still in flight here or in the reader, or the
-    /// server confirmed one after `startedAt`.
+    /// already applied: one is still in flight, from this list or any other
+    /// writer, or the server confirmed one after `startedAt`.
     func removalMayPostdate(_ startedAt: ContinuousClock.Instant) -> Bool {
         !pendingRemovedRefs.isEmpty
-            || mailStore.shields.hasMoveInFlight(folderPath: folder.path)
             || mailStore.shields.removalConfirmed(folderPath: folder.path, after: startedAt)
     }
 
@@ -128,12 +146,16 @@ extension MessageListViewModel {
     ///
     /// Only a reply that actually carried the counts is published: `unseen`
     /// and `flagged` fall back to the prior value above rather than flashing
-    /// 0, and a badge must not be overwritten with a guess either.
-    private func publishFolderCounts(_ status: FolderStatus) {
+    /// 0, and a badge must not be overwritten with a guess either. The badge
+    /// is bounded by the writes the reply may predate, as the chip is.
+    private func publishFolderCounts(_ status: FolderStatus, askedAt: ContinuousClock.Instant) {
         guard !isSearchScope, let unread = status.unseen, let total = status.messages else {
             return
         }
-        mailStore.counts.setFolderCounts(folderPath: folder.path, unread: unread, total: total)
+        let counts = mailStore.boundedFolderCounts(
+            unread: unread, total: total, folderPath: folder.path, askedAt: askedAt
+        )
+        mailStore.counts.setFolderCounts(folderPath: folder.path, unread: counts.unread, total: counts.total)
     }
 
     /// Row onAppear: the list is now rendering this absolute index. A row
@@ -228,6 +250,7 @@ extension MessageListViewModel {
         totalMessages = 0
         unseen = 0
         flagged = 0
+        hasCountedStatus = false
         savedMessageCount = nil
         hasMore = true
         resetWindow()
@@ -276,21 +299,14 @@ extension MessageListViewModel {
         let confirmedGone = mailStore.shields.confirmedRemovalRefs(folderPath: folder.path)
         return placedInFolder(fetched).compactMap { fetchedEnvelope in
             let ref = rowRef(for: fetchedEnvelope)
-            // A row optimistically removed by either this view model
-            // (`pendingRemovedRefs`) or the detail view (shared
-            // `mailStore.shields.pendingMoveRefs`) stays gone until the move resolves --
-            // and after that, a message the server confirmed gone stays gone
-            // for good: IMAP never reuses a UID within a mailbox, so a fetch
-            // that still carries it was answered before the move landed.
-            if pendingRemovedRefs.contains(ref)
-                || mailStore.shields.pendingMoveRefs.contains(ref)
-                || confirmedGone.contains(ref) { return nil }
-            // A flag write in flight from either this view model
-            // (`pendingFlagRefs`) or the detail view (shared
-            // `mailStore.shields.pendingFlagWriteRefs`) shields the row's flags.
-            let flagWriteInFlight = pendingFlagRefs.contains(ref)
-                || mailStore.shields.pendingFlagWriteRefs.contains(ref)
-            if flagWriteInFlight, let local = envelope(for: ref) {
+            // A row being removed by anyone -- this list, another list, the
+            // reader -- stays gone until the removal resolves, and after that
+            // a message the server confirmed gone stays gone for good: IMAP
+            // never reuses a UID within a mailbox, so a fetch that still
+            // carries it was answered before the move landed.
+            if mailStore.shields.isRemoving(ref) || confirmedGone.contains(ref) { return nil }
+            // A flag write in flight from anyone shields the row's flags.
+            if mailStore.shields.isWritingFlags(ref), let local = envelope(for: ref) {
                 return rebuildEnvelope(fetchedEnvelope, flags: local.flags)
             }
             return fetchedEnvelope

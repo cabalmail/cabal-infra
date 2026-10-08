@@ -316,8 +316,9 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
 
     // MARK: - The flag-write shield
 
-    /// The list's own half (`pendingFlagRefs`, set by the swipe, menu and
-    /// bulk read/flag toggles): a refresh landing while the list's write is
+    /// The list's own half (bracketed in the store's record,
+    /// `MessageShields.beginFlagWrite`, by the swipe, menu and bulk read/flag
+    /// toggles): a refresh landing while the list's write is
     /// in flight keeps the optimistic flags, in memory and on disk.
     func testAListFlagWriteInFlightKeepsItsLocalFlagsThroughARefresh() async throws {
         let model = try await fixture.makeModel(loaded: [1], total: 1)

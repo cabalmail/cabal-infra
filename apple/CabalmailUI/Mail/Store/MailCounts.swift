@@ -29,6 +29,15 @@ public final class MailCounts {
     // counts (`FolderListViewModel`).
     var folderUnreadCounts: [String: Int] = [:]
     var folderTotalCounts: [String: Int] = [:]
+    /// Folders whose counts above came from a STATUS, or a change with a
+    /// known result (Mark All as Read, Empty Trash), this session, and have
+    /// moved since only by deltas: what a fetched STATUS may be bounded
+    /// against (`MailSessionStore.boundedFolderCounts`). A count seeded from
+    /// saved state, or guessed by a delta on a folder with none, isn't.
+    private(set) var countedFolders: Set<String> = []
+    /// The same for `inboxUnreadCount`: whether a STATUS has set it this
+    /// session (`MailSessionStore.polledInboxUnread`, or INBOX's counts).
+    var inboxUnreadIsCounted = false
     /// Keeps the counts above in step with the saved folder state, for
     /// offline launches (`SavedFolderCounts`).
     let savedFolderCounts = SavedFolderCounts()
@@ -48,6 +57,7 @@ public final class MailCounts {
     /// total in hand (e.g. an optimistic delta-based recovery path).
     func setUnreadCount(folderPath: String, count: Int) {
         folderUnreadCounts[folderPath] = max(0, count)
+        countedFolders.insert(folderPath)
         savedFolderCounts.countChanged(folderPath, unread: max(0, count), total: folderTotalCounts[folderPath])
     }
 
@@ -57,8 +67,12 @@ public final class MailCounts {
     func setFolderCounts(folderPath: String, unread: Int, total: Int) {
         folderUnreadCounts[folderPath] = max(0, unread)
         folderTotalCounts[folderPath] = max(0, total)
+        countedFolders.insert(folderPath)
         savedFolderCounts.countChanged(folderPath, unread: max(0, unread), total: max(0, total))
-        if Self.isInbox(folderPath) { setInboxUnread(unread) }
+        if Self.isInbox(folderPath) {
+            setInboxUnread(unread)
+            inboxUnreadIsCounted = true
+        }
     }
 
     /// Replace the whole unread map. Used by the folder list view model
@@ -66,8 +80,10 @@ public final class MailCounts {
     /// drop out.
     func setUnreadCounts(_ counts: [String: Int]) {
         folderUnreadCounts = counts.mapValues { max(0, $0) }
+        countedFolders.formUnion(counts.keys)
         if let inbox = counts.first(where: { Self.isInbox($0.key) })?.value {
             setInboxUnread(inbox)
+            inboxUnreadIsCounted = true
         }
     }
 
@@ -136,6 +152,8 @@ public final class MailCounts {
     func reset() {
         folderUnreadCounts = [:]
         folderTotalCounts = [:]
+        countedFolders = []
+        inboxUnreadIsCounted = false
         subscribedFolderPaths = nil
         savedFolderCounts.reset()
     }
