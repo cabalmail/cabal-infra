@@ -23,7 +23,7 @@ final class MessageListPillCountTests: XCTestCase {
             ]
         )
         // Server-sourced STATUS counts as of the last refresh.
-        model.totalMessages = 2
+        model.window.totalMessages = 2
         model.unseen = 1
         model.flagged = 0
         return model

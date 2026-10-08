@@ -25,7 +25,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
             folderPath: folderPath
         )
         // Server-sourced STATUS count as of the last refresh.
-        model.totalMessages = UInt32(uids.count)
+        model.window.totalMessages = UInt32(uids.count)
         return model
     }
 
@@ -43,7 +43,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
 
         XCTAssertTrue(model.envelopes.isEmpty)
         XCTAssertEqual(
-            model.totalMessages, 0,
+            model.window.totalMessages, 0,
             "the emptied Drafts folder must render no rows — a leftover total is a skeleton row"
         )
     }
@@ -54,7 +54,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
         model.pruneEnvelope(ref(99))
 
         XCTAssertEqual(
-            model.totalMessages, 2,
+            model.window.totalMessages, 2,
             "a signal for a UID we never had loaded says nothing about the folder total"
         )
     }
@@ -65,7 +65,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
         await model.dispose(model.envelopes[0])
 
         XCTAssertEqual(model.envelopes.map(\.uid), [2])
-        XCTAssertEqual(model.totalMessages, 1)
+        XCTAssertEqual(model.window.totalMessages, 1)
     }
 
     func testFailedDisposeKeepsTheTotal() async throws {
@@ -77,7 +77,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
 
         // The row never left `envelopes`, so the total never lost its slot.
         XCTAssertEqual(model.envelopes.map(\.uid), [1, 2])
-        XCTAssertEqual(model.totalMessages, 2)
+        XCTAssertEqual(model.window.totalMessages, 2)
     }
 
     func testMoveToDropsTheSlotAndRestoresItOnFailure() async throws {
@@ -85,14 +85,14 @@ final class OptimisticPruneTotalTests: XCTestCase {
         let model = try makeModel(imap: imap, uids: [1, 2])
 
         await model.moveTo(model.envelopes[0], destination: "Archive")
-        XCTAssertEqual(model.totalMessages, 1)
+        XCTAssertEqual(model.window.totalMessages, 1)
 
         await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
         await model.moveTo(model.envelopes[0], destination: "Archive")
 
         XCTAssertEqual(model.envelopes.map(\.uid), [2])
         XCTAssertEqual(
-            model.totalMessages, 1,
+            model.window.totalMessages, 1,
             "a failed move puts the row back, so the folder total gets its slot back too"
         )
     }
@@ -104,7 +104,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
         await model.performMove(
             uidsBySource: ["INBOX": [1, 2]], to: "Archive", markSeenFirst: true
         )
-        XCTAssertEqual(model.totalMessages, 1)
+        XCTAssertEqual(model.window.totalMessages, 1)
 
         await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
         await model.performMove(
@@ -112,7 +112,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
         )
 
         XCTAssertEqual(model.envelopes.map(\.uid), [3])
-        XCTAssertEqual(model.totalMessages, 1)
+        XCTAssertEqual(model.window.totalMessages, 1)
     }
 
     func testPurgeDropsEverySlot() async throws {
@@ -122,7 +122,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
         await model.purgeMessages(refs: [ref(1, in: FolderTree.trashPath), ref(2, in: FolderTree.trashPath)])
 
         XCTAssertTrue(model.envelopes.isEmpty)
-        XCTAssertEqual(model.totalMessages, 0)
+        XCTAssertEqual(model.window.totalMessages, 0)
     }
 
     func testSearchResultsKeepTheirOwnRowCount() throws {
@@ -132,7 +132,7 @@ final class OptimisticPruneTotalTests: XCTestCase {
         model.pruneEnvelope(ref(1))
 
         XCTAssertEqual(
-            model.totalMessages, 2,
+            model.window.totalMessages, 2,
             "search lists derive their row count from the results, not from a folder STATUS"
         )
     }

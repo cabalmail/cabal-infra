@@ -40,7 +40,7 @@ final class StatusBoundEdgeTests: XCTestCase {
         )
         await fixture.track(list.client)
         let status = FolderStatus(messages: 3, unseen: unread.count, flagged: 0, uidValidity: 7, uidNext: 4)
-        _ = list.applyStatusCounts(status)
+        _ = list.window.applyStatusCounts(status)
         await imap.scriptInitialLoad(status: status, topEnvelopes: rows)
         return (list, list.envelopes)
     }
@@ -55,7 +55,7 @@ final class StatusBoundEdgeTests: XCTestCase {
         let (list, rows) = try await countedWorkList(imap: imap, appState: appState, unread: [3, 2])
         await imap.holdNext(.status)
 
-        let sort = Task { await list.setSort(SortCriterion(field: .subject, direction: .ascending)) }
+        let sort = Task { await list.window.setSort(SortCriterion(field: .subject, direction: .ascending)) }
         await imap.awaitHeld(.status)
         await list.setFlag(.seen, add: true, envelope: rows[0])
         await imap.releaseHeld(.status)
@@ -146,9 +146,9 @@ final class StatusBoundEdgeTests: XCTestCase {
         list.unseen = 5
         appState.mailStore.shields.beginFlagWrite([ref(3)], flag: .seen, added: true)
 
-        _ = list.applyStatusCounts(FolderStatus(messages: 30, unseen: 12, flagged: 0))
+        _ = list.window.applyStatusCounts(FolderStatus(messages: 30, unseen: 12, flagged: 0))
         XCTAssertEqual(list.unseen, 12)
-        _ = list.applyStatusCounts(FolderStatus(messages: 30, unseen: 13, flagged: 0))
+        _ = list.window.applyStatusCounts(FolderStatus(messages: 30, unseen: 13, flagged: 0))
         XCTAssertEqual(list.unseen, 12, "the first STATUS counted it")
     }
 

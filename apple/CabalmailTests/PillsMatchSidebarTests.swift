@@ -44,7 +44,7 @@ final class PillsMatchSidebarTests: XCTestCase {
             imap: imap, envelopes: rows, folderPath: path, mailStore: appState.mailStore
         )
         await fixture.track(list.client)
-        _ = list.applyStatusCounts(FolderStatus(messages: 3, unseen: 2, flagged: 1, uidValidity: 7, uidNext: 4))
+        _ = list.window.applyStatusCounts(FolderStatus(messages: 3, unseen: 2, flagged: 1, uidValidity: 7, uidNext: 4))
         return list
     }
 
@@ -214,7 +214,7 @@ final class PillsMatchSidebarTests: XCTestCase {
         appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 7, total: 30)
         let list = offline.makeListModel(client: client, mailStore: appState.mailStore)
 
-        await list.seedSavedCounts()
+        await list.window.seedSavedCounts()
 
         XCTAssertEqual(list.unseen, 7)
         XCTAssertEqual(list.flagged, 1, "the flagged count the session had none of is seeded")
@@ -227,7 +227,7 @@ final class PillsMatchSidebarTests: XCTestCase {
         let list = offline.makeListModel(client: client, mailStore: appState.mailStore)
         appState.sessionManager.teardownGate.markEnded(client)
 
-        await list.seedSavedCounts()
+        await list.window.seedSavedCounts()
 
         XCTAssertNil(appState.mailStore.counts.folderUnreadCounts["INBOX"])
         XCTAssertNil(appState.mailStore.counts.folderFlaggedCounts["INBOX"])
@@ -249,7 +249,7 @@ final class PillsMatchSidebarTests: XCTestCase {
             counts.savedFolderCounts.markSeeded(path)
         }
         let list = offline.makeListModel(client: client, mailStore: appState.mailStore)
-        await list.seedSavedCounts()
+        await list.window.seedSavedCounts()
 
         counts.clearSeeded()
 
@@ -269,7 +269,7 @@ final class PillsMatchSidebarTests: XCTestCase {
             client: try offline.makeClient(folderState: cache), mailStore: appState.mailStore
         )
 
-        _ = list.applyStatusCounts(FolderStatus(messages: 30, unseen: 7, flagged: 3), mayPredateRemoval: true)
+        _ = list.window.applyStatusCounts(FolderStatus(messages: 30, unseen: 7, flagged: 3), mayPredateRemoval: true)
         // A later change that is saved, as a marker the first write would
         // have landed before.
         appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 9, total: 40)
@@ -290,7 +290,7 @@ final class PillsMatchSidebarTests: XCTestCase {
         let appState = AppState()
         let counts = appState.mailStore.counts
         var list: MessageListViewModel? = offline.makeListModel(client: client, mailStore: appState.mailStore)
-        await list?.seedSavedCounts()
+        await list?.window.seedSavedCounts()
         XCTAssertEqual(counts.folderUnreadCounts["INBOX"], 2, "precondition: the list seeded it")
         counts.clearSeeded()
         XCTAssertEqual(counts.folderUnreadCounts["INBOX"], 2, "precondition: kept while the list is open")
@@ -314,11 +314,11 @@ final class PillsMatchSidebarTests: XCTestCase {
         appState.mailStore.counts.applyUnreadDelta(folderPath: work, delta: -1)
         let reply = FolderStatus(messages: 9, unseen: 6, flagged: 4)
 
-        _ = list.applyStatusCounts(reply)
+        _ = list.window.applyStatusCounts(reply)
         XCTAssertEqual(list.unseen, 1, "fresh: held at what is shown")
         XCTAssertEqual(list.flagged, 4, "no flag write out: taken")
 
-        _ = list.applyStatusCounts(reply, askedAt: .now + MailCounts.countFreshness + .seconds(1))
+        _ = list.window.applyStatusCounts(reply, askedAt: .now + MailCounts.countFreshness + .seconds(1))
         XCTAssertEqual(list.unseen, 6, "stale: taken as it comes")
     }
 
@@ -329,13 +329,13 @@ final class PillsMatchSidebarTests: XCTestCase {
         let client = try offline.makeClient(folderState: await offline.savedState())
         let appState = AppState()
         let list = offline.makeListModel(client: client, mailStore: appState.mailStore)
-        await list.seedSavedCounts()
+        await list.window.seedSavedCounts()
         XCTAssertEqual(list.unseen, 2, "precondition: seeded, not counted")
 
-        _ = list.applyStatusCounts(FolderStatus(messages: 22, unseen: 2, flagged: 1), mayPredateRemoval: true)
+        _ = list.window.applyStatusCounts(FolderStatus(messages: 22, unseen: 2, flagged: 1), mayPredateRemoval: true)
         appState.mailStore.shields.beginFlagWrite([MessageRef(folder: "INBOX", uid: 21)], flag: .seen, added: true)
         appState.mailStore.counts.applyUnreadDelta(folderPath: "INBOX", delta: -1)
-        _ = list.applyStatusCounts(FolderStatus(messages: 22, unseen: 2, flagged: 1))
+        _ = list.window.applyStatusCounts(FolderStatus(messages: 22, unseen: 2, flagged: 1))
 
         XCTAssertEqual(list.unseen, 1, "the mark-read still out holds the count down")
     }

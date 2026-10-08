@@ -2,18 +2,13 @@ import Foundation
 import Observation
 import CabalmailKit
 
-/// Backs `MessageListView`. Owns the paginated envelope window, envelope
-/// cache hydration, search results, and the per-row mark-as-read / dispose
-/// actions.
-///
-/// Window strategy: on open, `STATUS` the folder for its message count, then
-/// fetch the top page via `topEnvelopes`. Older pages lazy-load as the user
-/// scrolls, through positional `envelopes(offset:limit:)` calls against the
-/// paginated `/list_messages` (large-mailbox plan Layer 3.1). Where the
-/// window ends against the STATUS total, and whether a page there came back
-/// empty, decide `hasMore`, so sparse folders no longer dead-end (Layer
-/// 3.3). The envelope cache stores everything keyed by `UIDVALIDITY` so
-/// reopen is instant while the refresh runs in the background.
+/// Backs `MessageListView`: one folder's list, or the global search surface.
+/// It coordinates the parts that show the rows -- the folder window
+/// (`window`, a `FolderWindowLoader`: rows, positions, paging, refresh and
+/// the snapshot) and, while one runs, a search in its place -- and owns what
+/// spans them: the filter pills, the selection, the writes made from the
+/// list and the events it hears from other writers, and the routing of a
+/// refresh to whichever part is showing.
 @Observable
 @MainActor
 final class MessageListViewModel {
@@ -24,62 +19,16 @@ final class MessageListViewModel {
     /// call sites read this unchanged; the search paths are gated off before
     /// any of them issue an IMAP request against a `.search` sentinel.
     let folder: Folder
-    // Internal (not `private`) so the view model's same-module extensions
-    // in sibling files (`+Optimistic`, `+NextUnread`) can reach them.
     let client: CabalmailClient
     let preferences: Preferences
     /// The session's shared mail state: the folder counts this list keeps
     /// the sidebar's in step with, and the shields its merges honour.
     let mailStore: MailSessionStore
-    // Top-page size. Kept small for a fast first paint on a cold folder, and
-    // reused as the "have we paginated past the top page?" threshold in
-    // `applyRefreshPage` (+Refresh sibling file), so it's internal not private.
-    let pageSize: UInt32 = 50
-    // Older pages fetched while scrolling use a larger size: each
-    // /list_envelopes round trip carries fixed IMAP connect/SELECT overhead,
-    // so bigger pages mean fewer trips and steadier deep scrolling. Capped
-    // server-side by helper.py MAX_PAGE_SIZE (250); 200 stays under it.
-    let loadMorePageSize: UInt32 = 200
-    // Max rows kept in the loaded window. Trimming the scrolled-past front
-    // past this bound keeps SwiftUI's per-update cost (its O(n) ForEach diff
-    // and the O(n) `filteredEnvelopes` in the view) from growing without
-    // limit -- what made the list sluggish past ~800 loaded. Sized to hold
-    // the viewport, the prefetch runway below it, and a scroll-back buffer
-    // above, while staying under that point. Tunable.
-    let windowCap = 600
-    // Prefetch the next page once the user scrolls within this many rows of the
-    // end of the loaded list, so scrolling doesn't stall at the bottom waiting
-    // for a fetch. It has to exceed the number of rows the user scrolls past
-    // during one page fetch, so it scales with `loadMorePageSize`: at 100 (set
-    // when pages were 50) the next 200-row page only began loading once the
-    // user was halfway through the page they were on, so a normal scroll
-    // reached the end before it arrived. A little over one page keeps a full
-    // page of runway ahead -- on open it prefetches the first big page
-    // immediately, then stays ~a page ahead of the scroll.
-    let prefetchDistance = 250
+    /// The folder window: its rows, their positions and every load that
+    /// fills them. Views and tests reach window state through it.
+    let window: FolderWindowLoader
 
-    var envelopes: [Envelope] = []
-    /// A refresh, a reset or a search is in flight: the list's spinner, the
-    /// Refresh button's disabled state, and the gate that keeps page loads
-    /// out meanwhile. It falls only once the last of them has returned
-    /// (`holdLoading()`), so an overlapping one can't lower it for another.
-    private(set) var isLoading = false
-    var isLoadingMore = false
-    // Upward counterpart of `isLoadingMore`: a front-reload (loadPrevious) is
-    // in flight. No top spinner (a top ProgressView would itself shift the
-    // scroll); it only gates against overlapping a downward page with an
-    // upward one. Internal so the `+Refresh` sibling that owns loadPrevious
-    // can set it.
-    var isLoadingPrevious = false
-    // A full-window reload (a scrollbar drag into an unloaded region) is in
-    // flight. Gates the incremental extends and other jumps against it.
-    // Internal so `performLoadWindow` in the `+Refresh` sibling can clear it.
-    var isLoadingWindow = false
     var errorMessage: String?
-
-    /// Active sort key. Drives both the in-memory display order and the
-    /// wire sort the Lambda applies. Mutated via `setSort(_:)`.
-    var sortCriterion: SortCriterion = .default
 
     /// Active filter tab. Narrows the loaded envelopes client-side and, for
     /// Unread / Flagged, drives the folder-scoped server search that loads
@@ -171,53 +120,6 @@ final class MessageListViewModel {
     /// triggering row's `.task` cancellation (the `loadMoreTask` pattern).
     var loadMoreSearchTask: Task<Void, Never>?
 
-    /// The folder's UIDVALIDITY, from the last STATUS or the cache snapshot.
-    /// Nil until one answers, and always in `.search` scope, which has no
-    /// folder. Readable so the sibling extensions can stamp it onto the refs
-    /// they build for this folder's rows (`rowRef(for:)`).
-    private(set) var uidValidity: UInt32?
-    // Folder message count from the last STATUS. Pagination loads until the
-    // loaded envelope count reaches it. Internal so the +Refresh sibling
-    // extension can read it after a page merge to recompute `hasMore`.
-    var totalMessages: UInt32 = 0 {
-        // A folder whose count moved may hold rows below the window again.
-        didSet { if totalMessages != oldValue { hasMore = true } }
-    }
-    // The Unread and Flagged pill counts (`unseen`, `flagged`) are the mail
-    // store's counts for this folder, the same numbers the sidebar shows; see
-    // `+Refresh`. `totalMessages` is the All count.
-    /// The All pill's count until a STATUS answers this session: the folder
-    /// total last saved (`seedSavedCounts`). Kept apart from `totalMessages`,
-    /// which also sizes the list, where a total nothing can load offline
-    /// would draw placeholder rows.
-    var savedMessageCount: Int?
-    /// Whether a page below the window may still hold rows; `ensureLoaded`
-    /// asks for one only while it is set. A page that comes back empty clears
-    /// it, so a STATUS that over-counts isn't asked for the same empty page by
-    /// every row that appears (#1823). Only a change to `totalMessages`, a
-    /// move of the window's end, or a reset sets it again
-    /// (`recomputeHasMore(windowEndBefore:)`).
-    var hasMore = true
-    // Sliding-window pagination state. `envelopes` holds a contiguous window
-    // [windowStart, windowStart + count) of the folder's sorted list;
-    // `windowStart` is the absolute sort-index of `envelopes[0]`, so page
-    // offsets are absolute, not `envelopes.count`. `hasTrimmedFront` records
-    // that the window no longer starts at the top, which gates the top-page
-    // refresh and the snapshot persist (both assume a top-anchored window).
-    // `performLoadPrevious` reloads the front as the user scrolls back up,
-    // clearing `hasTrimmedFront` once the window reaches the top again. Reset
-    // via `resetWindow()` on every path that wipes `envelopes`. Internal so
-    // the `+Refresh` sibling (loadPrevious) can reach them.
-    var windowStart: UInt32 = 0
-    var hasTrimmedFront = false
-    /// What the window is known to line up with on the server, and the state
-    /// of any re-read that realigns it (`+Reconcile`).
-    @ObservationIgnored var alignment = WindowAlignment()
-    /// The refresh passes in flight and the refreshes parked on them.
-    @ObservationIgnored var refreshFlight = RefreshFlight()
-    /// The refreshes, resets and searches holding `isLoading` up.
-    @ObservationIgnored private var loadingHolds = 0
-
     /// Foreground-only change watcher (`MailboxWatcher`, which polls folder
     /// status). Nil when the view is offscreen; started on
     /// `task`, stopped on `onDisappear`. Separated from the refresh path so
@@ -225,44 +127,6 @@ final class MessageListViewModel {
     /// watcher for the main actor.
     private var watcher: MailboxWatcher?
     private var watcherTask: Task<Void, Never>?
-    /// In-flight pagination fetch, owned by the model so it survives the
-    /// triggering row's `.task` cancellation (see `ensureLoaded(around:)`).
-    /// Cancelled in `stopWatching()` when the list goes away.
-    var loadMoreTask: Task<Void, Never>?
-    /// In-flight front reload (loadPrevious), owned by the model like
-    /// `loadMoreTask` so it survives the triggering row's `.task`
-    /// cancellation. Cancelled in `stopWatching()`.
-    var loadPrevTask: Task<Void, Never>?
-    /// In-flight full-window reload for a scrollbar jump. Model-owned for the
-    /// same reason; cancelled in `stopWatching()`.
-    var loadWindowTask: Task<Void, Never>?
-    /// Debounced envelope-snapshot writer (see `schedulePersist`). Coalesces
-    /// the O(loaded count) snapshot rewrite so a continuous scroll persists
-    /// once when it settles, not on every page. Cancelled in `stopWatching()`.
-    private(set) var persistTask: Task<Void, Never>?
-    /// Debounced "load where the list settled" after a keyboard page jump.
-    /// Cancelled in `stopWatching()`.
-    var keyScrollTask: Task<Void, Never>?
-    /// Absolute indices of the rows the list is currently rendering, tracked via
-    /// row onAppear/onDisappear. `@ObservationIgnored` so the high-frequency
-    /// churn never invalidates the view; read only by the page-scroll handlers.
-    /// Counted rather than a set: a replaced row (`replaceRows(showing:)`) is
-    /// one row leaving its index and another arriving at it, and SwiftUI
-    /// doesn't promise the old one's onDisappear comes first.
-    @ObservationIgnored var visibleRowIndices: [Int: Int] = [:]
-    /// Pre-fetched bottom window, staged off to the side so the first jump to
-    /// the bottom (End / scrollbar-to-bottom) is instant rather than a round
-    /// trip. The single contiguous `envelopes` window can't hold both the top
-    /// and the bottom at once, and the on-disk cache is UID-keyed + top-
-    /// anchored (no positional hydrate), so the bottom lives here (see
-    /// `BottomPrefetch`). `performLoadWindow` adopts it;
-    /// `invalidateBottomPrefetch()` drops it. `@ObservationIgnored` so the
-    /// background fill never invalidates the list view.
-    @ObservationIgnored var bottomPrefetch: BottomPrefetch?
-    /// In-flight bottom-prefetch fetch, model-owned (like `loadWindowTask`) so a
-    /// late fill can be cancelled on folder teardown / invalidation rather than
-    /// landing stale rows. Cancelled in `stopWatching()` and on every invalidate.
-    @ObservationIgnored var bottomPrefetchTask: Task<Void, Never>?
     /// Coalescing timestamp — if `.changed` fires in bursts (e.g. server
     /// delivers three messages in quick succession) we collapse them into
     /// one refresh by gating on elapsed time.
@@ -272,18 +136,8 @@ final class MessageListViewModel {
     // pre-write server state; applying it verbatim would resurrect a row
     // just moved or revert a flag just toggled. Every write, this list's or
     // anyone's, is bracketed in the mail store's one record
-    // (`MessageShields`), which `shieldFetched`, the refresh's STATUS bounds
-    // and the paging gate ask.
-
-    /// The removals in flight that touch this list: its folder's, from any
-    /// writer, or on the search surface any. It includes, on the dispose
-    /// path, the few hundred milliseconds where the row is still present but
-    /// animating out (`rowDisposalPhases`). Paging waits while it is
-    /// non-empty, since a removal moves every row below it up a place.
-    var pendingRemovedRefs: Set<MessageRef> {
-        let removing = mailStore.shields.pendingMoveRefs
-        return isSearchScope ? removing : removing.filter { $0.folder == folder.path }
-    }
+    // (`MessageShields`), which the window's merges, the refresh's STATUS
+    // bounds and the paging gate ask.
 
     /// Rows `pruneEnvelope(_:)` took out for a dispose / move / purge made by
     /// the reader or another list that is still in flight, with the index
@@ -323,10 +177,31 @@ final class MessageListViewModel {
         self.client = client
         self.preferences = preferences
         self.mailStore = mailStore
+        self.window = FolderWindowLoader(scope: scope, client: client, mailStore: mailStore)
+        window.host = self
         // For the model's whole life, not the view's: a list under a pushed
         // reader has had `.onDisappear` and still has to hear its archive.
         mailStore.events.subscribe(self)
     }
+
+    /// The rows on screen: the folder window's, or a search's in their place
+    /// (both live in the window's array until the search moves out). The
+    /// `_modify` accessor hands the window's storage through, so an in-place
+    /// edit (a flag flip, a removal) doesn't copy the whole array.
+    var envelopes: [Envelope] {
+        get { window.envelopes }
+        set { window.envelopes = newValue }
+        _modify { yield &window.envelopes }
+    }
+
+    /// A refresh, a reset or a search is in flight (`FolderWindowLoader.isLoading`).
+    var isLoading: Bool { window.isLoading }
+
+    /// The removals in flight that touch this list: its folder's, from any
+    /// writer, or on the search surface any. It includes, on the dispose
+    /// path, the few hundred milliseconds where the row is still present but
+    /// animating out (`rowDisposalPhases`).
+    var pendingRemovedRefs: Set<MessageRef> { window.pendingRemovedRefs }
 
     /// Start the watcher-driven auto-refresh loop. Called from the view's
     /// `.task` after `loadInitial()` settles. The watcher runs on its own
@@ -358,22 +233,12 @@ final class MessageListViewModel {
 
     /// Tear down the watcher. View hooks this into `.onDisappear` so the
     /// status polling stops when the list isn't on screen — no API calls
-    /// for a mailbox the user isn't looking at.
+    /// for a mailbox the user isn't looking at. The window's own tasks stop
+    /// with it, before any suspension.
     func stopWatching() async {
         watcherTask?.cancel()
         watcherTask = nil
-        loadMoreTask?.cancel()
-        loadMoreTask = nil
-        loadPrevTask?.cancel()
-        loadPrevTask = nil
-        loadWindowTask?.cancel()
-        loadWindowTask = nil
-        persistTask?.cancel()
-        persistTask = nil
-        keyScrollTask?.cancel()
-        keyScrollTask = nil
-        bottomPrefetchTask?.cancel()
-        bottomPrefetchTask = nil
+        window.cancelTasks()
         // Let go of the watcher before waiting for it to stop, so a list back
         // on screen in the meantime starts a fresh one (`startWatching`).
         let stopping = watcher
@@ -390,18 +255,11 @@ final class MessageListViewModel {
         await refresh()
     }
 
-    /// Brings the list up to date with the server: the folder's STATUS and
-    /// the window work it calls for, or, while a search is showing, that
-    /// search again.
-    ///
-    /// Single-flight (#1820, `RefreshFlight`): a refresh asked for while a
-    /// pass is out waits for it, then for one more pass that asks STATUS
-    /// afresh and answers every refresh that waited. `isLoading` stays up
-    /// until the last of them returns. `prefetched` is a STATUS already asked
-    /// for, with when it was asked, used rather than asked for again unless
-    /// the refresh had to wait. `startingOver` marks a reset's refresh
-    /// (`hardReload`, `setSort`, leaving a search), which runs at once: the
-    /// reset has already stood down whatever the pass out was for.
+    /// Brings the list up to date with the server: while a search is
+    /// showing, that search again; otherwise the folder window's
+    /// single-flight refresh (`WindowRefresher`). `prefetched` is a STATUS
+    /// already asked for; `startingOver` marks a reset's refresh, which runs
+    /// at once.
     func refresh(prefetched: PrefetchedStatus? = nil, startingOver: Bool = false) async {
         // Re-route while a search is showing — pull-to-refresh and the
         // watcher / 60-second background refreshes shouldn't silently wipe
@@ -412,195 +270,8 @@ final class MessageListViewModel {
             await refreshSearch(prefetched: prefetched)
             return
         }
-        // Search scope with no active search has nothing to refresh — and no
-        // real folder to STATUS. A background/pull refresh here would query the
-        // sentinel path; bail instead.
-        if isSearchScope { return }
-        holdLoading()
-        defer { releaseLoading() }
-        let ask = prefetched?.ask ?? refreshFlight.ask()
-        var status = prefetched
-        var supersede = startingOver
-        // A cancelled caller stops asking; a search that starts meanwhile
-        // makes the folder's refresh moot.
-        while !refreshFlight.hasAnswered(ask), !Task.isCancelled, !isSearchActive {
-            if refreshFlight.current != nil, !supersede {
-                await withCheckedContinuation { refreshFlight.park($0) }
-                status = nil
-                continue
-            }
-            let pass = refreshFlight.begin(answeringThrough: status?.ask)
-            await refreshPass(prefetched: status)
-            for waiter in refreshFlight.end(pass, finished: !Task.isCancelled) {
-                waiter.resume()
-            }
-            supersede = false
-            status = nil
-        }
+        await window.refresh(prefetched: prefetched, startingOver: startingOver)
     }
-
-    /// One refresh pass: STATUS (or the one prefetched), the counts, then the
-    /// window. A reset or a search that starts while one of its awaits is
-    /// out moves the window's generation, and the pass then leaves the list
-    /// to it (#1870).
-    private func refreshPass(prefetched: PrefetchedStatus?) async {
-        let startedAt = prefetched?.askedAt ?? ContinuousClock.now
-        var generation = alignment.generation
-        do {
-            // flagged: true asks for the SEARCH FLAGGED count too -- this is the
-            // one status call that drives the filter-pill counts.
-            let status: FolderStatus
-            if let prefetched {
-                status = prefetched.status
-            } else {
-                status = try await client.folderStatus(path: folder.path, flagged: true)
-                guard generation == alignment.generation else { return }
-            }
-            // Only a concrete, *changed* UIDVALIDITY means "rebuild from
-            // scratch." A missing/zero reading from a flaky STATUS must not
-            // wipe a scrolled, paginated list back to the top page on a
-            // routine background refresh.
-            if let fresh = status.uidValidity, fresh != 0 {
-                if let known = self.uidValidity, known != fresh {
-                    try? await client.envelopeCache.invalidate(folder: folder.path)
-                    try? await client.bodyCache.invalidate(folder: folder.path)
-                    guard generation == alignment.generation else { return }
-                    envelopes = []
-                    resetWindow()
-                    mailStore.shields.clearConfirmedRemovals(folderPath: folder.path)
-                    generation = alignment.generation
-                }
-                self.uidValidity = fresh
-            }
-            let uidValidity = self.uidValidity ?? 0
-            // Top page uses sequence-number FETCH via `topEnvelopes` (robust on
-            // sparse folders); `performLoadMore` loads older pages positionally
-            // by offset. `totalMessages` from STATUS gates pagination.
-            // STATUS drives the All/Unread/Flagged pill counts and the
-            // pagination gate; helper lives in +Refresh to keep this body lean.
-            let mayPredate = removalMayPostdate(startedAt)
-            _ = applyStatusCounts(status, mayPredateRemoval: mayPredate, askedAt: startedAt)
-            let reading = windowReading(status, askedAt: startedAt,
-                                        mayPredateRemoval: mayPredate, generation: generation)
-            // Whether the loaded rows still sit where the server has them
-            // decides what comes next: usually the top page, as always.
-            try await refreshWindow(reading, status: status, generation: generation, uidValidity: uidValidity)
-            errorMessage = nil
-        } catch {
-            // A refresh whose task was cancelled (the 60-second poll's, the
-            // watcher's, when the list leaves the screen) has nothing to
-            // report; "cancelled" would stay on a list that is fine (#1816).
-            guard !Task.isCancelled else { return }
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    /// Index-driven window loader. A row (real or placeholder) at
-    /// `absoluteIndex` appeared, so ensure the loaded window covers it. Near
-    /// an edge it extends incrementally via `performLoadMore` /
-    /// `performLoadPrevious` (cheap: one page + a trim of the far side); a far
-    /// jump (the user dragged the scrollbar into an unloaded region) reloads a
-    /// fresh window centered there. Replaces the old envelope-keyed
-    /// loadMore/loadPrevious triggers: because the list's `ForEach` spans the
-    /// full stable index range, shifting/trimming the backing window only
-    /// changes which indices hold data -- it never restructures the list, so
-    /// there's no jump and no trim-retrigger thrash. The fetches run on
-    /// model-owned tasks so they outlive the row `.task`'s cancellation.
-    func ensureLoaded(around absoluteIndex: Int) {
-        guard !isSearchActive, pendingRemovedRefs.isEmpty, !alignment.isReconciling,
-              !isLoading, !isLoadingMore, !isLoadingPrevious, !isLoadingWindow
-              else { return }
-        let windowLo = Int(windowStart)
-        let windowHi = windowLo + envelopes.count   // exclusive
-        let prefetch = Int(prefetchDistance)
-        if absoluteIndex >= windowLo - prefetch && absoluteIndex <= windowHi + prefetch {
-            // Near or inside the window: extend toward the approached edge.
-            // A fresh jump window is shorter than the runway, so an index can
-            // be in reach of both; the nearer edge goes first (#1823).
-            let below = absoluteIndex >= windowHi - prefetch && hasMore && windowHi < Int(totalMessages)
-            let above = absoluteIndex <= windowLo + prefetch && windowLo > 0
-            if below, !above || windowHi - 1 - absoluteIndex <= absoluteIndex - windowLo {
-                isLoadingMore = true
-                loadMoreTask = Task { [weak self] in await self?.performLoadMore() }
-            } else if above {
-                isLoadingPrevious = true
-                loadPrevTask = Task { [weak self] in await self?.performLoadPrevious() }
-            }
-        } else {
-            // Far jump: replace the window with one centered on the target.
-            isLoadingWindow = true
-            loadWindowTask = Task { [weak self] in await self?.performLoadWindow(around: absoluteIndex) }
-        }
-    }
-
-    /// Fetches and merges the next positional page. Always invoked from
-    /// `loadMoreTask` (see `ensureLoaded(around:)`) so it outlives the
-    /// triggering row's `.task` cancellation. Resets `isLoadingMore` on every
-    /// exit, including cancellation, via `defer`.
-    private func performLoadMore() async {
-        defer { isLoadingMore = false }
-        let generation = alignment.generation
-        do {
-            // Positional page in the current sort order. `mergeFetched`
-            // dedups, so a shifted offset (a concurrent removal) can't
-            // double-insert. The offset is absolute: the window's front may
-            // have been trimmed, so the next page starts past everything ever
-            // loaded (`windowStart` + the rows still in memory), not at
-            // `envelopes.count`.
-            let offset = windowStart + UInt32(envelopes.count)
-            let fetched = try await client.imapClient.envelopes(
-                folder: folder.path,
-                offset: offset,
-                limit: loadMorePageSize,
-                sort: sortCriterion
-            )
-            // A reset or a search that started while the page was out has
-            // replaced the rows it was addressed to (#1870).
-            guard generation == alignment.generation else { return }
-            mergeFetched(fetched)
-            // Trim the scrolled-past front so the loaded window stays bounded
-            // (see `windowCap`). loadMore only fires near the bottom (within
-            // `prefetchDistance`), so the last `windowCap` rows always cover
-            // the viewport, the runway below it, and a scroll-back buffer
-            // above; `removeFirst` drops the newest rows the user scrolled up
-            // and away from under the default newest-first sort. Spacer
-            // virtualization (the list reserves the off-window rows as blank
-            // cells) keeps each loaded row at its absolute position, so the
-            // viewport doesn't move across the removal.
-            if envelopes.count > windowCap {
-                let overflow = envelopes.count - windowCap
-                envelopes.removeFirst(overflow)
-                windowStart += UInt32(overflow)
-                hasTrimmedFront = true
-            }
-            // Done when the page comes back empty or the absolute bottom of
-            // the window reaches the folder's STATUS total.
-            hasMore = !fetched.isEmpty && (windowStart + UInt32(envelopes.count)) < totalMessages
-            // Persist is debounced: rewriting the whole on-disk snapshot is
-            // O(loaded count) and, awaited here on every page, put a growing
-            // write (~0.7s at 800 rows, ~1.5s at 1500) on the pagination
-            // critical path while `isLoadingMore` was held -- so deep
-            // scrolling fell further behind the longer it ran. The snapshot
-            // is a warm-reopen cache, not source of truth, so coalescing the
-            // writes to once the scroll settles is safe: a kill mid-scroll
-            // just re-paginates from the last flush.
-            schedulePersist()
-        } catch {
-            // Best-effort pagination — don't surface an error unless we're
-            // blocked entirely.
-        }
-    }
-
-    // `performLoadPrevious` -- the upward counterpart of `performLoadMore`
-    // that reloads the trimmed front as the user scrolls back up -- lives in
-    // `MessageListViewModel+Refresh.swift` alongside `mergeFetched`, to keep
-    // this type body under SwiftLint's length cap.
-
-    // Structured search (`runSearch`, `clearSearch`, and the query builder) lives in `MessageListViewModel+Search.swift`
-    // so the primary type body stays under SwiftLint's length cap.
-
-    // The per-row flag actions (`markRead`, `toggleSeen`, `toggleFlag`) live in
-    // `MessageListViewModel+Flags.swift` to keep this type body under the cap.
 
     /// Messages this list removed are confirmed gone on the server (a
     /// dispose, move or purge landed; the mutation service has already
@@ -615,9 +286,6 @@ final class MessageListViewModel {
 
 // MARK: - Internals
 
-// Lifted into an extension so the primary type body stays under SwiftLint's
-// 250-line cap. Same-file extension — all helpers remain file-private to
-// the view model.
 extension MessageListViewModel {
     /// The currently-configured dispose action, exposed so the view can
     /// render the right swipe-action label and icon without reaching into
@@ -637,10 +305,27 @@ extension MessageListViewModel {
     /// True when this is the global search surface (no anchor folder).
     var isSearchScope: Bool { scope.isSearch }
 
+    /// Whether the sort menu means anything for the rows shown. Search
+    /// results (a pill's included) come from the server newest first, and
+    /// `SearchQuery` can't ask for another order; sorting the loaded rows
+    /// here would reshuffle them under the user as each later page landed.
+    /// So the menu is off during a search, rather than offering an order the
+    /// rows don't take (#1822).
+    var sortApplies: Bool { !isSearchScope && !isSearchActive }
+
     /// Convenience for the folder path — the overwhelming majority of call
     /// sites. Equivalent to `init(scope: .folder(folder), ...)`.
     convenience init(folder: Folder, client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore) {
         self.init(scope: .folder(folder), client: client, preferences: preferences, mailStore: mailStore)
+    }
+
+    /// The order the rows on screen sort in, for the writes that put a row
+    /// back (`FolderWindowLoader.envelopeOrder`).
+    var envelopeOrder: (Envelope, Envelope) -> Bool { window.envelopeOrder }
+
+    /// Drops the window's staged bottom page: the rows moved under it.
+    func invalidateBottomPrefetch() {
+        window.invalidateBottomPrefetch()
     }
 
     /// Drop a message's row from the in-memory envelope list after it was
@@ -689,11 +374,9 @@ extension MessageListViewModel {
         applyOptimisticFlag(ref, flag: flag, add: added)
     }
 
-    /// The identity of `envelope`'s row. Every row this model loads carries
-    /// its folder (`placedInFolder(_:)`, and `SearchedEnvelope` for search
-    /// rows); one that doesn't is taken to be this folder's.
+    /// The identity of `envelope`'s row (`FolderWindowLoader.rowRef(for:)`).
     func rowRef(for envelope: Envelope) -> MessageRef {
-        envelope.ref(defaultFolder: folder.path, uidValidity: uidValidity)
+        window.rowRef(for: envelope)
     }
 
     /// Position of `ref`'s row in `envelopes`, while it is loaded.
@@ -706,123 +389,18 @@ extension MessageListViewModel {
         index(of: ref).map { envelopes[$0] }
     }
 
-    /// `fetched`, a page of this folder's rows, placed in this folder so each
-    /// row names its own message. Every folder-mode path that brings rows
-    /// into `envelopes` goes through this (or through `shieldFetched`, which
-    /// calls it).
+    /// `fetched` placed in this folder (`FolderWindowLoader.placedInFolder(_:)`).
     func placedInFolder(_ fetched: [Envelope]) -> [Envelope] {
-        fetched.map { $0.folder == nil ? $0.inFolder(folder.path) : $0 }
+        window.placedInFolder(fetched)
     }
+}
 
-    // Internal so `loadInitial` in the `+Refresh` sibling can reach it.
-    func hydrateFromCache() async {
-        if let snapshot = await client.envelopeCache.snapshot(for: folder.path) {
-            uidValidity = snapshot.uidValidity
-            envelopes = placedInFolder(Array(snapshot.envelopes.values)).sorted(by: envelopeOrder)
-            // Nothing says where these rows sit on the server now; the
-            // refresh that follows decides (`planWindow`).
-            forgetWindowAnchor()
-            // `hasMore`/`totalMessages` stay at their defaults; the refresh
-            // that follows hydration sets the real count from STATUS.
-        }
-    }
+// MARK: - The window's host
 
-    private func persistCache(uidValidity: UInt32, uidNext: UInt32) async throws {
-        try await client.envelopeCache.merge(
-            envelopes: envelopes,
-            uidValidity: uidValidity,
-            uidNext: uidNext,
-            into: folder.path
-        )
-    }
-
-    /// Coalesces envelope-snapshot writes during pagination. Each loaded page
-    /// reschedules the write ~1s out, so a continuous scroll persists once
-    /// when it settles rather than O(loaded count) on every page's critical
-    /// path. `stopWatching()` cancels a pending write when the list goes away.
-    private func schedulePersist() {
-        persistTask?.cancel()
-        persistTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled, let self else { return }
-            await self.persistLoadedPages()
-        }
-    }
-
-    /// Writes the current in-memory window to the on-disk snapshot. Invoked
-    /// only from the debounce, never on the per-page path. Skipped once the
-    /// front has been trimmed: the snapshot is a warm-reopen cache and must
-    /// stay top-anchored so a relaunch lands at the top of the folder, not
-    /// mid-scroll. The cache therefore holds up to the first `windowCap` rows.
-    /// Search results are never the folder's snapshot, whatever was due to
-    /// be written when the search started (#1870).
-    private func persistLoadedPages() async {
-        guard !hasTrimmedFront, !isSearchActive,
-              let uidValidity, let uidNext = envelopes.map(\.uid).max() else { return }
-        try? await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
-    }
-
-    /// Resets the sliding-window cursor to a fresh top-anchored state. Called
-    /// by every path that wipes `envelopes` (hard reload, sort change, search
-    /// clear, UIDVALIDITY change) so the next load starts at the top of the
-    /// folder and the top-page refresh / persist resume.
-    func resetWindow() {
-        standDownWindowLoads()
-        windowStart = 0
-        hasTrimmedFront = false
-        hasMore = true
-        forgetWindowAnchor()
-    }
-
-    /// `hasMore` from where the window ends now, `windowEndBefore` being where
-    /// it ended before the change. An empty page's verdict stands while the
-    /// window's end hasn't moved (#1823); a change in `totalMessages` lifts it
-    /// through its didSet, and a reset through `resetWindow()`.
-    func recomputeHasMore(windowEndBefore: UInt32) {
-        let windowEnd = windowStart + UInt32(envelopes.count)
-        hasMore = windowEnd < totalMessages && (hasMore || windowEnd != windowEndBefore)
-    }
-
-    /// Stands down every load addressed to the rows on screen: the page
-    /// loads are cancelled, the staged bottom window dropped, and the
-    /// generation moved, so a page or a refresh pass that lands anyway drops
-    /// what it brought (#1870). Every reset runs it, and so does a search, as
-    /// it starts and as its rows replace the folder's.
-    func standDownWindowLoads() {
-        loadMoreTask?.cancel()
-        loadPrevTask?.cancel()
-        loadWindowTask?.cancel()
-        invalidateBottomPrefetch()
-        alignment.generation += 1
-    }
-
-    /// After a search that stood the window's loads down and then didn't take
-    /// the list over (it failed, was cancelled, or another overtook it): what
-    /// the viewport shows loads once `isLoading` falls, and the bottom window
-    /// is staged again.
-    func resumeWindowLoads() {
-        guard !isSearchScope else { return }
-        alignment.needsSettleLoad = true
-        scheduleBottomPrefetch()
-    }
-
-    /// Holds `isLoading` up for a refresh, a reset or a search until the
-    /// matching `releaseLoading()`. The last release lowers it, and loads
-    /// what the viewport shows without rows (`needsSettleLoad`).
-    func holdLoading() {
-        loadingHolds += 1
-        isLoading = true
-    }
-
-    func releaseLoading() {
-        loadingHolds -= 1
-        guard loadingHolds == 0 else { return }
-        isLoading = false
-        if alignment.needsSettleLoad {
-            alignment.needsSettleLoad = false
-            scheduleEnsureLoaded()
-        }
-    }
+extension MessageListViewModel: FolderWindowHost {
+    /// Select mode is on with rows picked: a re-read waits rather than
+    /// reshuffle the rows under the selection being built.
+    var isBuildingBulkSelection: Bool { bulkMode && !selectedRefs.isEmpty }
 }
 
 // MARK: - Mail events

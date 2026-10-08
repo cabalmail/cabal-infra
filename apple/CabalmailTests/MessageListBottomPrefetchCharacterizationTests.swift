@@ -46,30 +46,30 @@ final class MessageListBottomPrefetchCharacterizationTests: XCTestCase {
         let staged = await world.pages()
         XCTAssertEqual(staged, [Page(offset: 800, limit: 200)])
         XCTAssertEqual(model.envelopes.map(\.uid), ListPagingWorld.uids(0..<50), "staged off to the side")
-        XCTAssertNil(model.envelope(at: 999))
+        XCTAssertNil(model.window.envelope(at: 999))
 
-        model.ensureLoaded(around: 999)
-        XCTAssertTrue(model.isLoadingWindow)
+        model.window.ensureLoaded(around: 999)
+        XCTAssertTrue(model.window.isLoadingWindow)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 800, limit: 200)], "adopted with no round trip")
-        XCTAssertEqual(model.windowStart, 800)
+        XCTAssertEqual(model.window.windowStart, 800)
         XCTAssertEqual(model.envelopes.map(\.uid), ListPagingWorld.uids(800..<1000))
-        XCTAssertEqual(model.envelope(at: 999)?.uid, 1)
-        XCTAssertTrue(model.hasTrimmedFront)
+        XCTAssertEqual(model.window.envelope(at: 999)?.uid, 1)
+        XCTAssertTrue(model.window.hasTrimmedFront)
     }
 
     /// The staged page is consumed by the jump that adopts it: jumping away
     /// and back fetches the bottom again.
     func testTheStagedBottomPageIsUsedOnce() async throws {
         let model = try await openedWithStagedBottom()
-        model.ensureLoaded(around: 999)
+        model.window.ensureLoaded(around: 999)
         await world.settle(model)
 
-        model.ensureLoaded(around: 100)
+        model.window.ensureLoaded(around: 100)
         await world.settle(model)
-        model.ensureLoaded(around: 999)
+        model.window.ensureLoaded(around: 999)
         await world.settle(model)
 
         let pages = await world.pages()
@@ -87,23 +87,23 @@ final class MessageListBottomPrefetchCharacterizationTests: XCTestCase {
     func testAJumpOutsideTheStagedBottomPageFetchesAndKeepsItStaged() async throws {
         let model = try await openedWithStagedBottom()
 
-        model.ensureLoaded(around: 500)
-        XCTAssertTrue(model.isLoadingWindow)
+        model.window.ensureLoaded(around: 500)
+        XCTAssertTrue(model.window.isLoadingWindow)
         await world.settle(model)
 
         let jumped = await world.pages()
         XCTAssertEqual(jumped, [Page(offset: 800, limit: 200), Page(offset: 400, limit: 200)])
-        XCTAssertEqual(model.windowStart, 400)
-        XCTAssertEqual(model.envelope(at: 500)?.uid, 500)
+        XCTAssertEqual(model.window.windowStart, 400)
+        XCTAssertEqual(model.window.envelope(at: 500)?.uid, 500)
 
-        model.ensureLoaded(around: 999)
-        XCTAssertTrue(model.isLoadingWindow)
+        model.window.ensureLoaded(around: 999)
+        XCTAssertTrue(model.window.isLoadingWindow)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, jumped, "the staged page survived the jump to 500 and is adopted now")
-        XCTAssertEqual(model.windowStart, 800)
-        XCTAssertEqual(model.envelope(at: 999)?.uid, 1)
+        XCTAssertEqual(model.window.windowStart, 800)
+        XCTAssertEqual(model.window.envelope(at: 999)?.uid, 1)
     }
 
     /// One message arrives: the refresh's STATUS changes the total, which drops
@@ -117,13 +117,13 @@ final class MessageListBottomPrefetchCharacterizationTests: XCTestCase {
         await world.scriptServer(size: 1001)
 
         await model.refresh()
-        XCTAssertEqual(model.totalMessages, 1001)
-        model.ensureLoaded(around: 999)
+        XCTAssertEqual(model.window.totalMessages, 1001)
+        model.window.ensureLoaded(around: 999)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 800, limit: 200), Page(offset: 801, limit: 200)])
-        XCTAssertEqual(model.windowStart, 801)
+        XCTAssertEqual(model.window.windowStart, 801)
         XCTAssertEqual(model.envelopes.map(\.uid), ListPagingWorld.uids(801..<1001, size: 1001))
     }
 
@@ -137,13 +137,13 @@ final class MessageListBottomPrefetchCharacterizationTests: XCTestCase {
         let statusesAfter = await world.imap.statusCalls.count
         XCTAssertEqual(statusesAfter, statuses + 1, "the refresh ran its STATUS")
         XCTAssertNil(model.errorMessage)
-        XCTAssertEqual(model.totalMessages, 1000)
-        model.ensureLoaded(around: 999)
+        XCTAssertEqual(model.window.totalMessages, 1000)
+        model.window.ensureLoaded(around: 999)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 800, limit: 200)])
-        XCTAssertEqual(model.windowStart, 800)
+        XCTAssertEqual(model.window.windowStart, 800)
     }
 
     /// A fill still in flight when the folder's size changes is cancelled and
@@ -156,19 +156,19 @@ final class MessageListBottomPrefetchCharacterizationTests: XCTestCase {
         let model = try world.makeModel()
         await model.loadInitial()
         await world.imap.awaitHeld(.envelopes)
-        let fill = model.bottomPrefetchTask
+        let fill = model.window.bottomPrefetchTask
 
         await world.scriptServer(size: 1001)
         await model.refresh()
-        XCTAssertEqual(model.totalMessages, 1001)
-        XCTAssertNil(model.bottomPrefetchTask, "the size change drops the fill")
+        XCTAssertEqual(model.window.totalMessages, 1001)
+        XCTAssertNil(model.window.bottomPrefetchTask, "the size change drops the fill")
         await world.scriptServer(size: 1000)
         await model.refresh()
-        XCTAssertEqual(model.totalMessages, 1000)
+        XCTAssertEqual(model.window.totalMessages, 1000)
         XCTAssertNil(model.errorMessage)
         await world.imap.releaseHeld(.envelopes)
         await fill?.value
-        model.ensureLoaded(around: 999)
+        model.window.ensureLoaded(around: 999)
         await world.settle(model)
 
         let pages = await world.pages()
@@ -176,8 +176,8 @@ final class MessageListBottomPrefetchCharacterizationTests: XCTestCase {
             pages, [Page(offset: 800, limit: 200), Page(offset: 800, limit: 200)],
             "nothing was staged, so the jump fetches the bottom page itself"
         )
-        XCTAssertEqual(model.windowStart, 800)
-        XCTAssertEqual(model.envelope(at: 999)?.uid, 1)
+        XCTAssertEqual(model.window.windowStart, 800)
+        XCTAssertEqual(model.window.envelope(at: 999)?.uid, 1)
     }
 
     /// Only a folder bigger than the 600-row window cap gets a staged bottom;
@@ -198,7 +198,7 @@ final class MessageListBottomPrefetchCharacterizationTests: XCTestCase {
         let model = try await openedWithStagedBottom()
         XCTAssertNil(model.errorMessage)
 
-        model.ensureLoaded(around: 999)
+        model.window.ensureLoaded(around: 999)
         await world.settle(model)
 
         let pages = await world.pages()

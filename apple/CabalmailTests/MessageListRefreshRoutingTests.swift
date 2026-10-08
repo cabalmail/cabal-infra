@@ -86,7 +86,7 @@ final class MessageListRefreshRoutingTests: XCTestCase {
         XCTAssertEqual(statuses, ["Work flagged=true"], "the reload's own STATUS, used once")
         XCTAssertEqual(model.unseen, 5)
         XCTAssertEqual(model.flagged, 1)
-        XCTAssertEqual(model.totalMessages, 9)
+        XCTAssertEqual(model.window.totalMessages, 9)
         XCTAssertEqual(model.envelopes.map(\.uid), [8, 6])
         XCTAssertEqual(model.filterTab, .unread)
     }
@@ -159,7 +159,7 @@ final class MessageListRefreshRoutingTests: XCTestCase {
         await fixture.imap.scriptSearch(fixture.searchResult(fixture.rows([3, 1])))
         await fixture.imap.holdNext(.status)
 
-        let sort = Task { await model.setSort(subjectOrder) }
+        let sort = Task { await model.window.setSort(subjectOrder) }
         await fixture.imap.awaitHeld(.status)
         await model.selectFilter(.unread)
         await fixture.imap.releaseHeld(.status)
@@ -167,7 +167,7 @@ final class MessageListRefreshRoutingTests: XCTestCase {
 
         XCTAssertTrue(model.isSearchActive)
         XCTAssertEqual(model.envelopes.map(\.uid), [3, 1])
-        XCTAssertEqual(model.sortCriterion, subjectOrder)
+        XCTAssertEqual(model.window.sortCriterion, subjectOrder)
         XCTAssertEqual(model.unseen, 2, "the probe's counts")
         let searches = await fixture.imap.searchCalls
         let tops = await fixture.topPageCalls()

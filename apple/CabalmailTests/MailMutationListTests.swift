@@ -42,7 +42,7 @@ final class MailMutationListTests: XCTestCase {
         let second = try TestFixtures.makeModel(imap: imap, envelopes: rows, folderPath: work, mailStore: store)
         for list in [first, second] {
             await fixture.track(list.client)
-            list.totalMessages = 3
+            list.window.totalMessages = 3
             list.unseen = 2
         }
         store.counts.setFolderCounts(folderPath: work, unread: 2, total: 3)
@@ -67,7 +67,7 @@ final class MailMutationListTests: XCTestCase {
         otherWindow.apply()
 
         XCTAssertEqual(second.rowRefs, [ref(2), ref(1)], "gone before the server answered")
-        XCTAssertEqual(second.totalMessages, 2)
+        XCTAssertEqual(second.window.totalMessages, 2)
         XCTAssertEqual(second.unseen, 1)
         XCTAssertEqual(second.selectedRefs, [], "the other window lets go of the row without advancing")
         XCTAssertNil(otherWindow.shown)
@@ -143,7 +143,7 @@ final class MailMutationListTests: XCTestCase {
 
         XCTAssertTrue(probe.coveredInBetween, "between the answer and the restore, the row was listed or recorded")
         XCTAssertEqual(first.rowRefs, [ref(3), ref(2), ref(1)])
-        XCTAssertEqual(first.totalMessages, 3)
+        XCTAssertEqual(first.window.totalMessages, 3)
     }
 
     /// A refused removal of several rows in one list puts them back in order
@@ -186,7 +186,7 @@ final class MailMutationListTests: XCTestCase {
         XCTAssertEqual(second.rowRefs, [ref(3), ref(2), ref(1)])
         XCTAssertFalse(second.envelopes[0].flags.contains(.seen), "back unread, as it is on the server")
         XCTAssertEqual(second.unseen, 2)
-        XCTAssertEqual(second.totalMessages, 3)
+        XCTAssertEqual(second.window.totalMessages, 3)
         XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts[work], 2)
         XCTAssertEqual(first.errorMessage, Self.refused.localizedDescription)
         XCTAssertNil(second.errorMessage, "the toast is the acting window's")
@@ -200,7 +200,7 @@ final class MailMutationListTests: XCTestCase {
         await first.disposeMessages(refs: [ref(3), ref(1)], action: .archive)
 
         XCTAssertEqual(second.rowRefs, [ref(2)])
-        XCTAssertEqual(second.totalMessages, 1)
+        XCTAssertEqual(second.window.totalMessages, 1)
         XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts[work], 1)
     }
 

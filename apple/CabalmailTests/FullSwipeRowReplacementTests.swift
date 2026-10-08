@@ -32,7 +32,7 @@ final class FullSwipeRowReplacementTests: XCTestCase {
     /// not hidden behind that row's button.
     func testTheMessageThatMovesUpIntoAFullSwipedRowIsNotHeldOpen() async throws {
         let (model, rows) = try await archiveTheTopMessage(keying: .slots)
-        XCTAssertEqual(model.envelope(at: 0)?.uid, 2, "the full swipe should have archived the top message")
+        XCTAssertEqual(model.window.envelope(at: 0)?.uid, 2, "the full swipe should have archived the top message")
         XCTAssertFalse(
             try rows.isHeldOpen(slot: 0),
             "the message that moved up inherited the swiped row's held-open reveal"
@@ -43,7 +43,7 @@ final class FullSwipeRowReplacementTests: XCTestCase {
     /// it was. It must come back drawn, not covered by its own Archive button.
     func testAMessageWhoseArchiveFailsComesBackClosed() async throws {
         let (model, rows) = try await archiveTheTopMessage(keying: .slots, moveFails: true)
-        XCTAssertEqual(model.envelope(at: 0)?.uid, 1, "a failed move leaves the message in place")
+        XCTAssertEqual(model.window.envelope(at: 0)?.uid, 1, "a failed move leaves the message in place")
         XCTAssertFalse(
             try rows.isHeldOpen(slot: 0),
             "the message whose archive failed came back held open behind its own button"
@@ -56,14 +56,14 @@ final class FullSwipeRowReplacementTests: XCTestCase {
     /// swipes open outside a `List`, and the replacement could be retired.
     func testHarnessSeesTheHeldOpenRowWhenSlotsAreKeyedByIndex() async throws {
         let (model, rows) = try await archiveTheTopMessage(keying: .index)
-        XCTAssertEqual(model.envelope(at: 0)?.uid, 2)
+        XCTAssertEqual(model.window.envelope(at: 0)?.uid, 2)
         try Self.expectHeldOpen(rows)
     }
 
     /// The same control for the failed move.
     func testHarnessSeesAFailedArchiveHeldOpenWhenSlotsAreKeyedByIndex() async throws {
         let (model, rows) = try await archiveTheTopMessage(keying: .index, moveFails: true)
-        XCTAssertEqual(model.envelope(at: 0)?.uid, 1)
+        XCTAssertEqual(model.window.envelope(at: 0)?.uid, 1)
         try Self.expectHeldOpen(rows)
     }
 
@@ -82,7 +82,7 @@ final class FullSwipeRowReplacementTests: XCTestCase {
             imap: imap,
             envelopes: [1, 2, 3, 4].map { TestFixtures.makeEnvelope(uid: $0, flags: [.seen]) }
         )
-        model.totalMessages = 4
+        model.window.totalMessages = 4
         let rows = RowPositions()
         let harness = try await SwipeTestHarness.make(rows: 4) {
             SlotList(model: model, rows: rows, keying: keying)
@@ -141,7 +141,7 @@ private struct SlotList: View {
     let keying: Keying
 
     var body: some View {
-        let count = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
+        let count = max(Int(model.window.totalMessages), Int(model.window.windowStart) + model.envelopes.count)
         ScrollView {
             LazyVStack(spacing: 0) {
                 switch keying {
@@ -157,7 +157,7 @@ private struct SlotList: View {
 
     @ViewBuilder
     private func row(_ index: Int) -> some View {
-        if let envelope = model.envelope(at: index) {
+        if let envelope = model.window.envelope(at: index) {
             DisposingRow(model: model, ref: model.rowRef(for: envelope), rowHeight: SwipeTestHarness.rowHeight) {
                 SwipeActionRow(
                     height: SwipeTestHarness.rowHeight, contentID: envelope.uid, rowBackground: .clear,

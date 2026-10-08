@@ -41,7 +41,7 @@ final class DisposeRaceTests: XCTestCase {
             folderPath: inbox,
             mailStore: mailStore
         )
-        model.totalMessages = UInt32(uids.count)
+        model.window.totalMessages = UInt32(uids.count)
         return model
     }
 
@@ -88,7 +88,7 @@ final class DisposeRaceTests: XCTestCase {
             once the fade and collapse have played the row must leave -- waiting for the server \
             leaves the next message under the pointer in the slot below
             """)
-        XCTAssertEqual(model.totalMessages, 2)
+        XCTAssertEqual(model.window.totalMessages, 2)
         XCTAssertFalse(model.isDisposingRow, "rows take hits again once the gap has closed")
         XCTAssertTrue(
             model.pendingRemovedRefs.contains(ref(1)),
@@ -119,7 +119,7 @@ final class DisposeRaceTests: XCTestCase {
         await dispose.value
 
         XCTAssertEqual(model.envelopes.map(\.uid), [1, 2, 3], "the failed row comes back at its old index")
-        XCTAssertEqual(model.totalMessages, 3)
+        XCTAssertEqual(model.window.totalMessages, 3)
         XCTAssertNotNil(model.errorMessage)
         XCTAssertTrue(model.rowDisposalPhases.isEmpty)
         XCTAssertTrue(
@@ -177,13 +177,13 @@ final class DisposeRaceTests: XCTestCase {
         await imap.awaitHeld(.status)
 
         await model.dispose(model.envelopes[0])
-        XCTAssertEqual(model.totalMessages, 2)
+        XCTAssertEqual(model.window.totalMessages, 2)
 
         await imap.releaseHeld(.status)
         await refresh.value
 
         XCTAssertEqual(
-            model.totalMessages, 2,
+            model.window.totalMessages, 2,
             "a STATUS answered before the move landed still counts the departed message; it can't restore the slot"
         )
         XCTAssertEqual(model.envelopes.map(\.uid), [4, 3])
@@ -205,7 +205,7 @@ final class DisposeRaceTests: XCTestCase {
         await model.refresh()
 
         XCTAssertEqual(model.envelopes.map(\.uid), [6, 4, 3])
-        XCTAssertEqual(model.totalMessages, 3, "the clamp is only for replies that may predate a removal")
+        XCTAssertEqual(model.window.totalMessages, 3, "the clamp is only for replies that may predate a removal")
     }
 
     func testAMessageTheReaderMovedStaysGoneFromAStaleRefresh() async throws {
@@ -228,7 +228,7 @@ final class DisposeRaceTests: XCTestCase {
         await refresh.value
 
         XCTAssertEqual(model.envelopes.map(\.uid), [4], "the page predates the move; the message stays gone")
-        XCTAssertEqual(model.totalMessages, 1, "and its STATUS, taken mid-move, can't restore the slot")
+        XCTAssertEqual(model.window.totalMessages, 1, "and its STATUS, taken mid-move, can't restore the slot")
     }
 
     // MARK: - The reader reports its confirmed moves

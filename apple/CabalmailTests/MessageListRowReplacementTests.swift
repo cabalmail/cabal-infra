@@ -19,7 +19,7 @@ final class MessageListRowReplacementTests: XCTestCase {
             envelopes: uids.map { TestFixtures.makeEnvelope(uid: $0, flags: [.seen]) },
             folderPath: folderPath
         )
-        model.totalMessages = UInt32(uids.count)
+        model.window.totalMessages = UInt32(uids.count)
         return model
     }
 
@@ -42,8 +42,8 @@ final class MessageListRowReplacementTests: XCTestCase {
 
     func testReplacingARowRenewsTheSlotItsMessageOccupies() throws {
         let model = try makeModel(uids: [5, 6, 7])
-        model.windowStart = 10
-        model.totalMessages = 13
+        model.window.windowStart = 10
+        model.window.totalMessages = 13
 
         model.replaceRows(showing: [ref(6)])
 
@@ -103,7 +103,7 @@ final class MessageListRowReplacementTests: XCTestCase {
         // down a slot, but the row that was swiped -- and is held open -- is
         // still slot 0.
         model.envelopes.insert(TestFixtures.makeEnvelope(uid: 9, flags: [.seen]), at: 0)
-        model.totalMessages = 4
+        model.window.totalMessages = 4
         let left = await eventually { !model.envelopes.contains { $0.uid == 1 } }
         XCTAssertTrue(left)
 
@@ -129,18 +129,18 @@ final class MessageListRowReplacementTests: XCTestCase {
 
     func testARowReportingInBeforeTheOneItReplacesLeavesKeepsItsIndexVisible() throws {
         let model = try makeModel(uids: [1, 2, 3])
-        model.noteRowVisible(0)
-        model.noteRowVisible(1)
+        model.window.noteRowVisible(0)
+        model.window.noteRowVisible(1)
 
         // A replaced row is one row leaving its index and another arriving at
         // it, and SwiftUI doesn't order their callbacks.
-        model.noteRowVisible(0)
-        model.noteRowHidden(0)
+        model.window.noteRowVisible(0)
+        model.window.noteRowHidden(0)
 
-        XCTAssertEqual(model.firstVisibleRow, 0, "slot 0 is still on screen; PgUp must not skip it")
-        XCTAssertEqual(model.lastVisibleRow, 1)
-        model.noteRowHidden(0)
-        XCTAssertEqual(model.firstVisibleRow, 1)
+        XCTAssertEqual(model.window.firstVisibleRow, 0, "slot 0 is still on screen; PgUp must not skip it")
+        XCTAssertEqual(model.window.lastVisibleRow, 1)
+        model.window.noteRowHidden(0)
+        XCTAssertEqual(model.window.firstVisibleRow, 1)
     }
 
     private func eventually(within timeout: Duration = .seconds(3), _ condition: () -> Bool) async -> Bool {

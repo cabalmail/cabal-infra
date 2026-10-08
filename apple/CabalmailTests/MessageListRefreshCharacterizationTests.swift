@@ -50,7 +50,7 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelopes.map(\.uid), [3, 2, 1])
         XCTAssertEqual(model.errorMessage, offline.localizedDescription)
         XCTAssertFalse(model.isLoading)
-        XCTAssertEqual(model.totalMessages, 3)
+        XCTAssertEqual(model.window.totalMessages, 3)
         XCTAssertEqual(model.unseen, 1)
         let tops = await fixture.topPageCalls()
         XCTAssertTrue(tops.isEmpty, "no top page is asked for once STATUS fails")
@@ -76,7 +76,7 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         // UID 4 arrives, and two more refreshes are asked for.
         let second = Task { await model.refresh() }
         let third = Task { await model.refresh() }
-        try await waitUntilOnMainActor { model.refreshFlight.waiting == 2 }
+        try await waitUntilOnMainActor { model.window.refreshFlight.waiting == 2 }
         let waiting = await fixture.statusCalls()
         XCTAssertEqual(waiting.count, 1, "neither went to the wire")
 
@@ -95,7 +95,7 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         await third.value
 
         XCTAssertEqual(model.envelopes.map(\.uid), [4, 3, 2, 1], "the rerun lands last")
-        XCTAssertEqual(model.totalMessages, 4)
+        XCTAssertEqual(model.window.totalMessages, 4)
         XCTAssertFalse(model.isLoading)
         let statuses = await fixture.statusCalls()
         XCTAssertEqual(statuses.count, 2, "one rerun answers both")
@@ -128,7 +128,7 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         await background.value
 
         XCTAssertEqual(model.envelopes.map(\.uid), [5, 4], "the older page was dropped")
-        XCTAssertEqual(model.totalMessages, 2)
+        XCTAssertEqual(model.window.totalMessages, 2)
         XCTAssertFalse(model.isLoading)
         let statuses = await fixture.statusCalls()
         XCTAssertEqual(statuses.count, 2, "the background STATUS and the reset's probe, and no rerun")
@@ -152,11 +152,11 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         await fixture.imap.awaitHeld(.status)
 
         await model.hardReload()
-        XCTAssertEqual(model.totalMessages, 4)
+        XCTAssertEqual(model.window.totalMessages, 4)
         await fixture.imap.releaseHeld(.status)
         await background.value
 
-        XCTAssertEqual(model.totalMessages, 4, "the older count was dropped")
+        XCTAssertEqual(model.window.totalMessages, 4, "the older count was dropped")
         XCTAssertEqual(model.envelopes.map(\.uid), [4, 3, 2, 1])
         let statuses = await fixture.statusCalls()
         XCTAssertEqual(statuses.count, 2, "the background STATUS and the probe; the reset answered both")
@@ -186,13 +186,13 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         await fixture.scriptRefresh(messages: 4, page: [4, 3, 2, 1])
         await fixture.imap.releaseHeld(.status)
         await reset.value
-        XCTAssertEqual(model.totalMessages, 3, "the reset shows what its probe found")
+        XCTAssertEqual(model.window.totalMessages, 3, "the reset shows what its probe found")
         await fixture.imap.releaseHeld(.topEnvelopes)
         await background.value
 
         let statuses = await fixture.statusCalls()
         XCTAssertEqual(statuses.count, 3, "the probe, the background refresh, and its own rerun")
-        XCTAssertEqual(model.totalMessages, 4)
+        XCTAssertEqual(model.window.totalMessages, 4)
         XCTAssertEqual(model.envelopes.map(\.uid), [4, 3, 2, 1])
         XCTAssertFalse(model.isLoading)
     }
@@ -236,9 +236,9 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         let model = try await fixture.makeModel(loaded: [3, 2, 1], total: 3)
         await fixture.scriptRefresh(messages: 3, page: [3, 2, 1])
 
-        await model.setSort(subjectOrder)
+        await model.window.setSort(subjectOrder)
 
-        XCTAssertEqual(model.sortCriterion, subjectOrder)
+        XCTAssertEqual(model.window.sortCriterion, subjectOrder)
         let statuses = await fixture.statusCalls()
         let tops = await fixture.topPageCalls()
         let pages = await fixture.pageCalls()
@@ -257,7 +257,7 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         await fixture.awaitBottomPrefetch(model)
         XCTAssertEqual(fixture.stagedBottomStart(model), 800)
 
-        await model.setSort(subjectOrder)
+        await model.window.setSort(subjectOrder)
         await fixture.awaitBottomPrefetch(model)
 
         let pages = await fixture.pageCalls()
@@ -276,13 +276,13 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
 
         // End (a far jump to the last row) adopts the re-staged rows with no
         // round trip, and they are in the new order: "Subject 1" sorts first.
-        model.ensureLoaded(around: 999)
+        model.window.ensureLoaded(around: 999)
         await fixture.awaitLoadWindow(model)
         let afterEnd = await fixture.pageCalls()
         XCTAssertEqual(afterEnd.count, 2, "no new page is asked for")
-        let bottom = Set((800..<1_000).compactMap { model.envelope(at: $0)?.uid })
+        let bottom = Set((800..<1_000).compactMap { model.window.envelope(at: $0)?.uid })
         XCTAssertEqual(bottom, Set(UInt32(1)...200))
-        XCTAssertEqual(model.envelope(at: 800)?.uid, 1)
+        XCTAssertEqual(model.window.envelope(at: 800)?.uid, 1)
     }
 
     // MARK: - Hard reload, online

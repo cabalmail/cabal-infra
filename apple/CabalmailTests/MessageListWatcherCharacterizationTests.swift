@@ -57,7 +57,7 @@ final class ListWatcherHarness {
             mailStore: AppState().mailStore
         )
         model.envelopes = Self.rows(uids)
-        model.totalMessages = UInt32(uids.count)
+        model.window.totalMessages = UInt32(uids.count)
         models.append(model)
         return model
     }
@@ -79,9 +79,9 @@ final class ListWatcherHarness {
     func makeWindowModel(window: Range<Int>) throws -> MessageListViewModel {
         let model = try makeModel(uids: [])
         model.envelopes = Array(Self.thousand[window])
-        model.windowStart = UInt32(window.lowerBound)
-        model.hasTrimmedFront = window.lowerBound > 0
-        model.totalMessages = 1000
+        model.window.windowStart = UInt32(window.lowerBound)
+        model.window.hasTrimmedFront = window.lowerBound > 0
+        model.window.totalMessages = 1000
         return model
     }
 
@@ -237,7 +237,7 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         try await waitUntilOnMainActor { !model.isLoading }
 
         XCTAssertEqual(model.envelopes.map(\.uid), [6, 5, 4, 3, 2, 1])
-        XCTAssertEqual(model.totalMessages, 6)
+        XCTAssertEqual(model.window.totalMessages, 6)
         XCTAssertNil(model.errorMessage)
         let statusCalls = await imap.statusCalls
         XCTAssertEqual(statusCalls, [.init(path: "INBOX", flagged: true)])
@@ -265,7 +265,7 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         await imap.releaseHeld(.status)
         try await waitUntilOnMainActor { !model.isLoading }
 
-        XCTAssertEqual(model.totalMessages, 4)
+        XCTAssertEqual(model.window.totalMessages, 4)
         let statusCalls = await imap.statusCalls
         XCTAssertEqual(statusCalls, [.init(path: "INBOX", flagged: true)])
         let topCalls = await imap.topEnvelopesCalls
@@ -286,7 +286,7 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         await imap.scriptFolderContents(ListWatcherHarness.folder(of: 1001))
         let model = try harness.makeWindowModel(window: 300..<600)
         // The STATUS these rows were paged in against, as paging leaves it.
-        model.alignment.anchor = WindowAnchor(total: 1000, uidNext: 1001)
+        model.window.alignment.anchor = WindowAnchor(total: 1000, uidNext: 1001)
         await model.startWatching()
         try await harness.awaitStreams()
 
@@ -294,25 +294,25 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         await imap.releaseHeld(.status)
         try await waitUntilOnMainActor { !model.isLoading }
 
-        XCTAssertEqual(model.totalMessages, 1001)
-        XCTAssertEqual(model.windowStart, 325, "one page centred on the old window")
+        XCTAssertEqual(model.window.totalMessages, 1001)
+        XCTAssertEqual(model.window.windowStart, 325, "one page centred on the old window")
         XCTAssertEqual(model.envelopes.count, 250)
-        XCTAssertEqual(model.envelope(at: 325)?.uid, 676, "the row the server has at 325")
+        XCTAssertEqual(model.window.envelope(at: 325)?.uid, 676, "the row the server has at 325")
         XCTAssertNil(model.errorMessage)
         let topCalls = await imap.topEnvelopesCalls
         XCTAssertTrue(topCalls.isEmpty, "no top page while the front is trimmed")
 
-        model.ensureLoaded(around: 300)
-        let previous = try XCTUnwrap(model.loadPrevTask)
+        model.window.ensureLoaded(around: 300)
+        let previous = try XCTUnwrap(model.window.loadPrevTask)
         await previous.value
         let calls = await imap.envelopesCalls
         XCTAssertEqual(calls, [
             .init(folder: "INBOX", offset: 325, limit: 250, sort: .default),
             .init(folder: "INBOX", offset: 125, limit: 200, sort: .default),
         ])
-        XCTAssertEqual(model.windowStart, 125)
-        XCTAssertEqual(model.envelope(at: 299)?.uid, 702)
-        XCTAssertEqual(model.envelope(at: 300)?.uid, 701, "the server holds UID 701 at index 300")
+        XCTAssertEqual(model.window.windowStart, 125)
+        XCTAssertEqual(model.window.envelope(at: 299)?.uid, 702)
+        XCTAssertEqual(model.window.envelope(at: 300)?.uid, 701, "the server holds UID 701 at index 300")
     }
 
     /// While the Unread or Flagged pill is showing, a change event asks for
@@ -351,7 +351,7 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         let statusCalls = await imap.statusCalls
         XCTAssertEqual(statusCalls.count, 1, "STATUS for the counts")
         XCTAssertEqual(model.unseen, 0, "as the scripted STATUS says")
-        XCTAssertEqual(model.totalMessages, 6)
+        XCTAssertEqual(model.window.totalMessages, 6)
         XCTAssertEqual(
             model.mailStore.counts.folderUnreadCounts["INBOX"], 0, "and pushed to the sidebar badge"
         )

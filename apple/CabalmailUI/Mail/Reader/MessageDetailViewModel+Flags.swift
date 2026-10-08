@@ -9,7 +9,7 @@ import CabalmailKit
 // Each toggle is optimistic: flip the in-memory flag, then send the write
 // through the mutation service, which tells every list before the STORE,
 // shields it from a refresh that lands before it resolves (see
-// `MessageShields` and `MessageListViewModel.shieldFetched`), and moves the
+// `MessageShields` and `FolderWindowLoader.shieldFetched`), and moves the
 // unread count for `\Seen`. If the server refuses, the service takes the
 // change back everywhere else and the reader flips its own flag back.
 @MainActor
