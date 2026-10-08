@@ -1,14 +1,17 @@
 import SwiftUI
 import CabalmailKit
 
-/// Compact tab identities. `resumeSection` maps the two content tabs onto
-/// the resume session's sections; the utility tabs have none.
+/// Tab identities for the tab-bar layouts: the compact tab bar and
+/// visionOS's. `resumeSection` maps the content tabs onto the resume
+/// session's sections; the utility tabs have none. Folders is visionOS's
+/// alone (the compact Mail tab browses folders in its own sidebar), and
+/// belongs to mail.
 enum CompactTab: Hashable {
-    case mail, feeds, addresses, settings, search
+    case mail, folders, feeds, addresses, settings, search
 
     var resumeSection: ResumeSession.Section? {
         switch self {
-        case .mail: return .mail
+        case .mail, .folders: return .mail
         case .feeds: return .feeds
         case .addresses, .settings, .search: return nil
         }

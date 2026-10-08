@@ -22,178 +22,117 @@ import CabalmailKit
 /// way to reach the folder list.
 struct VisionSectionView: View {
     @Environment(AppState.self) private var appState
+    @Environment(SceneNavigator.self) private var navigator
 
-    /// Mailbox selection shared across tabs: the Folders tab writes it, the Mail
-    /// tab reads it. Lifted here (rather than owned by either tab) so a folder
-    /// pick reconfigures the message list even though the two live in different
-    /// tabs.
-    @State private var selectedFolder: Folder?
-    /// The visible tab. Bound so a Folders pick, the ⌘, command, and a resume
-    /// tap can switch tabs programmatically. Seeded from the stored resume
-    /// session so a launch that ended in the feed reader opens on Feeds (a
-    /// `@State` default can't reach the environment, hence the direct store
-    /// read).
-    @State private var selection: Section = ResumeSessionStore.storedSection() == .feeds ? .feeds : .mail
-    /// True once the launch INBOX landing has run, so nothing re-seeds the
-    /// selection out from under the user later.
-    @State private var didLand = false
-    /// The folders fetched by the launch landing, so a navigate request can
-    /// select the real `Folder` value the Folders tab tags its rows with
-    /// (#1535; see `SceneNavigator.loadedFolders`).
-    @State private var loadedFolders: [Folder] = []
+    /// This tab view's identity as the window's mail tree. visionOS has no
+    /// layout swap, so it is the window's only one: it lands at launch and
+    /// owns the folder and message the Mail and Folders tabs share.
+    @State private var tree = UUID()
 
-    enum Section: Hashable { case mail, folders, feeds, addresses, settings, search }
+    /// The visible tab, through the navigator: a Folders pick, the ⌘,
+    /// command and a resume tap switch tabs there, and a switch notes the
+    /// section on the resume session. Seeded from the stored session, so a
+    /// launch that ended in the feed reader opens on Feeds.
+    private var selection: Binding<CompactTab> {
+        Binding(get: { navigator.compactTab }, set: { navigator.showTab($0) })
+    }
 
-    /// The resume-session section the selected tab belongs to; nil for the
-    /// utility tabs, which decide nothing about mail versus feeds.
-    private var activeSection: ResumeSession.Section? {
-        switch selection {
-        case .mail, .folders: return .mail
-        case .feeds: return .feeds
-        case .addresses, .settings, .search: return nil
-        }
+    /// The Folders tab's selection: the window's folder. A pick there also
+    /// switches to Mail (`SceneNavigator`).
+    private var folderSelection: Binding<Folder?> {
+        Binding(get: { navigator.folder(in: tree) }, set: { navigator.selectFolder($0) })
     }
 
     var body: some View {
-        TabView(selection: $selection) {
-            Tab("Mail", systemImage: "tray", value: Section.mail) {
-                VisionMailPane(selectedFolder: $selectedFolder)
+        TabView(selection: selection) {
+            Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
+                VisionMailPane(tree: tree)
             }
-            Tab("Folders", systemImage: "folder", value: Section.folders) {
+            Tab("Folders", systemImage: "folder", value: CompactTab.folders) {
                 foldersTab
             }
-            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: Section.feeds) {
+            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: CompactTab.feeds) {
                 FeedRootView()
             }
-            Tab("Addresses", systemImage: "at", value: Section.addresses) {
+            Tab("Addresses", systemImage: "at", value: CompactTab.addresses) {
                 AddressManagementTab()
             }
-            Tab("Settings", systemImage: "gear", value: Section.settings) {
+            Tab("Settings", systemImage: "gear", value: CompactTab.settings) {
                 SettingsView()
             }
-            Tab("Search", systemImage: "magnifyingglass", value: Section.search) {
+            Tab("Search", systemImage: "magnifyingglass", value: CompactTab.search) {
                 SearchView()
             }
         }
-        // Land on INBOX at launch regardless of which tab (Mail) is showing, so
-        // the message list isn't empty before the user ever visits Folders. The
-        // Folders tab's own list loads lazily on first appearance, so the seed
-        // has to come from here.
-        .task { await landOnInboxIfNeeded() }
-        // A folder pick in the Folders tab jumps to Mail. Guarded on the current
-        // tab so the launch / resume folder changes (which target Mail
-        // themselves) don't trigger a redundant switch, and on the path so the
-        // launch landing's same-folder metadata reconcile (see
-        // `landOnInboxIfNeeded`) doesn't yank the user out of Folders.
-        .onChange(of: selectedFolder) { old, folder in
-            if folder != nil, old?.path != folder?.path, selection == .folders { selection = .mail }
+        // Land at launch regardless of which tab is showing, so the message
+        // list isn't empty before the user ever visits Folders. The Folders
+        // tab's own list loads lazily on first appearance, so the folder list
+        // that finishes the landing is fetched from here.
+        .task {
+            _ = await navigator.mailTreeAppeared(tree, isWide: false, showingFeeds: false)
+            await loadFoldersIfNeeded()
         }
         // ⌘, opens Settings — its own tab here, rather than the iPad sheet.
         .onWindowCommand(appState.settingsRequestTick) {
-            selection = .settings
+            navigator.showTab(.settings)
         }
-        // The resume session remembers which section the user was in; Mail
-        // and Feeds each keep their own position, so only the section moves.
-        .onChange(of: selection) { _, tab in
-            switch tab {
-            case .mail, .folders: appState.navCoordinator?.noteSection(.mail)
-            case .feeds: appState.navCoordinator?.noteSection(.feeds)
-            case .addresses, .settings, .search: break
-            }
-        }
-        // The same mapping, for the menus that share a chord across mail and
-        // feeds (`SharedChordPolicy`).
-        .reportsActiveSection(activeSection)
+        // For the menus that share a chord across mail and feeds
+        // (`SharedChordPolicy`).
+        .reportsActiveSection(navigator.compactTab.resumeSection)
         // The cross-device probe lives on `SignedInRootView`. A tapped feed
         // toast opens the Feeds tab, whose `FeedRootView` follows the request.
         .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
-            if request != nil { selection = .feeds }
-        }
-        // A resume toast was tapped: jump to the cursor's folder in Mail.
-        .onChange(of: appState.navCoordinator?.navigateRequest) { _, request in
-            guard let request, let coordinator = appState.navCoordinator else { return }
-            coordinator.navigateRequest = nil
-            coordinator.scheduleRestore(for: request)
-            selection = .mail
-            if selectedFolder?.path != request.folder {
-                selectedFolder = loadedFolders.first { $0.path == request.folder } ?? Folder(path: request.folder)
-            }
+            if request != nil { navigator.showTab(.feeds) }
         }
     }
 
-    /// Folders tab: the shared `FolderListView` bound to the cross-tab
-    /// selection. No `onFoldersLoaded` seed here — the launch landing comes from
-    /// `landOnInboxIfNeeded` (which runs even while this tab is unmounted), so
-    /// this tab only ever changes `selectedFolder` on a real user pick.
+    /// Folders tab: the shared `FolderListView` bound to the window's folder.
+    /// No `onFoldersLoaded` here — the landing's folder list comes from
+    /// `loadFoldersIfNeeded` (which runs even while this tab is unmounted).
     @ViewBuilder
     private var foldersTab: some View {
         NavigationStack {
-            FolderListView(selection: $selectedFolder, externalFilter: nil)
+            FolderListView(selection: folderSelection, externalFilter: nil)
         }
     }
 
-    /// Lands the Mail tab at launch on the resume session's folder (INBOX
-    /// when there is none), reselecting its open message, and offers the
-    /// cross-device toast if another install's cursor is reachable. Mirrors
-    /// `MailRootView`'s provisional landing: a synthetic `Folder(path:)` is
-    /// selected immediately so the message list starts loading without
-    /// waiting on `/list_folders` (the message machinery only needs the
-    /// path; seeded as subscribed so the list doesn't flash the
-    /// unsubscribed-folder banner). The fetched folder is swapped in once the
-    /// list arrives — sourced from its own `FolderListViewModel` because
-    /// there's no always-mounted sidebar to hand one over — or INBOX if the
-    /// folder no longer exists. The Feeds tab restores its own position
+    /// Fetches the folder list for the navigator: it swaps the fetched folder
+    /// in for the landing's provisional one, or falls back to INBOX if the
+    /// folder no longer exists (`SceneNavigator.foldersLoaded`). Sourced from
+    /// its own `FolderListViewModel` because there's no always-mounted
+    /// sidebar to hand one over. The Feeds tab restores its own position
     /// (`FeedRootView`).
-    private func landOnInboxIfNeeded() async {
-        guard !didLand, selectedFolder == nil, let client = appState.client else { return }
-        didLand = true
-        let coordinator = appState.navCoordinator
-        let target = coordinator?.mailLaunchTarget()
-            ?? NavStateCoordinator.MailLaunchTarget(folderPath: "INBOX", messageRestore: nil)
-        coordinator?.armProvisionalLanding()
-        if let restore = target.messageRestore {
-            coordinator?.scheduleRestore(for: restore)
-        }
-        selectedFolder = Folder(path: target.folderPath, isSubscribed: true)
+    private func loadFoldersIfNeeded() async {
+        guard navigator.loadedFolders.isEmpty, let client = appState.client else { return }
         let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
         await model.loadFolderList()
-        let folders = model.folders
         // A saved copy drawn offline can lag the server; reconcile against a
         // live list only.
-        guard !folders.isEmpty, !model.isShowingSavedCopy else { return }
-        loadedFolders = folders
-        let inbox = folders.first { $0.path.caseInsensitiveCompare("INBOX") == .orderedSame } ?? folders.first
-        // Swap the fetched folder into the provisional selection so the
-        // Folders tab's row highlight matches (`Folder` equality spans
-        // attributes / subscription). Same path — the mounted message list
-        // survives, and `VisionMailPane`'s same-path guard keeps the swap
-        // from clearing the open message. Skipped if the user already
-        // navigated elsewhere; a folder that no longer exists falls back to
-        // INBOX and drops the message restore aimed at it.
-        if let current = selectedFolder, current.path == target.folderPath {
-            if let fetched = folders.first(where: { $0.path == current.path }) {
-                selectedFolder = fetched
-            } else if let inbox {
-                coordinator?.clearPendingRestore()
-                selectedFolder = inbox
-            }
-        }
-        // The cross-device probe runs from `SignedInRootView`.
-        coordinator?.materializeLanding()
+        guard !model.folders.isEmpty, !model.isShowingSavedCopy else { return }
+        navigator.foldersLoaded(model.folders)
     }
 }
 
-/// Mail tab body: a two-column list + reader for the selected folder, with no
-/// folder sidebar (folders are their own tab). Selection is local; the folder
-/// comes in from `VisionSectionView`. Records the cross-client cursor as the
-/// user moves through folders and messages, matching `MailRootView`.
+/// Mail tab body: a two-column list + reader for the window's folder, with
+/// no folder sidebar (folders are their own tab). The folder and the open
+/// message are the navigator's, which records the cross-client cursor as the
+/// user moves through them, as on the other layouts.
 private struct VisionMailPane: View {
-    @Binding var selectedFolder: Folder?
-    @Environment(AppState.self) private var appState
-    @State private var selectedEnvelope: Envelope?
+    let tree: UUID
+    @Environment(SceneNavigator.self) private var navigator
     /// How many messages the list currently has selected. Drives the "N
     /// messages selected" reading-pane placeholder during a multi-selection.
     @State private var listSelectionCount = 0
+
+    private var selectedFolder: Folder? { navigator.folder(in: tree) }
+    private var selectedEnvelope: Envelope? { navigator.envelope(in: tree) }
+
+    /// The list's selection, through the navigator. The Mail tab has no
+    /// search of its own (Search is a tab), so the open message is always
+    /// the folder's.
+    private var envelopeSelection: Binding<Envelope?> {
+        Binding(get: { selectedEnvelope }, set: { navigator.selectMessage($0, isSearching: false, from: tree) })
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -201,29 +140,11 @@ private struct VisionMailPane: View {
         } detail: {
             detailColumn
         }
-        // Switching folders clears the open message and any multi-selection so
-        // the reader can't briefly show an old message against the new mailbox,
-        // then records the folder move for the cross-client cursor. A same-path
-        // change is the launch landing's metadata reconcile — same mailbox, so
-        // keep the open message and don't re-record the cursor.
-        .onChange(of: selectedFolder) { old, folder in
-            guard old?.path != folder?.path else { return }
-            selectedEnvelope = nil
+        // Switching folders drops any multi-selection with the old mailbox.
+        // A same-path change is the landing's metadata reconcile — same
+        // mailbox, so the selection stays.
+        .onChange(of: selectedFolder?.path) {
             listSelectionCount = 0
-            if let path = folder?.path {
-                appState.navCoordinator?.recordFolder(path)
-            }
-        }
-        // Record the open message (or its absence) for the cursor.
-        .onChange(of: selectedEnvelope) { _, envelope in
-            guard let folderPath = selectedFolder?.path else { return }
-            if let envelope {
-                // Anchored to the selected folder, as on the other layouts.
-                let ref = envelope.ref(defaultFolder: folderPath)
-                if ref.folder == folderPath { appState.navCoordinator?.recordMessage(ref) }
-            } else {
-                appState.navCoordinator?.recordNoMessage(folderPath: folderPath)
-            }
         }
     }
 
@@ -232,13 +153,11 @@ private struct VisionMailPane: View {
         if let selectedFolder {
             MessageListView(
                 scope: .folder(selectedFolder),
-                selection: $selectedEnvelope,
+                selection: envelopeSelection,
                 onSelectionCountChanged: { listSelectionCount = $0 },
-                // The list's folder-switch menu writes the cross-tab
-                // selection exactly as a Folders-tab pick does. `self.`
-                // because the enclosing `if let` shadows the binding with
-                // the unwrapped constant.
-                onSwitchFolder: { self.selectedFolder = $0 }
+                // The list's folder-switch menu picks the window's folder
+                // exactly as a Folders-tab pick does.
+                onSwitchFolder: { navigator.selectFolder($0) }
             )
             .id(selectedFolder.path)
         } else {

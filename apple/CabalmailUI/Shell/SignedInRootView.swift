@@ -119,14 +119,11 @@ struct SignedInRootView: View {
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
                 navigator = SceneNavigator(appState: appState)
             }
-            #if !os(visionOS)
             // Push, Spotlight and Siri write one app-wide request; the first
-            // window to see it takes it. visionOS's tab view still takes its
-            // own.
+            // window to see it takes it.
             .onChange(of: appState.navCoordinator?.navigateRequest) {
                 navigator.takeNavigateRequest()
             }
-            #endif
     }
 
     private func offerCrossDeviceCursor(atLaunch: Bool) async {
@@ -252,11 +249,7 @@ struct SignedInRootView: View {
                 if cursor.kind == .rss {
                     Task { await appState.navCoordinator?.requestFeedNavigation(cursor) }
                 } else {
-                    #if os(visionOS)
-                    appState.navCoordinator?.navigateRequest = cursor
-                    #else
                     navigator.navigate(to: cursor)
-                    #endif
                 }
                 appState.toast = nil
             }

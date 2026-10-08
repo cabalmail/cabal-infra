@@ -16,7 +16,8 @@ import CabalmailKit
 /// which another window may have written since.
 ///
 /// **Trees.** Each `MailRootView` instance is a tree with an identity of its
-/// own (`mailTreeAppeared`). The first tree in a window lands — on a parked
+/// own (`mailTreeAppeared`), and so is visionOS's tab view, which has no
+/// layout swap and so only ever one. The first tree in a window lands — on a parked
 /// navigate request, else the launch snapshot of the resume session. A tree
 /// built later by a layout swap renders the window's route instead: the
 /// folder stays, and an open message is re-parked through
@@ -61,11 +62,11 @@ final class SceneNavigator {
     /// because backing out to the folder list leaves the folder selected.
     private var compactColumn: NavigationSplitViewColumn = .sidebar
 
-    /// The compact layout's tab. Seeded from the resume session when the
-    /// window is created and kept from then on, so a swap to the regular
-    /// split and back reopens the tab it left — the Search, Addresses and
-    /// Settings tabs included. On the wide layout, which has no tab bar, it
-    /// follows what the user does in the split (#1644).
+    /// The compact layout's tab, or visionOS's. Seeded from the resume
+    /// session when the window is created and kept from then on, so a swap
+    /// to the regular split and back reopens the tab it left — the Search,
+    /// Addresses and Settings tabs included. On the wide layout, which has
+    /// no tab bar, it follows what the user does in the split (#1644).
     private(set) var compactTab: CompactTab
 
     /// The sidebar's fetched folders, so a navigate request can select the
@@ -81,6 +82,15 @@ final class SceneNavigator {
     /// Set alongside a provisional landing and consumed by the folder list's
     /// first load, which swaps the fetched folder in (`foldersLoaded`).
     private(set) var awaitingLaunchReconcile = false
+
+    /// Whether the window has shown mail since it was created: the regular
+    /// split, or a tab of the mail section (Mail, or visionOS's Folders). A
+    /// landing records its folder only once it has. visionOS lands at launch
+    /// whichever tab is up, and its Mail tab, not yet built on a Feeds
+    /// launch, used to record nothing; recording there would move the
+    /// session out of Feeds and drop its open message. Once built, it
+    /// recorded whatever tab was up, so this never goes back to false.
+    private var hasShownMail: Bool
 
     /// The tree that owns the window's folder, message and column.
     private var mountedTree: UUID?
@@ -118,6 +128,7 @@ final class SceneNavigator {
         let section = seed ?? .mail
         route = AppRoute(section: section)
         compactTab = CompactTab.initial(for: section)
+        hasShownMail = section == .mail
     }
 
     convenience init(appState: AppState) {
@@ -147,15 +158,17 @@ final class SceneNavigator {
         tree == mountedTree ? compactColumn : .sidebar
     }
 
-    /// A `MailRootView` appeared. The first tree in the window lands; a tree
-    /// built after it by a layout swap takes over the window's route; the
-    /// same tree appearing again (a tab switch) changes nothing once the
+    /// A mail tree appeared: a `MailRootView`, or visionOS's tab view, which
+    /// lands whichever tab it opens on. The first tree in the window lands;
+    /// a tree built after it by a layout swap takes over the window's route;
+    /// the same tree appearing again (a tab switch) changes nothing once the
     /// window has landed. Returns a feed scope for a wide tree to open, when
     /// that is where the window goes.
     func mailTreeAppeared(_ tree: UUID, isWide: Bool, showingFeeds: Bool) async -> RssItemScope? {
         let isRebuild = mountedTree != nil && mountedTree != tree
         appearingTree = tree
         layoutIsWide = isWide
+        if isWide { hasShownMail = true }
         guard isRebuild, didLand else {
             mountedTree = tree
             let scope = await landIfNeeded(tree, isWide: isWide, showingFeeds: showingFeeds)
@@ -257,7 +270,7 @@ final class SceneNavigator {
         if let restore = target.messageRestore {
             coordinator.scheduleRestore(for: restore)
         }
-        setFolder(Folder(path: target.folderPath, isSubscribed: true))
+        setFolder(Folder(path: target.folderPath, isSubscribed: true), records: hasShownMail)
     }
 
     /// The folder list's first load. Finishes a provisional landing, or a
@@ -301,7 +314,7 @@ final class SceneNavigator {
                 setFolder(fetched)
             } else if let inbox {
                 coordinator?.clearPendingRestore()
-                setFolder(inbox)
+                setFolder(inbox, records: hasShownMail)
             }
         } else if let coordinator {
             // The client wasn't wired when the tree appeared, so there was no
@@ -396,6 +409,7 @@ final class SceneNavigator {
         guard tab != compactTab else { return }
         compactTab = tab
         guard let section = tab.resumeSection else { return }
+        if section == .mail { hasShownMail = true }
         route.section = section
         coordinator()?.noteSection(section)
     }
@@ -414,7 +428,9 @@ final class SceneNavigator {
         moveSection(to: .feeds)
     }
 
-    private func setFolder(_ folder: Folder?) {
+    /// - Parameter records: whether a new folder moves the session there.
+    ///   Only a landing before the window has shown mail passes false.
+    private func setFolder(_ folder: Folder?, records: Bool = true) {
         // A same-path write is a metadata reconcile — the provisional
         // `Folder(path:)` swapped for the fetched one: same mailbox, so the
         // message stays and nothing is re-recorded.
@@ -426,11 +442,14 @@ final class SceneNavigator {
         selectedEnvelope = nil
         route.mail = AppRoute.Mail(folderPath: folder?.path)
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: folder != nil)
-        guard let path = folder?.path else { return }
+        guard let path = folder?.path, records else { return }
         moveSection(to: .mail)
         // Folder is the cursor's highest-priority field; the coordinator
         // debounces and de-dupes the write.
         coordinator()?.recordFolder(path)
+        // visionOS's Folders tab picks the folder for its Mail tab, so a new
+        // folder chosen there shows its messages.
+        if compactTab == .folders { showTab(.mail) }
     }
 
     private func applyMessage(_ envelope: Envelope?, isSearching: Bool) {

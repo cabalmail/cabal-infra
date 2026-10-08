@@ -484,8 +484,8 @@ extension PushRegistrar {
     /// Routes the app to the pushed message. While signed in this drives
     /// the same `navigateRequest` machinery as the cross-device resume
     /// toast; before the session is wired (cold launch from a tap) the ref
-    /// parks here and `sessionDidStart` re-routes it — `MailRootView`
-    /// drains a pre-mount request from its `.task`.
+    /// parks here and `sessionDidStart` re-routes it — a window's first
+    /// landing drains a request parked before it (`SceneNavigator`).
     private func route(_ ref: PushMessageRef) {
         guard let coordinator = appState?.navCoordinator else {
             pendingOpen = ref
