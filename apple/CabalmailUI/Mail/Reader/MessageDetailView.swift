@@ -17,7 +17,7 @@ struct MessageDetailView: View {
     let folder: Folder
     let envelope: Envelope
     /// The message shown: `envelope` in `folder`, which the host takes from
-    /// the selected row. What the toolbar's signals name.
+    /// the selected row. What the toolbar's mail events name.
     var messageRef: MessageRef {
         MessageRef(folder: folder.path, uid: envelope.uid, messageId: envelope.messageId)
     }
@@ -261,7 +261,7 @@ struct MessageDetailView: View {
                     client: client,
                     preferences: preferences
                 )
-                Self.relayOutcomes(of: newModel, to: appState.mailStore)
+                Self.relayOutcomes(of: newModel, to: appState.mailStore, from: commandWindowID)
                 model = newModel
                 activeModel = newModel
             }
@@ -352,20 +352,25 @@ struct MessageDetailView: View {
 
 extension MessageDetailView {
     /// Relays a reader's flag and move outcomes to `mailStore`, for the
-    /// message list and the folder counts. A static seam so the late-change
-    /// guards can be tested without hosting the view.
-    static func relayOutcomes(of model: MessageDetailViewModel, to mailStore: MailSessionStore) {
-        // Relay flag changes (\Seen toggles) to the store's signals so the
-        // list view's `.onChange` handler can flip the row's bold
-        // styling and unread dot without waiting for the next
-        // refresh.
+    /// message lists and the folder counts. `origin` is the reader's main
+    /// window (`commandWindowID`), which the events it posts name. A static
+    /// seam so the late-change guards can be tested without hosting the
+    /// view.
+    static func relayOutcomes(
+        of model: MessageDetailViewModel,
+        to mailStore: MailSessionStore,
+        from origin: UUID? = nil
+    ) {
+        // Post flag changes (\Seen toggles) on the store's events so every
+        // list holding the row flips its bold styling and unread dot
+        // without waiting for the next refresh.
         let ref = model.ref
         let client = model.client
         // The flag and move callbacks below can also fire once the
         // write fails, after the session has ended: not then (#1851).
         model.onFlagChanged = { [weak mailStore] flag, added in
             guard mailStore?.acceptsCounts(from: client) == true else { return }
-            mailStore?.signalFlagChange(ref, flag: flag, added: added)
+            mailStore?.postFlagChange(ref, flag: flag, added: added, from: origin)
         }
         // Bracket each flag write so the list shields the optimistic
         // flag from a refresh that lands before the write resolves
@@ -389,7 +394,7 @@ extension MessageDetailView {
         // ...or, if the server refuses, put the pruned row back.
         model.onMoveFailed = { [weak mailStore] markUnread in
             guard mailStore?.acceptsCounts(from: client) == true else { return }
-            mailStore?.signalRemovalFailed(ref, markUnread: markUnread)
+            mailStore?.postRemovalFailed(ref, markUnread: markUnread, from: origin)
         }
     }
 }

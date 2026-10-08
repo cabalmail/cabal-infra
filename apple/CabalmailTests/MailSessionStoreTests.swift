@@ -6,9 +6,10 @@ import CabalmailKit
 // and composer share out of `AppState` into one `MailSessionStore`. Two
 // properties carry the move. Sign-out resets the store in place, clearing
 // exactly what `forgetAccountState` cleared on `AppState` and leaving the
-// signals and their ticks. And every view model reads and writes the store
-// it was built with: each test below builds over one `AppState`'s store and
-// keeps a second, untouched `AppState` beside it as the negative control.
+// mail events alone: they keep reaching every subscriber. And every view
+// model reads and writes the store it was built with: each test below builds
+// over one `AppState`'s store and keeps a second, untouched `AppState` beside
+// it as the negative control.
 @MainActor
 final class MailSessionStoreTests: XCTestCase {
     private var harness: SessionHarness!
@@ -28,30 +29,12 @@ final class MailSessionStoreTests: XCTestCase {
 
     // MARK: - Sign-out
 
-    /// Every signal the store carries, with the one tick tests can read.
-    private struct SignalSnapshot: Equatable {
-        let disposed: DisposedEnvelope?
-        let failed: FailedRemoval?
-        let failedTick: Int
-        let flagChange: EnvelopeFlagChange?
-        let readAdvance: ReadAdvanceRequest?
-        let draftReplaced: DraftReplacedSignal?
-
-        @MainActor init(_ signals: MessageSignals) {
-            disposed = signals.lastDisposedEnvelope
-            failed = signals.lastFailedRemoval
-            failedTick = signals.failedRemovalTick
-            flagChange = signals.lastEnvelopeFlagChange
-            readAdvance = signals.lastReadAdvanceRequest
-            draftReplaced = signals.lastDraftReplaced
-        }
-    }
-
-    func testSignOutResetsTheStoreInPlaceAndLeavesTheSignals() async throws {
+    func testSignOutResetsTheStoreInPlaceAndLeavesTheEvents() async throws {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         let store = state.mailStore
         let ref = MessageRef(folder: "Archive", uid: 9)
+        let events = MailEventRecorder(store)
         store.counts.setFolderCounts(folderPath: "Archive", unread: 3, total: 40)
         store.counts.setFolderCounts(folderPath: "Projects", unread: 1, total: 8)
         store.counts.setSubscribedFolders(["INBOX", "Archive"])
@@ -59,16 +42,17 @@ final class MailSessionStoreTests: XCTestCase {
         store.shields.recordConfirmedRemovals([MessageRef(folder: "Archive", uid: 5)])
         store.shields.setFlagWrite(MessageRef(folder: "Archive", uid: 6), inFlight: true)
         store.shields.setMoveInFlight(MessageRef(folder: "Projects", uid: 7), inFlight: true)
-        store.signals.signalDisposed(ref)
-        store.signalRemovalFailed(ref)
-        store.signalFlagChange(ref, flag: .flagged, added: true)
-        store.signals.signalReadAdvance(ref, advance: .nextUnread)
-        store.signals.signalDraftReplaced(
-            folderPath: "Drafts", replacement: DraftReplacement(retiredUIDs: [3], survivingUID: 4)
+        store.events.post(.removed([ref]), from: nil)
+        store.postRemovalFailed(ref, from: nil)
+        store.postFlagChange(ref, flag: .flagged, added: true, from: nil)
+        store.events.post(.readAdvance(ref, advance: .nextUnread), from: nil)
+        store.events.post(
+            .draftReplaced(folderPath: "Drafts", replacement: DraftReplacement(retiredUIDs: [3], survivingUID: 4)),
+            from: nil
         )
-        let signals = SignalSnapshot(store.signals)
+        let posted = events.events
         XCTAssertNotNil(store.counts.savedFolderCounts.cache, "precondition: the session wired the saved counts")
-        XCTAssertNotNil(signals.draftReplaced, "precondition: every signal was sent")
+        XCTAssertEqual(posted.count, 5, "precondition: every kind of event was posted and heard")
 
         await state.signOut()
 
@@ -82,12 +66,12 @@ final class MailSessionStoreTests: XCTestCase {
         XCTAssertEqual(store.shields.confirmedRemovals, [:])
         XCTAssertEqual(store.shields.pendingFlagWriteRefs, [])
         XCTAssertEqual(store.shields.pendingMoveRefs, [])
-        // ...and what it never touched: every signal and its tick.
-        XCTAssertEqual(SignalSnapshot(store.signals), signals, "every signal survives sign-out")
-        store.signals.signalDisposed(ref)
-        XCTAssertEqual(
-            store.signals.lastDisposedEnvelope?.tick, 2, "the tick runs on, so the next signal still fires .onChange"
-        )
+        // ...and what it never touched: the events. Sign-out posts none, and
+        // a subscriber from before it still hears the next one.
+        XCTAssertEqual(events.events, posted, "sign-out posts no event")
+        store.events.post(.removed([ref]), from: nil)
+        XCTAssertEqual(events.events.count, 6, "the next event still reaches a subscriber from before sign-out")
+        XCTAssertEqual(events.events.last?.change, .removed([ref]))
     }
 
     /// Sign-out zeroes the Inbox count by stopping the badge poller, which
@@ -162,24 +146,28 @@ final class MailSessionStoreTests: XCTestCase {
     func testAReaderRelaysToTheStoreItWasWiredTo() async throws {
         let imap = FakeImapClient()
         let ref = MessageRef(folder: "Archive", uid: 7)
+        let window = UUID()
         let owner = AppState()
         let bystander = AppState()
+        let ownerEvents = MailEventRecorder(owner.mailStore)
+        let bystanderEvents = MailEventRecorder(bystander.mailStore)
         let reader = try await fixture.makeReader(imap: imap, uid: 7, folderPath: "Archive")
-        MessageDetailView.relayOutcomes(of: reader, to: owner.mailStore)
+        MessageDetailView.relayOutcomes(of: reader, to: owner.mailStore, from: window)
 
         await reader.toggleFlagged()
         reader.onMoveInFlight?(true)
         reader.onMoveFailed?(true)
 
-        XCTAssertEqual(owner.mailStore.signals.lastEnvelopeFlagChange?.ref, ref)
+        XCTAssertEqual(ownerEvents.events, [
+            MailEvent(change: .flagsChanged([ref], flag: .flagged, added: true), origin: window),
+            MailEvent(change: .restored(ref, markUnread: true), origin: window),
+        ], "each names the reader's window")
         XCTAssertEqual(owner.mailStore.shields.pendingMoveRefs, [ref])
-        XCTAssertEqual(owner.mailStore.signals.lastFailedRemoval?.ref, ref)
         XCTAssertEqual(
             owner.mailStore.counts.folderUnreadCounts["Archive"], 1, "the failed removal handed back its unread"
         )
-        XCTAssertNil(bystander.mailStore.signals.lastEnvelopeFlagChange)
+        XCTAssertEqual(bystanderEvents.events, [])
         XCTAssertEqual(bystander.mailStore.shields.pendingMoveRefs, [])
-        XCTAssertNil(bystander.mailStore.signals.lastFailedRemoval)
         XCTAssertNil(bystander.mailStore.counts.folderUnreadCounts["Archive"])
     }
 }
