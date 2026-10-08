@@ -19,9 +19,9 @@ extension MessageListViewModel {
     /// Unstructured, model-owned task, so a cancellation of the view's
     /// `.task` (SwiftUI fires it mid-push transition — same class as the
     /// detail view's #403) can't propagate into the first fetch. The view
-    /// only runs this once per model, so a cancelled first load would
-    /// paint `network("cancelled")` over an empty list with nothing left
-    /// to retry it. Mirrors `refreshFromPull`.
+    /// only runs this once per model, so a first load cut short there would
+    /// end as `.cancelled`, silently, on an empty list with nothing left to
+    /// retry it. Mirrors `refreshFromPull`.
     func loadInitial() async {
         guard envelopes.isEmpty else { return }
         let sticky = isSearchScope ? .all : preferences.mailFolderFilter(for: folder.path)
@@ -38,7 +38,7 @@ extension MessageListViewModel {
     /// Pull-to-refresh entry point. Runs `refresh()` on an unstructured,
     /// model-owned `Task` and awaits it, so a cancellation of SwiftUI's
     /// `.refreshable` task doesn't propagate into the in-flight request and
-    /// surface as `network("cancelled")`. The embedded per-row swipe `List`s
+    /// cut the refresh short as `.cancelled`. The embedded per-row swipe `List`s
     /// inherit the outer `.refreshable`, and that scroll interaction was
     /// cancelling the pull task mid-fetch; an unstructured task is detached
     /// from that cancellation. Mirrors the pagination cancel-storm fix.
@@ -215,6 +215,9 @@ extension MessageListViewModel {
             if isSearchActive { await refreshSearch() }
             return
         }
+        // The spinner holds from the probe through the refresh it hands to.
+        holdLoading()
+        defer { releaseLoading() }
         // Ask the server before dropping anything. Offline the wipe used to
         // run anyway: the list emptied, and with the snapshot went the
         // folder's rows for every later offline launch and its Spotlight
@@ -228,29 +231,31 @@ extension MessageListViewModel {
         savedMessageCount = nil
         hasMore = true
         resetWindow()
-        await refresh(prefetched: probe)
+        await refresh(prefetched: probe, startingOver: true)
     }
 
     /// A STATUS already asked for, and when, for `refresh(prefetched:)`.
+    /// `ask` is the refresh ask numbered just before it was asked for, so the
+    /// pass it seeds answers no refresh asked for after it (`RefreshFlight`).
     struct PrefetchedStatus {
         let status: FolderStatus
         let askedAt: ContinuousClock.Instant
+        let ask: Int
     }
 
     /// Asks the server for this folder's STATUS before a reset that drops the
     /// list (`hardReload`, `setSort`). Nil, with the error shown, when it
     /// can't be reached: the caller then keeps the list as it is (#1796).
-    /// Raises `isLoading` for the wait, so the list shows its spinner, the
-    /// Refresh button stays disabled and no page loads in between; the
-    /// refresh that follows lowers it, or this does if there is none.
+    /// The caller holds `isLoading` up from before the probe until its reset
+    /// is done, so the list shows its spinner, the Refresh button stays
+    /// disabled and no page loads in between.
     func probeBeforeReset() async -> PrefetchedStatus? {
-        isLoading = true
+        let ask = refreshFlight.ask()
         let askedAt = ContinuousClock.now
         do {
             let status = try await client.folderStatus(path: folder.path, flagged: true)
-            return PrefetchedStatus(status: status, askedAt: askedAt)
+            return PrefetchedStatus(status: status, askedAt: askedAt, ask: ask)
         } catch {
-            isLoading = false
             errorMessage = error.localizedDescription
             return nil
         }
@@ -318,6 +323,7 @@ extension MessageListViewModel {
     /// `private`) so `ensureLoaded` in the main file can launch it.
     func performLoadPrevious() async {
         defer { isLoadingPrevious = false }
+        let generation = alignment.generation
         do {
             let count = min(loadMorePageSize, windowStart)
             let offset = windowStart - count
@@ -327,7 +333,9 @@ extension MessageListViewModel {
                 limit: count,
                 sort: sortCriterion
             )
-            guard !fetched.isEmpty else { return }
+            // Dropped if a reset or a search replaced the rows meanwhile (#1870).
+            guard !fetched.isEmpty, generation == alignment.generation else { return }
+            let windowEnd = windowStart + UInt32(envelopes.count)
             windowStart = offset
             mergeFetched(fetched)
             // Trim the scrolled-away bottom; the next downward loadMore
@@ -336,7 +344,7 @@ extension MessageListViewModel {
                 envelopes.removeLast(envelopes.count - windowCap)
             }
             hasTrimmedFront = windowStart > 0
-            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            recomputeHasMore(windowEndBefore: windowEnd)
         } catch {
             // Best-effort: a failed page leaves the window as it was, and the
             // next scroll toward the top asks again.
@@ -370,10 +378,11 @@ extension MessageListViewModel {
            staged.total == totalMessages,
            absoluteIndex >= Int(staged.start),
            absoluteIndex < Int(staged.start) + staged.envelopes.count {
+            let windowEnd = windowStart + UInt32(envelopes.count)
             windowStart = staged.start
             envelopes = staged.envelopes
             hasTrimmedFront = staged.start > 0
-            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            recomputeHasMore(windowEndBefore: windowEnd)
             bottomPrefetch = nil
             return
         }
@@ -387,6 +396,7 @@ extension MessageListViewModel {
         // loadPrevious grow this window toward as the user scrolls from here.
         let page = Int(loadMorePageSize)
         let start = max(0, min(absoluteIndex - page / 2, max(0, total - page)))
+        let generation = alignment.generation
         do {
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
@@ -394,11 +404,13 @@ extension MessageListViewModel {
                 limit: loadMorePageSize,
                 sort: sortCriterion
             )
-            guard !fetched.isEmpty else { return }
+            // Dropped if a reset or a search replaced the rows meanwhile (#1870).
+            guard !fetched.isEmpty, generation == alignment.generation else { return }
+            let windowEnd = windowStart + UInt32(envelopes.count)
             windowStart = UInt32(start)
             envelopes = placedInFolder(fetched).sorted(by: envelopeOrder)
             hasTrimmedFront = start > 0
-            hasMore = (windowStart + UInt32(envelopes.count)) < totalMessages
+            recomputeHasMore(windowEndBefore: windowEnd)
         } catch {
             // Best-effort: the rows stay placeholders until the next jump or
             // scroll asks for them again.
@@ -449,12 +461,14 @@ extension MessageListViewModel {
 
     /// Background body for `scheduleBottomPrefetch`. Fetches the bottom window
     /// positionally and stages it, but only if it's still relevant on
-    /// completion: the sort the user is viewing hasn't changed and the folder
-    /// size still matches, otherwise the window would be mis-ordered or mis-
+    /// completion: the sort the user is viewing hasn't changed, the folder
+    /// size still matches, and no reset or search has replaced the rows
+    /// since (#1870), otherwise the window would be mis-ordered or mis-
     /// aligned. Best-effort -- a failed fetch just leaves End to take the
     /// normal round trip.
     func performBottomPrefetch(start: UInt32, total: UInt32) async {
         let sortAtKickoff = sortCriterion
+        let generation = alignment.generation
         do {
             let fetched = try await client.imapClient.envelopes(
                 folder: folder.path,
@@ -462,7 +476,7 @@ extension MessageListViewModel {
                 limit: loadMorePageSize,
                 sort: sortAtKickoff
             )
-            guard !Task.isCancelled, !fetched.isEmpty,
+            guard !Task.isCancelled, !fetched.isEmpty, generation == alignment.generation,
                   sortAtKickoff == sortCriterion, total == totalMessages else { return }
             bottomPrefetch = BottomPrefetch(
                 start: start, total: total, envelopes: placedInFolder(fetched).sorted(by: envelopeOrder)
@@ -522,6 +536,7 @@ extension MessageListViewModel {
         uidValidity: UInt32,
         serverReportsEmpty: Bool = false
     ) async throws -> Bool {
+        let windowEnd = windowStart + UInt32(envelopes.count)
         // The top page is authoritative over the loaded rows when either the
         // window still fits in one top page, or the fetch spans the whole
         // (possibly shrunken) folder -- see the doc comment above. The
@@ -546,24 +561,27 @@ extension MessageListViewModel {
         } else {
             disappeared = []
         }
+        // The rows first, with no await between the caller's generation
+        // check and them; the caches after, which are the folder's whatever
+        // the list shows by then.
         if !disappeared.isEmpty {
             let gone = Set(disappeared)
             envelopes.removeAll { gone.contains($0.uid) }
-            for uid in disappeared {
-                await client.bodyCache.remove(
-                    folder: folder.path,
-                    uidValidity: uidValidity,
-                    uid: uid
-                )
-            }
-            // Mirror the in-memory prune to disk by the same explicit UID
-            // list, so a confirmed-gone row can't re-hydrate on next launch.
-            try await client.envelopeCache.remove(uids: disappeared, folder: folder.path)
         }
         mergeFetched(fetched)
-        // Positional paging: more to load iff the loaded count is below the
-        // folder's STATUS message count.
-        hasMore = UInt32(envelopes.count) < totalMessages
+        recomputeHasMore(windowEndBefore: windowEnd)
+        for uid in disappeared {
+            await client.bodyCache.remove(
+                folder: folder.path,
+                uidValidity: uidValidity,
+                uid: uid
+            )
+        }
+        // Mirror the in-memory prune to disk by the same explicit UID list,
+        // so a confirmed-gone row can't re-hydrate on next launch.
+        if !disappeared.isEmpty {
+            try await client.envelopeCache.remove(uids: disappeared, folder: folder.path)
+        }
         // Upsert the shielded fresh page into the snapshot (the disappeared
         // rows were pruned above): a row we've optimistically removed stays
         // out of the snapshot, and a row with an in-flight flag write keeps

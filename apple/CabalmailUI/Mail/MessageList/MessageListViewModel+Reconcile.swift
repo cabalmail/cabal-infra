@@ -39,11 +39,15 @@ struct WindowAlignment {
     var anchor: WindowAnchor?
     /// A window re-read is in flight; `ensureLoaded` starts no page meanwhile.
     var isReconciling = false
-    /// Bumped whenever the window is replaced or reset, so a re-read or a
-    /// top page that finds it changed under it drops its result.
+    /// Moved whenever the rows on screen are replaced or reset, or a search
+    /// starts or installs its results. Every page load, the bottom prefetch
+    /// and each await of a refresh pass compare it after the await, and drop
+    /// what they brought when it moved.
     var generation = 0
-    /// A re-read replaced the rows without covering everything the list is
-    /// showing; the refresh that ran it loads what the viewport now lacks.
+    /// The viewport may show positions with no rows: a re-read replaced the
+    /// rows without covering everything the list is showing, or a search
+    /// stood the window's loads down and then didn't take the list over.
+    /// What it lacks loads once `isLoading` falls.
     var needsSettleLoad = false
 }
 
@@ -146,19 +150,24 @@ extension MessageListViewModel {
         return lower..<max(lower, min(total, lower + Self.windowReadLimit))
     }
 
-    /// The window half of `refresh()`, once STATUS has answered and its
+    /// The window half of `refresh()`, once `status` has answered and its
     /// counts are applied. A trimmed window that nothing moved under takes
     /// the counts only: folding in the top page would splice a gap above it.
     /// A window the server's positions moved under is read again. Otherwise
     /// the top page is folded in, and the arrivals checked against it.
+    /// `generation` is the pass's: a reset or a search that moves it while
+    /// the plan waits on a page in flight leaves the list to them (#1870).
     func refreshWindow(
         _ reading: WindowReading?,
-        messages: UInt32,
-        uidNext: UInt32,
-        uidValidity: UInt32,
-        serverReportsEmpty: Bool
+        status: FolderStatus,
+        generation passGeneration: Int,
+        uidValidity: UInt32
     ) async throws {
-        switch await windowPlan(for: reading) {
+        // The top page is addressed in the server's own numbering.
+        let messages = UInt32(max(0, status.messages ?? 0))
+        let plan = await windowPlan(for: reading)
+        guard passGeneration == alignment.generation else { return }
+        switch plan {
         case .countsOnly:
             return
         case .reread(let range):
@@ -178,26 +187,20 @@ extension MessageListViewModel {
             totalMessages: messages,
             sort: sortCriterion
         )
-        // A re-read from an overlapping refresh may have replaced the window
-        // while this page was out; folding the top into it would misplace it.
+        // A reset or a search may have replaced the window while this page
+        // was out, or a jump moved it off the top; folding the top into it
+        // would misplace it.
         guard generation == alignment.generation, !hasTrimmedFront else { return }
         // `serverReportsEmpty` is the server's own zero, not the `?? 0`
         // fallback `applyStatusCounts` applies: only an explicit zero licenses
         // pruning the list against an empty fetch (#939).
-        let licensed = try await applyRefreshPage(fetched, uidNext: uidNext,
+        let licensed = try await applyRefreshPage(fetched, uidNext: status.uidNext ?? 1,
                                                   uidValidity: uidValidity,
-                                                  serverReportsEmpty: serverReportsEmpty)
+                                                  serverReportsEmpty: status.messages == 0)
+        // The page's caches were written after its rows; whatever replaced
+        // the rows meanwhile anchors its own window.
+        guard generation == alignment.generation else { return }
         try await settleAnchor(after: reading, licensed: licensed, uidValidity: uidValidity)
-    }
-
-    /// `refresh()`'s exit: lower `isLoading`, and if a re-read left the
-    /// viewport showing positions it didn't read, load them.
-    func finishRefresh() {
-        isLoading = false
-        if alignment.needsSettleLoad {
-            alignment.needsSettleLoad = false
-            scheduleEnsureLoaded()
-        }
     }
 
     /// `planWindow`, after letting any page already in flight land: it was
@@ -359,10 +362,11 @@ extension MessageListViewModel {
 
     /// Makes `rows` (server positions from `lower`) the loaded window.
     private func installWindow(_ rows: [Envelope], at lower: Int) {
+        let windowEnd = windowStart + UInt32(envelopes.count)
         envelopes = shieldFetched(rows).sorted(by: envelopeOrder)
         windowStart = UInt32(lower)
         hasTrimmedFront = lower > 0
-        hasMore = windowStart + UInt32(envelopes.count) < totalMessages
+        recomputeHasMore(windowEndBefore: windowEnd)
         invalidateBottomPrefetch()
         alignment.generation += 1
         if let first = firstVisibleRow, let last = lastVisibleRow,
