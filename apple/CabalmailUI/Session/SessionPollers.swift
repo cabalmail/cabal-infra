@@ -14,6 +14,11 @@ final class SessionPollers {
     /// Where the badge poller's Inbox count goes: `AppState`'s mail store,
     /// whose counts push it to the system badge.
     var inboxUnreadChanged: @MainActor (Int) -> Void = { _ in }
+    /// Bounds a polled Inbox count by the writes its STATUS, asked at the
+    /// given time, may predate (`MailSessionStore.polledInboxUnread`), so a
+    /// poll asked before a mark-read landed can't put the badge back up
+    /// (#1880). `AppState` sets it; the stop's zero isn't bounded.
+    var boundInboxUnread: @MainActor (Int, ContinuousClock.Instant) -> Int = { count, _ in count }
 
     /// The badge poller's loop; readable so a test can await its last tick.
     private(set) var inboxBadgeTask: Task<Void, Never>?
@@ -51,12 +56,13 @@ final class SessionPollers {
     private func refreshInboxUnread() async {
         guard let client = client() else { return }
         do {
+            let askedAt = ContinuousClock.now
             let status = try await client.folderStatus(path: "INBOX")
             // A STATUS already answered when the sign-out stopped this loop
             // still resumes here, after the stop reset the badge to 0. Its
             // count is the ended session's, so it goes nowhere (#1886).
             guard !Task.isCancelled else { return }
-            inboxUnreadChanged(status.unseen ?? 0)
+            inboxUnreadChanged(boundInboxUnread(status.unseen ?? 0, askedAt))
         } catch {
             // Best-effort: if the STATUS call fails (transient network
             // blip, IMAP reconnection) the prior badge value stays put
