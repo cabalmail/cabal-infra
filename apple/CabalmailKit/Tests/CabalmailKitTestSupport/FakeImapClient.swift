@@ -95,15 +95,15 @@ public actor FakeImapClient: ImapClient {
         statusResults.append(results)
     }
 
-    /// Lets `status` answer even when its caller's task was cancelled while
-    /// it was held: the reply had already arrived before the cancel and was
-    /// only waiting to resume. Off by default, which models the cancel
-    /// reaching the request first.
-    private var statusAnswersAfterCancellation = false
+    /// Lets `status` (or `envelopes(offset:)`) answer even when its caller's
+    /// task was cancelled while it was held: the reply had already arrived
+    /// before the cancel and was only waiting to resume. Off by default,
+    /// which models the cancel reaching the request first.
+    private var answersAfterCancellation: Set<HeldCall> = []
 
-    public func answerStatusAfterCancellation() {
-        statusAnswersAfterCancellation = true
-    }
+    public func answerStatusAfterCancellation() { answersAfterCancellation.insert(.status) }
+
+    public func answerEnvelopesAfterCancellation() { answersAfterCancellation.insert(.envelopes) }
 
     /// Pages (or failures) for the next `envelopes(offset:)` calls.
     public func scriptEnvelopesResults(_ results: [Result<[Envelope], Error>]) {
@@ -294,7 +294,7 @@ public actor FakeImapClient: ImapClient {
         // Mirror the production transport: a URLSession data task whose
         // surrounding Task is cancelled fails with `URLError.cancelled`,
         // which `URLSessionHTTPTransport` reports as `.cancelled` (#1815).
-        if Task.isCancelled, !statusAnswersAfterCancellation { throw CabalmailError.cancelled }
+        if Task.isCancelled, !answersAfterCancellation.contains(.status) { throw CabalmailError.cancelled }
         if let scripted = statusResults.next() { return try scripted.get() }
         guard let statusResult else { return try trap() }
         return statusResult
@@ -304,7 +304,7 @@ public actor FakeImapClient: ImapClient {
     ) async throws -> [Envelope] {
         envelopesCalls.append(EnvelopesCall(folder: folder, offset: offset, limit: limit, sort: sort))
         await parkIfHeld(.envelopes)
-        if Task.isCancelled { throw CabalmailError.cancelled }
+        if Task.isCancelled, !answersAfterCancellation.contains(.envelopes) { throw CabalmailError.cancelled }
         if let scripted = envelopesResults.next() { return try scripted.get() }
         guard let folderContents else { return try trap() }
         return folderContents.page(offset: offset, limit: limit)

@@ -9,8 +9,8 @@ import CabalmailKit
 /// search, an optimistic removal or another page load is in flight. Failed
 /// pages are swallowed by design (best-effort pagination since 750dba7a),
 /// which the P8 tests pin so a refactor does not start surfacing page errors
-/// by accident. `hasMore` is written but never read, which the P9 test pins
-/// as a weakness so the refactor flips it on purpose rather than by accident.
+/// by accident. An empty page stops paging down until the folder's count
+/// changes, the window's end moves, or the window is reset (P9, #1823).
 ///
 /// Races are staged with the fake's hold-and-release gates, never with
 /// timing; see ListPagingWorld.swift.
@@ -207,8 +207,8 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
         await world.settle(model)
 
         XCTAssertNil(model.errorMessage)
-        // `hasMore` is write-only state (see P9): nothing reads it, so the
-        // retry below, not this flag, is what carries the pin.
+        // A failed page isn't an empty one: it leaves `hasMore` set, which
+        // is what lets the next row retry it.
         XCTAssertTrue(model.hasMore)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<50))
 
@@ -253,12 +253,14 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
 
     // MARK: - P9: an empty page
 
-    /// Pins a known weakness: `hasMore` is written but never read; paging gates
-    /// on the window's end against STATUS's total. When STATUS over-counts
-    /// (1000 reported, 50 there), the empty page sets `hasMore` false, yet
-    /// every row that appears asks for the same empty page again.
-    /// Tracked in #1823.
-    func testAnEmptyPageEndsHasMoreButTheNextRowAsksForTheSamePageAgain() async throws {
+    /// When STATUS over-counts (1000 reported, 50 there), the empty page
+    /// clears `hasMore` and `ensureLoaded` reads it, so the rows that appear
+    /// after it don't ask for the same empty page again (#1823), nor do they
+    /// after a refresh that finds the same count. A change in the folder's
+    /// count sets it again: the folder is asked once more, and stays quiet
+    /// once that page comes back empty too. This test pinned one request per
+    /// row until then.
+    func testAnEmptyPageStopsPagingDownUntilTheFolderCountChanges() async throws {
         let model = try await world.openedList(size: 50, statusCount: 1000)
         XCTAssertEqual(model.totalMessages, 1000)
 
@@ -267,11 +269,47 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
             await world.settle(model)
             XCTAssertFalse(model.hasMore, "after row \(index)")
         }
+        let quiet = await world.pages()
+        XCTAssertEqual(quiet, [Page(offset: 50, limit: 200)], "one request, not one per row")
+
+        await model.refresh()
+        XCTAssertFalse(model.hasMore, "the same count again")
+        model.ensureLoaded(around: 49)
+        await world.settle(model)
+        let stillQuiet = await world.pages()
+        XCTAssertEqual(stillQuiet, quiet, "a refresh with the same count asks nothing more")
+
+        await world.scriptServer(size: 50, statusCount: 1001)
+        await model.refresh()
+        XCTAssertEqual(model.totalMessages, 1001)
+        XCTAssertTrue(model.hasMore, "a changed count may mean rows below again")
+        for index in [0, 49] {
+            model.ensureLoaded(around: index)
+            await world.settle(model)
+        }
 
         let pages = await world.pages()
-        XCTAssertEqual(pages, Array(repeating: Page(offset: 50, limit: 200), count: 3))
+        XCTAssertEqual(pages, [Page(offset: 50, limit: 200), Page(offset: 50, limit: 200)])
+        XCTAssertFalse(model.hasMore)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<50, size: 50))
         XCTAssertNil(model.errorMessage)
+    }
+
+    /// What sets `hasMore` again, whichever path moves the count: a changed
+    /// `totalMessages` (a removal here, a STATUS there) and a reset do; the
+    /// same count written again does not.
+    func testAChangedCountOrAResetSetsHasMoreAgainButTheSameCountDoesNot() async throws {
+        let model = try await world.openedList(size: 50, statusCount: 1000)
+        model.hasMore = false
+
+        model.totalMessages = 1000
+        XCTAssertFalse(model.hasMore, "the same count")
+        model.totalMessages = 999
+        XCTAssertTrue(model.hasMore, "a changed count")
+
+        model.hasMore = false
+        model.resetWindow()
+        XCTAssertTrue(model.hasMore, "a reset")
     }
 
     // MARK: - P10: a refresh while a page is out
