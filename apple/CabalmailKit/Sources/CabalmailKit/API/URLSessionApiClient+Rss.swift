@@ -158,17 +158,18 @@ extension URLSessionApiClient: RssClient {
     /// `send` + decode, with the RSS error envelope's `code` token promoted
     /// into `CabalmailError.server(code:)` so callers can branch on
     /// `not_a_feed`, `needs_credentials`, and friends instead of on status.
+    /// A failure without a token stays `.http(status:body:)`.
     /// A 2xx that doesn't decode is `.decoding`, like every other endpoint's.
     private func decodeRss<T: Decodable>(_ type: T.Type, from request: URLRequest) async throws -> T {
         let data: Data
         do {
             data = try await send(request, expectedStatuses: 200..<300)
-        } catch let CabalmailError.server(status, message) {
-            if let envelope = try? JSONDecoder().decode(RssErrorEnvelope.self, from: Data(message.utf8)),
+        } catch let CabalmailError.http(status, body) {
+            if let envelope = try? JSONDecoder().decode(RssErrorEnvelope.self, from: Data(body.utf8)),
                let code = envelope.code, !code.isEmpty {
-                throw CabalmailError.server(code: code, message: envelope.error ?? message)
+                throw CabalmailError.server(code: code, message: envelope.error ?? body)
             }
-            throw CabalmailError.server(code: status, message: message)
+            throw CabalmailError.http(status: status, body: body)
         }
         return try decodeReply(type, from: data, for: request)
     }

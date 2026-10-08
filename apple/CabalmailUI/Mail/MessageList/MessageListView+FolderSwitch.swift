@@ -15,7 +15,8 @@ import CabalmailKit
 // window's `toolbarTitleMenu` adds a chevron or opens on click), so the Mac
 // removes the toolbar's title text and puts a `Menu` in the same slot — a
 // `.navigation` toolbar item with the bold name and a chevron (still true on
-// macOS 27, re-probed for #1601). The window
+// macOS 27, re-probed for #1601; `titleSwitchToolbarHost`, which the feed
+// list's scope menu shares). The window
 // keeps its title for the Window menu and Mission Control. Nothing is drawn
 // in the list's own action bar: a second copy of the folder name a row
 // below the title read as a redundancy on the Mac.
@@ -24,6 +25,7 @@ import CabalmailKit
 // the folder in effect carries the native mark an assistive client reads
 // (#1367), which on macOS brings the materialize-once behaviour the sort
 // menu documents (#1329, #1337): the identity carries what the rows draw.
+// Both title menus draw their rows with `TitleSwitchMenuRows`.
 extension MessageListView {
     /// The menu's rows for the folder list loaded so far, with the current
     /// folder checked.
@@ -39,24 +41,7 @@ extension MessageListView {
             content
         } else {
             #if os(macOS)
-            content
-                .toolbar(removing: .title)
-                .toolbar {
-                    // On macOS 26's liquid glass the toolbar wraps the item
-                    // in a glass capsule, so the folder name reads as a
-                    // bordered control with the name flush against the
-                    // capsule's edge. The title it stands in for is bare
-                    // text, so detach the item from the shared background
-                    // where the API exists (same treatment as the brand
-                    // mark in `SidebarBranding`); earlier systems draw a
-                    // borderless menu plain anyway.
-                    if #available(macOS 26.0, *) {
-                        ToolbarItem(placement: .navigation) { folderSwitchMenu }
-                            .sharedBackgroundVisibility(.hidden)
-                    } else {
-                        ToolbarItem(placement: .navigation) { folderSwitchMenu }
-                    }
-                }
+            content.titleSwitchToolbarHost { folderSwitchMenu }
             #else
             switch folderSwitchHost {
             case .titleMenu:
@@ -175,21 +160,12 @@ extension MessageListView {
         }
     }
 
-    @ViewBuilder
     private func folderSwitchRows(_ rows: [ReaderMenuRow<Folder>]) -> some View {
-        ForEach(rows) { row in
-            Toggle(isOn: Binding(
-                get: { row.isOn },
-                set: { _ in
-                    // Re-picking the folder the list is on is a no-op: the
-                    // parent would only re-key the same view.
-                    guard !row.isOn else { return }
-                    onSwitchFolder(row.option)
-                }
-            )) {
-                Label(row.label, systemImage: FolderPickerRow<EmptyView>.icon(for: row.option))
-            }
-        }
+        TitleSwitchMenuRows(
+            rows: rows,
+            symbol: { FolderPickerRow<EmptyView>.icon(for: $0) },
+            pick: onSwitchFolder
+        )
     }
 
     /// Fetches the folder list the menu offers. One `/list_folders` per

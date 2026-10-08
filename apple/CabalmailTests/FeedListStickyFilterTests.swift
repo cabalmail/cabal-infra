@@ -4,7 +4,8 @@ import CabalmailKit
 
 /// The feed list's filter pill is sticky per scope: the list opens on the
 /// pill stored for its feed, folder, or the all-feeds preference, and a
-/// tap writes the pill back there through `FeedDefaultsPersisting`.
+/// tap writes the pill back there through `FeedDefaultsPersisting`. A single
+/// feed's order is sticky the same way (the Order menu, `selectOrdering`).
 @MainActor
 final class FeedListStickyFilterTests: XCTestCase {
     private final class RecordingPersister: FeedDefaultsPersisting, @unchecked Sendable {
@@ -33,7 +34,7 @@ final class FeedListStickyFilterTests: XCTestCase {
         let model = FeedItemListViewModel(
             scope: scope, subscription: subscription, folder: folder,
             client: try TestFixtures.makeClient(imap: FakeImapClient()),
-            preferences: preferences, defaults: persister, bus: FeedStateBus()
+            preferences: preferences, defaults: persister
         )
         return (model, preferences)
     }
@@ -118,5 +119,59 @@ final class FeedListStickyFilterTests: XCTestCase {
         XCTAssertEqual(preferences.appPreferencesPayload()["filter:feeds:all"], "unread")
         XCTAssertTrue(persister.subscriptionCalls.isEmpty)
         XCTAssertTrue(persister.folderCalls.isEmpty)
+    }
+
+    // MARK: - Order
+
+    func testOrderingPolicyReadsTheFeedsStoredOrder() {
+        let sub = RssSubscription(subscriptionId: "s", feedId: "f", orderingMode: .oldestDayNewestWithin)
+        XCTAssertEqual(FeedListOrderingPolicy.initial(subscription: sub), .oldestDayNewestWithin)
+        XCTAssertEqual(FeedListOrderingPolicy.initial(subscription: nil), .newestFirst,
+                       "a folder, All Feeds, or a row not at hand opens newest first")
+        XCTAssertNil(FeedListOrderingPolicy.stickyUpdate(for: sub, ordering: .oldestDayNewestWithin))
+        XCTAssertEqual(
+            FeedListOrderingPolicy.stickyUpdate(for: sub, ordering: .oldestFirst)?.orderingMode, .oldestFirst
+        )
+    }
+
+    /// The owner's ask: an order picked from the menu is the order the
+    /// feed's list opens on next time, on any device, because it is written
+    /// to the subscription row the server syncs.
+    func testFeedListOpensOnItsStoredOrderAndAPickWritesItBack() async throws {
+        let persister = RecordingPersister()
+        let sub = RssSubscription(subscriptionId: "s", feedId: "f", orderingMode: .oldestFirst)
+        let (model, _) = try makeModel(scope: .subscription("s"), subscription: sub, persister: persister)
+        XCTAssertEqual(model.ordering, .oldestFirst)
+
+        model.selectOrdering(.newestDayOldestWithin)
+        XCTAssertEqual(model.ordering, .newestDayOldestWithin)
+        XCTAssertEqual(model.subscription?.orderingMode, .newestDayOldestWithin, "the held row changes at once")
+        await settle { persister.subscriptionCalls.count == 1 }
+        XCTAssertEqual(persister.subscriptionCalls.count, 1)
+        XCTAssertEqual(persister.subscriptionCalls[0].0.subscriptionId, "s")
+        XCTAssertEqual(persister.subscriptionCalls[0].1.orderingMode, .newestDayOldestWithin)
+        XCTAssertNil(persister.subscriptionCalls[0].1.defaultFilter, "only the order is written")
+
+        model.selectOrdering(.newestDayOldestWithin) // the order in force: nothing to apply or write
+        await settle { persister.subscriptionCalls.count == 2 }
+        XCTAssertEqual(persister.subscriptionCalls.count, 1)
+
+        // A list built from the written row opens on the picked order.
+        let reopened = try makeModel(scope: .subscription("s"), subscription: model.subscription, persister: persister)
+        XCTAssertEqual(reopened.0.ordering, .newestDayOldestWithin)
+    }
+
+    /// A folder or All Feeds list has no single feed to keep an order on:
+    /// a pick applies for the visit and writes nothing.
+    func testAMultiFeedListWritesNoOrder() async throws {
+        let persister = RecordingPersister()
+        let folder = RssFolder(folderId: "fo", name: "Tech")
+        let (model, preferences) = try makeModel(scope: .folder("fo"), folder: folder, persister: persister)
+        model.selectOrdering(.oldestFirst)
+        XCTAssertEqual(model.ordering, .oldestFirst)
+        await settle { !persister.folderCalls.isEmpty || !persister.subscriptionCalls.isEmpty }
+        XCTAssertTrue(persister.folderCalls.isEmpty)
+        XCTAssertTrue(persister.subscriptionCalls.isEmpty)
+        XCTAssertEqual(preferences.appPreferencesPayload().keys.filter { $0.hasPrefix("order") }, [])
     }
 }

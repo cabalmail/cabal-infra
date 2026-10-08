@@ -13,7 +13,15 @@ public enum CabalmailError: Error, Sendable, Equatable {
     case network(String)
     case transport(String)
     case protocolError(String)
+    /// A failure the server named with a code callers branch on: the RSS
+    /// API's error tokens (`not_a_feed`), Cognito's exception names
+    /// (`NotAuthorizedException`), and the config.json fetch.
     case server(code: String, message: String)
+    /// A non-2xx reply from the Lambda API, or from a presigned S3 URL, with
+    /// no code the client branches on; `body` is the reply as text. Callers
+    /// that do branch (the 409 of a send in flight or a rules conflict, the
+    /// BIMI 400) compare `status`.
+    case http(status: Int, body: String)
     case decoding(String)
     case cancelled
 
@@ -82,6 +90,9 @@ extension CabalmailError: LocalizedError {
             // The API explains itself in the body ("That message is no
             // longer in Drafts"); prefer that sentence over the status code.
             return Self.serverExplanation(message) ?? "The server couldn't complete that request (\(code))."
+        case .http(let status, let body):
+            // The same sentence `.server` gives for a numeric code.
+            return Self.serverExplanation(body) ?? "The server couldn't complete that request (\(status))."
         case .maintenance(let message):
             // Already client-facing copy, carried for exactly this purpose.
             return message

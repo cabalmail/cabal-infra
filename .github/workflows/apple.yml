@@ -242,6 +242,11 @@ jobs:
         # wedge was never re-tested on the 27.0 GA runtime; iOS and macOS
         # still run the suite. Re-test on each new visionOS runtime and
         # narrow this back to the iOS carve-out when it boots.
+        #
+        # The scheme is CabalmailKit-Package, not CabalmailKit: the package
+        # has two library products (CabalmailKit and CabalmailShared), and
+        # Xcode then gives only the -Package scheme a test action. It runs
+        # the same CabalmailKitTests, so the -skip-testing names above hold.
         run: |
           set -o pipefail
           SKIP_ARGS=""
@@ -254,7 +259,7 @@ jobs:
           fi
           gtimeout -v --kill-after=2m 30m \
             xcodebuild test \
-            -scheme CabalmailKit \
+            -scheme CabalmailKit-Package \
             -destination '${{ steps.dest.outputs.destination }}' \
             -skipPackagePluginValidation \
             -test-timeouts-enabled YES \

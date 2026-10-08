@@ -1,3 +1,4 @@
+import CabalmailShared
 import Foundation
 
 // MARK: - Push notifications
@@ -38,12 +39,10 @@ extension URLSessionApiClient {
         uid: UInt32?,
         messageID: String?
     ) async throws -> PushEnvelope {
-        var body: [String: Any] = ["folder": folder]
-        // Omitted (not null) when unset — same posture as the NSE's
-        // `EnvelopeQuery.requestBody`; the Lambda resolves by whichever
-        // coordinates it receives (msg_id authoritative, uid a hint).
-        if let uid { body["uid"] = Int(uid) }
-        if let messageID { body["msg_id"] = messageID }
+        // The body the NSE sends too: unset hints are omitted, not null, and
+        // the Lambda resolves by whichever it receives (msg_id authoritative,
+        // uid a hint).
+        let body = PushMessageCoordinates(folder: folder, uid: uid, messageID: messageID).requestBody
         let request = try await post("/push_envelope", json: body)
         let data = try await send(request, expectedStatuses: 200..<300)
         return try decodeReply(PushEnvelope.self, from: data, for: request)

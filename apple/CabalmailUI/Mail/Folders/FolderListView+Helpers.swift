@@ -179,9 +179,10 @@ extension FolderListView {
     }
 
     /// Creates the Feeds section's model on first appearance (wide layouts
-    /// only) and loads it from the store; every appearance then runs the
-    /// refresh until one has finished, so one cut short as the sidebar went
-    /// away (hidden, or rebuilt mid-sync) is taken over here (#1908).
+    /// only), which `observe()` then reads and keeps current; every
+    /// appearance runs the refresh until one has finished, so one cut short
+    /// as the sidebar went away (hidden, or rebuilt mid-sync) is taken over
+    /// here (#1908).
     func loadFeedModelIfNeeded() async {
         guard feedSelection != nil else { return }
         let model: FeedSidebarViewModel
@@ -191,7 +192,6 @@ extension FolderListView {
             feedManagement = FeedManagementViewModel(client: client)
             model = FeedSidebarViewModel(client: client)
             feedModel = model
-            await model.load()
         } else {
             return
         }
@@ -239,50 +239,6 @@ extension FolderListView {
             changed = true
         }
         if changed { collapsedPathsRaw = encodeCollapsed(set) }
-    }
-
-    /// Foreground for the folder row's icon. `FolderIconTint` owns the
-    /// rule and records what each candidate is worth in contrast (#1318);
-    /// this only spells the cases as styles. The accent is the
-    /// asset-catalog color, pinned explicitly rather than ridden through
-    /// `.tint`: macOS repaints environment tints with the user's system
-    /// accent (System Settings > Appearance) whenever that isn't
-    /// "multicolor", which left the wide layouts' icons off-brand. The
-    /// pinned color resolves the same light/dark variants on every
-    /// platform, so compact renders identically to before.
-    func iconForeground(isSelected: Bool) -> AnyShapeStyle {
-        switch FolderIconTint.tint(isSelected: isSelected) {
-        case .inherited:
-            return AnyShapeStyle(.primary)
-        case .accent:
-            return AnyShapeStyle(ColorTokens.accentForestFg)
-        }
-    }
-
-    /// Foreground for the folder name: accent while the folder has
-    /// unread messages, dimmed once it's caught up, and left alone on
-    /// the selected row. `FolderNameTint` owns the rule and records
-    /// what each case is worth in contrast (#1297); this only spells
-    /// the cases as styles. The accent is the pinned asset-catalog
-    /// color, for the reason `iconForeground` gives.
-    func folderNameForeground(hasUnread: Bool, isSelected: Bool) -> AnyShapeStyle {
-        switch FolderNameTint.tint(hasUnread: hasUnread, isSelected: isSelected) {
-        case .inherited:
-            return AnyShapeStyle(.primary)
-        case .unread:
-            return AnyShapeStyle(ColorTokens.accentForestFg)
-        case .caughtUp:
-            return AnyShapeStyle(Color.primary.opacity(FolderNameTint.dimmedOpacity))
-        }
-    }
-
-    /// Render the count badge text honoring the user's
-    /// `folderCountDisplay` preference. Returns `nil` when nothing
-    /// should be shown so the badge capsule collapses entirely (no
-    /// stray "0" badges on read folders). The rule itself lives in
-    /// `FolderCountBadge`, which the feed rows share.
-    func countBadgeText(unread: Int?, total: Int?) -> String? {
-        FolderCountBadge.text(display: preferences.folderCountDisplay, unread: unread, total: total)
     }
 
     /// Fire a one-shot STATUS for an unsubscribed folder the user just
@@ -423,7 +379,7 @@ extension FolderListView {
     var newFolderSheet: some View {
         if let model {
             NewFolderSheet(parents: model.possibleParents, form: newFolderForm) { name, parent in
-                await model.createFolder(name: name, parent: parent)
+                try await model.createFolder(name: name, parent: parent)
             }
         }
     }

@@ -10,35 +10,33 @@ import AppKit
 #endif
 import UserNotifications
 import CabalmailKit
+import CabalmailShared
 
-/// Message coordinates from the APNs payload's `msgRef` dictionary:
-/// `{"folder": "INBOX", "uid": 4271, "msg_id": "<...>"}`. `uid` is a
+/// Message coordinates from the APNs payload's `msgRef` dictionary, parsed
+/// by CabalmailShared's `PushMessageCoordinates`, the same parse the NSE
+/// uses: a uid of 0 and an empty `msg_id` read as nil. `uid` is a
 /// best-effort hint stamped by the dispatch path; `msg_id` is the durable
 /// identity (see `docs/0.11.x/push-notifications.md`). For notification
 /// *actions* we use the uid as given rather than re-resolving through
 /// `/push_envelope` — the backend sends the resolved uid when it can, and a
 /// stale hint only costs a no-op flag/move on a message that already left
-/// the folder.
+/// the folder. The NSE patches the server-resolved uid into msgRef when
+/// enrichment succeeds, so a nil uid here means it genuinely never resolved.
 struct PushMessageRef: Sendable {
     let folder: String
     let uid: UInt32?
     let messageID: String?
 
     init?(userInfo: [AnyHashable: Any]) {
-        guard
-            let ref = userInfo["msgRef"] as? [String: Any],
-            let folder = ref["folder"] as? String, !folder.isEmpty
-        else { return nil }
-        self.folder = folder
-        // 0 is the dispatch Lambda's "no hint" sentinel; mapping it to nil
-        // makes the action handlers' `guard let uid` skip cleanly instead of
-        // flag/move-ing UID 0 (which the API rejects as out of range). The
-        // NSE rewrites msgRef with the server-resolved uid when enrichment
-        // succeeds, so a nil here means the uid genuinely never resolved.
-        let rawUid = (ref["uid"] as? NSNumber)?.uint32Value
-        self.uid = rawUid == 0 ? nil : rawUid
-        let rawMessageID = ref["msg_id"] as? String
-        self.messageID = (rawMessageID?.isEmpty ?? true) ? nil : rawMessageID
+        guard let coordinates = PushMessageCoordinates(userInfo: userInfo) else { return nil }
+        self.folder = coordinates.folder
+        self.uid = coordinates.uid
+        self.messageID = coordinates.messageID
+    }
+
+    /// The same coordinates in their wire form, for writing a msgRef.
+    var coordinates: PushMessageCoordinates {
+        PushMessageCoordinates(folder: folder, uid: uid, messageID: messageID)
     }
 
     /// The pushed message, when the payload named it by UID. A payload whose
@@ -541,11 +539,7 @@ extension PushRegistrar {
             // is the "unresolved" sentinel, and a missing resolution keeps
             // the original hint) so Mark as Read / Archive / Open act on
             // the message this notification shows.
-            var msgRef: [String: Any] = ["folder": ref.folder]
-            let resolvedUid = envelope.uid.flatMap { $0 == 0 ? nil : $0 } ?? ref.uid
-            if let resolvedUid { msgRef["uid"] = Int(resolvedUid) }
-            if let messageID = ref.messageID { msgRef["msg_id"] = messageID }
-            content.userInfo = ["msgRef": msgRef]
+            content.userInfo = ref.coordinates.resolving(envelope.uid).userInfo
             try await notificationCenter.add(
                 UNNotificationRequest(
                     identifier: UUID().uuidString,
@@ -569,10 +563,7 @@ extension PushRegistrar {
         content.title = "New mail"
         content.sound = .default
         content.categoryIdentifier = "MAIL_MESSAGE"
-        var msgRef: [String: Any] = ["folder": ref.folder]
-        if let uid = ref.uid { msgRef["uid"] = Int(uid) }
-        if let messageID = ref.messageID { msgRef["msg_id"] = messageID }
-        content.userInfo = ["msgRef": msgRef]
+        content.userInfo = ref.coordinates.userInfo
         do {
             try await notificationCenter.add(
                 UNNotificationRequest(

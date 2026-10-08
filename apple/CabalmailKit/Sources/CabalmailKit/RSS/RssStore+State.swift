@@ -46,6 +46,7 @@ extension RssStore {
         try database.run("UPDATE items SET is_read = ?, state_is_explicit = 1 WHERE feed_id = ? AND sort_key = ?",
                    [.init(isRead), .init(feedId), .init(sortKey)])
         try enqueue(kind: .read, feedId: feedId, sortKey: sortKey, value: isRead)
+        emit(.items(["\(feedId)#\(sortKey)"]))
     }
 
     /// Favorites or unfavorites an item locally and queues the change.
@@ -53,25 +54,38 @@ extension RssStore {
         try database.run("UPDATE items SET is_favorite = ? WHERE feed_id = ? AND sort_key = ?",
                    [.init(isFavorite), .init(feedId), .init(sortKey)])
         try enqueue(kind: .favorite, feedId: feedId, sortKey: sortKey, value: isFavorite)
+        emit(.items(["\(feedId)#\(sortKey)"]))
     }
 
     /// Mark-all-read for one subscription, the way the server does it:
-    /// advance the watermark and flip items explicitly marked unread.
+    /// advance the watermark and flip items explicitly marked unread. One
+    /// transaction with the queued push: a watermark advanced here with no
+    /// push queued would read as read on this device for good, since the
+    /// store keeps the higher of its own and the server's (#1939).
     public func markAllRead(subscriptionId: String, watermark: String? = nil) throws {
         let watermark = watermark ?? Self.isoNow()
         guard let sub = try subscription(id: subscriptionId) else { return }
-        try database.run(
-            "UPDATE subscriptions SET read_watermark = MAX(read_watermark, ?) WHERE subscription_id = ?",
-            [.init(watermark), .init(subscriptionId)])
-        try database.run("""
-            UPDATE items SET is_read = 1 WHERE feed_id = ? AND state_is_explicit = 1 AND is_read = 0
-              AND published_at <= ?
-            """, [.init(sub.feedId), .init(watermark)])
-        // `created_at` carries the watermark itself (the tap time, unless the
-        // caller passed one), which `pendingMutations` hands to the drain.
-        try database.run(
-            "INSERT INTO pending (kind, subscription_id, feed_id, created_at) VALUES ('mark_all_read', ?, ?, ?)",
-            [.init(subscriptionId), .init(sub.feedId), .init(watermark)])
+        try database.exec("BEGIN")
+        do {
+            try database.run(
+                "UPDATE subscriptions SET read_watermark = MAX(read_watermark, ?) WHERE subscription_id = ?",
+                [.init(watermark), .init(subscriptionId)])
+            try database.run("""
+                UPDATE items SET is_read = 1 WHERE feed_id = ? AND state_is_explicit = 1 AND is_read = 0
+                  AND published_at <= ?
+                """, [.init(sub.feedId), .init(watermark)])
+            // `created_at` carries the watermark itself (the tap time, unless
+            // the caller passed one), which `pendingMutations` hands to the
+            // drain.
+            try database.run(
+                "INSERT INTO pending (kind, subscription_id, feed_id, created_at) VALUES ('mark_all_read', ?, ?, ?)",
+                [.init(subscriptionId), .init(sub.feedId), .init(watermark)])
+            try database.exec("COMMIT")
+        } catch {
+            try? database.exec("ROLLBACK")
+            throw error
+        }
+        emit(.feeds([sub.feedId]))
     }
 
     /// Applies state rows the server reported (the state sync) to the
@@ -102,6 +116,7 @@ extension RssStore {
             try? database.exec("ROLLBACK")
             throw error
         }
+        emit(.feeds(Set(states.map(\.feedId))))
     }
 
     /// Applies a watermark the SERVER reported (after a push or a catalog
@@ -110,6 +125,7 @@ extension RssStore {
         try database.run(
             "UPDATE subscriptions SET read_watermark = MAX(read_watermark, ?) WHERE subscription_id = ?",
             [.init(watermark), .init(subscriptionId)])
+        if let feedId = try subscription(id: subscriptionId)?.feedId { emit(.feeds([feedId])) }
     }
 
     public func pendingMutations() throws -> [PendingMutation] {
@@ -133,10 +149,16 @@ extension RssStore {
                      [.init(feedId), .init(sortKey)]).first) != nil
     }
 
+    /// Clears pushed queue rows; their items lose the "queued" mark.
     public func deletePending(ids: [Int]) throws {
         guard !ids.isEmpty else { return }
-        try database.run("DELETE FROM pending WHERE id IN (\(Self.placeholders(ids.count)))",
-                         ids.map(SQLiteDatabase.Value.init(_:)))
+        let binds = ids.map(SQLiteDatabase.Value.init(_:))
+        let items = try database.rows("""
+            SELECT feed_id, sort_key FROM pending
+            WHERE id IN (\(Self.placeholders(ids.count))) AND sort_key != ''
+            """, binds).map { "\($0.string(0))#\($0.string(1))" }
+        try database.run("DELETE FROM pending WHERE id IN (\(Self.placeholders(ids.count)))", binds)
+        emit(.items(Set(items)))
     }
 
     private func enqueue(kind: PendingKind, feedId: String, sortKey: String, value: Bool) throws {
@@ -168,6 +190,33 @@ extension RssStore {
               last_synced_at = excluded.last_synced_at, state_cursor = excluded.state_cursor
             """, [.init(feedId), .init(state.sinceCursor), .init(state.olderCursor),
                   .init(state.olderExhausted), .init(state.lastSyncedAt), .init(state.stateCursor)])
+        // Whether there is older history to load is the list's to show.
+        emit(.feeds([feedId]))
+    }
+
+    /// Records a sync's progress (its since and state cursors and the time)
+    /// and leaves "load older" where it is. A feed's sync and a "Load older
+    /// items" can overlap, and each used to write back the whole row it read
+    /// when it started, putting back the other's cursor (#1938).
+    public func setSyncProgress(feedId: String, sinceCursor: String, stateCursor: String, lastSyncedAt: String) throws {
+        try database.run("""
+            INSERT INTO feed_sync (feed_id, since_cursor, state_cursor, last_synced_at) VALUES (?, ?, ?, ?)
+            ON CONFLICT(feed_id) DO UPDATE SET since_cursor = excluded.since_cursor,
+              state_cursor = excluded.state_cursor, last_synced_at = excluded.last_synced_at
+            """, [.init(feedId), .init(sinceCursor), .init(stateCursor), .init(lastSyncedAt)])
+        emit(.feeds([feedId]))
+    }
+
+    /// Records "load older" progress and leaves the sync's cursors where
+    /// they are (`setSyncProgress`).
+    public func setOlderCursor(feedId: String, olderCursor: String, olderExhausted: Bool) throws {
+        try database.run("""
+            INSERT INTO feed_sync (feed_id, older_cursor, older_exhausted) VALUES (?, ?, ?)
+            ON CONFLICT(feed_id) DO UPDATE SET older_cursor = excluded.older_cursor,
+              older_exhausted = excluded.older_exhausted
+            """, [.init(feedId), .init(olderCursor), .init(olderExhausted)])
+        // Whether there is older history to load is the list's to show.
+        emit(.feeds([feedId]))
     }
 
     public func itemCount(feedId: String) throws -> Int {

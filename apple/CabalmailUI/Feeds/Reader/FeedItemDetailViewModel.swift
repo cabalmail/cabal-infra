@@ -29,22 +29,19 @@ final class FeedItemDetailViewModel {
 
     private let engine: RssSyncEngine?
     private let defaults: (any FeedDefaultsPersisting)?
-    private let bus: FeedStateBus
 
     init(
         item: RssItem,
         subscription: RssSubscription?,
         engine: RssSyncEngine?,
         preferences: Preferences,
-        defaults: (any FeedDefaultsPersisting)? = nil,
-        bus: FeedStateBus = .shared
+        defaults: (any FeedDefaultsPersisting)? = nil
     ) {
         self.item = item
         self.subscription = subscription
         self.engine = engine
         // The sync engine is the production persister; tests hand in a fake.
         self.defaults = defaults ?? engine
-        self.bus = bus
         let policy = FeedDetailPolicy.initial(
             for: subscription,
             hasArticleURL: URL(string: item.url) != nil,
@@ -53,15 +50,38 @@ final class FeedItemDetailViewModel {
         self.showingArticle = policy.showsArticle
         self.readerMode = policy.readerMode
         self.remoteContentAllowed = policy.remoteContentAllowed
-        bus.subscribe(self) { [weak self] change in self?.apply(change) }
     }
 
-    /// The list's swipe or context menu changed this item: keep the toolbar
-    /// truthful.
-    func apply(_ change: RssItem?) {
-        guard let change, change.id == item.id else { return }
-        item.isRead = change.isRead
-        item.isFavorite = change.isFavorite
+    /// The view's `.task` while the reader is up: follows the store, so the
+    /// toolbar's read and flag state stay truthful when the item is marked
+    /// elsewhere (the list's swipe or context menu, another window, another
+    /// device's marks arriving by state sync), and the feed's stored
+    /// defaults follow its settings sheet, which the next toggle compares
+    /// against. What is on screen (article or summary, styling, remote
+    /// content) stays as the reader opened it.
+    func observe() async {
+        guard let store = await engine?.store else { return }
+        let changes = await store.changes()
+        await readItem(from: store)
+        await readSubscription(from: store)
+        await FeedStoreChanges.follow(changes) { batch in
+            if batch.cleared || batch.items.contains(item.id) || batch.feeds.contains(item.feedId) {
+                await readItem(from: store)
+            }
+            if batch.catalog { await readSubscription(from: store) }
+        }
+    }
+
+    private func readItem(from store: RssStore) async {
+        guard let stored = (try? await store.item(feedId: item.feedId, sortKey: item.sortKey)) ?? nil else { return }
+        item.isRead = stored.isRead
+        item.isFavorite = stored.isFavorite
+    }
+
+    private func readSubscription(from store: RssStore) async {
+        guard let id = subscription?.subscriptionId,
+              let row = (try? await store.subscription(id: id)) ?? nil else { return }
+        subscription = row
     }
 
     var articleURL: URL? {
@@ -106,23 +126,20 @@ final class FeedItemDetailViewModel {
               )
         else { return }
         self.subscription = subscription.applying(update)
-        Task { [bus] in
-            _ = try? await defaults.updateSubscription(subscription, update)
-            // The sidebar and settings sheet read the row too.
-            bus.postCatalogChanged()
-        }
+        // The store's write tells the sidebar and the settings sheet.
+        Task { _ = try? await defaults.updateSubscription(subscription, update) }
     }
 
+    /// Optimistic: the toolbar flips at once, and the store's write tells
+    /// the list and the sidebar.
     func setRead(_ isRead: Bool) async {
         item.isRead = isRead
         try? await engine?.setRead(item, isRead)
-        bus.post(item)
     }
 
     func setFavorite(_ isFavorite: Bool) async {
         item.isFavorite = isFavorite
         try? await engine?.setFavorite(item, isFavorite)
-        bus.post(item)
     }
 }
 

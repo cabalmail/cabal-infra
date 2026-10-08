@@ -18,6 +18,10 @@ actor FakeRssClient: RssClient {
     private var cancelledError: any Error & Sendable = CabalmailError.cancelled
     private var catalogError: (any Error & Sendable)?
     private var itemsError: (any Error & Sendable)?
+    private var itemsErrors: [String: any Error & Sendable] = [:]
+    private var pushError: (any Error & Sendable)?
+    /// The subscriptions whose since-sync was asked for, in call order.
+    private(set) var syncedSubscriptions: [String] = []
 
     private(set) var catalog = RssCatalog(folders: [], subscriptions: [])
     private(set) var subscribeCalls: [(url: String, folderId: String?)] = []
@@ -35,6 +39,10 @@ actor FakeRssClient: RssClient {
     func set(cancelledError: any Error & Sendable) { self.cancelledError = cancelledError }
     func set(catalogError: (any Error & Sendable)?) { self.catalogError = catalogError }
     func set(itemsError: (any Error & Sendable)?) { self.itemsError = itemsError }
+    /// Fails one subscription's items calls; the others answer as usual.
+    func set(itemsError: (any Error & Sendable)?, forSubscription id: String) { itemsErrors[id] = itemsError }
+    /// Fails every `setItemState`, the pending queue's push.
+    func set(pushError: (any Error & Sendable)?) { self.pushError = pushError }
 
     /// Parks the next `call` until `releaseHeld(_:)`.
     func holdNext(_ call: HeldCall) { holdArmed.insert(call) }
@@ -147,31 +155,38 @@ actor FakeRssClient: RssClient {
 
     func listItems(scope: RssItemScope, filter: RssItemFilter, order: RssItemOrder, limit: Int,
                    cursor: String?) async throws -> RssItemsPage {
-        try await itemsCall()
+        var subscriptionId: String?
+        if case .subscription(let id) = scope { subscriptionId = id }
+        try await itemsCall(subscriptionId)
         return RssItemsPage(items: [], nextCursor: nil)
     }
 
     func syncItems(subscriptionId: String, since: String, limit: Int) async throws -> RssSyncPage {
-        try await itemsCall()
+        syncedSubscriptions.append(subscriptionId)
+        try await itemsCall(subscriptionId)
         return RssSyncPage(items: [], nextSince: since, hasMore: false)
     }
 
     func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage {
-        try await itemsCall()
+        try await itemsCall(subscriptionId)
         return RssStateSyncPage(states: [], nextSince: since, hasMore: false)
     }
 
-    private func itemsCall() async throws {
+    private func itemsCall(_ subscriptionId: String?) async throws {
         itemsCalls += 1
         try await pass(.items)
         if let itemsError { throw itemsError }
+        if let subscriptionId, let error = itemsErrors[subscriptionId] { throw error }
     }
 
     func getItem(feedId: String, sortKey: String) async throws -> RssItem {
         throw CabalmailError.server(code: "not_found", message: "unused")
     }
 
-    func setItemState(_ changes: [RssItemStateChange]) async throws -> Int { changes.count }
+    func setItemState(_ changes: [RssItemStateChange]) async throws -> Int {
+        if let pushError { throw pushError }
+        return changes.count
+    }
 
     func markAllRead(scope: RssItemScope, watermark: String?) async throws -> RssMarkAllReadResult {
         markAllReadCalls.append(scope)

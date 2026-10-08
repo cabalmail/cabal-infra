@@ -90,6 +90,7 @@ extension RssStore {
             try? database.exec("ROLLBACK")
             throw error
         }
+        emit(.feeds(Set(items.map(\.feedId))))
     }
 
     /// One page of items for the query, read state computed.
@@ -131,6 +132,41 @@ extension RssStore {
             GROUP BY s.subscription_id
             """)
         return Dictionary(uniqueKeysWithValues: rows.map { ($0.string(0), $0.int(1)) })
+    }
+
+    /// What a list's All / Unread / Flagged pills count for a scope: the
+    /// cached items `items(_:)` pages through, the unread ones (by the same
+    /// read rule), and the flagged ones.
+    public struct FilterCounts: Sendable, Hashable {
+        public var all: Int
+        public var unread: Int
+        public var favorite: Int
+
+        public init(all: Int = 0, unread: Int = 0, favorite: Int = 0) {
+            self.all = all
+            self.unread = unread
+            self.favorite = favorite
+        }
+
+        public func count(for filter: RssItemFilter) -> Int {
+            switch filter {
+            case .all: return all
+            case .unread: return unread
+            case .favorite: return favorite
+            }
+        }
+    }
+
+    /// The pill counts for a scope, in one pass over its feeds' items.
+    public func filterCounts(in scope: RssItemScope) throws -> FilterCounts {
+        let feedIds = try feedIds(in: scope)
+        guard !feedIds.isEmpty else { return FilterCounts() }
+        let row = try database.rows("""
+            SELECT COUNT(*), COALESCE(SUM(CASE WHEN (\(Schema.readExpression)) THEN 0 ELSE 1 END), 0),
+              COALESCE(SUM(i.is_favorite), 0)
+            FROM items i WHERE i.feed_id IN (\(Self.placeholders(feedIds.count)))
+            """, feedIds.map(SQLiteDatabase.Value.init(_:))).first
+        return FilterCounts(all: row?.int(0) ?? 0, unread: row?.int(1) ?? 0, favorite: row?.int(2) ?? 0)
     }
 
     /// Cached item counts keyed by subscription id (absent = zero): the

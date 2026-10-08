@@ -385,7 +385,7 @@ extension AddressListView {
         HStack {
             Image(systemName: address.favorite ? "star.fill" : "at")
                 // The asset-catalog accent, pinned like the folder icons
-                // (see `iconForeground` in FolderListView+Helpers.swift):
+                // (see `SidebarTreeRowLabel.iconStyle`):
                 // `Color.accentColor` follows the macOS system accent when
                 // that isn't "multicolor", leaving the icons off-brand.
                 .foregroundStyle(address.favorite ? ColorTokens.flaggedFg : ColorTokens.accentForestFg)

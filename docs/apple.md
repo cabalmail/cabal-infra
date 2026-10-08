@@ -19,7 +19,10 @@ apple/
                              #   window, menu-bar extra, asset catalogs
   CabalmailWatch/            # Watch companion app (address management only),
                              #   embedded in the iOS product
-  CabalmailKit/              # Shared Swift package — networking, models, auth, caching
+  CabalmailKit/              # Shared Swift package — networking, models, auth, caching;
+                             #   its second product, CabalmailShared, holds what the app
+                             #   extensions share with the apps (see "Extension-shared
+                             #   values" below)
 ```
 
 ## Bootstrap
@@ -702,7 +705,7 @@ TestFlight upload and skips the notarization steps.
 
 | Job | Runs when | What it does |
 |---|---|---|
-| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on CabalmailKit across macOS / iOS / visionOS destinations |
+| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) across macOS / iOS / visionOS destinations |
 | `app-build` | Same | Unsigned `xcodebuild build` for `Cabalmail` (iOS) and `CabalmailMac` (macOS) |
 | `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
@@ -984,23 +987,32 @@ Rules that keep the module working:
   if the sources were compiled there, including protocol conformances
   that nothing names by symbol (Swift looks those up at run time, and an
   archive member nothing references is otherwise left out). `CabalmailUI`
-  imports CabalmailKit without linking it, and `CabalmailMacTests` and
-  `CabalmailiOSTests` depend on `CabalmailUI` with `link: false`: the
-  host app carries both modules, and a second copy splits their types
-  (`as? CabalmailError` casts fail). Any new target that links the
-  library needs the same `-force_load`.
+  imports CabalmailKit and CabalmailShared without linking them, and
+  `CabalmailMacTests` and `CabalmailiOSTests` depend on `CabalmailUI` and
+  CabalmailShared with `link: false`: the host app carries every one of
+  these modules (CabalmailShared inside the Kit), and a second copy
+  splits their types (`as? CabalmailError` casts fail). Any new target
+  that links the library needs the same `-force_load`.
 - **Asset catalogs stay in the app targets.** A static library carries no
   resources. Shared code looks assets up by name (`Image("CabalmailMark")`
   resolves against the app bundle) rather than through generated asset
   symbols, which exist only in the app modules.
-- **Four files are also compiled by path into other targets**, which do
+- **Two files are also compiled by path into the watch app**, which does
   not link the library: `Platform/HostPlatform.swift` and
-  `Platform/ConfirmationDialogPolicy.swift` into the watch app, and
-  `Platform/Services/ExtensionControlDomainStore.swift` and
-  `Platform/Services/PrivateLinkTokenStore.swift` into both Safari web
-  extensions. Moving one means updating its path in `project.yml` (and,
-  for the token store, in `extensions/shared/test/privateLink.test.ts`,
-  which reads it), and none of them may import `CabalmailUI`.
+  `Platform/ConfirmationDialogPolicy.swift`. Moving one means updating
+  its path in `project.yml`, and neither may import `CabalmailUI`. The
+  stores the Safari web extensions read are not compiled by path: they
+  live in the `CabalmailShared` module (see "Extension-shared values"
+  below), which both Safari appexes link.
+- **The Safari appex folders keep their historical names.** The native
+  handler both Safari appexes compile,
+  `SafariWebExtensionHandler.swift`, lives in
+  `apple/CabalmailMacWebExtension/` despite the name, and
+  `apple/CabalmailWebExtension/` holds only the iOS appex's `Info.plist`
+  and entitlements. Renaming them touches the source, `Info.plist` and
+  entitlement paths in `project.yml`, `.swiftlint.yml`'s folder list and
+  the changelog gate's folder list for no change in behaviour, so it waits for XcodeGen target
+  templates, which a future extension would bring.
 
 The module is sorted into feature folders, at most two levels deep.
 Loose files in a feature folder are shared by that feature's subfolders.
@@ -1019,19 +1031,19 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu |
 | `Mail/Reader/` | `MessageDetailView`, `MessageDetailViewModel` and their extension files: the header, the toolbar and its policies, attachments, calendar invites, View Source |
 | `Mail/Search/` | The search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
-| `Feeds/` | The Feeds tab root, the feed change bus, feed health and per-feed web storage |
+| `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
 | `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (router, slot registry, scene) |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
-| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), count badges, sidebar header and filter rows, toolbar priority, branding |
+| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), branding |
 | `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout |
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
 | `Platform/` | Small per-OS adapters: host platform, confirmation-dialog roles, the pasteboard |
-| `Platform/Services/` | Push (the app delegate and `PushRegistrar`), the watch hand-off, the stores the Safari extension reads (control domain, private-link tokens) |
+| `Platform/Services/` | Push (the app delegate and `PushRegistrar`) and the watch hand-off |
 
 A file belongs in `Shared/` only if it knows nothing about any one
 feature, or if several features use it without carrying one feature's
@@ -1039,6 +1051,64 @@ logic; otherwise it stays with its feature. Platform conditionals
 (`#if os`) are still spread through the feature folders; new
 layout-level branches belong in `Shell/` and new OS adapters in
 `Platform/`.
+
+### Extension-shared values: the `CabalmailShared` module
+
+The app extensions don't link CabalmailKit, which keeps them small and
+keeps the Kit's resource bundle out of them. What an extension and the
+app must spell identically lives instead in `CabalmailShared`, a second
+library product of the `CabalmailKit` package
+(`apple/CabalmailKit/Sources/CabalmailShared/`):
+
+- `AppGroup.identifier`, the App Group whose `UserDefaults` suite the
+  apps write and the extensions read.
+- `ExtensionControlDomainStore` and `PrivateLinkTokenStore`, the two
+  stores the Safari web extensions' native handler reads: the control
+  domain the app signed in to, and the private-link token rows (#1765).
+  The app writes both. `extensions/shared/test/privateLink.test.ts` reads
+  the token store's source by path to check its token alphabet, and
+  `extensions.yml` runs that test on a pull request that changes the
+  file, so a move updates both paths.
+- `PushHandoff` and `PushTokenPayload`: where the app leaves the API URL
+  and the Cognito ID token for the notification service extensions (the
+  defaults key, the keychain service, account and access-group suffix),
+  and the JSON the token is stored as. `PushEnrichmentStore` writes them;
+  `CabalmailNotificationService/NotificationService.swift` reads them.
+- `PushMessageCoordinates` and `PushEnvelope`, the two push wire formats:
+  the payload's `msgRef` (folder, uid hint and `msg_id`; a uid of 0 or an
+  empty `msg_id` reads as none), which is also the `/push_envelope`
+  request body, and that endpoint's reply. The notification extension
+  parses, sends and patches with them; the Kit's `fetchPushEnvelope`
+  sends and decodes with them; the app's `PushMessageRef` parses through
+  them and the macOS in-app enrichment writes with them.
+
+How it is linked:
+
+- **The Kit depends on it**, so the apps and the watch get it inside the
+  Kit and link nothing new.
+- **The two notification service extensions and the two Safari web
+  extensions link the `CabalmailShared` product** and import it, never
+  the Kit. It is a static product with no
+  resources, so its code lands in each extension's own binary and
+  nothing new is embedded or signed.
+- **Keep it Foundation only**, with no resources, no logging (the
+  `os.Logger` lint rule exempts only `CabalmailLog` and the notification
+  extension) and no UI imports, and leave its product type automatic. A
+  resource would add a bundle to every extension, and a dynamic product
+  would put a framework inside each `.appex`, which App Store upload
+  rejects.
+- **Entitlements keep their literals**, since a plist can't import a
+  module: the App Group is in six entitlements files and the keychain
+  group in four (both apps and both notification extensions). No test
+  reads them, so change them by hand with the module.
+  `PushHandoffContractTests` pins each Swift constant to the shipped
+  value, so a change on the code side fails the Kit tests instead of
+  quietly turning every enriched notification back into "New mail".
+- **The Kit's xcodebuild test scheme is `CabalmailKit-Package`.** With two
+  library products, Xcode gives only that scheme a test action, so
+  `apple.yml` and `scripts/build-apple.sh` run
+  `xcodebuild test -scheme CabalmailKit-Package` from
+  `apple/CabalmailKit`. `swift test` is unaffected.
 
 ### Runtime configuration: published `config.json`
 
@@ -1073,6 +1143,82 @@ onto the `ImapClient` protocol, and `CabalmailClient.send(_:)` posts to
 server-side. Issue #371 made the switch after the earlier hand-rolled
 `NWConnection` IMAP and SMTP clients proved unreliable across network
 transitions and sleep/wake; that stack has since been deleted.
+
+### API errors: what a failed request throws
+
+Every Kit API request throws `CabalmailError`, with one deliberate
+exception: a lost `/set_rules` race throws `RuleSetConflictError`. (A
+Cognito 2xx that isn't JSON still escapes as a Foundation error, #1902.)
+The user-facing copy for every case is the enum's `LocalizedError`
+conformance in `Models/Errors.swift`. Most views show
+`error.localizedDescription`; some word particular cases themselves,
+among them the sign-in form (`SignInErrorText`), the composer
+(`ComposeViewModel.describe`), Siri (`IntentError`), the feed views
+(`FeedErrorText`) and the message list's bulk actions.
+
+- **The Lambda API or S3 said no: `.http(status:body:)`.** Any non-2xx
+  from the Lambda API, or from a presigned S3 URL, that the next two
+  bullets don't cover, with `body` the reply as text. Its copy is the
+  body's `status` string, or its `message` string when there is no
+  `status`, if that string is more than one word: a one-word `status`
+  such as `unable` doesn't fall through to `message`, and a handler's
+  `{"Error": ...}` body isn't read (#1918). Otherwise it is "The server
+  couldn't complete that request (NNN)." The callers that act on a
+  particular failure compare the status: a 409 `duplicate_in_flight` from
+  `/send` becomes `.sendInFlight`, a 409 from `/set_rules` becomes
+  `RuleSetConflictError`, and a 400 from `/fetch_bimi` is cached as "no
+  logo".
+- **A failure carrying a code: `.server(code:message:)`.** Three sources
+  produce it: the RSS API's error tokens (`not_a_feed`,
+  `needs_credentials`, ...), which `FeedErrorText` maps to copy; Cognito's
+  exception names (`NotAuthorizedException` is `.invalidCredentials` or
+  `.authExpired` instead, and an unreadable reply gets the code
+  `Unknown`); and the `config.json` fetch, with its HTTP status as the
+  code. Some views show `.server`'s message as written: Siri, the feed
+  views for a token they have no copy for, and the sign-in form (bare for
+  a Cognito trigger's copy, after "Server error:" otherwise; a mistyped
+  second-factor code gets its own sentence). An RSS token carries the
+  reply's `Error` sentence and every other Lambda API failure is `.http`,
+  so none of them shows a raw Lambda API reply.
+- **Two Lambda API statuses are handled first.** A 401 forces a token
+  refresh (one shared by a burst of 401s) and replays the request once; a
+  401 on the replay announces the session's expiry and throws
+  `.authExpired`. A 503 with `{"status": "maintenance"}` is
+  `.maintenance(message:)`, whose message is shown as written. A
+  presigned S3 URL gets neither: its 401 or 503 is plain `.http`.
+- **A 2xx that didn't parse: `.decoding`.** Every strict decode of a
+  Lambda API reply, the RSS endpoints included, goes through
+  `URLSessionApiClient.decodeReply`, which names the endpoint
+  ("list_envelopes returned an unexpected reply") and writes where the
+  decode stopped (its kind and coding path, never a field's value) to
+  `CabalmailLog`. A few
+  reads are lenient on purpose and fall back instead. The `config.json`
+  fetch and the Cognito calls decode on their own paths. A URL the API
+  hands back for the client to fetch (the presigned message, attachment,
+  inline-image and upload URLs, and the BIMI logo) is followed only when
+  it is absolute `http` or `https` with a host
+  (`URL(followableReplyString:)`). Anything else fails the call as
+  `.decoding`, which for `/fetch_bimi` is a lookup the cache retries
+  rather than a cached "no logo".
+- **No answer: `.network`.** `URLSessionHTTPTransport` turns every
+  `URLError` but the caller's own cancel into `.network`, retrying a
+  dropped connection, a timeout or a cancel nobody asked for once first.
+  A reply that isn't HTTP at all is `.transport`.
+- **The caller gave up: `.cancelled`.** Only when the request's own task
+  was cancelled, as when SwiftUI tears down a view's `.task`. Callers that
+  stay quiet on a cancel read `Task.isCancelled` rather than matching
+  `.cancelled`, because some paths answer a cancel with something else:
+  the folder list, for one, falls back to its saved copy.
+- **This device's storage failed: `.storage`.** A keychain call; see the
+  storage section below.
+
+A first send (`CabalmailClient.send(_:)`) treats `.network`, `.transport`,
+`.cancelled`, `.sendInFlight` and `.storage` as "queue the message in the
+outbox and retry" (`CabalmailClient.shouldQueue`). Any other error is
+thrown to the composer, which stays open and shows it. A message already
+in the outbox is retried by `SendQueue`, whatever the error, until
+`Outbox.maxAttempts` (a `.sendInFlight` answer doesn't spend an attempt),
+then marked failed and offered back to the user (`FailedSendBanner`).
 
 ### Storage: Keychain for secrets, on-disk Codable for mirrors
 

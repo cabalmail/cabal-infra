@@ -58,10 +58,16 @@ public func waitUntilOnMainActor(
 /// more: cancelling the drain finishes the stream, which still hands over
 /// its buffer, so this never waits on an element that isn't coming.
 public func bufferedCount<Element: Sendable>(_ stream: AsyncStream<Element>) async -> Int {
+    await bufferedElements(stream).count
+}
+
+/// The elements already buffered on `stream`, in order, without waiting for
+/// more (see `bufferedCount`). The stream is finished afterwards.
+public func bufferedElements<Element: Sendable>(_ stream: AsyncStream<Element>) async -> [Element] {
     let drain = Task {
-        var count = 0
-        for await _ in stream { count += 1 }
-        return count
+        var elements: [Element] = []
+        for await element in stream { elements.append(element) }
+        return elements
     }
     drain.cancel()
     return await drain.value

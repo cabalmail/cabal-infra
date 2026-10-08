@@ -1,13 +1,13 @@
 '''PUT /rss_update_folder - rename, move, or reorder a folder.
 
 Body: {"folder_id": "...", and any of "name", "parent_folder_id" (empty
-       string = root), "display_order", "default_filter"}
+       string = root), "display_order", "default_filter", "ordering_mode"}
 
 Moving a folder under itself or one of its descendants is refused: the
 tree must stay a tree.
 '''
-from rss_api import (ApiError, ITEM_FILTERS, MAX_TITLE_LENGTH, body_of,  # pylint: disable=import-error
-                     folder_and_descendants, folders, guarded, ok,
+from rss_api import (ApiError, ITEM_FILTERS, MAX_TITLE_LENGTH, ORDERING_MODES,  # pylint: disable=import-error
+                     body_of, folder_and_descendants, folders, guarded, ok,
                      serialize_folder, username)
 
 
@@ -27,14 +27,14 @@ def handler(event, _context):
     if 'display_order' in body:
         sets.append('display_order = :order')
         values[':order'] = valid_order(body['display_order'])
-    if 'default_filter' in body:
-        # The pill the folder's list opens on (sticky, like a subscription's
-        # default_filter); the folder row is per user, so it syncs as-is.
-        if body['default_filter'] not in ITEM_FILTERS:
-            raise ApiError(400, 'invalid_default_filter',
-                           f'default_filter must be one of {", ".join(ITEM_FILTERS)}.')
-        sets.append('default_filter = :filter')
-        values[':filter'] = body['default_filter']
+    # The pill the folder's list opens on and the order it opens in, sticky
+    # like a subscription's default_filter and ordering_mode; the folder row
+    # is per user, so they sync as-is. The order applies to the folder's own
+    # merged list only; the feeds inside keep theirs.
+    for field, allowed in (('default_filter', ITEM_FILTERS), ('ordering_mode', ORDERING_MODES)):
+        if field in body:
+            sets.append(f'{field} = :{field}')
+            values[f':{field}'] = valid_choice(field, body[field], allowed)
     if 'parent_folder_id' in body:
         parent = valid_parent(user, folder_id, body['parent_folder_id'])
         if parent:
@@ -63,6 +63,13 @@ def valid_name(value):
         raise ApiError(400, 'invalid_name',
                        'Folder name is empty, too long, or has control characters.')
     return name
+
+
+def valid_choice(field, value, allowed):
+    '''One of the field's allowed values.'''
+    if value not in allowed:
+        raise ApiError(400, f'invalid_{field}', f'{field} must be one of {", ".join(allowed)}.')
+    return value
 
 
 def valid_order(value):

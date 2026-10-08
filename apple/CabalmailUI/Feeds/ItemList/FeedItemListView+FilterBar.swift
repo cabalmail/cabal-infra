@@ -11,12 +11,14 @@ extension FeedItemListView {
         @Bindable var model = model
         VStack(spacing: 6) {
             HStack(spacing: 6) {
-                // The message list's pills, without counts.
+                // The message list's pills, counting the scope's items as
+                // mail's count the folder's.
                 FilterPillStrip {
                     ForEach(RssItemFilter.allCases) { filter in
                         FilterPill(
                             label: filterLabel(filter),
                             isOn: model.filter == filter,
+                            count: model.filterCounts?.count(for: filter),
                             identifier: "feed.filter.\(filter.rawValue)"
                         ) {
                             model.selectFilter(filter)
@@ -33,7 +35,11 @@ extension FeedItemListView {
                         // inline picker still draws its title as a section
                         // header, repeating the word on the button just
                         // pressed, so the label is hidden (VoiceOver keeps it).
-                        Picker("Order", selection: $model.ordering) {
+                        // A pick is sticky for the feed (`selectOrdering`).
+                        Picker("Order", selection: Binding(
+                            get: { model.ordering },
+                            set: { model.selectOrdering($0) }
+                        )) {
                             Text("Newest first").tag(RssOrderingMode.newestFirst)
                             Text("Oldest first").tag(RssOrderingMode.oldestFirst)
                             Text("Newest day, oldest first within").tag(RssOrderingMode.newestDayOldestWithin)

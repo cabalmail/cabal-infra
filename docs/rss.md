@@ -106,7 +106,9 @@ clients key their isolated web-view storage on), `created_at`, and
 
 **folder**: `folder_id`, `parent_folder_id` (empty = root), `name`,
 `display_order`, `default_filter` (the pill the folder's list opens on;
-same values and default as a subscription's).
+same values and default as a subscription's), `ordering_mode` (the order
+the folder's own merged list opens in; same values and default as a
+subscription's, and it does not change the order of the feeds inside).
 
 **item**: `feed_id`, `subscription_id`, `item_id`, `sort_key` (the item's
 key; opaque, pass it back), `guid`, `title`, `author`, `url`,
@@ -124,7 +126,8 @@ server and applied by the client; the server never reorders or filters
 items by them except as documented under `/rss_list_items`. The
 all-feeds list has no row of its own, so its sticky pill is the
 `filter:feeds:all` key of the synced preferences `app` map
-(`/set_preferences`).
+(`/set_preferences`), and its sticky order is the `order:feeds:all` key
+(one of the `ordering_mode` values).
 
 ### Endpoints
 
@@ -135,7 +138,7 @@ all-feeds list has no row of its own, so its sticky pill is the
 | `/rss_update_subscription` | PUT | `{subscription_id, custom_title?, folder_id?, ordering_mode?, default_open_mode?, default_styling?, default_remote_content?, default_filter?, notifications_enabled?}` | `{subscription}`. Codes: `invalid_<field>`, `unknown_folder`, `nothing_to_update`. |
 | `/rss_list_subscriptions` | GET | | `{folders, subscriptions}`, each subscription with its `feed` summary. |
 | `/rss_new_folder` | POST | `{name, parent_folder_id?, display_order?}` | `{folder}` |
-| `/rss_update_folder` | PUT | `{folder_id, name?, parent_folder_id? ("" = root), display_order?, default_filter?}` | `{folder}`. Code `cyclic_folder` when moved under itself. |
+| `/rss_update_folder` | PUT | `{folder_id, name?, parent_folder_id? ("" = root), display_order?, default_filter?, ordering_mode?}` | `{folder}`. Codes: `cyclic_folder` when moved under itself, `invalid_<field>`, `nothing_to_update`. |
 | `/rss_delete_folder` | POST | `{folder_id}` | `{folder_id, moved_subscriptions, moved_folders, parent_folder_id}`. Contents move to the parent, never deleted. |
 | `/rss_list_items` | GET | `subscription_id` \| `folder_id` \| neither (all); `filter=all\|unread\|favorite`; `order=newest\|oldest`; `limit` (1–100, default 50); `cursor` | `{items, next_cursor}`. Folder scope includes nested folders. Pages of several feeds are merged by sort key; `next_cursor` is opaque. |
 | `/rss_list_items` (sync) | GET | `subscription_id`, `since=<fetched_key or empty>`, `limit` | `{items, next_since, has_more}`: items ingested after `since`, oldest-ingested first. This is the cursor client caches sync on; it is keyed on ingest time, so backdated items are never missed. |

@@ -4,11 +4,12 @@ import CabalmailKit
 
 /// Backs the Feeds sidebar section (wide layouts) and the Feeds tab's
 /// sidebar (compact / visionOS): the catalog and unread counts from the
-/// local `RssStore`, refreshed through `RssSyncEngine`.
+/// local `RssStore`, refreshed through `RssSyncEngine` and kept current by
+/// the store's changes (`observe()`).
 ///
 /// Reads come from the store, so the sidebar renders offline and instantly;
-/// `refresh()` pulls the catalog, syncs every subscription's items (four at a
-/// time), pushes pending mutations, and reloads. Departed subscriptions'
+/// `refresh()` runs the engine's `syncAll` (the catalog, every
+/// subscription's items four at a time, the pending mutations) and reloads. Departed subscriptions'
 /// per-feed web-view storage is dropped here, since only the app layer has
 /// WebKit.
 @Observable
@@ -41,27 +42,34 @@ final class FeedSidebarViewModel {
     private let store: RssStore?
     private let engine: RssSyncEngine?
 
-    convenience init(client: CabalmailClient, bus: FeedStateBus = .shared) {
-        self.init(store: client.rssStore, engine: client.rssSync, bus: bus)
+    convenience init(client: CabalmailClient) {
+        self.init(store: client.rssStore, engine: client.rssSync)
     }
 
-    init(store: RssStore?, engine: RssSyncEngine?, bus: FeedStateBus = .shared) {
+    init(store: RssStore?, engine: RssSyncEngine?) {
         self.store = store
         self.engine = engine
-        // Any read / favorite change or refetch elsewhere moves the unread
-        // badges; a refetch also refreshes each feed's health, so the whole
-        // catalog is re-read from the store (cheap: one SQLite pass).
-        bus.subscribe(self) { [weak self] change in
-            Task { if change == nil { await self?.load() } else { await self?.reloadCounts() } }
-        }
-        // A subscribe, unsubscribe, or folder edit (the management sheets,
-        // an OPML import) changes the tree itself.
-        bus.subscribeCatalog(self) { [weak self] in
-            Task { await self?.load() }
-        }
     }
 
     var hasSubscriptions: Bool { !subscriptions.isEmpty }
+
+    /// The views' `.task` while the sidebar is up: reads the store, then
+    /// follows its changes until the view goes. A catalog change (a
+    /// subscribe, a folder edit, a sync's catalog with each feed's health)
+    /// re-reads the tree; anything else, a mark or a sync's items, moves only
+    /// the badges.
+    func observe() async {
+        guard let store else { return }
+        let changes = await store.changes()
+        await load()
+        await FeedStoreChanges.follow(changes) { batch in
+            if batch.catalog || batch.cleared {
+                await load()
+            } else {
+                await reloadCounts()
+            }
+        }
+    }
 
     /// Reads the store (no network).
     func load() async {
@@ -77,32 +85,22 @@ final class FeedSidebarViewModel {
         }
     }
 
-    /// Catalog + items + pending drain, then a reload. Safe to call from
-    /// several triggers at once: overlapping calls coalesce on `isRefreshing`.
+    /// Catalog + items + pending drain, then a reload: the engine's one
+    /// `syncAll` pass, which it joins to a pass the session's poller already
+    /// has in flight. Safe to call from several triggers at once: overlapping
+    /// calls coalesce on `isRefreshing`.
     func refresh() async {
         guard !isRefreshing, let engine else { return }
         isRefreshing = true
         defer { finishRefresh() }
         errorMessage = nil
-        do {
-            try await engine.refreshCatalog()
-            await load()
-        } catch {
-            // A refresh whose task was cancelled (the views' `.task` as the
-            // sidebar leaves the screen mid-sync: a push, a tab switch, the
-            // iPad sidebar hidden) has nothing to report (#1908). Read off the
-            // task, not the error, whose shape has varied.
-            if !Task.isCancelled { errorMessage = FeedErrorText.describe(error) }
-        }
-        if !Task.isCancelled {
-            let failures = await engine.syncAll()
-            // A cancel during the sync fails every feed with it, which would
-            // read as "every feed failed" here; that is no outcome either.
-            if !Task.isCancelled, let first = failures.first, errorMessage == nil,
-               failures.count == subscriptions.count, !subscriptions.isEmpty {
-                // Every feed failed: almost certainly offline; one line, not one per feed.
-                errorMessage = FeedErrorText.describe(first.value)
-            }
+        let report = await engine.syncAll()
+        // A refresh whose task was cancelled (the views' `.task` as the
+        // sidebar leaves the screen mid-sync: a push, a tab switch, the iPad
+        // sidebar hidden) stops waiting and has nothing to report (#1908).
+        // Read off the task, not the result.
+        if let report, !Task.isCancelled {
+            errorMessage = Self.errorLine(for: report)
         }
         // Cut short, the refresh is owed: the next `.task` runs it again.
         let cutShort = Task.isCancelled
@@ -110,6 +108,16 @@ final class FeedSidebarViewModel {
         await FeedWebStorage.dropDeparted(from: store)
         await load()
         needsRefresh = cutShort
+    }
+
+    /// The one line a pass leaves on the sidebar: the catalog's failure, or
+    /// every feed failing (almost certainly offline; one line, not one per
+    /// feed). A failed queue drain or some feeds failing says nothing here,
+    /// and neither counts toward "every feed" (#1904).
+    static func errorLine(for report: RssSyncReport) -> String? {
+        if let error = report.catalogError { return FeedErrorText.describe(error) }
+        if report.everyFeedFailed, let error = report.firstFeedError { return FeedErrorText.describe(error) }
+        return nil
     }
 
     /// The views' `.task`: a refresh until one has run to an outcome. Waits
@@ -136,8 +144,8 @@ final class FeedSidebarViewModel {
         }
     }
 
-    /// Reloads counts only (after a read-state change elsewhere). Totals
-    /// are re-read too: a load-older or a sync lands in the same bus post.
+    /// Reloads counts only (after a read-state change). Totals are re-read
+    /// too: a load-older or a sync moves them.
     func reloadCounts() async {
         guard let store else { return }
         unreadCounts = (try? await store.unreadCounts()) ?? unreadCounts
@@ -192,6 +200,8 @@ enum FeedErrorText {
         "invalid_opml": "That file isn't an OPML outline.",
     ]
 
+    /// A failure without a token is `.http` and reads as its localized
+    /// sentence, not the raw reply body.
     static func describe(_ error: Error) -> String {
         if case let CabalmailError.server(code, message) = error {
             if let known = serverMessages[code] { return known }

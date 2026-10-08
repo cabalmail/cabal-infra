@@ -30,6 +30,8 @@ enum IntentError: Error, CustomLocalizedStringResourceConvertible {
         // verbatim, same as AppState's canned messages.
         case .maintenance(let message):
             return .message(message)
+        // Cognito and config.json; an API or S3 failure is `.http` and takes
+        // `default`, its readable sentence, never the raw reply body.
         case .server(_, let message):
             return .message(message)
         case .network, .transport:

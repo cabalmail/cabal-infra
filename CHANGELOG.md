@@ -5,6 +5,141 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.29.0] - 2026-10-08
+
+### Added
+- Apple: **Counts on the feed list's pills.** The All, Unread and Flagged
+  pills above a feed's items, a folder's or All Feeds now show how many
+  items each holds, as the message list's pills do, and the numbers follow
+  every read and flag mark, whichever window or device made it. They count
+  the items the device holds, the same ones the list scrolls through.
+- **Stored order for feed folders and All Feeds.** A feed folder now keeps
+  the order its merged list opens in (`ordering_mode` on the folder, set
+  through `/rss_update_folder`; folders created before this read newest
+  first), and the All Feeds list keeps its order in the synced preference
+  `order:feeds:all`. A folder's order applies to its own list only; the
+  feeds inside keep theirs.
+
+### Changed
+- Apple: **Feeds get their server connection directly.** No visible change.
+  The app used to find its feed client by checking whether the mail API
+  client happened to be one too, so a different mail client would have
+  switched Feeds off without an error. The feed client is now passed in
+  where the app sets up its session, and the feed sync is built from that
+  same client.
+- Apple: **A feed's list order sticks.** The order you pick from the Order
+  menu above a feed's items is now the order that feed opens in next time,
+  on this device and your others, the way the All / Unread / Flagged choice
+  already sticks. It is saved to the feed, so Android, which already saved
+  it, and the feed's settings sheet show the same order. Folder and All
+  Feeds lists still open newest first.
+- Apple: **Feed reader's View menu stays on the bar.** On iOS 27, when the
+  feed reader's navigation bar runs out of room, its View menu is now the
+  last item to fold into the system overflow, as the mail reader's More
+  menu is. It is the only way to reader view, remote content and the
+  article on iPhone, so it no longer risks disappearing first.
+- Apple: **Feed rows in the sidebar match the folder rows.** The name of a
+  feed or feed folder with unread items is now in the accent green, as an
+  unread mail folder's name already was, and its icon and name sit 2 points
+  further apart, as a folder's do. A feed folder with nothing in it no
+  longer carries a hidden disclosure button. On Apple Vision Pro, feed rows
+  highlight when you look at them, the way folder rows already did.
+- Apple: **One shared definition for the notification hand-off.** No
+  visible change. The notification extension, which turns "New mail" into
+  the sender and subject, used to keep its own copy of the names and token
+  format the app uses to hand it the server address and sign-in, so a
+  rename on one side would have quietly turned every notification back
+  into "New mail". Both now read them from one small shared module, and a
+  test pins each value. Nothing should look or behave differently;
+  anything that does is a bug worth reporting.
+- Apple: **One count badge for folders and feeds.** The unread and total
+  counts beside mail folders and feeds in the sidebar now share one look:
+  full-strength digits that keep their width as a count changes, in the
+  same capsule. Folder counts were a lighter grey before, and feed counts
+  sat in a smaller, heavier capsule. VoiceOver now reads a folder's count as
+  "4 unread" (or "30 items", "4 unread of 30") as it already did for feeds.
+- Apple: **One title menu for mailboxes and feeds.** The menu behind the
+  message list's mailbox name and the one behind the feed list's feed or
+  folder name are now built from the same rows and, on the Mac, sit in
+  the toolbar the same way, so they list, check and switch alike. Picking
+  the mailbox or feed that is already open still leaves it open.
+- Apple: **One shared definition for the push message reference.** No
+  visible change. A new-mail push names its message with a small
+  reference, and the server's reply when the notification asks for the
+  sender and subject carries the message's confirmed number. The
+  notification extension, the app and the Mac's own notifications each
+  spelled those two formats separately; they now share one definition,
+  with tests for the cases where the push carries no number or no message
+  ID. Nothing should look or behave differently; anything that does is a
+  bug worth reporting.
+- Apple: **The Safari extension's server and private-link stores move
+  into the shared module.** No visible change. The two small stores the
+  Safari extension reads, the server the app is signed in to and the
+  short-lived private-link rows, were compiled into the extension from
+  the app's own source folder by path. They now live in the shared module
+  the extensions link, beside the notification hand-off, and a pull
+  request that changes the token store now runs the extension's tests.
+  Nothing should look or behave differently; anything that does is a bug
+  worth reporting.
+
+### Fixed
+- Apple: **Siri and the feed screens no longer read out a server's raw
+  reply.** When a request failed with a server error, a Siri or Shortcuts
+  action (Check Inbox, create an address) and the feed sheets and sidebar
+  showed the reply itself: JSON such as `{"message": "Internal server
+  error"}`, a whole HTML error page, or nothing at all. They now say the
+  same sentence the rest of the app does, such as "Internal server error."
+  or "The server couldn't complete that request (502)."
+- Apple: **"Load older items" no longer loses its place.** When a feed
+  refreshed while older items were loading, the refresh could put back
+  where "Load older items" had got to, so the next press fetched items
+  already shown, or the button came back after the feed's history had run
+  out. A refresh and a load of older items now each record only their own
+  progress (#1938).
+- Apple: **A feed's Mark All as Read can no longer half-apply.** If the
+  device's feed store failed partway through, the feed could end up marked
+  read on this device with nothing queued to tell the server, so it stayed
+  read here and unread everywhere else. The mark and its queued push are
+  now written together or not at all (#1939).
+- Apple: **Feeds from the account that signed out no longer show for the
+  next one.** A feed refresh still running when you signed out could write
+  that account's feeds and items back after the sign-out had cleared them,
+  so the next account to sign in on the same device briefly saw them in its
+  Feeds sidebar until its own first refresh finished. The signed-out
+  session's feed store now takes no further writes (#1937).
+- Apple: **Feeds refresh once, and one broken feed no longer stalls a
+  list.** Opening the app, the Feeds sidebar and a feed list used to start
+  two or three overlapping refreshes of every feed, fetching the feed list
+  twice over; they now share one. Refreshing a folder or All Feeds used to
+  stop at the first feed that failed, leaving the feeds after it and any
+  read or flag changes made offline unsent until the next refresh; every
+  feed is now tried, four at a time, and the queued changes still go. The
+  sidebar's "couldn't reach the server" line no longer appears when only
+  some feeds, or the queued changes, failed (#1904).
+- Apple: **Open feed lists keep up with refreshes and order changes.** A
+  feed list left open while the Feeds sidebar refreshed didn't show the new
+  items until it was opened again, and an order changed in a feed's
+  settings, or on another device, didn't reach a list already showing that
+  feed. The sidebar, the item list and the reader now follow the feed store
+  itself, so new items, read and flag marks and order changes reach every
+  open feed view, in every window, whichever one made them.
+- Apple: **Feed switcher on a wide iPad.** On an iPad with the folder list
+  beside the content (landscape, or a wide window), a feed list's name at
+  the top of the column lost its menu for switching to another feed or
+  folder, and its toolbar folded buttons into an overflow. The name and
+  its menu now sit in a row at the top of the list, as a mailbox's do, and
+  New Message stays in the toolbar.
+- Apple: **Going back from the inbox at launch stays on the folder list.**
+  On iPhone, the app opens on the inbox as it launches. Going back to the
+  folder list before that list had finished loading pushed you into the
+  inbox again as soon as it arrived, which on a slow connection could take
+  a few seconds. The folder list now stays put.
+- Apple: **The New Folder sheet says why a folder couldn't be created.**
+  When creating a folder failed, for example because a folder by that name
+  already existed, the sheet stayed open with no explanation, and the
+  reason went to the folder list behind it. The sheet now shows the reason
+  below its fields, and the folder list no longer does.
+
 ## [1.28.0] - 2026-10-07
 
 ### Changed

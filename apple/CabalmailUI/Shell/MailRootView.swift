@@ -584,7 +584,13 @@ extension MailRootView {
                     // request) has no mail landing to finish, but the probe
                     // still runs once so the cross-device toast — and the
                     // foreground reconcile it arms — work from there too.
-                    if awaitingLaunchReconcile || (!didProvisionalLand && selectedFolder == nil) {
+                    if awaitingLaunchReconcile, selectedFolder == nil {
+                        // The user left the provisional landing before the
+                        // list arrived (on iPhone, back to this sidebar):
+                        // finish the launch without landing them again.
+                        awaitingLaunchReconcile = false
+                        appState.navCoordinator?.materializeLanding()
+                    } else if awaitingLaunchReconcile || (!didProvisionalLand && selectedFolder == nil) {
                         awaitingLaunchReconcile = false
                         finishLaunchLanding(from: folders)
                     } else {

@@ -11,12 +11,13 @@ import CabalmailKit
 // On iOS, iPadOS and visionOS the menu is the system's own title menu
 // (`toolbarTitleMenu`). macOS never materializes one for a column title, so
 // the Mac removes the toolbar's title text and puts a `Menu` in the same
-// slot — a `.navigation` toolbar item with the bold name and a chevron,
-// borderless or macOS 27 drops the label (#1601). The rows are `Toggle`s so
-// the scope in effect carries the native mark an assistive client reads
-// (#1367), and the menu's identity carries what the rows draw (#1329,
-// #1337). The feed list has no search scope — its search is a field inside a
-// single feed's list — so the menu is always on.
+// slot (`titleSwitchToolbarHost`, shared with the mail list) — a
+// `.navigation` toolbar item with the bold name and a chevron, borderless or
+// macOS 27 drops the label (#1601). The rows are the shared
+// `TitleSwitchMenuRows`, `Toggle`s so the scope in effect carries the native
+// mark an assistive client reads (#1367), and the menu's identity carries
+// what the rows draw (#1329, #1337). The feed list has no search scope — its
+// search is a field inside a single feed's list — so the menu is always on.
 extension FeedItemListView {
     /// The menu's rows for the catalog loaded so far, with the current scope
     /// checked.
@@ -30,23 +31,43 @@ extension FeedItemListView {
     @ViewBuilder
     func feedScopeSwitchTitle<Content: View>(_ content: Content) -> some View {
         #if os(macOS)
-        content
-            .toolbar(removing: .title)
-            .toolbar {
-                // Detached from macOS 26's shared glass background, as the
-                // mail list's menu is: the item stands in for bare title
-                // text, not for a bordered control.
-                if #available(macOS 26.0, *) {
-                    ToolbarItem(placement: .navigation) { scopeSwitchMenu }
-                        .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem(placement: .navigation) { scopeSwitchMenu }
-                }
-            }
+        content.titleSwitchToolbarHost { scopeSwitchMenu }
         #else
-        content.toolbarTitleMenu { scopeSwitchMenuItems }
+        switch scopeSwitchHost {
+        case .titleMenu:
+            content.toolbarTitleMenu { scopeSwitchMenuItems }
+        case .columnHeader:
+            // The column-scoped bar has no width to spare for a title, menu
+            // or not: in feed scope on a landscape iPad the title menu
+            // vanished outright and the bar's other items folded into the
+            // system overflow (`FolderSwitchPlacement`, #1626). So the switch
+            // is drawn in the column, as the message list's is, and the bar's
+            // title goes with it.
+            VStack(spacing: 0) {
+                TitleSwitchHeaderMenu(
+                    title: title, spokenKind: "Feed scope", hint: "Switch feed or folder",
+                    identifier: "feed.scopeSwitch"
+                ) {
+                    scopeSwitchMenuItems
+                }
+                content
+            }
+            .toolbar(removing: .title)
+        }
         #endif
     }
+
+    #if !os(macOS)
+    /// Where the switch is drawn on this layout: the message list's rule
+    /// (`FolderSwitchPlacement`), read from the same `showsSettingsGear`
+    /// flag, since the feed list is the same narrow split column.
+    var scopeSwitchHost: FolderSwitchHost {
+        FolderSwitchPlacement.host(
+            isWideSidebar: showsSettingsGear,
+            columnScopedToolbar: GlobalSearchFieldPlacement.platformColumnScopedToolbar
+        )
+    }
+    #endif
 
     #if os(macOS)
     /// macOS: the scope name, bold like the toolbar title it stands in for,
@@ -83,20 +104,11 @@ extension FeedItemListView {
     #endif
 
     /// The menu body: All Feeds, then the flattened tree.
-    @ViewBuilder
     var scopeSwitchMenuItems: some View {
-        ForEach(scopeSwitchRows) { row in
-            Toggle(isOn: Binding(
-                get: { row.isOn },
-                set: { _ in
-                    // Re-picking the scope the list is on is a no-op: the
-                    // parent would only re-key the same view.
-                    guard !row.isOn else { return }
-                    onSwitchScope(row.option)
-                }
-            )) {
-                Label(row.label, systemImage: FeedScopeSwitchMenuPolicy.symbol(for: row.option))
-            }
-        }
+        TitleSwitchMenuRows(
+            rows: scopeSwitchRows,
+            symbol: FeedScopeSwitchMenuPolicy.symbol(for:),
+            pick: onSwitchScope
+        )
     }
 }

@@ -2,9 +2,8 @@ import Foundation
 import CabalmailKit
 
 /// What a sidebar count badge shows under the user's `folderCountDisplay`
-/// preference. One rule for both media: the mail folder rows
-/// (`FolderListView.countBadgeText`) and the feed rows
-/// (`FeedSidebarRowLabel`) read it, so "Unread / total" means the same
+/// preference. One rule for both media: `CountBadge` draws it on the mail
+/// folder rows and the feed rows alike, so "Unread / total" means the same
 /// thing on a folder and on a feed (cross-media plan, Phase 1).
 ///
 /// `nil` means "draw no badge" — the capsule collapses rather than showing a

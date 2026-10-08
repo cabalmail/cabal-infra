@@ -1,3 +1,4 @@
+import CabalmailShared
 import Foundation
 
 /// Shared-container handoff to the Notification Service Extension (NSE).
@@ -12,8 +13,10 @@ import Foundation
 /// - the current ID token + expiry into a keychain item in the shared
 ///   access group (`<TEAMID>.com.cabalmail.shared`),
 ///
-/// and the NSE reads both back with its own local `UserDefaults` /
-/// `SecItem` helpers.
+/// and the NSE reads both back with its own `UserDefaults` / `SecItem`
+/// code. The names of both containers and the token's JSON shape live in
+/// the Foundation-only CabalmailShared module, which the NSE links instead
+/// of the Kit (`AppGroup`, `PushHandoff`, `PushTokenPayload`).
 ///
 /// Every write is best-effort and never throws: simulator and unsigned
 /// builds lack the app-group / keychain-sharing entitlements (SecItem fails
@@ -21,17 +24,19 @@ import Foundation
 /// thrown error we swallow here), and a missing mirror only costs
 /// notification enrichment — it must never break sign-in.
 public struct PushEnrichmentStore: @unchecked Sendable {
-    /// App Group shared between the app and the NSE. Declared in both
-    /// targets' entitlements files.
-    public static let appGroupID = "group.com.cabalmail.Cabalmail"
+    // The handoff's names, forwarded from CabalmailShared, where the NSE
+    // reads them too.
+
+    /// App Group shared between the app and the NSE.
+    public static let appGroupID = AppGroup.identifier
     /// Unprefixed shared keychain access group. The runtime SecItem calls
     /// need the fully-qualified `<TEAMID>.` form — see `resolvedAccessGroup`.
-    public static let keychainAccessGroupSuffix = "com.cabalmail.shared"
+    public static let keychainAccessGroupSuffix = PushHandoff.keychainAccessGroupSuffix
     /// App Group `UserDefaults` key carrying the API Gateway stage URL.
-    public static let apiURLDefaultsKey = "cabal.push.api_url"
+    public static let apiURLDefaultsKey = PushHandoff.apiURLDefaultsKey
     /// Keychain coordinates of the mirrored token JSON (`PushTokenPayload`).
-    public static let keychainService = "com.cabalmail.push"
-    public static let keychainAccount = "push.auth"
+    public static let keychainService = PushHandoff.keychainService
+    public static let keychainAccount = PushHandoff.keychainAccount
 
     // Nil when the shared containers can't exist in this context (no team-ID
     // prefix in Info.plist, e.g. unsigned builds or the test runner); every
@@ -104,20 +109,6 @@ public struct PushEnrichmentStore: @unchecked Sendable {
     public func clear() {
         defaults?.removeObject(forKey: Self.apiURLDefaultsKey)
         try? secureStore?.remove(Self.keychainAccount)
-    }
-}
-
-/// JSON payload stored under `PushEnrichmentStore.keychainAccount`.
-/// snake_case to match the hand-rolled decoder in the NSE (which has no
-/// shared type to import — keep in sync with
-/// `apple/CabalmailNotificationService/NotificationService.swift`).
-struct PushTokenPayload: Codable {
-    let idToken: String
-    let expiresAt: Date
-
-    enum CodingKeys: String, CodingKey {
-        case idToken = "id_token"
-        case expiresAt = "expires_at"
     }
 }
 
