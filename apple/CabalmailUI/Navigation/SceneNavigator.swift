@@ -37,8 +37,9 @@ import CabalmailKit
 /// leaves the compact Feeds tab's place where it was.
 ///
 /// Every transition does what the view handler it replaced did, cursor
-/// recording included. Search stays the view's (a transition that reads it
-/// takes `isSearching`).
+/// recording included. The search model is the window's too
+/// (`searchModel`), but whether the window is searching is the view's: a
+/// transition that reads it takes `isSearching`.
 @Observable
 @MainActor
 final class SceneNavigator {

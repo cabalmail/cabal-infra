@@ -139,24 +139,25 @@ final class SignOutCharacterizationTests: XCTestCase {
         XCTAssertNil(state.signedOutReason)
     }
 
-    /// Search is the window's (`SceneNavigator`), not the app's: a new
-    /// sign-in gets a new navigator (`SignedInRootView`), and with it a new
-    /// search model, so nothing of the last account's query or results
-    /// carries over.
+    /// Search is the window's (`SceneNavigator`), not the app's, and keyed on
+    /// the client: after a sign-out and a new sign-in the window's navigator
+    /// hands out a new search model, so nothing of the last account's query
+    /// or results carries over. (`SignedInRootView` also builds a new
+    /// navigator for a new client; no unit test can host that view.)
     func testANewClientsNavigatorGetsANewSearchModel() async throws {
         let preferences = Preferences(store: InMemoryPreferenceStore())
         let state = harness.appState
         state.usePreferences(preferences)
         await SignOutSuiteSteps.signIn(harness)
+        let navigator = SceneNavigator(appState: state)
         let first = try XCTUnwrap(state.client)
-        let search = SceneNavigator(appState: state)
-            .searchModel(client: first, preferences: preferences, mailStore: state.mailStore)
+        let search = navigator.searchModel(client: first, preferences: preferences, mailStore: state.mailStore)
 
         await state.signOut()
         await SignOutSuiteSteps.signIn(harness, idToken: "ID-2")
         let second = try XCTUnwrap(state.client)
-        let next = SceneNavigator(appState: state)
-            .searchModel(client: second, preferences: preferences, mailStore: state.mailStore)
+        XCTAssertFalse(second === first, "precondition: a new client")
+        let next = navigator.searchModel(client: second, preferences: preferences, mailStore: state.mailStore)
 
         XCTAssertFalse(next === search)
         XCTAssertTrue(next.client === second)
