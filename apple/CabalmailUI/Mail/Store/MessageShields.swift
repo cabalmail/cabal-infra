@@ -10,7 +10,7 @@ import CabalmailKit
 /// (`MailMutationService`) for every list, reader and reply, and by a list
 /// for a moment longer while its own row is still leaving or being put
 /// back. (A notification's actions write outside it, #1973, and the
-/// whole-folder writes aren't bracketed.) Every reader asks it: a list's merge (`MessageListViewModel.shieldFetched`)
+/// whole-folder writes aren't bracketed.) Every reader asks it: a list's merge (`FolderWindowLoader.shieldFetched`)
 /// keeps a row it is removing out and a row it is flagging at its local
 /// flags, whichever list or reader started the write; and every writer of a
 /// fetched STATUS (a list's refresh, the sidebar's, the unsubscribed-folder

@@ -9,7 +9,7 @@ extension NavStateCoordinator {
     // MARK: Launch
 
     /// Envelopes the message list loads on first open
-    /// (`MessageListViewModel.pageSize`). Launch reachability is checked against
+    /// (`FolderWindowLoader.pageSize`). Launch reachability is checked against
     /// this same window, so a cursor we vouch for always resolves to a
     /// selectable row when the user taps Resume.
     static let initialWindow: UInt32 = 50

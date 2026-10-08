@@ -66,7 +66,7 @@ extension MessageListViewModel {
 
     /// The absolute index `ref`'s message occupies, while it's loaded.
     func slotIndex(of ref: MessageRef) -> Int? {
-        index(of: ref).map { Int(windowStart) + $0 }
+        index(of: ref).map { Int(window.windowStart) + $0 }
     }
 
     /// Gives each message in `refs` a new row in place of the one it has now,

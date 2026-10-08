@@ -62,15 +62,15 @@ extension MessageListViewModel {
         // result set.
         let priorCursor = searchNextCursor
         searchNextCursor = nil
-        holdLoading()
-        defer { releaseLoading() }
+        window.holdLoading()
+        defer { window.releaseLoading() }
         // A folder page or refresh still out was addressed to the rows this
         // search replaces; landing later, it would mix folder rows into the
         // results (#1870). They stand down now, and again as the results
         // land, for any that started meanwhile. A search that ends without
         // taking the list over leaves the folder rows they were filling.
-        standDownWindowLoads()
-        defer { if !isSearchActive { resumeWindowLoads() } }
+        window.standDownWindowLoads()
+        defer { if !isSearchActive { window.resumeWindowLoads() } }
         // Snapshotted for the staleness check below: the filters this request
         // asked with, not whatever they hold when it answers.
         let filters = searchFilters
@@ -90,7 +90,7 @@ extension MessageListViewModel {
             // user has already ended (#1536). Same staleness rule
             // `loadMoreSearchResults` applies to its cursor.
             guard submittedQuery == trimmed, searchFilters == filters else { return }
-            standDownWindowLoads()
+            window.standDownWindowLoads()
             envelopes = distinctRows(result.envelopes, after: [])
             searchTotalEstimate = result.totalEstimate
             searchTruncated = result.truncated
@@ -180,8 +180,8 @@ extension MessageListViewModel {
                 status = try? await client.folderStatus(path: folder.path, flagged: true)
             }
             if let status {
-                _ = applyStatusCounts(
-                    status, mayPredateRemoval: removalMayPostdate(startedAt), askedAt: startedAt
+                _ = window.applyStatusCounts(
+                    status, mayPredateRemoval: window.removalMayPostdate(startedAt), askedAt: startedAt
                 )
             }
         }
@@ -263,10 +263,10 @@ extension MessageListViewModel {
         searchFoldersSearched = []
         searchNextCursor = nil
         envelopes.removeAll()
-        totalMessages = 0
-        savedMessageCount = nil
-        hasMore = true
-        resetWindow()
+        window.totalMessages = 0
+        window.savedMessageCount = nil
+        window.hasMore = true
+        window.resetWindow()
         // Folder scope drops back to the folder view; the global search
         // surface has no folder to return to, so it just lands on the empty
         // "type to search" state.
@@ -278,8 +278,8 @@ extension MessageListViewModel {
         // snapshot is a window of that order; under another it would leave
         // gaps once the server answers.
         if envelopes.isEmpty, errorMessage != nil {
-            if sortCriterion == .default { await hydrateFromCache() }
-            await seedSavedCounts()
+            if window.sortCriterion == .default { await window.hydrateFromCache() }
+            await window.seedSavedCounts()
         }
     }
 
