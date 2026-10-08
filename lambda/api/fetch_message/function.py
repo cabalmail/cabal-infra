@@ -4,6 +4,7 @@ import re
 from helper import get_message # pylint: disable=import-error
 from helper import query_params # pylint: disable=import-error
 from helper import sign_url # pylint: disable=import-error
+from helper import invalid_input_response # pylint: disable=import-error
 from helper import CACHE_BUCKET # pylint: disable=import-error
 
 from helper import maintenance_guard # pylint: disable=import-error
@@ -20,7 +21,7 @@ def handler(event, _context): # pylint: disable=too-many-locals
     try:
         query_string = query_params(event, 'host', 'folder', 'id')
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     # IMAP's own path: nested folders arrive as "Parent/Child" but the server,
     # and so the raw-message cache key get_message writes, uses "Parent.Child".
@@ -78,13 +79,6 @@ def handler(event, _context): # pylint: disable=too-many-locals
             "in_reply_to": message.get_all('In-Reply-To'),
             "references": message.get_all('References')
         })
-    }
-
-def _invalid(err):
-    '''Builds the 400 returned when a required parameter is missing.'''
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {err}"})
     }
 
 def get_recipient(message):

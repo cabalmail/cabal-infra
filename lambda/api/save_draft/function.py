@@ -28,6 +28,7 @@ from compose import ( # pylint: disable=import-error
 from helper import ( # pylint: disable=import-error
     delete_object,
     get_imap_client,
+    invalid_input_response,
     maintenance_guard,
     parse_json_body,
     validate_uid,
@@ -48,7 +49,7 @@ def handler(event, _context):
     if op == 'discard':
         return _discard(body, user)
     if op != 'save':
-        return _invalid(f'unknown op: {op!r}')
+        return invalid_input_response(f'unknown op: {op!r}')
     return _save(body, user)
 
 
@@ -61,7 +62,7 @@ def _save(body, user):
     try:
         require_fields(body, COMPOSE_REQUIRED_FIELDS + ('host',))
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     unauthorized = unauthorized_sender_response_or_none(user, body['sender'])
     if unauthorized:
         return unauthorized
@@ -69,7 +70,7 @@ def _save(body, user):
         msg = compose_from_body(body, user)
         replaces = _parse_replaces(body)
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
 
     client = get_imap_client(body['host'], user, 'INBOX')
     try:
@@ -118,7 +119,7 @@ def _discard(body, user):
         uid = validate_uid(body.get('replaces_uid'))
         uidvalidity = validate_uid(body.get('replaces_uidvalidity'))
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     client = get_imap_client(body['host'], user, 'INBOX')
     try:
         try:
@@ -155,11 +156,3 @@ def _drop_cached_raw(_host, user, uid):
     retrievable from the cache bucket afterwards (same hygiene as
     purge_messages). `_host` is ignored; the bucket is derived server-side.'''
     delete_object(CACHE_BUCKET, f'{user}/{DRAFTS_FOLDER}/{uid}/raw')
-
-
-def _invalid(err):
-    '''Builds the 400 returned when a validator rejects the request.'''
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {err}"})
-    }
