@@ -10,10 +10,12 @@ import CabalmailKit
 /// last chose for this feed (`RssSubscription.defaultFilter`), folder
 /// (`RssFolder.defaultFilter`), or the all-feeds list
 /// (`Preferences.rssAllFeedsFilter`) -- Unread until then -- and a tap
-/// writes the pill back there (`selectFilter`). A single feed's order is
-/// sticky the same way (`RssSubscription.orderingMode`, `selectOrdering`).
-/// The rows sync through the server, so the choices follow the account
-/// across devices.
+/// writes the pill back there (`selectFilter`). The order is sticky the
+/// same way, per feed (`RssSubscription.orderingMode`), per folder
+/// (`RssFolder.orderingMode`) and for all feeds
+/// (`Preferences.rssAllFeedsOrdering`), newest first until then
+/// (`selectOrdering`). The rows sync through the server, so the choices
+/// follow the account across devices.
 ///
 /// Everything the list shows comes from `RssStore`; the network only runs
 /// in `sync()` (fresh items) and `loadOlder()` (history), both of which
@@ -63,7 +65,7 @@ final class FeedItemListViewModel {
     private var scopeFeedIds: Set<String> = []
 
     /// The single subscription this list shows, when it shows exactly one;
-    /// search, load-older, and the ordering preference only make sense then.
+    /// search and load-older only make sense then.
     /// Mutable only so a pill tap can hold the optimistic row (`selectFilter`).
     private(set) var subscription: RssSubscription?
     /// The folder this list shows, in folder scope; same optimistic role.
@@ -80,7 +82,8 @@ final class FeedItemListViewModel {
         self.engine = engine
         self.preferences = preferences
         self.defaults = defaults ?? engine
-        self.ordering = FeedListOrderingPolicy.initial(subscription: subscription)
+        self.ordering = FeedListOrderingPolicy.initial(scope: scope, subscription: subscription, folder: folder,
+                                                       allFeedsOrdering: preferences.rssAllFeedsOrdering)
         self.filter = FeedListFilterPolicy.initial(scope: scope, subscription: subscription, folder: folder,
                                                    allFeedsFilter: preferences.rssAllFeedsFilter)
     }
@@ -92,33 +95,37 @@ final class FeedItemListViewModel {
     func selectFilter(_ filter: RssItemFilter) {
         guard filter != self.filter else { return }
         self.filter = filter
-        switch scope {
-        case .all:
-            preferences.rssAllFeedsFilter = filter
-        case .subscription:
-            guard let subscription,
-                  let update = FeedListFilterPolicy.stickyUpdate(for: subscription, filter: filter)
-            else { return }
-            persist(update, to: subscription)
-        case .folder:
-            guard let folder,
-                  let update = FeedListFilterPolicy.stickyUpdate(for: folder, filter: filter)
-            else { return }
-            persist(update, to: folder)
-        }
+        persistSticky(allFeeds: { $0.rssAllFeedsFilter = filter },
+                      subscription: { FeedListFilterPolicy.stickyUpdate(for: $0, filter: filter) },
+                      folder: { FeedListFilterPolicy.stickyUpdate(for: $0, filter: filter) })
     }
 
     /// An Order menu pick: applies the order, then makes it the order this
-    /// feed's list opens on, on every device, through the same optimistic
-    /// write as the pill. Only a single feed has an order to keep; the menu
-    /// is offered only there (`canSearch`).
+    /// scope's list opens on, on every device, through the same optimistic
+    /// write as the pill. A folder's order is its own merged list's; the
+    /// feeds inside keep theirs.
     func selectOrdering(_ ordering: RssOrderingMode) {
         guard ordering != self.ordering else { return }
         self.ordering = ordering
-        guard let subscription,
-              let update = FeedListOrderingPolicy.stickyUpdate(for: subscription, ordering: ordering)
-        else { return }
-        persist(update, to: subscription)
+        persistSticky(allFeeds: { $0.rssAllFeedsOrdering = ordering },
+                      subscription: { FeedListOrderingPolicy.stickyUpdate(for: $0, ordering: ordering) },
+                      folder: { FeedListOrderingPolicy.stickyUpdate(for: $0, ordering: ordering) })
+    }
+
+    /// Writes a sticky choice where this scope keeps it: the synced
+    /// preference for all feeds, else the scope's row. A nil update means
+    /// the row already says so.
+    private func persistSticky(allFeeds: (Preferences) -> Void,
+                               subscription update: (RssSubscription) -> RssSubscriptionUpdate?,
+                               folder folderUpdate: (RssFolder) -> RssFolderUpdate?) {
+        switch scope {
+        case .all:
+            allFeeds(preferences)
+        case .subscription:
+            if let subscription, let change = update(subscription) { persist(change, to: subscription) }
+        case .folder:
+            if let folder, let change = folderUpdate(folder) { persist(change, to: folder) }
+        }
     }
 
     /// Holds the updated row at once, then writes it through the store to
@@ -177,25 +184,24 @@ final class FeedItemListViewModel {
     /// What the catalog decides for this list: its subscription or folder
     /// row (sticky defaults, the feed's health), the feed titles on rows, and
     /// which feeds the scope covers. True when the list must reload: the
-    /// scope gained or lost a feed, or the feed's order changed in its
+    /// scope gained or lost a feed, or the scope's order changed in a
     /// settings sheet or on another device.
     private func readCatalog() async -> Bool {
         guard let store else { return false }
         var reloads = false
         switch scope {
         case .subscription(let id):
-            if let row = (try? await store.subscription(id: id)) ?? nil {
-                subscription = row
-                let stored = FeedListOrderingPolicy.initial(subscription: row)
-                if stored != ordering {
-                    ordering = stored
-                    reloads = true
-                }
-            }
+            if let row = (try? await store.subscription(id: id)) ?? nil { subscription = row }
         case .folder(let id):
             if let row = (try? await store.folder(id: id)) ?? nil { folder = row }
         case .all:
             break
+        }
+        let stored = FeedListOrderingPolicy.initial(scope: scope, subscription: subscription, folder: folder,
+                                                    allFeedsOrdering: preferences.rssAllFeedsOrdering)
+        if stored != ordering {
+            ordering = stored
+            reloads = true
         }
         if subscription == nil, let subs = try? await store.subscriptions() {
             subscriptionTitles = Self.titles(of: subs)
@@ -405,16 +411,28 @@ enum FeedListFilterPolicy {
 /// Which order a single feed's list opens on, and what an Order menu pick
 /// writes back. Pure so it can be unit-tested without a client.
 enum FeedListOrderingPolicy {
-    /// The feed's stored order, or newest first for a list with no single
-    /// subscription (a folder, All Feeds) or a row not at hand.
-    static func initial(subscription: RssSubscription?) -> RssOrderingMode {
-        subscription?.orderingMode ?? .newestFirst
+    /// The scope's sticky order: the subscription's or folder's stored
+    /// order, or the all-feeds preference. A scope whose row is not at hand
+    /// opens newest first.
+    static func initial(
+        scope: RssItemScope, subscription: RssSubscription?, folder: RssFolder?, allFeedsOrdering: RssOrderingMode
+    ) -> RssOrderingMode {
+        switch scope {
+        case .all: return allFeedsOrdering
+        case .subscription: return subscription?.orderingMode ?? .newestFirst
+        case .folder: return folder?.orderingMode ?? .newestFirst
+        }
     }
 
     /// The subscription update a pick of `ordering` writes, or nil when the
     /// row already says so.
     static func stickyUpdate(for subscription: RssSubscription, ordering: RssOrderingMode) -> RssSubscriptionUpdate? {
         subscription.orderingMode == ordering ? nil : RssSubscriptionUpdate(orderingMode: ordering)
+    }
+
+    /// The folder counterpart of `stickyUpdate(for:ordering:)`.
+    static func stickyUpdate(for folder: RssFolder, ordering: RssOrderingMode) -> RssFolderUpdate? {
+        folder.orderingMode == ordering ? nil : RssFolderUpdate(orderingMode: ordering)
     }
 }
 

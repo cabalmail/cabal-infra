@@ -134,6 +134,7 @@ actor FakeRssClient: RssClient {
         if let value = update.name { folder.name = value }
         if let value = update.parentFolderId { folder.parentFolderId = value }
         if let value = update.defaultFilter { folder.defaultFilter = value }
+        if let value = update.orderingMode { folder.orderingMode = value }
         catalog.folders = catalog.folders.map { $0.folderId == folderId ? folder : $0 }
         return folder
     }

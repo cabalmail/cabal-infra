@@ -59,6 +59,7 @@ extension URLSessionApiClient: RssClient {
         if let value = update.parentFolderId { body["parent_folder_id"] = value }
         if let value = update.displayOrder { body["display_order"] = value }
         if let value = update.defaultFilter { body["default_filter"] = value.rawValue }
+        if let value = update.orderingMode { body["ordering_mode"] = value.rawValue }
         let request = try await put("/rss_update_folder", json: body)
         struct Payload: Decodable { let folder: RssFolder }
         return try await decodeRss(Payload.self, from: request).folder

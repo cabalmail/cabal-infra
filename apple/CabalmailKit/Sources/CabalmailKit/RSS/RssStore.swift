@@ -32,7 +32,7 @@ public actor RssStore {
     /// Announces each committed write on `changes()`.
     let changeBroadcast = RssChangeBroadcast()
 
-    static let schemaVersion = 5
+    static let schemaVersion = 6
 
     public init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -105,7 +105,8 @@ public actor RssStore {
     /// half-applied one that fails on every rerun. A downgrade (a file from
     /// a newer build) throws, and `openRecovering` deletes and repopulates.
     private static func migrate(_ database: SQLiteDatabase) throws {
-        let steps = [Schema.version1, Schema.version2, Schema.version3, Schema.version4, Schema.version5]
+        let steps = [Schema.version1, Schema.version2, Schema.version3, Schema.version4, Schema.version5,
+                     Schema.version6]
         assert(steps.count == schemaVersion)
         let current = database.userVersion
         guard current <= schemaVersion else { throw NewerSchemaError(found: current) }
@@ -278,22 +279,24 @@ public actor RssStore {
 
     private func writeFolder(_ folder: RssFolder) throws {
         try database.run("""
-            INSERT INTO folders (folder_id, parent_folder_id, name, display_order, default_filter)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO folders (folder_id, parent_folder_id, name, display_order, default_filter, ordering_mode)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(folder_id) DO UPDATE SET parent_folder_id = excluded.parent_folder_id,
               name = excluded.name, display_order = excluded.display_order,
-              default_filter = excluded.default_filter
+              default_filter = excluded.default_filter, ordering_mode = excluded.ordering_mode
             """, [.init(folder.folderId), .init(folder.parentFolderId), .init(folder.name),
-                  .init(folder.displayOrder), .init(folder.defaultFilter.rawValue)])
+                  .init(folder.displayOrder), .init(folder.defaultFilter.rawValue),
+                  .init(folder.orderingMode.rawValue)])
     }
 
     public func folders() throws -> [RssFolder] {
         try database.rows("""
-            SELECT folder_id, parent_folder_id, name, display_order, default_filter
+            SELECT folder_id, parent_folder_id, name, display_order, default_filter, ordering_mode
             FROM folders ORDER BY display_order, name
             """).map {
             RssFolder(folderId: $0.string(0), parentFolderId: $0.string(1), name: $0.string(2), displayOrder: $0.int(3),
-                      defaultFilter: RssItemFilter(rawValue: $0.string(4)) ?? .defaultForFeeds)
+                      defaultFilter: RssItemFilter(rawValue: $0.string(4)) ?? .defaultForFeeds,
+                      orderingMode: RssOrderingMode(rawValue: $0.string(5)) ?? .newestFirst)
         }
     }
 
@@ -496,5 +499,12 @@ enum Schema {
     /// layer (which owns WebKit) has dropped them.
     static let version5 = """
         CREATE TABLE IF NOT EXISTS departed_data_stores (uuid TEXT PRIMARY KEY);
+        """
+
+    /// The sticky order per folder (one of the four ordering modes); rows
+    /// from before it existed read as `newest_first`, which is also the
+    /// server's default for a folder that never set it.
+    static let version6 = """
+        ALTER TABLE folders ADD COLUMN ordering_mode TEXT NOT NULL DEFAULT 'newest_first';
         """
 }

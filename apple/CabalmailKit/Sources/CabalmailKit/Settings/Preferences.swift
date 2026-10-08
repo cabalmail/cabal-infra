@@ -205,6 +205,7 @@ public final class Preferences {
         case flagPalette = "cabalmail.prefs.flag_palette"
         case rssMarkAsRead = "cabalmail.prefs.rss_mark_as_read"
         case rssAllFeedsFilter = "cabalmail.prefs.rss_all_feeds_filter"
+        case rssAllFeedsOrdering = "cabalmail.prefs.rss_all_feeds_ordering"
         case mailFolderFilters = "cabalmail.prefs.mail_folder_filters"
         case swipeLeading = "cabalmail.prefs.swipe_leading"
         case swipeTrailing = "cabalmail.prefs.swipe_trailing"
@@ -291,6 +292,15 @@ public final class Preferences {
             if !isReloading && !isApplyingRemote { rssAllFeedsFilterSyncable = true }
         }
     }
+    /// The order the all-feeds list opens in; sticky, like a single feed's
+    /// or folder's (which live on their own rows instead). Newest first by
+    /// default, the rows' default.
+    public var rssAllFeedsOrdering: RssOrderingMode {
+        didSet {
+            persist(.rssAllFeedsOrdering, rssAllFeedsOrdering.rawValue)
+            if !isReloading && !isApplyingRemote { rssAllFeedsOrderingSyncable = true }
+        }
+    }
     /// The filter pill each mail folder's list opens on, by folder path; a
     /// folder absent here opens on All. Sticky: the list writes the pill
     /// back through `setMailFolderFilter` when the user changes it. Synced
@@ -331,6 +341,8 @@ public final class Preferences {
     private var rssMarkAsReadSyncable = false
     /// Same gate for the all-feeds pill (`filter:feeds:all`).
     private var rssAllFeedsFilterSyncable = false
+    /// Same gate for the all-feeds order (`order:feeds:all`).
+    private var rssAllFeedsOrderingSyncable = false
     /// Same gate for the four swipe bindings, which ride as a set.
     var swipeBindingsSyncable = false
 
@@ -367,6 +379,7 @@ public final class Preferences {
         self.flagPalette = []
         self.rssMarkAsRead = .manual
         self.rssAllFeedsFilter = .defaultForFeeds
+        self.rssAllFeedsOrdering = .newestFirst
         self.mailFolderFilters = [:]
         self.swipeLeading = .toggleRead
         self.swipeTrailing = .dispose
@@ -437,6 +450,7 @@ public final class Preferences {
         flagPalette = readString(.flagPalette).flatMap(FlagPalette.decode) ?? []
         rssMarkAsRead = readEnum(.rssMarkAsRead, default: .manual)
         rssAllFeedsFilter = readEnum(.rssAllFeedsFilter, default: .defaultForFeeds)
+        rssAllFeedsOrdering = readEnum(.rssAllFeedsOrdering, default: .newestFirst)
         mailFolderFilters = Self.decodeFolderFilters(readString(.mailFolderFilters))
         swipeLeading = readEnum(.swipeLeading, default: .toggleRead)
         swipeTrailing = readEnum(.swipeTrailing, default: .dispose)
@@ -522,6 +536,7 @@ extension Preferences {
         static let flagPalette = "flag_palette"
         static let rssMarkAsRead = "rss_mark_as_read"
         static let rssAllFeedsFilter = "filter:feeds:all"
+        static let rssAllFeedsOrdering = "order:feeds:all"
     }
 
     /// The complete set of synced preferences as the `app` map the server
@@ -557,6 +572,9 @@ extension Preferences {
         }
         if rssAllFeedsFilter != .defaultForFeeds || rssAllFeedsFilterSyncable {
             payload[AppWireKey.rssAllFeedsFilter] = rssAllFeedsFilter.rawValue
+        }
+        if rssAllFeedsOrdering != .newestFirst || rssAllFeedsOrderingSyncable {
+            payload[AppWireKey.rssAllFeedsOrdering] = rssAllFeedsOrdering.rawValue
         }
         // A mail folder's pill exists only once a user set it (here or on
         // another device), so a present entry is its own proof the server
@@ -599,6 +617,10 @@ extension Preferences {
         if remote[AppWireKey.rssAllFeedsFilter] != nil {
             rssAllFeedsFilterSyncable = true
             applyEnum(remote[AppWireKey.rssAllFeedsFilter], to: \.rssAllFeedsFilter)
+        }
+        if remote[AppWireKey.rssAllFeedsOrdering] != nil {
+            rssAllFeedsOrderingSyncable = true
+            applyEnum(remote[AppWireKey.rssAllFeedsOrdering], to: \.rssAllFeedsOrdering)
         }
         applyRemoteFolderFilters(remote)
         applyRemoteSwipe(remote)

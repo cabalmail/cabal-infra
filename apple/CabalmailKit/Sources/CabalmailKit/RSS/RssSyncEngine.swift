@@ -298,7 +298,7 @@ public actor RssSyncEngine {
         return updated
     }
 
-    /// Changes a folder's settings (today only its sticky filter pill), with
+    /// Changes a folder's settings (today its sticky filter pill and order), with
     /// the same optimistic store-first shape as `updateSubscription`.
     @discardableResult
     public func updateFolder(_ folder: RssFolder, _ update: RssFolderUpdate) async throws -> RssFolder {
