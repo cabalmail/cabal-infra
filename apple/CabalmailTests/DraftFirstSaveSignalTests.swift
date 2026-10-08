@@ -26,39 +26,40 @@ final class DraftFirstSaveSignalTests: XCTestCase {
     // copy it created, and that a session which autosaved first still
     // reports its whole chain — lives in `DraftReplacementTests`, where the
     // rest of the retirement rule is pinned. This file starts where that
-    // ends: what the signal does once it is sent.
+    // ends: what the report does once it is posted.
 
-    // MARK: - What AppState does with it
+    // MARK: - What the mail store does with it
 
     /// The half that made the fix two lines instead of one: the signal
     /// sender used to drop anything with an empty retired chain, so even a
-    /// reporting first save would have gone nowhere.
-    func testAppStatePublishesAnArrivalOnlySignal() {
+    /// reporting first save would have gone nowhere. The mail events keep
+    /// that: an arrival alone is posted.
+    func testTheStorePostsAnArrivalOnlyReplacement() {
         let appState = AppState()
+        let events = MailEventRecorder(appState.mailStore)
 
-        appState.mailStore.signals.signalDraftReplaced(
-            folderPath: "Drafts",
-            replacement: DraftReplacement(retiredUIDs: [], survivingUID: 700)
+        appState.mailStore.events.post(
+            .draftReplaced(folderPath: "Drafts", replacement: DraftReplacement(retiredUIDs: [], survivingUID: 700)),
+            from: nil
         )
 
-        XCTAssertEqual(appState.mailStore.signals.lastDraftReplaced?.folderPath, "Drafts")
-        XCTAssertEqual(
-            appState.mailStore.signals.lastDraftReplaced?.replacement,
-            DraftReplacement(retiredUIDs: [], survivingUID: 700)
-        )
+        XCTAssertEqual(events.changes, [
+            .draftReplaced(folderPath: "Drafts", replacement: DraftReplacement(retiredUIDs: [], survivingUID: 700)),
+        ])
     }
 
     /// Neither half means nothing happened on the server. Still dropped, so
     /// an empty compose opened and closed cannot make an open list refresh.
-    func testAppStateStillDropsASignalWithNothingInIt() {
+    func testTheStoreStillDropsAReplacementWithNothingInIt() {
         let appState = AppState()
+        let events = MailEventRecorder(appState.mailStore)
 
-        appState.mailStore.signals.signalDraftReplaced(
-            folderPath: "Drafts",
-            replacement: DraftReplacement(retiredUIDs: [], survivingUID: nil)
+        appState.mailStore.events.post(
+            .draftReplaced(folderPath: "Drafts", replacement: DraftReplacement(retiredUIDs: [], survivingUID: nil)),
+            from: nil
         )
 
-        XCTAssertNil(appState.mailStore.signals.lastDraftReplaced)
+        XCTAssertEqual(events.events, [])
     }
 
     // MARK: - What the list does with it

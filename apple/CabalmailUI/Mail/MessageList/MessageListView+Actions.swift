@@ -247,58 +247,28 @@ extension MessageListView {
         }
     }
 
-    /// Swaps an open Drafts list — and whatever reader it is driving — from
-    /// the copies `/save_draft` just retired onto the one that survived.
-    ///
-    /// The prune is the easy half. The half that matters is the selection:
-    /// the reader Save Draft returns to still holds the retired copy's
-    /// fetched body, and Edit Draft from there seeds the pre-edit content
-    /// and pins the send's discard to an expunged UID, so the edit is
-    /// dropped and the saved copy orphaned (#1078). Re-pointing rebuilds
-    /// the reader against the survivor (the detail column is keyed on the
-    /// UID), which re-fetches and shows what was actually saved.
-    ///
-    /// The refresh comes first because the survivor landed under a UID this
-    /// list has never seen. Nothing else surfaces it promptly: the watcher
-    /// on an open folder has no real IDLE behind it, so it re-reads
-    /// `folderStatus` every 30 s and the row arrives somewhere in that
-    /// window (measured at t+5 s and t+32 s on two runs — #1083, correcting
-    /// this comment's earlier "a minute or more").
-    ///
-    /// A first save is that refresh and nothing else: no retired UID to
-    /// prune, and `resolve` reads an empty chain as `.ignore`, so whatever
-    /// the user was reading is left exactly where it was.
-    func handleDraftReplaced(_ replacement: DraftReplacement) {
-        guard let model else { return }
-        // Drafts is one folder, so the replacement's UIDs name its rows.
-        let draft = { (uid: UInt32) in MessageRef(folder: folder.path, uid: uid) }
-        for uid in replacement.retiredUIDs {
-            model.pruneEnvelope(draft(uid))
+    /// Applies what the mail events this list heard ask of its selection,
+    /// oldest first, from where this view left off
+    /// (`MessageListViewModel.selectionReactions`), per
+    /// `MailEventSelectionPolicy`: a reader action moves only its own
+    /// window's selection, and every other window's list just lets go of the
+    /// row (#1845). Wide layouts drive the reading pane off `selectedRefs`;
+    /// compact moves `selection`. A target the list no longer holds (a
+    /// refresh moved its window on) lets the reader go.
+    func applySelectionReactions(model: MessageListViewModel) {
+        let reactions = model.selectionReactions.since(appliedSelectionReactions)
+        appliedSelectionReactions = model.selectionReactions.tick
+        guard let update = MailEventSelectionPolicy.update(
+            after: reactions,
+            selectedRefs: model.selectedRefs,
+            shown: selection.map(model.rowRef(for:)),
+            isWideLayout: isWideLayout,
+            in: commandWindowID
+        ) else { return }
+        let shown = update.shown.flatMap(model.envelope(for:))
+        if isWideLayout {
+            model.selectedRefs = update.shown != nil && shown == nil ? [] : update.selectedRefs
         }
-        let displayed = isWideLayout ? model.selectedRefs.first?.uid : selection?.uid
-        Task { @MainActor in
-            await model.refresh()
-            let target: Envelope?
-            switch DraftReplacementPolicy.resolve(
-                displayedUID: displayed,
-                replacement: replacement,
-                loadedUIDs: model.envelopes.map(\.uid)
-            ) {
-            case .ignore:
-                return
-            case .dismiss:
-                target = nil
-            case .repoint(let uid):
-                // A survivor the policy saw but the lookup misses can only
-                // mean the window moved under a concurrent refresh; letting
-                // the reader go is the same right answer as `.dismiss`.
-                target = model.envelope(for: draft(uid))
-            }
-            if isWideLayout {
-                model.selectedRefs = target.map { [model.rowRef(for: $0)] } ?? []
-            } else {
-                selection = target
-            }
-        }
+        selection = shown
     }
 }
