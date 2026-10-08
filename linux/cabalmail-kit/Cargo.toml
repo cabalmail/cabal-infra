@@ -20,8 +20,11 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
+# Only the async mutex that serializes token refresh. No runtime: the kit's
+# futures run on whichever runtime the caller owns.
+tokio = { version = "1", features = ["sync"] }
 toml_edit = "0.25"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt", "net"] }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "net", "time"] }
 wiremock = "0.6"
