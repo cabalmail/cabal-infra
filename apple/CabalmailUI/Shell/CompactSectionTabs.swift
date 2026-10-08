@@ -59,7 +59,6 @@ enum CompactTab: Hashable {
 /// window is created, so it is settled before the Mail tab's `MailRootView`
 /// can appear and land.
 struct CompactSectionTabs: View {
-    @Environment(AppState.self) private var appState
     @Environment(SceneNavigator.self) private var navigator
 
     /// The tab bar's selection, through the navigator so a switch notes the
@@ -97,12 +96,6 @@ struct CompactSectionTabs: View {
             }
         }
         .environment(\.showsCompactBrandMark, true)
-        // A tapped cross-device feed toast opens the Feeds tab; its root
-        // follows the request from there. A mail navigation moves the tab
-        // itself (`SceneNavigator.navigate(to:)`).
-        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
-            if request != nil { navigator.showTab(.feeds) }
-        }
         // The same section, for the menus that share a chord across mail and
         // feeds (`SharedChordPolicy`): each tab keeps its selection while the
         // other is in front, so the section is what decides between them.

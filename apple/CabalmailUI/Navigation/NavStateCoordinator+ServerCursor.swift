@@ -99,9 +99,11 @@ extension NavStateCoordinator {
 
     /// A tapped feed toast: resolve the item, seed the local reading
     /// position from the cursor so the reader restores it through its usual
-    /// path, park the item for its scope, and ask the views to open it.
-    func requestFeedNavigation(_ cursor: NavState) async {
-        guard let item = await feedItem(for: cursor) else { return }
+    /// path, and park the item for its scope. Returns the scope for the
+    /// tapped window to open (`SceneNavigator.navigateFeeds`); nil when the
+    /// item is gone.
+    func requestFeedNavigation(_ cursor: NavState) async -> RssItemScope? {
+        guard let item = await feedItem(for: cursor) else { return nil }
         let anchor = cursor.messageAnchor ?? cursor.messageFraction.map { String(format: "f%.4f", $0) }
         if anchor != nil {
             savePosition(key: ReadingPositionKey.feed(itemID: item.id), anchor: anchor, offset: nil,
@@ -110,8 +112,7 @@ extension NavStateCoordinator {
         let scope = cursor.rssScope.flatMap(RssItemScope.init(token:))
             ?? (item.subscriptionId.isEmpty ? .all : .subscription(item.subscriptionId))
         pendingFeedRestore = PendingFeedRestore(scope: scope, item: item)
-        feedNavigateTick += 1
-        feedNavigateRequest = FeedNavigateRequest(scope: scope, tick: feedNavigateTick)
+        return scope
     }
 
     /// Whether `cursor`'s recorded message is present in its folder's initial

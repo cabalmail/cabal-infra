@@ -26,12 +26,8 @@ struct MailRootView: View {
     @State var tree = UUID()
     var selectedFolder: Folder? { navigator.folder(in: tree) }
     var selectedEnvelope: Envelope? { navigator.envelope(in: tree) }
-    /// Feeds section selection (RSS plan, phase 5). Mutually exclusive with
-    /// `selectedFolder`: picking a feed clears the mail folder and the
-    /// columns show the item list and reader; picking a folder clears this.
-    @State var selectedFeedScope: RssItemScope?
-    @State var selectedFeedItem: RssItem?
-    @State var selectedFeedSubscription: RssSubscription?
+    // The wide split's feed list and item are the window's too
+    // (`selectedFeedScope`, in the +Feeds sibling).
     /// How many messages the list currently has selected, reported by
     /// `MessageListView` on wide/keyboard layouts. Drives the "N messages
     /// selected" reading-pane placeholder when a multi-selection is active;
@@ -224,10 +220,7 @@ struct MailRootView: View {
                 // Same reason the dismissal is here: re-picking the selected
                 // folder leaves the panel up otherwise, which is the half of
                 // #1217 where the tap produced no feedback at all.
-                if picked != nil {
-                    dismissFolderPanel()
-                    selectedFeedScope = nil
-                }
+                if picked != nil { dismissFolderPanel() }
                 navigator.selectFolder(picked)
             }
         )
@@ -387,8 +380,12 @@ struct MailRootView: View {
             // already done it and this is a no-op for it.
             if path != nil { dismissFolderPanel() }
         }
-        // Feed reader navigation (RSS plan, phase 5); see MailRootView+Feeds.
-        .modifier(feedNavigation())
+        // A feed list opening without a pick — a landing, a layout swap's
+        // hand-off, a tapped feed banner — closes the search and the panel
+        // as a pick does (RSS plan, phase 5; see MailRootView+Feeds).
+        .onChange(of: selectedFeedScope) { _, scope in
+            if scope != nil { feedListOpened() }
+        }
         // Catch-all drop target behind the whole split view: a message
         // released anywhere that isn't a folder row (the message list, the
         // reading pane, sidebar chrome) ends the drag so the sidebar flips
@@ -399,28 +396,11 @@ struct MailRootView: View {
             appState.endMessageDrag()
             return false
         }
-        // The cross-device probe (launch and foreground) lives on
-        // `SignedInRootView`, which every layout keeps mounted. A tapped feed
-        // toast lands here on the wide layouts, where the feed reader shares
-        // this split view: open the scope, or — already showing it — the
-        // parked item directly.
-        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
-            guard isWideSidebar, let request, let coordinator = appState.navCoordinator else { return }
-            if selectedFeedScope == request.scope {
-                if let item = coordinator.consumeFeedItemRestore(for: request.scope) { selectedFeedItem = item }
-            } else {
-                feedSidebarSelection.wrappedValue = request.scope
-            }
-        }
         .task {
             // The window's launch landing — or, for a tree a layout swap has
             // just built, the window's route (`SceneNavigator`). A wide tree
-            // may be sent to the feed reader instead.
-            if let scope = await navigator.mailTreeAppeared(
-                tree, isWide: isWideSidebar, showingFeeds: selectedFeedScope != nil
-            ) {
-                openFeedScope(scope)
-            }
+            // may land in the feed reader instead.
+            await navigator.mailTreeAppeared(tree, isWide: isWideSidebar)
             // Shared with the compact Search tab so a layout swap keeps the
             // query and results (#1654); this split anchors it to the folder.
             if searchModel == nil, let client = appState.client {

@@ -44,16 +44,14 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         let first = UUID()
-        _ = await navigator.mailTreeAppeared(first, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(first, isWide: false)
         navigator.foldersLoaded([inbox, archive])
         navigator.selectMessage(message, isSearching: false, from: first)
         // Another window on the same install moves on.
         coordinator.recordFolder("Archive")
 
         let rebuilt = UUID()
-        let scope = await navigator.mailTreeAppeared(rebuilt, isWide: true, showingFeeds: false)
-
-        XCTAssertNil(scope)
+        await navigator.mailTreeAppeared(rebuilt, isWide: true)
         XCTAssertEqual(navigator.selectedFolder, inbox)
         XCTAssertEqual(coordinator.pendingRestore?.folderPath, "INBOX")
         XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
@@ -68,12 +66,12 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         let first = UUID()
-        _ = await navigator.mailTreeAppeared(first, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(first, isWide: false)
         navigator.foldersLoaded([inbox, archive])
         navigator.selectFolder(nil)
         coordinator.recordFolder("Archive")
 
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(navigator.selectedFolder, Folder(path: "Archive", isSubscribed: true))
         XCTAssertTrue(navigator.awaitingLaunchReconcile)
@@ -88,11 +86,11 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let coordinator = try makeCoordinator()
         coordinator.navigateRequest = NavState(folder: "Archive", uid: 7, clientID: "push")
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.foldersLoaded([inbox, archive])
         navigator.selectFolder(nil)
 
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive", "the live session, not the launch snapshot's Lists")
         XCTAssertNotEqual(coordinator.pendingRestore?.folderPath, "Lists", "no restore of the snapshot's message")
@@ -104,9 +102,9 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         store.saveSession(ResumeSession(section: .mail, folder: "Lists.Cabal", uid: 42))
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
 
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(coordinator.pendingRestore?.folderPath, "Lists.Cabal")
         XCTAssertEqual(coordinator.pendingRestore?.uid, 42)
@@ -119,13 +117,13 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         let first = UUID()
-        _ = await navigator.mailTreeAppeared(first, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(first, isWide: false)
         navigator.foldersLoaded([inbox])
         navigator.selectMessage(message, isSearching: false, from: first)
         navigator.navigate(to: NavState(folder: "INBOX", uid: 4, clientID: "push"))
         _ = coordinator.consumePendingRestore(for: "INBOX")
 
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
     }
@@ -139,7 +137,7 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         let first = UUID()
-        _ = await navigator.mailTreeAppeared(first, isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(first, isWide: true)
         navigator.foldersLoaded([inbox])
         navigator.selectMessage(message, isSearching: false, from: first)
         XCTAssertEqual(navigator.compactColumn(in: first), .detail)
@@ -149,7 +147,7 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         XCTAssertNil(navigator.envelope(in: rebuilt))
         XCTAssertEqual(navigator.compactColumn(in: rebuilt), .sidebar)
 
-        _ = await navigator.mailTreeAppeared(rebuilt, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(rebuilt, isWide: false)
         XCTAssertEqual(navigator.folder(in: rebuilt), inbox)
         XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
         XCTAssertNil(navigator.envelope(in: rebuilt))
@@ -167,11 +165,11 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         let tree = UUID()
-        _ = await navigator.mailTreeAppeared(tree, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(tree, isWide: false)
         navigator.foldersLoaded([inbox])
         navigator.selectMessage(message, isSearching: false, from: tree)
 
-        _ = await navigator.mailTreeAppeared(tree, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(tree, isWide: false)
 
         XCTAssertEqual(navigator.envelope(in: tree), message)
         XCTAssertEqual(navigator.compactColumn(in: tree), .detail)
@@ -184,11 +182,11 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         let first = UUID()
-        _ = await navigator.mailTreeAppeared(first, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(first, isWide: false)
         navigator.foldersLoaded([inbox])
         navigator.selectMessage(message, isSearching: false, from: first)
         let rebuilt = UUID()
-        _ = await navigator.mailTreeAppeared(rebuilt, isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(rebuilt, isWide: true)
 
         navigator.setCompactColumn(.sidebar, isSearching: false, from: first)
         navigator.selectMessage(TestFixtures.makeEnvelope(uid: 12), isSearching: false, from: first)
@@ -205,14 +203,12 @@ final class SceneNavigatorRebuildTests: XCTestCase {
     func testAWideRebuildWithNoFeedScopeMovesTheSectionToMail() async throws {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.foldersLoaded([inbox])
         navigator.showTab(.feeds)
         XCTAssertEqual(coordinator.session.section, .feeds)
 
-        let scope = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
-
-        XCTAssertNil(scope)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
         XCTAssertEqual(navigator.selectedFolder, inbox)
         XCTAssertEqual(navigator.route.section, .mail)
         XCTAssertEqual(navigator.compactTab, .mail)
@@ -226,13 +222,13 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         let compact = UUID()
-        _ = await navigator.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(compact, isWide: false)
         navigator.foldersLoaded([inbox, archive])
         navigator.selectMessage(message, isSearching: false, from: compact)
         navigator.showTab(.settings)
 
         let wide = UUID()
-        _ = await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(wide, isWide: true)
         navigator.selectMessage(message, isSearching: false, from: wide)
         XCTAssertEqual(navigator.compactTab, .settings)
 
@@ -245,11 +241,11 @@ final class SceneNavigatorRebuildTests: XCTestCase {
     func testTheTabSurvivesARebuild() async throws {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.showTab(.addresses)
 
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
 
         XCTAssertEqual(navigator.compactTab, .addresses)
     }

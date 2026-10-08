@@ -64,7 +64,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
             feedsLaunchTarget: { _ in await lookup.lookup() }
         )
         let compact = UUID()
-        _ = await navigator.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(compact, isWide: false)
         navigator.foldersLoaded([inbox, archive])
         navigator.selectMessage(message, isSearching: false, from: compact)
         navigator.showTab(.feeds)
@@ -79,7 +79,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let (navigator, compact) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
         let wide = UUID()
 
-        let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false) }
+        let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true) }
         try await lookup.waitUntilEntered()
 
         XCTAssertNil(navigator.folder(in: wide))
@@ -90,7 +90,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         XCTAssertEqual(coordinator.session.uid, 9)
 
         lookup.release(with: nil)
-        _ = await handOff.value
+        await handOff.value
         XCTAssertEqual(navigator.folder(in: wide), inbox)
         XCTAssertEqual(navigator.compactColumn(in: wide), .content)
         XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
@@ -103,15 +103,15 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let lookup = HeldLookup()
         let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
         let wide = UUID()
-        let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false) }
+        let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true) }
         try await lookup.waitUntilEntered()
 
         let compactAgain = UUID()
-        _ = await navigator.mailTreeAppeared(compactAgain, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(compactAgain, isWide: false)
         lookup.release(with: .all)
-        let scope = await handOff.value
+        await handOff.value
 
-        XCTAssertNil(scope, "the replaced tree opens no feed scope")
+        XCTAssertNil(navigator.feeds.scope, "the replaced tree opens no feed scope")
         XCTAssertNil(navigator.folder(in: wide))
         XCTAssertEqual(navigator.folder(in: compactAgain), inbox, "the mail position survives")
         XCTAssertEqual(navigator.route.mail.message, MessageRef(folder: "INBOX", uid: 9))
@@ -123,12 +123,12 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let lookup = HeldLookup()
         let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
-        let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+        let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true) }
         try await lookup.waitUntilEntered()
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
 
         lookup.release(with: nil)
-        _ = await handOff.value
+        await handOff.value
 
         XCTAssertEqual(navigator.route.section, .feeds)
         XCTAssertEqual(coordinator.session.section, .feeds)
@@ -142,14 +142,14 @@ final class SceneNavigatorHandOffTests: XCTestCase {
             let coordinator = try makeCoordinator()
             let lookup = HeldLookup()
             let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
-            let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+            let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true) }
             try await lookup.waitUntilEntered()
             navigator.layoutIsWide = false
 
             lookup.release(with: found)
-            let scope = await handOff.value
+            await handOff.value
 
-            XCTAssertNil(scope)
+            XCTAssertNil(navigator.feeds.scope)
             XCTAssertEqual(navigator.selectedFolder, inbox, "the mail position survives")
             XCTAssertEqual(navigator.route.section, .feeds)
             XCTAssertEqual(coordinator.session.section, .feeds)
@@ -166,12 +166,12 @@ final class SceneNavigatorHandOffTests: XCTestCase {
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
             feedsLaunchTarget: { _ in await lookup.lookup() }
         )
-        let landing = Task { await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+        let landing = Task { await navigator.mailTreeAppeared(UUID(), isWide: true) }
         try await lookup.waitUntilEntered()
         navigator.layoutIsWide = false
 
         lookup.release(with: nil)
-        _ = await landing.value
+        await landing.value
 
         XCTAssertNil(navigator.selectedFolder)
         XCTAssertEqual(coordinator.session.section, .feeds)
@@ -185,13 +185,14 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
         navigator.showTab(.settings)
         let wide = UUID()
-        let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false) }
+        let handOff = Task { await navigator.mailTreeAppeared(wide, isWide: true) }
         try await lookup.waitUntilEntered()
 
         lookup.release(with: .all)
-        let scope = await handOff.value
+        await handOff.value
 
-        XCTAssertEqual(scope, .all)
+        XCTAssertEqual(navigator.feeds.scope(in: wide), .all)
+        XCTAssertTrue(navigator.splitShowsFeeds)
         XCTAssertNil(navigator.selectedFolder)
         XCTAssertEqual(navigator.compactTab, .settings)
     }
@@ -203,11 +204,11 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let lookup = HeldLookup()
         let (navigator, _) = await windowReadingMailThenOnFeeds(coordinator, lookup: lookup)
         navigator.showTab(.settings)
-        let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+        let handOff = Task { await navigator.mailTreeAppeared(UUID(), isWide: true) }
         try await lookup.waitUntilEntered()
 
         lookup.release(with: nil)
-        _ = await handOff.value
+        await handOff.value
 
         XCTAssertEqual(navigator.route.section, .mail)
         XCTAssertEqual(navigator.compactTab, .settings)
@@ -220,12 +221,12 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: .mail)
         let compact = UUID()
-        _ = await navigator.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(compact, isWide: false)
         navigator.foldersLoaded([inbox])
         navigator.selectMessage(message, isSearching: false, from: compact)
 
         navigator.navigate(to: NavState(folder: "INBOX", messageID: "<four@example.com>", uid: 4, clientID: "push"))
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(coordinator.pendingRestore?.uid, 4)
         XCTAssertEqual(coordinator.pendingRestore?.messageID, "<four@example.com>")
@@ -238,12 +239,12 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: .mail)
         let compact = UUID()
-        _ = await navigator.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(compact, isWide: false)
         navigator.foldersLoaded([inbox])
         navigator.selectMessage(message, isSearching: false, from: compact)
 
         navigator.navigate(to: NavState(folder: "INBOX", uid: 4, messageScroll: 640, clientID: "other-install"))
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(coordinator.pendingRestore?.uid, 4)
         XCTAssertEqual(coordinator.pendingScrollRestore?.offset, 640)
@@ -254,12 +255,12 @@ final class SceneNavigatorHandOffTests: XCTestCase {
     func testAFeedPickInTheSplitMovesAUtilityTab() async throws {
         let coordinator = try makeCoordinator()
         let navigator = SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: .mail)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.foldersLoaded([inbox])
         navigator.showTab(.settings)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
 
-        navigator.showFeeds()
+        navigator.showFeeds(.all)
 
         XCTAssertEqual(navigator.compactTab, .feeds)
     }
@@ -272,8 +273,9 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let opened = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds, feedsLaunchTarget: { _ in .all }
         )
-        let scope = await opened.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
-        XCTAssertEqual(scope, .all)
+        await opened.mailTreeAppeared(UUID(), isWide: true)
+        XCTAssertEqual(opened.feeds.scope, .all)
+        XCTAssertTrue(opened.splitShowsFeeds)
         XCTAssertNil(opened.selectedFolder)
         XCTAssertEqual(opened.route.section, .feeds)
 
@@ -282,14 +284,14 @@ final class SceneNavigatorHandOffTests: XCTestCase {
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
             feedsLaunchTarget: { _ in await lookup.lookup() }
         )
-        let landing = Task { await replaced.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false) }
+        let landing = Task { await replaced.mailTreeAppeared(UUID(), isWide: true) }
         try await lookup.waitUntilEntered()
         let compact = UUID()
-        _ = await replaced.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        await replaced.mailTreeAppeared(compact, isWide: false)
         lookup.release(with: .all)
 
-        let staleScope = await landing.value
-        XCTAssertNil(staleScope)
+        await landing.value
+        XCTAssertNil(replaced.feeds.scope)
         XCTAssertEqual(replaced.folder(in: compact)?.path, "Archive", "the compact tree's landing stands")
     }
 
@@ -299,11 +301,11 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: .mail)
         let compact = UUID()
-        _ = await navigator.mailTreeAppeared(compact, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(compact, isWide: false)
         navigator.foldersLoaded([inbox])
         navigator.showTab(.settings)
         let wide = UUID()
-        _ = await navigator.mailTreeAppeared(wide, isWide: true, showingFeeds: false)
+        await navigator.mailTreeAppeared(wide, isWide: true)
 
         navigator.selectMessage(message, isSearching: false, from: wide)
 

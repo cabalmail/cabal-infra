@@ -49,7 +49,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
         let tree = UUID()
         XCTAssertEqual(navigator.compactTab, .feeds)
 
-        _ = await navigator.mailTreeAppeared(tree, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(tree, isWide: false)
 
         XCTAssertEqual(navigator.folder(in: tree)?.path, "Archive")
         XCTAssertEqual(coordinator.pendingRestore?.uid, 5, "the Mail tab's list reselects it when it loads")
@@ -74,7 +74,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
         store.saveSession(ResumeSession(section: .feeds, folder: "Gone", uid: 3))
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
 
         navigator.foldersLoaded([inbox, archive])
 
@@ -93,7 +93,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
         store.saveSession(ResumeSession(section: .mail, folder: "Gone"))
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.showTab(.settings)
 
         navigator.foldersLoaded([inbox, archive])
@@ -109,7 +109,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
         store.saveSession(ResumeSession(section: .feeds, folder: "Gone"))
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.showTab(.mail)
         navigator.showTab(.feeds)
 
@@ -140,7 +140,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         let tree = UUID()
-        _ = await navigator.mailTreeAppeared(tree, isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(tree, isWide: false)
         navigator.foldersLoaded([inbox, archive])
         navigator.showTab(.folders)
 
@@ -158,7 +158,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
     func testOnlyANewFolderLeavesTheFoldersTab() async throws {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.showTab(.folders)
 
         navigator.foldersLoaded([inbox, archive])
@@ -179,7 +179,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
         store.saveSession(ResumeSession(section: .mail, folder: "Gone"))
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
-        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.showTab(.folders)
 
         navigator.foldersLoaded([inbox, archive])

@@ -9,13 +9,6 @@ import XCTest
 final class LaunchRestoreSequencingSourceScanTests: XCTestCase {
 
     func testTheFeedItemRestoreIsAppliedFromTheListNotTheScopeChange() throws {
-        let body = try Self.source("CabalmailUI/Feeds/FeedRootView.swift")
-        let scopeHandler = try XCTUnwrap(Self.block(of: ".onChange(of: selectedScope)", in: body))
-        XCTAssertFalse(
-            scopeHandler.contains("consumeFeedItemRestore"),
-            "the scope's onChange must not select the restored item in the same update"
-        )
-        XCTAssertFalse(body.contains("consumeFeedItemRestore"), "FeedRootView no longer consumes the restore at all")
         let list = try Self.source("CabalmailUI/Feeds/ItemList/FeedItemListView.swift")
         // Every path waits for the list to have appeared and loaded; only a
         // tapped cross-device feed toast (resume-session plan, Phase C) may
