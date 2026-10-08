@@ -94,18 +94,27 @@ final class MailEventsTests: XCTestCase {
         XCTAssertTrue(recorder.events.isEmpty)
     }
 
-    // MARK: - What the store posts with a count
+    // MARK: - What a write posts with a count
 
-    func testAFlagChangePostsAndMovesTheUnreadCountForSeenOnly() {
+    /// A writer in `window` that shows nothing of its own, so the events it
+    /// posts are the plain ones every subscriber hears.
+    private func writer(through imap: FakeImapClient) throws -> MailWriter {
+        MailWriter(client: try TestFixtures.makeClient(imap: imap), window: window, sender: nil, advances: true)
+    }
+
+    func testAFlagChangePostsAndMovesTheUnreadCountForSeenOnly() async throws {
         let store = AppState().mailStore
         store.counts.setFolderCounts(folderPath: "INBOX", unread: 3, total: 10)
         let recorder = MailEventRecorder(store)
+        let writer = try writer(through: FakeImapClient())
 
-        store.postFlagChange(inbox, flag: .seen, added: true, from: window)
+        await store.mutations.setFlag(.seen, added: true, on: [inbox], changing: [inbox], by: writer).value
         XCTAssertEqual(store.counts.folderUnreadCounts["INBOX"], 2)
-        store.postFlagChange(inbox, flag: .flagged, added: true, from: window)
+        await store.mutations.setFlag(.flagged, added: true, on: [inbox], changing: [inbox], by: writer).value
         XCTAssertEqual(store.counts.folderUnreadCounts["INBOX"], 2, "a flag other than \\Seen moves no count")
-        store.postFlagChange(inbox, flag: .seen, added: false, from: nil)
+        await store.mutations.setFlag(
+            .seen, added: false, on: [inbox], changing: [inbox], by: .composer(through: writer.client)
+        ).value
 
         XCTAssertEqual(store.counts.folderUnreadCounts["INBOX"], 3)
         XCTAssertEqual(recorder.events, [
@@ -115,18 +124,31 @@ final class MailEventsTests: XCTestCase {
         ])
     }
 
-    func testAFailedRemovalPostsTheRestoreAndHandsBackTheUnreadItTook() {
+    /// A refused removal posts the restore, and hands back exactly the
+    /// unread count it took: only for the message a dispose marked read.
+    func testAFailedRemovalPostsTheRestoreAndHandsBackTheUnreadItTook() async throws {
         let store = AppState().mailStore
         store.counts.setFolderCounts(folderPath: "Archive", unread: 1, total: 10)
         let recorder = MailEventRecorder(store)
+        let imap = FakeImapClient()
+        let boom = CabalmailError.network("boom")
+        await imap.scriptMoveResults([.failure(boom), .failure(boom)])
+        let writer = try writer(through: imap)
+        let read = MessageRef(folder: "Archive", uid: 8)
 
-        store.postRemovalFailed(archive, markUnread: true, from: window)
-        store.postRemovalFailed(archive, from: window)
+        let unreadDispose = store.mutations.remove(
+            [archive], .move(to: "Trash", markingSeen: true), unread: [archive], by: writer
+        )
+        XCTAssertEqual(store.counts.folderUnreadCounts["Archive"], 0, "the dispose read it")
+        await unreadDispose.value
+        await store.mutations.remove([read], .move(to: "Trash", markingSeen: true), unread: [], by: writer).value
 
-        XCTAssertEqual(store.counts.folderUnreadCounts["Archive"], 2, "only the one that had marked it read")
+        XCTAssertEqual(store.counts.folderUnreadCounts["Archive"], 1, "handed back once, for the one it marked read")
         XCTAssertEqual(recorder.events, [
+            MailEvent(change: .removed([archive]), origin: window),
             MailEvent(change: .restored(archive, markUnread: true), origin: window),
-            MailEvent(change: .restored(archive, markUnread: false), origin: window),
+            MailEvent(change: .removed([read]), origin: window),
+            MailEvent(change: .restored(read, markUnread: false), origin: window),
         ])
     }
 

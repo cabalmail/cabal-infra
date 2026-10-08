@@ -87,11 +87,7 @@ final class MailEventSearchSurfaceTests: XCTestCase {
         await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
         await imap.holdNext(.move)
 
-        let dispose = Task {
-            await reader.dispose(onSuccess: {
-                appState.mailStore.events.post(.removed([self.inbox]), from: self.windowA)
-            })
-        }
+        let dispose = Task { await reader.dispose() }
         await imap.awaitHeld(.move)
 
         XCTAssertEqual(model.rowRefs, [sent, archive], "the archived result left; its Sent copy stays")

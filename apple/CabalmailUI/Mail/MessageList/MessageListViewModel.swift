@@ -294,15 +294,17 @@ final class MessageListViewModel {
         return isSearchScope ? removing : removing.filter { $0.folder == folder.path }
     }
 
-    /// Rows `pruneEnvelope(_:)` took out for a reader dispose / move /
-    /// purge that is still in flight, with the index each held, so a failed
-    /// server write can put the row back (`restorePrunedEnvelope`). The rows
-    /// are this list's own (rows stay in each list); whether their removal is
-    /// still in flight is the record's. Only in-flight removals are kept, so
-    /// it holds a handful at most.
+    /// Rows `pruneEnvelope(_:)` took out for a dispose / move / purge made by
+    /// the reader or another list that is still in flight, with the index
+    /// each held, so a failed server write can put the row back
+    /// (`restorePrunedEnvelope`). The rows are this list's own (rows stay in
+    /// each list); whether their removal is still in flight is the record's.
+    /// Only in-flight removals are kept, so it holds a handful at most. (The
+    /// name predates the other lists' removals reaching this list.)
     @ObservationIgnored var readerPrunedEnvelopes: [MessageRef: (envelope: Envelope, index: Int)] = [:]
-    /// Reader removals whose failure reached this list before their prune
-    /// did; the prune skips them. See `restorePrunedEnvelope(_:markUnread:)`.
+    /// Removals whose failure reached this list while it still had the row:
+    /// the next prune of the message is skipped if no removal is in flight
+    /// behind it. See `pruneEnvelope(_:)`.
     @ObservationIgnored var readerFailedRefs: Set<MessageRef> = []
 
     /// Rows mid-disposal animation. A disposed row stays in `envelopes`
@@ -609,27 +611,15 @@ final class MessageListViewModel {
     // The per-row flag actions (`markRead`, `toggleSeen`, `toggleFlag`) live in
     // `MessageListViewModel+Flags.swift` to keep this type body under the cap.
 
-    /// Cache cleanup after a successful move out of `folder`, reached through
-    /// `confirmRemoval` so every removal path shares it without needing the
-    /// private `uidValidity`. `EnvelopeCache.remove` already takes an array;
-    /// `MessageBodyCache.remove` is per-uid so we loop.
-    func pruneCachesAfter(move folder: String, uids: [UInt32]) async {
-        guard let uidValidity, !uids.isEmpty else { return }
-        // Messages just left this folder (a confirmed dispose / move / purge),
-        // so a bottom window staged at the old positions is misaligned -- drop
-        // it. The in-flight removal already blocks adoption via `ensureLoaded`'s
-        // `pendingRemovedRefs` gate; this covers the window after it clears.
+    /// Messages this list removed are confirmed gone on the server (a
+    /// dispose, move or purge landed; the mutation service has already
+    /// forgotten them in the offline caches), so a bottom window staged at
+    /// the old positions is misaligned -- drop it. The in-flight removal
+    /// already blocks adoption via `ensureLoaded`'s `pendingRemovedRefs`
+    /// gate; this covers the window after it clears.
+    func removalsConfirmed() {
         invalidateBottomPrefetch()
-        try? await client.envelopeCache.remove(uids: uids, folder: folder)
-        for uid in uids {
-            await client.bodyCache.remove(
-                folder: folder,
-                uidValidity: uidValidity,
-                uid: uid
-            )
-        }
     }
-
 }
 
 // MARK: - Internals
@@ -663,17 +653,27 @@ extension MessageListViewModel {
     }
 
     /// Drop a message's row from the in-memory envelope list after it was
-    /// disposed elsewhere (a `.removed` event: the reader's archive, move or
-    /// purge, or a send from Drafts). The detail view model prunes the
-    /// envelope + body caches once the server confirms; this only touches the
-    /// list's in-memory copy so the row disappears immediately without a
-    /// server round trip.
-    func pruneEnvelope(_ ref: MessageRef) {
-        if readerFailedRefs.remove(ref) != nil { return }
+    /// disposed elsewhere (a `.removed` event: the reader's or another list's
+    /// archive, move or purge, or a send from Drafts). The mutation service
+    /// forgets the message in the offline caches once the server confirms;
+    /// this only touches the list's in-memory copy so the row disappears
+    /// immediately without a server round trip.
+    ///
+    /// A failure that reached this list while it still had the row (it was
+    /// built while the removal was out) is remembered in `readerFailedRefs`,
+    /// and swallows the next prune of that message if no removal is in
+    /// flight behind it -- including a compose session's send from Drafts,
+    /// which isn't recorded. It is spent on that next prune either way, so a
+    /// removal made through the mutation service goes ahead.
+    ///
+    /// `originalIndex` is where the row was before the removal that names it
+    /// pruned any of its other rows (`applyRemoval`), kept for a revert.
+    func pruneEnvelope(_ ref: MessageRef, from originalIndex: Int? = nil) {
+        if readerFailedRefs.remove(ref) != nil, !mailStore.shields.isRemoving(ref) { return }
         let removedIndex = index(of: ref)
         let removed = removedIndex.map { envelopes[$0] }
         if let removed, let removedIndex {
-            stashForReaderRevert(removed, at: removedIndex)
+            stashForReaderRevert(removed, at: originalIndex ?? removedIndex)
         }
         let loadedBefore = envelopes.count
         if let removedIndex { envelopes.remove(at: removedIndex) }
@@ -692,13 +692,14 @@ extension MessageListViewModel {
         if let removed, !removed.flags.contains(.seen) {
             unseen = max(0, unseen - 1)
         }
-        // The folder lost a row (detail-view dispose, no cache-prune round
-        // trip), so a staged bottom window may no longer line up -- drop it.
+        // The folder lost a row (a removal made elsewhere), so a staged
+        // bottom window may no longer line up -- drop it.
         invalidateBottomPrefetch()
     }
 
     /// Apply a flag toggle that originated outside the list (a
-    /// `.flagsChanged` event: the reader's toggles, a reply's `\Answered`).
+    /// `.flagsChanged` event: the reader's toggles, another list's, a
+    /// reply's `\Answered`).
     /// Updates the in-memory envelope so the row's bold styling and unread
     /// dot match the new state without waiting for a refresh. No-op when the
     /// message isn't currently in the window; matched by the row's ref, so
@@ -846,8 +847,9 @@ extension MessageListViewModel {
 
 // MARK: - Mail events
 
-// The list's half of the mail store's events (`MailEvents`): what the reader
-// and the composer changed, matched against this list's own rows by ref. A
+// The list's half of the mail store's events (`MailEvents`): what the reader,
+// the composer and other lists changed, matched against this list's own rows
+// by ref (its own writes aren't sent back to it). A
 // folder list's rows all carry its folder; the search surface's come from
 // many, and an event reaches whichever of them it names (#1877). Whatever
 // the selection should do about one is queued for the view, which owns the
@@ -856,7 +858,7 @@ extension MessageListViewModel: MailEventSubscriber {
     func receive(_ event: MailEvent) {
         switch event.change {
         case .removed(let refs):
-            applyRemoval(of: refs, from: event.origin)
+            applyRemoval(of: refs, from: event.origin, advancing: event.advances)
         case .restored(let ref, let markUnread):
             // The selection stays where the removal's advance left it, as
             // with a failed swipe.
@@ -872,7 +874,8 @@ extension MessageListViewModel: MailEventSubscriber {
             guard let current = envelope(for: ref) else { return }
             let next = markReadAdvanceTarget(after: current, following: advance)
             selectionReactions.append(ListSelectionReaction(
-                kind: .readAdvance, rows: [ref], target: next.map(rowRef(for:)), origin: event.origin
+                kind: .readAdvance, rows: [ref], target: next.map(rowRef(for:)), origin: event.origin,
+                advances: event.advances
             ))
         }
     }
@@ -889,7 +892,7 @@ extension MessageListViewModel: MailEventSubscriber {
     /// same draft, and leaving one in place would let the advance walk onto
     /// a row that's about to disappear. The advance target is worked out
     /// before the row goes, since every advance policy walks from its index.
-    func applyRemoval(of refs: [MessageRef], from origin: UUID?) {
+    func applyRemoval(of refs: [MessageRef], from origin: UUID?, advancing: Bool) {
         var seen = Set<MessageRef>()
         let named = refs.filter {
             (isSearchScope ? index(of: $0) != nil : $0.folder == folder.path) && seen.insert($0).inserted
@@ -897,15 +900,18 @@ extension MessageListViewModel: MailEventSubscriber {
         guard !named.isEmpty else { return }
         let current = envelopes.first { seen.contains(rowRef(for: $0)) }
         let currentRef = current.map(rowRef(for:))
+        // Where each row was before any of them left, for a revert.
+        var before: [MessageRef: Int] = [:]
+        for ref in named { before[ref] = index(of: ref) }
         for ref in named where ref != currentRef {
-            pruneEnvelope(ref)
+            pruneEnvelope(ref, from: before[ref])
         }
         let next = current.flatMap { advanceTarget(after: $0, following: preferences.disposeAdvance) }
         if let currentRef {
-            pruneEnvelope(currentRef)
+            pruneEnvelope(currentRef, from: before[currentRef])
         }
         selectionReactions.append(ListSelectionReaction(
-            kind: .removal, rows: seen, target: next.map(rowRef(for:)), origin: origin
+            kind: .removal, rows: seen, target: next.map(rowRef(for:)), origin: origin, advances: advancing
         ))
     }
 

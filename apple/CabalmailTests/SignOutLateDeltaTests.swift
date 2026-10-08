@@ -4,10 +4,10 @@ import CabalmailKit
 
 /// Unread changes from a message action that land after its server call,
 /// once the session that made them has ended (#1851): the revert when a
-/// move, dispose, flag change or purge fails, and the bulk mark read, which
-/// applies its change when the STORE answers. Each test holds the call,
-/// signs alice out and bob in, gives bob counts of his own for the folders
-/// involved (in memory and in a saved folder state, as stage keeps it),
+/// move, dispose, flag change or purge fails, and a bulk mark read that
+/// answers late. Each test holds the call, signs alice out and bob in, gives
+/// bob counts of his own for the folders involved (in memory and in a saved
+/// folder state, as stage keeps it),
 /// then lets the call answer. Before #1851 the late change moved bob's
 /// counts by alice's change and saved the result as his.
 ///
@@ -89,18 +89,30 @@ final class SignOutLateDeltaTests: XCTestCase {
         }
     }
 
-    /// The reader's flag revert and failed-move callbacks (wired by
-    /// `MessageDetailView.relayOutcomes`) fire after their server call. For
-    /// a reader of alice's, once bob is signed in, neither moves his counts.
-    func testTheReadersLateCallbacksAfterTheNextSignInChangeNothing() async throws {
+    /// The reader's flag revert and failed-move restore land after their
+    /// server call. For readers of alice's whose writes the server refuses
+    /// once bob is signed in, neither moves his counts.
+    func testTheReadersLateRevertsAfterTheNextSignInChangeNothing() async throws {
         try await signIn(as: "alice")
-        let reader = try makeReader(over: XCTUnwrap(harness.appState.client))
+        let client = try XCTUnwrap(harness.appState.client)
+        let reading = makeReader(of: unread[0], over: client)
+        let disposing = makeReader(of: unread[1], over: client)
+        await harness.imap.scriptFlagResults([.failure(Self.refused)])
+        await harness.imap.scriptMoveResults([.failure(Self.refused)])
+        await harness.imap.holdNext(.setFlags)
+        await harness.imap.holdNext(.move)
+        let read = Task { await reading.setSeen(true) }
+        let dispose = Task { await disposing.dispose() }
+        await harness.imap.awaitHeld(.setFlags)
+        await harness.imap.awaitHeld(.move)
         await harness.appState.signOut()
         try await signIn(as: "bob")
         let cache = await giveBobCountsOfHisOwn()
 
-        reader.onFlagChanged?(.seen, false)
-        reader.onMoveFailed?(true)
+        await harness.imap.releaseHeld(.setFlags)
+        await harness.imap.releaseHeld(.move)
+        await read.value
+        await dispose.value
         try await Task.sleep(for: .milliseconds(200))
 
         XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 5)
@@ -108,20 +120,36 @@ final class SignOutLateDeltaTests: XCTestCase {
         XCTAssertEqual(saved?.unseen, 5)
     }
 
-    /// Negative control: a live session's reader still moves the count.
-    func testALiveReadersCallbacksStillMoveTheCount() async throws {
+    /// Negative control: a live session's reader still moves the count, and
+    /// a refusal still hands it back.
+    func testALiveReadersRevertsStillMoveTheCount() async throws {
         try await signIn(as: "alice")
-        let reader = try makeReader(over: XCTUnwrap(harness.appState.client))
+        let client = try XCTUnwrap(harness.appState.client)
+        let reading = makeReader(of: unread[0], over: client)
+        let disposing = makeReader(of: unread[1], over: client)
         harness.appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 5, total: 50)
+        await harness.imap.scriptFlagResults([.failure(Self.refused)])
+        await harness.imap.scriptMoveResults([.failure(Self.refused)])
 
-        reader.onFlagChanged?(.seen, true)
+        await harness.imap.holdNext(.setFlags)
+        let read = Task { await reading.setSeen(true) }
+        await harness.imap.awaitHeld(.setFlags)
         XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 4)
-        reader.onMoveFailed?(true)
+        await harness.imap.releaseHeld(.setFlags)
+        await read.value
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 5)
+
+        await harness.imap.holdNext(.move)
+        let dispose = Task { await disposing.dispose() }
+        await harness.imap.awaitHeld(.move)
+        XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 4)
+        await harness.imap.releaseHeld(.move)
+        await dispose.value
         XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts["INBOX"], 5)
     }
 
     /// Negative control: in a live session the bulk mark read still takes
-    /// INBOX's unread count down when the STORE answers.
+    /// INBOX's unread count down.
     func testABulkMarkReadInALiveSessionStillLowersTheCount() async throws {
         try await signIn(as: "alice")
         let list = try makeList(folder: "INBOX", over: XCTUnwrap(harness.appState.client))
@@ -181,11 +209,12 @@ final class SignOutLateDeltaTests: XCTestCase {
         return cache
     }
 
-    /// A reader of INBOX UID 1 over `client`, wired as the view wires it.
-    private func makeReader(over client: CabalmailClient) -> MessageDetailViewModel {
+    /// A reader of `envelope` in INBOX over `client`, wired as the view
+    /// wires it.
+    private func makeReader(of envelope: Envelope, over client: CabalmailClient) -> MessageDetailViewModel {
         let reader = MessageDetailViewModel(
             folder: Folder(path: "INBOX", attributes: [], isSubscribed: true),
-            envelope: unread[0],
+            envelope: envelope,
             client: client,
             preferences: Preferences(store: InMemoryPreferenceStore())
         )

@@ -43,8 +43,8 @@ final class MailSessionStoreTests: XCTestCase {
         store.shields.setFlagWrite(MessageRef(folder: "Archive", uid: 6), inFlight: true)
         store.shields.setMoveInFlight(MessageRef(folder: "Projects", uid: 7), inFlight: true)
         store.events.post(.removed([ref]), from: nil)
-        store.postRemovalFailed(ref, from: nil)
-        store.postFlagChange(ref, flag: .flagged, added: true, from: nil)
+        store.events.post(.restored(ref, markUnread: false), from: nil)
+        store.events.post(.flagsChanged([ref], flag: .flagged, added: true), from: nil)
         store.events.post(.readAdvance(ref, advance: .nextUnread), from: nil)
         store.events.post(
             .draftReplaced(folderPath: "Drafts", replacement: DraftReplacement(retiredUIDs: [3], survivingUID: 4)),
@@ -122,14 +122,15 @@ final class MailSessionStoreTests: XCTestCase {
         }
         let list = try TestFixtures.makeModel(
             imap: imap,
-            envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2)],
+            envelopes: [TestFixtures.makeEnvelope(uid: 1), TestFixtures.makeEnvelope(uid: 2, flags: [.seen])],
             folderPath: "Work",
             mailStore: owner.mailStore
         )
 
         await list.setSeen(true, refs: [MessageRef(folder: "Work", uid: 1)])
         XCTAssertEqual(owner.mailStore.counts.folderUnreadCounts["Work"], 1, "the read moved the owner's count")
-        await list.confirmRemoval(from: "Work", uids: [2])
+        await list.moveTo(try XCTUnwrap(list.envelope(for: MessageRef(folder: "Work", uid: 2))), destination: "Archive")
+        XCTAssertEqual(owner.mailStore.counts.folderUnreadCounts["Work"], 1, "precondition: a read message moved")
         await list.markAllRead()
 
         XCTAssertNil(list.errorMessage)
@@ -154,15 +155,23 @@ final class MailSessionStoreTests: XCTestCase {
         let reader = try await fixture.makeReader(imap: imap, uid: 7, folderPath: "Archive")
         MessageDetailView.relayOutcomes(of: reader, to: owner.mailStore, from: window)
 
+        owner.mailStore.counts.setFolderCounts(folderPath: "Archive", unread: 1, total: 5)
         await reader.toggleFlagged()
-        reader.onMoveInFlight?(true)
-        reader.onMoveFailed?(true)
-
-        XCTAssertEqual(ownerEvents.events, [
-            MailEvent(change: .flagsChanged([ref], flag: .flagged, added: true), origin: window),
-            MailEvent(change: .restored(ref, markUnread: true), origin: window),
-        ], "each names the reader's window")
+        await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
+        await imap.holdNext(.move)
+        let dispose = Task { await reader.dispose() }
+        await imap.awaitHeld(.move)
         XCTAssertEqual(owner.mailStore.shields.pendingMoveRefs, [ref])
+        XCTAssertEqual(owner.mailStore.counts.folderUnreadCounts["Archive"], 0, "the dispose took its unread")
+        await imap.releaseHeld(.move)
+        await dispose.value
+
+        let sender = ObjectIdentifier(reader)
+        XCTAssertEqual(ownerEvents.events, [
+            MailEvent(change: .flagsChanged([ref], flag: .flagged, added: true), origin: window, sender: sender),
+            MailEvent(change: .removed([ref]), origin: window, sender: sender),
+            MailEvent(change: .restored(ref, markUnread: true), origin: window, sender: sender),
+        ], "each names the reader's window")
         XCTAssertEqual(
             owner.mailStore.counts.folderUnreadCounts["Archive"], 1, "the failed removal handed back its unread"
         )

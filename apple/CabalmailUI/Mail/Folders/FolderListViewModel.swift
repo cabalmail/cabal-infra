@@ -283,18 +283,11 @@ final class FolderListViewModel {
     }
 
     /// Permanently deletes everything in Trash. Called only after the
-    /// sidebar's confirmation dialog. On success the cached envelope
-    /// snapshot for Trash is dropped, the sidebar badge zeroes, and the
-    /// visible message list (if it is Trash) is told to hard-reload.
+    /// sidebar's confirmation dialog. The after-effects (Trash's snapshot,
+    /// its badge, the list reload) are the mutation service's.
     func emptyTrash() async {
-        let path = FolderTree.trashPath
         do {
-            try await client.imapClient.emptyTrash(folder: path)
-            try? await client.envelopeCache.invalidate(folder: path)
-            if mailStore.acceptsCounts(from: client) {
-                mailStore.counts.setFolderCounts(folderPath: path, unread: 0, total: 0)
-            }
-            mailStore.requestListRefresh()
+            try await mailStore.mutations.emptyTrash(through: client)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

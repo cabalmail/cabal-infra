@@ -6,11 +6,11 @@ import CabalmailKit
 /// opens a message.
 ///
 /// With `Preferences.markAsRead == .onOpen`, a successful `load()` spawns an
-/// unstructured `setSeen(true)`: the reader flips `isSeen` and signals the
-/// list (`onFlagChanged`) before the STORE, brackets the STORE with
-/// `onFlagWriteInFlight` (the list's pending-flag shield), and reverts both on
-/// failure with the raw `"\(error)"` description in `errorMessage` -- not the
-/// #940 user copy `load()` uses. The server never marks a message read on
+/// unstructured `setSeen(true)`: the reader flips `isSeen`, and its write
+/// through the store's mutation service posts the change for the lists
+/// before the STORE and holds the STORE in the record of writes in flight
+/// (the lists' pending-flag shield); both are reverted on failure, with the
+/// error in `errorMessage`. The server never marks a message read on
 /// fetch (`fetch_message` sends `seen=false`), so this is the only path that
 /// does. The `.setFlags` hold gate stages the STORE so each step is asserted
 /// in order rather than by timing.
@@ -47,7 +47,7 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         await imap.scriptBody(folder: "INBOX", uid: uid, [.success(MessageDetailMimeFixture.alternative)])
         let model = try await fixture.makeReader(imap: imap, uid: uid, flags: flags, markAsRead: markAsRead)
         try await fixture.seedSnapshot(model)
-        let recorder = RelayRecorder()
+        let recorder = RelayRecorder(AppState().mailStore)
         recorder.attach(to: model)
         return (model, recorder)
     }
@@ -82,6 +82,8 @@ final class MessageDetailMarkSeenTests: XCTestCase {
 
         await imap.releaseHeld(.setFlags)
         try await waitUntilOnMainActor { recorder.writes == [true, false] }
+        // The reader resumes from its write in a job of its own.
+        await MessageDetailLoadFixture.drainMainActor()
 
         XCTAssertTrue(model.isSeen)
         XCTAssertNil(model.errorMessage)
@@ -102,7 +104,8 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         guard try await openAndAwaitHeldStore(model, imap: imap) else { return }
         XCTAssertTrue(model.isSeen)
         await imap.releaseHeld(.setFlags)
-        try await waitUntilOnMainActor { recorder.writes == [true, false] }
+        try await waitUntilOnMainActor { !model.isSeen }
+        XCTAssertEqual(recorder.writes, [true, false], "the write left the record when it answered")
 
         XCTAssertFalse(model.isSeen)
         XCTAssertEqual(recorder.flagChanges, [
@@ -147,7 +150,7 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         await imap.scriptBody(folder: "INBOX", uid: uid, [.failure(CabalmailError.network("offline"))])
         let model = try await fixture.makeReader(imap: imap, uid: uid, markAsRead: .onOpen)
         try await fixture.seedSnapshot(model)
-        let recorder = RelayRecorder()
+        let recorder = RelayRecorder(AppState().mailStore)
         recorder.attach(to: model)
 
         await model.load()
@@ -166,7 +169,7 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         let model = try await fixture.makeReader(imap: imap, uid: uid, markAsRead: .onOpen)
         try await fixture.seedSnapshot(model)
         try await fixture.cacheBody(MessageDetailMimeFixture.alternative, for: model)
-        let recorder = RelayRecorder()
+        let recorder = RelayRecorder(AppState().mailStore)
         recorder.attach(to: model)
 
         guard try await openAndAwaitHeldStore(model, imap: imap) else { return }
@@ -179,6 +182,8 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         await imap.releaseHeld(.setFlags)
         // Let the unstructured mark-seen task finish inside this test.
         try await waitUntilOnMainActor { recorder.writes == [true, false] }
+        // The reader resumes from its write in a job of its own.
+        await MessageDetailLoadFixture.drainMainActor()
         XCTAssertTrue(model.isSeen)
     }
 
@@ -197,6 +202,8 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         await model.load()
         _ = try XCTUnwrap(model.plainText, "the open must succeed for a mark-seen to follow")
         try await waitUntilOnMainActor { recorder.writes == [true, false] }
+        // The reader resumes from its write in a job of its own.
+        await MessageDetailLoadFixture.drainMainActor()
 
         XCTAssertTrue(model.isSeen)
         let after = await model.client.envelopeCache.snapshot(for: "INBOX")
@@ -208,25 +215,21 @@ final class MessageDetailMarkSeenTests: XCTestCase {
 
     // MARK: - The list, wired the way the views wire it
 
-    /// A list holding 9, 8, 7 (7 unread) and a reader open on 7, its
-    /// `onFlagChanged` relayed to the list as `MessageDetailView` and
-    /// `MessageListView` relay it through `AppState`.
+    /// A list holding 9, 8, 7 (7 unread) and a reader open on 7, both over
+    /// one store, the reader connected to it as `MessageDetailView` connects
+    /// it.
     private func makeWiredPair(imap: FakeImapClient) async throws -> WiredPair {
         let envelopes = [9, 8, 7].map { TestFixtures.makeEnvelope(uid: $0, flags: $0 == 7 ? [] : [.seen]) }
-        let list = try TestFixtures.makeModel(imap: imap, envelopes: envelopes)
+        let store = AppState().mailStore
+        let list = try TestFixtures.makeModel(imap: imap, envelopes: envelopes, mailStore: store)
         await fixture.track(list.client)
         list.totalMessages = 3
         list.unseen = 1
         await imap.scriptBody(folder: "INBOX", uid: uid, [.success(MessageDetailMimeFixture.alternative)])
         let reader = try await fixture.makeReader(imap: imap, envelope: envelopes[2], markAsRead: .onOpen)
         try await fixture.seedSnapshot(reader, envelopes: envelopes)
-        let recorder = RelayRecorder()
+        let recorder = RelayRecorder(store)
         recorder.attach(to: reader)
-        let open = MessageRef(folder: reader.folder.path, uid: uid)
-        reader.onFlagChanged = { [weak list, weak recorder] flag, added in
-            recorder?.flagChanges.append(RelayRecorder.FlagChange(flag: flag, added: added))
-            list?.applyFlagChange(open, flag: flag, added: added)
-        }
         return WiredPair(list: list, reader: reader, recorder: recorder)
     }
 
@@ -236,11 +239,14 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         let pair = try await makeWiredPair(imap: imap)
 
         guard try await openAndAwaitHeldStore(pair.reader, imap: imap) else { return }
+        XCTAssertEqual(pair.recorder.writes, [true], "the write is in flight")
 
         XCTAssertTrue(pair.list.envelopes[2].flags.contains(.seen), "the row reads as read before the STORE lands")
         XCTAssertEqual(pair.list.unseen, 0)
         await imap.releaseHeld(.setFlags)
         try await waitUntilOnMainActor { pair.recorder.writes == [true, false] }
+        // The reader resumes from its write in a job of its own.
+        await MessageDetailLoadFixture.drainMainActor()
         XCTAssertTrue(pair.list.envelopes[2].flags.contains(.seen))
         XCTAssertEqual(pair.list.unseen, 0)
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [9, 8, 7])
@@ -255,7 +261,8 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         guard try await openAndAwaitHeldStore(pair.reader, imap: imap) else { return }
         XCTAssertEqual(pair.list.unseen, 0)
         await imap.releaseHeld(.setFlags)
-        try await waitUntilOnMainActor { pair.recorder.writes == [true, false] }
+        try await waitUntilOnMainActor { !pair.reader.isSeen }
+        XCTAssertEqual(pair.recorder.writes, [true, false], "the write left the record when it answered")
 
         XCTAssertFalse(pair.list.envelopes[2].flags.contains(.seen))
         XCTAssertEqual(pair.list.unseen, 1)
@@ -263,24 +270,45 @@ final class MessageDetailMarkSeenTests: XCTestCase {
     }
 }
 
-/// What a reader's flag relays reported, in order.
+/// What a reader's writes reported through the store it is connected to,
+/// in order: the flag changes posted for the lists, and the write's place in
+/// the record of writes in flight (`true` once it is out, then `false` once
+/// it has answered).
 @MainActor
-private final class RelayRecorder {
+private final class RelayRecorder: MailEventSubscriber {
     struct FlagChange: Equatable {
         let flag: Flag
         let added: Bool
     }
 
-    var flagChanges: [FlagChange] = []
-    var writes: [Bool] = []
+    let store: MailSessionStore
+    private var ref: MessageRef?
+    private(set) var flagChanges: [FlagChange] = []
+    private var begun = false
 
+    init(_ store: MailSessionStore) {
+        self.store = store
+        store.events.subscribe(self)
+    }
+
+    /// Connects `model` to the store, as `MessageDetailView` does.
     func attach(to model: MessageDetailViewModel) {
-        model.onFlagChanged = { [weak self] flag, added in
-            self?.flagChanges.append(FlagChange(flag: flag, added: added))
-        }
-        model.onFlagWriteInFlight = { [weak self] inFlight in
-            self?.writes.append(inFlight)
-        }
+        ref = model.ref
+        MessageDetailView.relayOutcomes(of: model, to: store)
+    }
+
+    var writes: [Bool] {
+        guard begun, let ref else { return [] }
+        return store.shields.isWritingFlags(ref) ? [true] : [true, false]
+    }
+
+    func receive(_ event: MailEvent) {
+        guard case .flagsChanged(let refs, let flag, let added) = event.change,
+              let ref, refs.contains(ref) else { return }
+        // The service records the write just before it posts the change, so
+        // a change posted with no write in the record isn't one.
+        if store.shields.isWritingFlags(ref) { begun = true }
+        flagChanges.append(FlagChange(flag: flag, added: added))
     }
 }
 

@@ -3,7 +3,7 @@ import CabalmailKit
 
 // Permanent deletion out of Trash for the detail pane. Sibling extension
 // for the same reason as `+Flags`: keeps the main view-model file under
-// SwiftLint's caps. Mirrors `dispose(onSuccess:onFailure:)`'s optimistic
+// SwiftLint's caps. Mirrors `dispose(action:onFailure:)`'s optimistic
 // shape minus the `\Seen` mark — an expunged message has no flags left
 // to maintain.
 extension MessageDetailViewModel {
@@ -35,25 +35,12 @@ extension MessageDetailViewModel {
         }
     }
 
-    func purge(
-        onSuccess: (() -> Void)? = nil,
-        onFailure: ((Error) -> Void)? = nil
-    ) async {
-        // Shield the optimistic prune from a concurrent refresh until the
-        // expunge resolves, exactly like the move paths.
-        onMoveInFlight?(true)
-        defer { onMoveInFlight?(false) }
-        onSuccess?()
-        do {
-            try await client.imapClient.purge(
-                folder: folder.path,
-                uids: [envelope.uid]
-            )
-            await confirmRemoval()
-        } catch {
-            onMoveFailed?(false)
-            errorMessage = error.localizedDescription
-            onFailure?(error)
-        }
+    /// Deletes the open message for good, once the user has confirmed.
+    /// Optimistic like `dispose`: every list drops the row at once and puts
+    /// it back if the server refuses, when `onFailure` shows the toast.
+    func purge(onFailure: ((Error) -> Void)? = nil) async {
+        let outcome = await removeOpenMessage(.purge, unread: !isSeen)
+        guard outcome.failed.contains(ref) else { return }
+        reportRefusal(outcome, to: onFailure)
     }
 }
