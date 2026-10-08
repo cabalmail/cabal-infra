@@ -48,33 +48,25 @@ enum CompactTab: Hashable {
 /// root applies (see `SidebarBranding.swift`). Set on the `TabView` so a
 /// tab added later inherits it.
 ///
-/// Its own view rather than a computed property of `SignedInRootView`, so
-/// that the tab selection is `@State` on a view created afresh each time the
-/// tab tree is built. `SignedInRootView` itself survives a size-class swap
-/// between this tree and the regular split (the swap replaces only the
-/// subtree), so a selection stored there went stale: close an iPhone Duo, or
-/// narrow an iPad window, after reading feeds in the split, and the tab bar
-/// came back on whichever tab it had last shown while the resume session —
-/// kept live by the split's `recordFolder` / `recordFeedScope` — said Feeds.
-/// Seeding the state in `init` from the live coordinator re-reads the truth
-/// at every rebuild (SwiftUI honours a `State` initial value only when the
-/// view's identity is new, which is exactly then), and it settles the tab
-/// before the Mail tab's `MailRootView` can appear and record a mail landing
-/// over the feeds section (#1644).
+/// The selected tab is the window's `SceneNavigator.compactTab`, which lives
+/// above the layout switch: close an iPhone Duo, or narrow an iPad window,
+/// and the tab bar comes back on the tab it left — or, after reading in the
+/// split, on the section the split was showing, which the navigator follows
+/// there (#1644). The navigator seeds it from the resume session when the
+/// window is created, so it is settled before the Mail tab's `MailRootView`
+/// can appear and land.
 struct CompactSectionTabs: View {
     @Environment(AppState.self) private var appState
-    @State private var tab: CompactTab
+    @Environment(SceneNavigator.self) private var navigator
 
-    /// - Parameter initialSection: the section to open on — the coordinator's
-    ///   `launchSection` when one exists, else the stored session's (a
-    ///   `@State` default can't reach the environment, hence the caller
-    ///   passes it in — see `ResumeSessionStore.storedSection`).
-    init(initialSection: ResumeSession.Section?) {
-        _tab = State(initialValue: CompactTab.initial(for: initialSection))
+    /// The tab bar's selection, through the navigator so a switch notes the
+    /// section on the resume session.
+    private var tab: Binding<CompactTab> {
+        Binding(get: { navigator.compactTab }, set: { navigator.showTab($0) })
     }
 
     var body: some View {
-        TabView(selection: $tab) {
+        TabView(selection: tab) {
             Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
                 MailRootView()
                     .tabBarTrayShield()
@@ -102,26 +94,18 @@ struct CompactSectionTabs: View {
             }
         }
         .environment(\.showsCompactBrandMark, true)
-        // The resume session remembers which section the user was in; the
-        // Mail and Feeds tabs each keep their own position, so only the
-        // section moves here. Other tabs leave it alone.
-        .onChange(of: tab) { _, tab in
-            if let section = tab.resumeSection {
-                appState.navCoordinator?.noteSection(section)
-            }
-        }
         // A tapped cross-device toast opens the section it names; the tab's
         // own root follows the request from there.
         .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
-            if request != nil { tab = .feeds }
+            if request != nil { navigator.showTab(.feeds) }
         }
         .onChange(of: appState.navCoordinator?.navigateRequest) { _, request in
-            if request != nil { tab = .mail }
+            if request != nil { navigator.showTab(.mail) }
         }
         // The same section, for the menus that share a chord across mail and
         // feeds (`SharedChordPolicy`): each tab keeps its selection while the
         // other is in front, so the section is what decides between them.
-        .reportsActiveSection(tab.resumeSection)
+        .reportsActiveSection(navigator.compactTab.resumeSection)
     }
 }
 #endif

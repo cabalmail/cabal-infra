@@ -42,6 +42,11 @@ import CabalmailKit
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.commandWindowID) private var commandWindowID
+    /// This window's navigation, held here — above the layout switch — so a
+    /// swap between the tab tree and the split rebuilds only the layout and
+    /// the window keeps its folder, message and tab (`SceneNavigator`).
+    @State private var navigator: SceneNavigator
     @State private var isOffline = false
     @State private var failedSends = FailedSendMonitor()
     /// The window width the section layout was last laid out at; see
@@ -57,8 +62,16 @@ struct SignedInRootView: View {
     @State private var settingsPresented = false
     #endif
 
+    /// - Parameter appState: read once, to seed the navigator from the
+    ///   session's coordinator (a `@State` initial value can't reach the
+    ///   environment). SwiftUI keeps the first navigator for the view's life.
+    init(appState: AppState) {
+        _navigator = State(initialValue: SceneNavigator(appState: appState))
+    }
+
     var body: some View {
         sectionLayout
+            .environment(navigator)
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.width
             } action: { width in
@@ -90,6 +103,12 @@ struct SignedInRootView: View {
             // because this view is in the visible hierarchy in every tab,
             // folder, and modal state; see ComposeRequestRouter.
             .composeRequestRouter()
+            .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
+            // A new sign-in gets a new navigator, as it gets a new
+            // coordinator: nothing of the last account's place carries over.
+            .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
+                navigator = SceneNavigator(appState: appState)
+            }
     }
 
     private func offerCrossDeviceCursor(atLaunch: Bool) async {
@@ -114,14 +133,9 @@ struct SignedInRootView: View {
         #else
         switch layoutChoice {
         case .compactTabs:
-            // Seeded from the live coordinator so a tree rebuilt mid-process
-            // (a fold, an iPad window narrowing) opens on the section the
-            // split was showing; the stored session covers a cold launch,
-            // before the coordinator exists. See `CompactSectionTabs` for why
-            // the selection lives on that view and not here.
-            CompactSectionTabs(
-                initialSection: appState.navCoordinator?.launchSection ?? ResumeSessionStore.storedSection()
-            )
+            // The tab comes from the navigator, so a tree rebuilt mid-process
+            // (a fold, an iPad window narrowing) opens on the tab it left.
+            CompactSectionTabs()
                 // The tab tree is compact width throughout, whatever the raw
                 // size class says in landscape on a Plus / Max: the Mail
                 // tab's split view must never expand into columns and

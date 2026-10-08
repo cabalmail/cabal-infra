@@ -15,8 +15,7 @@ extension MailRootView {
                 if picked != nil {
                     if isSearching { endGlobalSearch() }
                     dismissFolderPanel()
-                    selectedFolder = nil
-                    selectedEnvelope = nil
+                    navigator.showFeeds()
                     listSelectionCount = 0
                 }
                 selectedFeedScope = picked
@@ -91,7 +90,7 @@ extension MailRootView {
     func feedNavigation() -> FeedNavigationModifier {
         FeedNavigationModifier(
             selectedFeedScope: $selectedFeedScope, selectedFeedItem: $selectedFeedItem,
-            selectedFeedSubscription: $selectedFeedSubscription, compactColumn: $compactColumn
+            selectedFeedSubscription: $selectedFeedSubscription, compactColumn: compactColumnSelection
         )
     }
 
