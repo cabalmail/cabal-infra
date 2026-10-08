@@ -39,6 +39,9 @@ extension MessageListViewModel {
         // Set at once, so the menu shows it and a second pick builds on it.
         let previous = sortCriterion
         sortCriterion = criterion
+        // The spinner holds from the probe through the refresh it hands to.
+        holdLoading()
+        defer { releaseLoading() }
         var probe: PrefetchedStatus?
         if !isSearchScope {
             // The new order comes from the server, so ask it before dropping
@@ -64,12 +67,11 @@ extension MessageListViewModel {
             if let probe {
                 _ = applyStatusCounts(probe.status, mayPredateRemoval: removalMayPostdate(probe.askedAt))
             }
-            isLoading = false
             return
         }
         envelopes.removeAll()
         resetWindow()
-        await refresh(prefetched: probe)
+        await refresh(prefetched: probe, startingOver: true)
         // Re-stage the bottom window in the new order (resetWindow dropped the
         // old one) so End stays instant after a re-sort.
         scheduleBottomPrefetch()
