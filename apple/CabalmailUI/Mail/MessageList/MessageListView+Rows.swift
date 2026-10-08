@@ -153,13 +153,8 @@ extension MessageListView {
     /// inner version.
     ///
     /// `.draggable` (not `.onDrag`) so a plain click still selects the row.
-    /// `.onDrag`'s drag-start closure was where the sidebar got flipped to
-    /// reveal folders; `.draggable` has no such hook, so the flip rides two
-    /// drag-start signals for robustness: the payload autoclosure (evaluated
-    /// when the drag lifts) and the preview's `.onAppear` (fired when the drag
-    /// image is built). `beginMessageDrag()` is idempotent, so firing both is
-    /// harmless. Internal (not `private`) so `messageRow` in `+Selection` can
-    /// wrap the `SwipeActionRow` with it.
+    /// Internal (not `private`) so `messageRow` in `+Selection` can wrap the
+    /// `SwipeActionRow` with it.
     @ViewBuilder
     func draggableRow(
         for envelope: Envelope,
@@ -174,16 +169,12 @@ extension MessageListView {
                 .contentShape(Rectangle())
                 .draggable(dragPayload(items, envelope: envelope, model: model)) {
                     MessageDragPreview(count: items.count, subject: envelope.subject)
-                        .onAppear { appState.beginMessageDrag() }
                 }
         } else {
             content()
         }
     }
 
-    /// Builds the drag payload and flips the sidebar's drag flag. Called from
-    /// `.draggable`'s `@autoclosure` payload, so the side effect lands exactly
-    /// when the drag begins.
     /// The drag payload: the move items, plus — for a single message — the
     /// subject and a lazy raw-source fetch so the drag can also land outside
     /// the app as an `.eml` (see `MessageDragPayload`). The fetch captures
@@ -194,7 +185,6 @@ extension MessageListView {
         envelope: Envelope,
         model: MessageListViewModel
     ) -> MessageDragPayload {
-        appState.beginMessageDrag()
         guard items.count == 1, let item = items.first else {
             return MessageDragPayload(items: items, sourceList: dragSourceID)
         }

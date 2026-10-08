@@ -155,14 +155,6 @@ public final class AppState {
     /// handoff consumed by `routePendingSpotlightOpen()` (SpotlightRouting).
     @ObservationIgnored var pendingSpotlightRef: SpotlightMessageRef?
 
-    /// True while a message-row drag is in flight on a wide-screen layout.
-    /// `MailRootView`'s sidebar watches this to temporarily reveal the
-    /// folder list as a drop target when the user is on the Addresses tab,
-    /// flipping back when the drag ends. Driven through `beginMessageDrag()`
-    /// / `endMessageDrag()` in the drag-and-drop extension below; internal
-    /// (not `private(set)`) so those same-type extension methods can write it.
-    var messageDragInProgress = false
-
     /// Latest drag-and-drop move. A folder row's drop handler posts this with
     /// the destination path; the active `MessageListView` observes it via
     /// `.onChange` and routes the payload through its view model so the move
@@ -207,10 +199,6 @@ public final class AppState {
             self.toast = nil
         }
     }
-
-    /// The one search model both iOS layout trees share — see
-    /// `sharedSearchModel(client:preferences:)` in `AppState+Search.swift`.
-    var searchModelStore: MessageListViewModel?
 
     /// Local-only contacts lookup, used by message list / detail / avatar
     /// to enrich incoming mail with the user's own name and photo for the
@@ -318,7 +306,6 @@ extension AppState {
     /// between.
     private func endClientSession() {
         composeSlots.endSession()
-        searchModelStore = nil
     }
 }
 
@@ -385,22 +372,12 @@ extension AppState {
 
 // MARK: - Drag-and-drop coordination
 //
-// Mutators for the `messageDragInProgress` / `pendingMoveRequest` /
-// `moveRequestTick` storage declared on the main type above. The drag flag
-// and the move request are the two halves of moving a message onto a sidebar
-// folder: the flag lets the sidebar reveal folders mid-drag (see
-// `MailRootView`), and the move request hands the dropped payload to the
-// active message list (see `MessageListView`). See
+// Mutators for the `pendingMoveRequest` / `moveRequestTick` storage declared
+// on the main type above: the move request hands a payload dropped on a
+// sidebar folder to the active message list (see `MessageListView`). See
 // `CabalmailUI/Mail/MessageDrag.swift` for the drag/drop plumbing itself.
 @MainActor
 extension AppState {
-    /// Drag lifecycle, driven from SwiftUI drag/drop closures. `begin` fires
-    /// when a row is lifted; `end` fires on drop or release. Both are
-    /// idempotent so the burst of drag callbacks the system can emit doesn't
-    /// matter.
-    func beginMessageDrag() { messageDragInProgress = true }
-    func endMessageDrag() { messageDragInProgress = false }
-
     /// Post a drag-and-drop move for the active message list to perform.
     /// `tick` is monotonic so dragging onto the same folder twice still fires
     /// the list's `.onChange` observer.

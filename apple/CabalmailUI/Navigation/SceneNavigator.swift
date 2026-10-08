@@ -37,8 +37,9 @@ import CabalmailKit
 /// leaves the compact Feeds tab's place where it was.
 ///
 /// Every transition does what the view handler it replaced did, cursor
-/// recording included. Search stays the view's (a transition that reads it
-/// takes `isSearching`).
+/// recording included. The search model is the window's too
+/// (`searchModel`), but whether the window is searching is the view's: a
+/// transition that reads it takes `isSearching`.
 @Observable
 @MainActor
 final class SceneNavigator {
@@ -71,6 +72,9 @@ final class SceneNavigator {
     /// The window's place in the feed reader, read and written by the feed
     /// trees (`FeedNavigationState`).
     private(set) var feeds = FeedNavigationState()
+
+    /// The window's search model (`searchModel(client:preferences:mailStore:)`).
+    @ObservationIgnored private var search: MessageListViewModel?
 
     /// Counts the feed banners this window has followed, so the wide split
     /// can end a search for one as it does for a feed pick (`navigateFeeds`).
@@ -625,5 +629,24 @@ extension SceneNavigator {
                 }
             }
         }
+    }
+}
+
+// The window's search, in the same file so it reaches the stored model.
+extension SceneNavigator {
+    /// The window's search model, created on first use for `client`. One per
+    /// window, so each window keeps its own query and results; shared by the
+    /// window's layout trees (the regular split's search field and the
+    /// compact Search tab), so a layout swap keeps them (#1654). A new
+    /// sign-in gets a new navigator, and the model goes with the old one.
+    func searchModel(
+        client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore
+    ) -> MessageListViewModel {
+        if let search, search.client === client { return search }
+        let model = MessageListViewModel(
+            scope: .search, client: client, preferences: preferences, mailStore: mailStore
+        )
+        search = model
+        return model
     }
 }

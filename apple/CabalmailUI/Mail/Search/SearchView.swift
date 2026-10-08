@@ -20,10 +20,11 @@ import CabalmailKit
 struct SearchView: View {
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
+    @Environment(SceneNavigator.self) private var navigator
 
-    /// The search model `AppState` shares with the regular split's search
-    /// (`sharedSearchModel`, #1654), held here rather than by
-    /// `MessageListView` so `.searchable` can bind its `searchQuery`;
+    /// The window's search model, which it shares with the regular split's
+    /// search (`SceneNavigator.searchModel`, #1654), held here rather than
+    /// by `MessageListView` so `.searchable` can bind its `searchQuery`;
     /// injected into the list, which skips the folder lifecycle in `.search`
     /// scope.
     @State private var model: MessageListViewModel?
@@ -66,13 +67,16 @@ struct SearchView: View {
             #endif
         }
         .task {
-            // Shared with the regular split's search so a layout swap keeps
-            // the query and results (#1654). This tab searches everywhere, so
-            // the anchor the split may have set is cleared here.
+            // The window's, shared with its regular split's search so a
+            // layout swap keeps the query and results (#1654). This tab
+            // searches everywhere, so the anchor the split may have set is
+            // cleared here.
             if model == nil, let client = appState.client {
-                let shared = appState.sharedSearchModel(client: client, preferences: preferences)
-                shared.searchAnchor = nil
-                model = shared
+                let window = navigator.searchModel(
+                    client: client, preferences: preferences, mailStore: appState.mailStore
+                )
+                window.searchAnchor = nil
+                model = window
             }
         }
     }

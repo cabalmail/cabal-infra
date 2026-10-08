@@ -284,10 +284,8 @@ extension FolderListView {
 
     /// Post a move request for the active message list to perform. SwiftUI
     /// decodes the `Transferable` payload before calling this, so we just
-    /// flatten the items and route them. `endMessageDrag()` always runs so
-    /// the sidebar flips back from folders to addresses once the drop lands.
+    /// flatten the items and route them.
     func handleMessageDrop(_ payloads: [MessageDragPayload], into folder: Folder) -> Bool {
-        defer { appState.endMessageDrag() }
         let items = payloads.flatMap { $0.items }
         guard !items.isEmpty else { return false }
         appState.requestMove(items: items, to: folder.path, from: payloads.lazy.compactMap(\.sourceList).first)

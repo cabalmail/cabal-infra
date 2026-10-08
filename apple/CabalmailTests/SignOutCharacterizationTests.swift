@@ -109,20 +109,18 @@ final class SignOutCharacterizationTests: XCTestCase {
 
     /// The cursor's local resume state (session record, reading positions,
     /// the offered cross-device cursor) is cleared from the defaults it was
-    /// built over; compose's session ends; the client, cursor, shared search
-    /// model and preferences sync are dropped, the sync stopped rather than
-    /// just released; the saved counts stop writing; and a stale reason is
+    /// built over; compose's session ends; the client, cursor and
+    /// preferences sync are dropped, the sync stopped rather than just
+    /// released; the saved counts stop writing; and a stale reason is
     /// cleared for the blank form.
     func testSignOutForgetsTheResumeStateAndDropsTheSessionObjects() async throws {
         let preferences = Preferences(store: InMemoryPreferenceStore())
         let state = harness.appState
         state.usePreferences(preferences)
         await SignOutSuiteSteps.signIn(harness)
-        let client = try XCTUnwrap(state.client)
+        _ = try XCTUnwrap(state.client)
         try await waitUntilOnMainActor { preferences.onLocalChange != nil }
         seedResumeState()
-        let search = state.sharedSearchModel(client: client, preferences: preferences)
-        XCTAssertTrue(state.searchModelStore === search, "precondition")
         state.sessionManager.signedOutReason = .sessionExpired
 
         await state.signOut()
@@ -134,12 +132,35 @@ final class SignOutCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.composeSlots.session, 1)
         XCTAssertNil(state.client)
         XCTAssertNil(state.navCoordinator)
-        XCTAssertNil(state.searchModelStore)
         XCTAssertNil(state.prefsCoordinator)
         XCTAssertNil(preferences.onLocalChange, "the sync was stopped, not just released")
         XCTAssertNil(state.mailStore.counts.savedFolderCounts.cache)
         XCTAssertEqual(state.status, .signedOut)
         XCTAssertNil(state.signedOutReason)
+    }
+
+    /// Search is the window's (`SceneNavigator`), not the app's, and keyed on
+    /// the client: after a sign-out and a new sign-in the window's navigator
+    /// hands out a new search model, so nothing of the last account's query
+    /// or results carries over. (`SignedInRootView` also builds a new
+    /// navigator for a new client; no unit test can host that view.)
+    func testANewClientsNavigatorGetsANewSearchModel() async throws {
+        let preferences = Preferences(store: InMemoryPreferenceStore())
+        let state = harness.appState
+        state.usePreferences(preferences)
+        await SignOutSuiteSteps.signIn(harness)
+        let navigator = SceneNavigator(appState: state)
+        let first = try XCTUnwrap(state.client)
+        let search = navigator.searchModel(client: first, preferences: preferences, mailStore: state.mailStore)
+
+        await state.signOut()
+        await SignOutSuiteSteps.signIn(harness, idToken: "ID-2")
+        let second = try XCTUnwrap(state.client)
+        XCTAssertFalse(second === first, "precondition: a new client")
+        let next = navigator.searchModel(client: second, preferences: preferences, mailStore: state.mailStore)
+
+        XCTAssertFalse(next === search)
+        XCTAssertTrue(next.client === second)
     }
 
     // MARK: - Helpers
