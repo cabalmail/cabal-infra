@@ -30,10 +30,28 @@ final class SavedFolderCounts {
         seededPaths.insert(folderPath)
     }
 
-    /// Hands over and forgets the seeded paths, for the folder list to clear.
+    /// The message list showing each folder whose seeded counts it shows
+    /// too, held weakly.
+    private var adopters: [String: WeakAdopter] = [:]
+
+    private struct WeakAdopter {
+        weak var list: AnyObject?
+    }
+
+    /// `list` has `folderPath` open and shows its counts on its pills: while
+    /// it does, a live folder list arriving mustn't blank them. Once it has
+    /// gone, a seeded count is dropped as any other.
+    func adopt(_ folderPath: String, by list: AnyObject) {
+        adopters[folderPath] = WeakAdopter(list: list)
+    }
+
+    /// Hands over and forgets the seeded paths, for the folder list to clear,
+    /// but those a message list still has open, which stay seeded.
     func takeSeeded() -> Set<String> {
-        defer { seededPaths.removeAll() }
-        return seededPaths
+        adopters = adopters.filter { $0.value.list != nil }
+        let open = seededPaths.filter { adopters[$0] != nil }
+        defer { seededPaths = open }
+        return seededPaths.subtracting(open)
     }
 
     /// A folder's counts are known: set in `MailCounts` from a live STATUS or a
@@ -69,6 +87,7 @@ final class SavedFolderCounts {
     func reset() {
         cache = nil
         seededPaths.removeAll()
+        adopters.removeAll()
         lastWrite = nil
     }
 }

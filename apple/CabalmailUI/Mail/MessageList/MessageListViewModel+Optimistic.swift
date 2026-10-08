@@ -36,27 +36,14 @@ extension MessageListViewModel {
         errorMessage = outcome.message
     }
 
+    /// Flips `flag` on `ref`'s row, if it is loaded. Rows only: the Unread
+    /// and Flagged pills are the mail store's counts, which the mutation
+    /// service moves once for each write.
     func applyOptimisticFlag(_ ref: MessageRef, flag: Flag, add: Bool) {
         guard let position = index(of: ref) else { return }
         var flags = envelopes[position].flags
-        let flipped = flags.contains(flag) != add
         if add { flags.insert(flag) } else { flags.remove(flag) }
         envelopes[position] = rebuildEnvelope(envelopes[position], flags: flags)
-        // Keep the Unread/Flagged pill counts in step with the optimistic row
-        // state — STATUS only corrects them on the next refresh, so without
-        // this the pills lag every flag/read change until a server round trip.
-        // Every optimistic flag path (list toggle, detail-view signal, bulk,
-        // and their reverts) funnels through here, so adjusting on a real flip
-        // only can't double-count.
-        guard flipped else { return }
-        switch flag {
-        case .seen:
-            unseen = max(0, unseen + (add ? -1 : 1))
-        case .flagged:
-            flagged = max(0, flagged + (add ? 1 : -1))
-        default:
-            break
-        }
     }
 
     /// Keep the server-sourced folder total in step with an optimistic prune
@@ -183,7 +170,8 @@ extension MessageListViewModel {
         // cross-folder search mode the row's own folder's count moves.
         let removal = mailStore.mutations.remove(
             [ref], .move(to: destination, markingSeen: wasUnread),
-            unread: wasUnread ? [ref] : [], by: .list(self, through: client)
+            unread: wasUnread ? [ref] : [], flagged: envelope.flags.contains(.flagged) ? [ref] : [],
+            by: .list(self, through: client)
         )
         // An early failure stops the collapse, so a row that is staying never
         // closes its gap; a confirmed removal drops a staged bottom window at
@@ -292,8 +280,7 @@ extension MessageListViewModel {
 
     /// Undo `pruneEnvelope(_:)` after a dispose, move or purge made by the
     /// reader or another list failed on the server: the row comes back where
-    /// it was, with the folder total and Unread pill adjustments the prune
-    /// made. A removal that named several of this list's rows stashed each at
+    /// it was, with the folder total the prune took. A removal that named several of this list's rows stashed each at
     /// the index it held before any of them left, and they come back in any
     /// order, so each goes in ahead of the rows from that removal still
     /// stashed (still on their way back, or gone for good). `markUnread` is
@@ -318,9 +305,6 @@ extension MessageListViewModel {
             readerPrunedEnvelopes = readerPrunedEnvelopes.filter { inFlight.contains($0.key) }
             let stillOut = readerPrunedEnvelopes.values.filter { $0.index < stashed.index }.count
             restoreEnvelope(envelope, at: max(0, stashed.index - stillOut))
-            if !envelope.flags.contains(.seen) {
-                unseen += 1
-            }
             invalidateBottomPrefetch()
         } else if index(of: ref) != nil {
             readerFailedRefs.insert(ref)

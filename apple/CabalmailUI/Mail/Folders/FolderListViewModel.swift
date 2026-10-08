@@ -107,10 +107,7 @@ final class FolderListViewModel {
             // Badges seeded from a saved copy (here, or by visionOS's landing
             // model) go with it, so a recount cut short leaves them blank
             // rather than old. A no-op unless something was seeded.
-            for path in mailStore.counts.savedFolderCounts.takeSeeded() {
-                mailStore.counts.folderUnreadCounts[path] = nil
-                mailStore.counts.folderTotalCounts[path] = nil
-            }
+            mailStore.counts.clearSeeded()
             isShowingSavedCopy = false
             // Publish the LSUB set by path so the message list's
             // unsubscribed-folder banner reads subscription from here rather
@@ -152,20 +149,19 @@ final class FolderListViewModel {
     /// and the subscribed ones) that this session hasn't counted live.
     /// Unsubscribed folders get no badge until opened, as online. Only a
     /// reply that carried both numbers is used, as
-    /// `MessageListViewModel.publishFolderCounts` requires of a live one.
-    /// Written straight to the maps rather than through `setFolderCounts`,
-    /// which would also set the app badge: that shows what this device last
-    /// set, which can be newer than the saved STATUS.
+    /// `MailSessionStore.takeStatus` requires of a live one.
+    /// Seeded rather than set through `setFolderCounts`, which would also set
+    /// the app badge: that shows what this device last set, which can be
+    /// newer than the saved STATUS (`MailCounts.seed`).
     private func seedSavedCounts() async {
         let saved = await client.savedFolderStatuses()
         guard mailStore.acceptsCounts(from: client) else { return }
         let recounted = folders.filter { $0.isSubscribed || MailCounts.isInbox($0.path) }
-        for folder in recounted where mailStore.counts.folderUnreadCounts[folder.path] == nil {
-            guard let status = saved[folder.path], let unread = status.unseen,
-                  let total = status.messages else { continue }
-            mailStore.counts.folderUnreadCounts[folder.path] = max(0, unread)
-            mailStore.counts.folderTotalCounts[folder.path] = max(0, total)
-            mailStore.counts.savedFolderCounts.markSeeded(folder.path)
+        for folder in recounted {
+            guard let status = saved[folder.path] else { continue }
+            if mailStore.counts.seed(folderPath: folder.path, from: status) {
+                mailStore.counts.savedFolderCounts.markSeeded(folder.path)
+            }
         }
     }
 

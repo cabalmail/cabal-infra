@@ -167,9 +167,8 @@ extension MessageListViewModel {
 
     /// A refresh of the active search: the folder's counts from STATUS
     /// first (a pill is a search, and its counts and the sidebar badge would
-    /// otherwise stop moving until it is left, or read 0 after a hard reload
-    /// zeroed them, #1819), then the submitted search again at the depth
-    /// already paged in. `prefetched` is a STATUS the caller already asked
+    /// otherwise stop moving until it is left, #1819), then the submitted
+    /// search again at the depth already paged in. `prefetched` is a STATUS the caller already asked
     /// for (`hardReload`), used rather than asked for again.
     func refreshSearch(prefetched: PrefetchedStatus? = nil) async {
         if !isSearchScope {
@@ -265,9 +264,6 @@ extension MessageListViewModel {
         searchNextCursor = nil
         envelopes.removeAll()
         totalMessages = 0
-        unseen = 0
-        flagged = 0
-        hasCountedStatus = false
         savedMessageCount = nil
         hasMore = true
         resetWindow()

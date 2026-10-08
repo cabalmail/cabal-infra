@@ -87,7 +87,7 @@ public final class MailSessionStore {
     /// bounded by the writes that reply may predate: a `\Seen` change, or a
     /// removal, in flight then or since (`MessageShields.unreadBound`). Each
     /// is bounded against what the sidebar shows now, when that came from a
-    /// STATUS this session (`MailCounts.countedFolders`); a guessed or seeded
+    /// STATUS this session, recently (`MailCounts.isCounted`); a guessed or seeded
     /// count, or none, takes the reply as it is. What every writer of a
     /// fetched STATUS sets the sidebar from (#1880).
     func boundedFolderCounts(
@@ -99,13 +99,81 @@ public final class MailSessionStore {
         let unreadBound = shields.unreadBound(folderPath: folderPath, askedAt: askedAt)
         let removing = shields.hasRemovalInFlight(folderPath: folderPath)
             || shields.removalConfirmed(folderPath: folderPath, after: askedAt)
-        let counted = counts.countedFolders.contains(folderPath)
+        let counted = counts.isCounted(folderPath, askedAt: askedAt)
         let shownUnread = counted ? counts.folderUnreadCounts[folderPath] : nil
         let shownTotal = counted ? counts.folderTotalCounts[folderPath] : nil
         return (
             shownUnread.map { unreadBound.bound(unread, from: $0) } ?? unread,
             removing ? shownTotal.map { min(total, $0) } ?? total : total
         )
+    }
+
+    /// A folder's flagged count from a STATUS asked at `askedAt`, bounded by
+    /// the `\Flagged` writes and removals it may predate, against the count
+    /// shown when a STATUS set it this session; otherwise the reply as it is.
+    func boundedFlaggedCount(_ flagged: Int, folderPath: String, askedAt: ContinuousClock.Instant) -> Int {
+        guard counts.isFlaggedCounted(folderPath, askedAt: askedAt),
+              let shown = counts.folderFlaggedCounts[folderPath] else { return flagged }
+        return shields.flaggedBound(folderPath: folderPath, askedAt: askedAt).bound(flagged, from: shown)
+    }
+
+    /// A message list's STATUS of its folder, asked at `askedAt`, fetched
+    /// through `client`: the rule by which it reaches the folder's counts,
+    /// which the list's Unread and Flagged pills and the sidebar both show.
+    /// A reply that carried the unread and total counts sets them, bounded
+    /// by the writes it may predate (`boundedFolderCounts`); one that carried
+    /// the flagged count sets it, bounded the same way. A reply from a session
+    /// that has started ending writes nothing (#1848).
+    func takeStatus(
+        _ status: FolderStatus,
+        folderPath: String,
+        askedAt: ContinuousClock.Instant,
+        fetchedThrough client: CabalmailClient
+    ) {
+        guard acceptsCounts(from: client), !folderPath.isEmpty else { return }
+        if let unread = status.unseen, let total = status.messages {
+            let bounded = boundedFolderCounts(unread: unread, total: total, folderPath: folderPath, askedAt: askedAt)
+            counts.setFolderCounts(folderPath: folderPath, unread: bounded.unread, total: bounded.total)
+        }
+        if let flagged = status.flagged {
+            counts.setFlaggedCount(
+                folderPath: folderPath,
+                count: boundedFlaggedCount(flagged, folderPath: folderPath, askedAt: askedAt)
+            )
+        }
+    }
+
+    /// The same for a reply that may predate a removal the list has already
+    /// applied: it would count the departed message again, so it may only
+    /// lower the counts shown, bounded as `takeStatus` bounds them, sets no
+    /// total, and saves what is shown, with `shownTotal`, the list's own
+    /// total, for the next offline launch. What it shows is a base for the
+    /// next reply's bounds, as a count it set would be.
+    func takeStatus(
+        _ status: FolderStatus,
+        predatingRemovalIn folderPath: String,
+        askedAt: ContinuousClock.Instant,
+        shownTotal: Int,
+        fetchedThrough client: CabalmailClient
+    ) {
+        guard acceptsCounts(from: client), !folderPath.isEmpty else { return }
+        if let fetched = status.unseen, let shown = counts.folderUnreadCounts[folderPath] {
+            var unread = min(fetched, shown)
+            if counts.isCounted(folderPath, askedAt: askedAt) {
+                unread = shields.unreadBound(folderPath: folderPath, askedAt: askedAt).bound(unread, from: shown)
+            }
+            counts.show(unread: unread, folderPath: folderPath, counted: true)
+            // `client.folderStatus` saved the reply as it came, but it may
+            // count a message already removed here: save what is shown.
+            counts.savedFolderCounts.countChanged(folderPath, unread: unread, total: shownTotal)
+        }
+        if let fetched = status.flagged, let shown = counts.folderFlaggedCounts[folderPath] {
+            var flagged = min(fetched, shown)
+            if counts.isFlaggedCounted(folderPath, askedAt: askedAt) {
+                flagged = shields.flaggedBound(folderPath: folderPath, askedAt: askedAt).bound(flagged, from: shown)
+            }
+            counts.show(flagged: flagged, folderPath: folderPath, counted: true)
+        }
     }
 
     /// Marks a replied-to message `\Answered` after its reply sends, or once

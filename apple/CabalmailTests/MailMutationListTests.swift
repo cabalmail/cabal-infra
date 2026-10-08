@@ -228,7 +228,7 @@ final class MailMutationListTests: XCTestCase {
         await imap.awaitHeld(.setFlags)
 
         XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts[work], 3, "two flipped; 1 was read already")
-        XCTAssertEqual(second.unseen, 0)
+        XCTAssertEqual(second.unseen, 3, "the other window's pill is the same number")
         await imap.releaseHeld(.setFlags)
         await read.value
         XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts[work], 3)

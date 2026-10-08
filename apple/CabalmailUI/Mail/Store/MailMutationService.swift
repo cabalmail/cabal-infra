@@ -106,8 +106,9 @@ final class MailMutationService {
 
     /// Adds or removes `flag` on `refs`. `changing` are the refs whose flag
     /// the write actually flips, as the writer shows them: only those move
-    /// the unread count (for `\Seen`) and are flipped back if the write fails,
-    /// so a mark-read over a message already read moves nothing.
+    /// the unread count (for `\Seen`) or the flagged count (for `\Flagged`)
+    /// and are flipped back if the write fails, so a mark-read over a message
+    /// already read moves nothing.
     ///
     /// The record, the event and the count change happen before this
     /// returns; the returned task makes the server call, one per folder, and
@@ -129,8 +130,8 @@ final class MailMutationService {
         }
         shields.beginFlagWrite(refs, flag: flag, added: added)
         post(.flagsChanged(refs, flag: flag, added: added), by: writer)
-        let counted = flag == .seen ? countedForUnread(changing.map(\.folder)) : []
-        moveUnread(changing, in: counted, by: added ? -1 : 1)
+        let moves = CountMoves(counts: counts, folders: changing.map(\.folder))
+        moves.move(flag, added: added, for: changing)
         return Task {
             defer { shields.endFlagWrite(refs, flag: flag, added: added) }
             var failed: Set<MessageRef> = []
@@ -152,7 +153,11 @@ final class MailMutationService {
             let reverted = refs.filter { failed.contains($0) && changing.contains($0) }
             if !reverted.isEmpty, acceptsAnswer(from: client) {
                 post(.flagsChanged(reverted, flag: flag, added: !added), by: writer)
-                moveUnread(Set(reverted), in: counted, by: added ? 1 : -1)
+                // A message removed since (in flight, or confirmed gone) took
+                // its count with it; giving the flag's count back too would
+                // count it twice.
+                let stillThere = reverted.filter { !shields.isRemoving($0) && shields.confirmedRemovals[$0] == nil }
+                moves.move(flag, added: !added, for: stillThere)
             }
             return FlagOutcome(failed: failed, message: message)
         }
@@ -190,7 +195,10 @@ final class MailMutationService {
     }
 
     /// Removes `refs` from their folders. `unread` are the ones the writer
-    /// shows unread, whose count moves with them.
+    /// shows unread, whose count moves with them; `flagged`, the ones it
+    /// shows flagged, whose count leaves the source folder. (A flagged
+    /// message moving in doesn't raise the destination's flagged count until
+    /// its next STATUS.)
     ///
     /// The record, the event and the count change happen before this
     /// returns; the returned task makes the server call, one per source
@@ -200,6 +208,7 @@ final class MailMutationService {
         _ refs: [MessageRef],
         _ removal: Removal,
         unread: Set<MessageRef>,
+        flagged: Set<MessageRef> = [],
         by writer: MailWriter
     ) -> Task<RemovalOutcome, Never> {
         let client = writer.client
@@ -210,16 +219,17 @@ final class MailMutationService {
         }
         shields.beginRemoval(refs)
         let plan = RemovalPlan(
-            refs: refs, removal: removal, unread: unread.intersection(refs),
-            counted: countedForUnread(refs.map(\.folder) + [removal.destination].compactMap { $0 }),
+            refs: refs, removal: removal,
+            unread: unread.intersection(refs), flagged: flagged.intersection(refs),
+            moves: CountMoves(counts: counts, folders: refs.map(\.folder) + [removal.destination].compactMap { $0 }),
             writer: writer
         )
         // A plain move of unread messages raises the destination's count
         // now, so a STATUS of it asked before the move lands is bounded too.
-        let arrival = removal.destination(carrying: plan.unread).flatMap { plan.counted.contains($0) ? $0 : nil }
+        let arrival = removal.destination(carrying: plan.unread).flatMap { plan.moves.movesUnread(in: $0) ? $0 : nil }
         if let arrival { shields.beginArrival(into: arrival) }
         post(.removed(refs), by: writer)
-        moveUnread(of: plan.unread, for: removal, in: plan.counted, by: 1)
+        moveCounts(of: plan.unread, flagged: plan.flagged, for: plan, by: 1)
         return Task {
             defer {
                 shields.endRemoval(refs)
@@ -250,8 +260,10 @@ final class MailMutationService {
         let removal: Removal
         /// The refs the writer shows unread.
         let unread: Set<MessageRef>
-        /// The folders whose unread counts it moves (`countedForUnread`).
-        let counted: Set<String>
+        /// The refs the writer shows flagged.
+        let flagged: Set<MessageRef>
+        /// The folders whose counts it moves.
+        let moves: CountMoves
         let writer: MailWriter
     }
 
@@ -320,7 +332,7 @@ final class MailMutationService {
             post(.flagsChanged(readNow, flag: .seen, added: true), by: plan.writer)
         }
         let returning = Set(back).intersection(plan.unread).subtracting(settled.markedRead)
-        moveUnread(of: returning, for: plan.removal, in: plan.counted, by: -1)
+        moveCounts(of: returning, flagged: Set(back).intersection(plan.flagged), for: plan, by: -1)
     }
 
     // MARK: - Whole folders
@@ -365,47 +377,27 @@ final class MailMutationService {
         try? await client.envelopeCache.invalidate(folder: path)
         guard acceptsAnswer(from: client) else { return }
         counts.setFolderCounts(folderPath: path, unread: 0, total: 0)
+        counts.setFlaggedCount(folderPath: path, count: 0)
         onListRefreshRequested()
     }
 
     // MARK: - Counts
 
-    /// The folders among `folders` whose unread counts a write moves: the
-    /// ones the store has a count for, and INBOX, whose count is also the app
-    /// badge. A folder with none (not opened or counted this session) is left
-    /// alone, and so is the revert: a delta there would invent a count from
-    /// 0, and taking it back would save that guess over the folder's real
-    /// saved count. Decided once, when the write starts, so a write and its
-    /// revert always move the same folders.
-    private func countedForUnread(_ folders: some Sequence<String>) -> Set<String> {
-        Set(folders.filter { counts.folderUnreadCounts[$0] != nil || MailCounts.isInbox($0) })
-    }
-
-    /// Moves `refs`' unread count out of their folders (`direction` 1) or
-    /// back (`-1`), and for a plain move into, or back out of, the
-    /// destination, in the `counted` folders only.
-    private func moveUnread(
-        of refs: Set<MessageRef>,
-        for removal: Removal,
-        in counted: Set<String>,
+    /// Moves the counts of messages leaving their folders (`direction` 1) or
+    /// coming back (`-1`): `unread`'s unread count out of their folders and,
+    /// for a plain move, into the destination; `flagged`'s flagged count out
+    /// of their folders.
+    private func moveCounts(
+        of unread: Set<MessageRef>,
+        flagged: Set<MessageRef>,
+        for plan: RemovalPlan,
         by direction: Int
     ) {
-        for (folder, uids) in refs.uidsByFolder() {
-            if counted.contains(folder) {
-                counts.applyUnreadDelta(folderPath: folder, delta: -direction * uids.count)
-            }
-            if case .move(let destination, markingSeen: false) = removal, counted.contains(destination) {
-                counts.applyUnreadDelta(folderPath: destination, delta: direction * uids.count)
-            }
+        plan.moves.moveUnread(unread, by: -direction)
+        if case .move(let destination, markingSeen: false) = plan.removal {
+            plan.moves.moveUnread(unread, into: destination, by: direction)
         }
-    }
-
-    /// Moves each `counted` folder's unread count by `delta` per message of
-    /// `refs`.
-    private func moveUnread(_ refs: Set<MessageRef>, in counted: Set<String>, by delta: Int) {
-        for (folder, uids) in refs.uidsByFolder() where counted.contains(folder) {
-            counts.applyUnreadDelta(folderPath: folder, delta: delta * uids.count)
-        }
+        plan.moves.moveFlagged(flagged, by: -direction)
     }
 
     private func post(_ change: MailEvent.Change, by writer: MailWriter) {

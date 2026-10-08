@@ -54,6 +54,7 @@ extension MessageListViewModel {
         let condemnedRefs = condemned.map { rowRef(for: $0) }.filter { listed.insert($0).inserted }
         let condemnedSet = Set(condemnedRefs)
         let unread = Set(condemned.filter { !$0.flags.contains(.seen) }.map { rowRef(for: $0) })
+        let flagged = Set(condemned.filter { $0.flags.contains(.flagged) }.map { rowRef(for: $0) })
 
         envelopes.removeAll { condemnedSet.contains(rowRef(for: $0)) }
         adjustTotalMessages(by: -condemned.count)
@@ -61,7 +62,7 @@ extension MessageListViewModel {
         mailStore.shields.beginRemoval(condemnedRefs)
         defer { mailStore.shields.endRemoval(condemnedRefs) }
         let outcome = await mailStore.mutations.remove(
-            condemnedRefs, .purge, unread: unread, by: .list(self, through: client)
+            condemnedRefs, .purge, unread: unread, flagged: flagged, by: .list(self, through: client)
         ).value
         if !outcome.confirmed.isEmpty { removalsConfirmed() }
         if !outcome.failed.isEmpty {

@@ -51,8 +51,8 @@ extension MessageDetailViewModel {
 
     /// Flip one custom-flag slot (rules-composition plan, Phase 4). Same
     /// optimistic shape as `toggleFlagged`; the change carries the keyword
-    /// `Flag`, which the list's `applyFlagChange` handles like any other
-    /// (pills untouched via its `default` arm).
+    /// `Flag`, which the list's `applyFlagChange` handles like any other,
+    /// and which moves no count (the `default` arm in `CountMoves.move`).
     func toggleKeyword(_ slot: String) async {
         let wasTagged = keywordSlots.contains(slot)
         setKeyword(slot, !wasTagged)

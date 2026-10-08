@@ -48,40 +48,70 @@ extension MessageListViewModel {
 
     /// Starts the pills from the counts the last successful STATUS saved,
     /// possibly in an earlier launch, so a list opened offline doesn't read 0
-    /// over its cached rows. `unseen` and `flagged` take them directly, so
-    /// optimistic deltas move them as usual; the All count goes to
-    /// `savedMessageCount` rather than `totalMessages`. The first STATUS that
-    /// answers replaces all three (`applyStatusCounts`).
+    /// over its cached rows. The Unread and Flagged counts are seeded into the
+    /// mail store where it has none of its own yet (`MailCounts.seed`), so
+    /// the sidebar shows them too and every change moves both; the All count
+    /// goes to `savedMessageCount` rather than `totalMessages`. The first
+    /// STATUS that answers replaces all three (`applyStatusCounts`).
     func seedSavedCounts() async {
         guard !isSearchScope, let saved = await client.savedFolderStatus(path: folder.path) else { return }
-        unseen = max(0, saved.unseen ?? 0)
-        flagged = max(0, saved.flagged ?? 0)
-        hasCountedStatus = false
         savedMessageCount = saved.messages.map { max(0, $0) }
+        guard mailStore.acceptsCounts(from: client) else { return }
+        let counts = mailStore.counts
+        if counts.seed(folderPath: folder.path, from: saved) {
+            counts.savedFolderCounts.markSeeded(folder.path)
+        }
+        // While this list has the folder open, a live folder list arriving
+        // mustn't blank its seeded counts; once it has gone, they go as any
+        // other seeded badge.
+        counts.savedFolderCounts.adopt(folder.path, by: self)
     }
 
     /// The All pill's folder count: the saved one until a STATUS answers.
     var allCount: Int { savedMessageCount ?? Int(totalMessages) }
 
+    /// The Unread pill's count: the mail store's unread count for this
+    /// folder, which the sidebar shows too, so the two are one number. None
+    /// on the search surface, whose rows come from many folders. Setting it
+    /// shows a count without vouching for it (`MailCounts.show`); nothing in
+    /// the app does, since the mutation service moves the store's counts.
+    var unseen: Int {
+        get { isSearchScope ? 0 : mailStore.counts.folderUnreadCounts[folder.path] ?? 0 }
+        set {
+            guard !isSearchScope else { return }
+            mailStore.counts.show(unread: newValue, folderPath: folder.path)
+        }
+    }
+
+    /// The Flagged pill's count: the mail store's flagged count for this
+    /// folder. As `unseen`.
+    var flagged: Int {
+        get { isSearchScope ? 0 : mailStore.counts.folderFlaggedCounts[folder.path] ?? 0 }
+        set {
+            guard !isSearchScope else { return }
+            mailStore.counts.show(flagged: newValue, folderPath: folder.path)
+        }
+    }
+
     /// Capture the server-sourced counts from a STATUS reply: `totalMessages`
-    /// (the All pill and the pagination gate) plus the Unread/Flagged pill
-    /// counts. Returns the server's own message total so `refresh()` can
-    /// address the top-page fetch in the server's numbering. `unseen`/`flagged` fall back to the prior value when a
-    /// transient STATUS drops them, rather than flashing 0. Lives here so the
-    /// main view-model body stays under SwiftLint's type-body cap.
+    /// (the All pill and the pagination gate) here, and the Unread/Flagged
+    /// pill counts in the mail store, where the sidebar reads them too
+    /// (`MailSessionStore.takeStatus`). Returns the server's own message
+    /// total so `refresh()` can address the top-page fetch in the server's
+    /// numbering. Lives here so the main view-model body stays under
+    /// SwiftLint's type-body cap.
     ///
     /// `mayPredateRemoval` marks a reply that could have been taken before a
     /// removal this client already applied -- one still in flight, or one
     /// confirmed after the refresh began. Such a reply would count the
     /// departed message again, so it may lower the counts but not raise them
-    /// (new mail waits for the next STATUS), and it isn't published to the
-    /// sidebar badge.
+    /// (new mail waits for the next STATUS).
     ///
     /// `askedAt` is when the STATUS was asked for. A flag write in flight then,
     /// or since, may be missing from it: a mark-read still going out leaves
     /// the message counted unread. So the Unread and Flagged counts may move
-    /// only the way those writes move them (`MessageShields.unreadBound`),
-    /// here and in the sidebar, rather than bounce back (#1880).
+    /// only the way those writes move them (`MessageShields.unreadBound`)
+    /// rather than bounce back (#1880).
     func applyStatusCounts(
         _ status: FolderStatus,
         mayPredateRemoval: Bool = false,
@@ -89,42 +119,24 @@ extension MessageListViewModel {
     ) -> UInt32 {
         let serverMessages = UInt32(max(0, status.messages ?? 0))
         var messages = serverMessages
-        var fetchedUnseen = max(0, status.unseen ?? unseen)
-        var fetchedFlagged = max(0, status.flagged ?? flagged)
         if mayPredateRemoval {
             messages = min(messages, totalMessages)
-            fetchedUnseen = min(fetchedUnseen, unseen)
-            fetchedFlagged = min(fetchedFlagged, flagged)
         }
-        if !isSearchScope, hasCountedStatus {
-            let shields = mailStore.shields
-            fetchedUnseen = shields.unreadBound(folderPath: folder.path, askedAt: askedAt)
-                .bound(fetchedUnseen, from: unseen)
-            fetchedFlagged = shields.flaggedBound(folderPath: folder.path, askedAt: askedAt)
-                .bound(fetchedFlagged, from: flagged)
-        }
-        if status.unseen != nil { hasCountedStatus = true }
         // A changed folder size shifts every absolute index, so a bottom window
         // staged against the old total is no longer aligned -- drop it (the
         // stamp check in `performLoadWindow` is the backstop for the window
         // between a mutation and the STATUS that reflects it).
         if messages != totalMessages { invalidateBottomPrefetch() }
         totalMessages = messages
-        unseen = fetchedUnseen
-        flagged = fetchedFlagged
         savedMessageCount = nil
-        // A reply for a session that has started ending is the last
-        // account's: it reaches neither the sidebar nor the saved counts
-        // (#1848).
-        guard mailStore.acceptsCounts(from: client) else { return serverMessages }
-        if !mayPredateRemoval {
-            publishFolderCounts(status, askedAt: askedAt)
-        } else if !isSearchScope {
-            // `client.folderStatus` saved this reply as it came, but it may
-            // count a message already removed here: save what is shown.
-            mailStore.counts.savedFolderCounts.countChanged(
-                folder.path, unread: unseen, total: Int(totalMessages)
+        guard !isSearchScope else { return serverMessages }
+        if mayPredateRemoval {
+            mailStore.takeStatus(
+                status, predatingRemovalIn: folder.path, askedAt: askedAt,
+                shownTotal: Int(totalMessages), fetchedThrough: client
             )
+        } else {
+            mailStore.takeStatus(status, folderPath: folder.path, askedAt: askedAt, fetchedThrough: client)
         }
         return serverMessages
     }
@@ -136,26 +148,6 @@ extension MessageListViewModel {
     func removalMayPostdate(_ startedAt: ContinuousClock.Instant) -> Bool {
         !pendingRemovedRefs.isEmpty
             || mailStore.shields.removalConfirmed(folderPath: folder.path, after: startedAt)
-    }
-
-    /// Push the same STATUS reply at the sidebar badge. The badge and the
-    /// Unread chip are one number shown twice in one window, but only the
-    /// sidebar's own refresh used to re-run STATUS — so a message arriving
-    /// between sidebar refreshes moved the chip and left the badge behind
-    /// (#1064). Sourcing both from this reply is what keeps them equal.
-    ///
-    /// Only a reply that actually carried the counts is published: `unseen`
-    /// and `flagged` fall back to the prior value above rather than flashing
-    /// 0, and a badge must not be overwritten with a guess either. The badge
-    /// is bounded by the writes the reply may predate, as the chip is.
-    private func publishFolderCounts(_ status: FolderStatus, askedAt: ContinuousClock.Instant) {
-        guard !isSearchScope, let unread = status.unseen, let total = status.messages else {
-            return
-        }
-        let counts = mailStore.boundedFolderCounts(
-            unread: unread, total: total, folderPath: folder.path, askedAt: askedAt
-        )
-        mailStore.counts.setFolderCounts(folderPath: folder.path, unread: counts.unread, total: counts.total)
     }
 
     /// Row onAppear: the list is now rendering this absolute index. A row
@@ -248,9 +240,6 @@ extension MessageListViewModel {
         try? await client.envelopeCache.invalidate(folder: folder.path)
         envelopes.removeAll()
         totalMessages = 0
-        unseen = 0
-        flagged = 0
-        hasCountedStatus = false
         savedMessageCount = nil
         hasMore = true
         resetWindow()

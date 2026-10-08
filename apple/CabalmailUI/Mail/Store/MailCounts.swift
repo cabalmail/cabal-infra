@@ -1,11 +1,14 @@
 import Foundation
 import Observation
 import UserNotifications
+import CabalmailKit
 
 /// The signed-in account's folder counts: the per-folder unread and total
-/// badges the sidebar draws, the Inbox unread count behind the app icon
-/// badge, the folders the server reports as subscribed, and the write-through
-/// to the saved folder state an offline launch draws from.
+/// counts the sidebar badges draw, which are also a message list's Unread
+/// pill (and its flagged counts, its Flagged pill), the Inbox unread count
+/// behind the app icon badge, the folders the server reports as subscribed,
+/// and the write-through to the saved folder state an offline launch draws
+/// from.
 ///
 /// Part of `MailSessionStore` (`counts`). Subscribed folders' counts are
 /// refreshed proactively by `FolderListViewModel`; unsubscribed folders are
@@ -23,21 +26,35 @@ public final class MailCounts {
     /// can mirror what shows on the dock/home-screen badge.
     public private(set) var inboxUnreadCount: Int = 0
 
-    // Per-folder unread + total counts, keyed by folder path. Writable from
-    // the module: the sidebar's seeding and its clearing of seeded counts
-    // write them directly, deliberately skipping the app badge and the saved
-    // counts (`FolderListViewModel`).
+    // Per-folder unread + total counts, keyed by folder path. Written through
+    // the setters, `seed`, `clearSeeded` and `show`; left writable from the
+    // module for tests that set up a count directly.
     var folderUnreadCounts: [String: Int] = [:]
     var folderTotalCounts: [String: Int] = [:]
-    /// Folders whose counts above came from a STATUS, or a change with a
-    /// known result (Mark All as Read, Empty Trash), this session, and have
-    /// moved since only by deltas: what a fetched STATUS may be bounded
-    /// against (`MailSessionStore.boundedFolderCounts`). A count seeded from
-    /// saved state, or guessed by a delta on a folder with none, isn't.
-    private(set) var countedFolders: Set<String> = []
+    /// When each folder's counts above were last set by a STATUS, or a
+    /// change with a known result (Mark All as Read, Empty Trash), this
+    /// session, having moved since only by deltas: what a fetched STATUS may
+    /// be bounded against while it is fresh (`isCounted(_:askedAt:)`). A count
+    /// seeded from saved state, or guessed by a delta on a folder with none,
+    /// isn't.
+    private var countedAt: [String: ContinuousClock.Instant] = [:]
+    /// How long a count set by a STATUS stays a base to bound a later STATUS
+    /// against: past it, the folder may have changed elsewhere (another
+    /// device), which no write recorded here accounts for, so a STATUS is
+    /// taken as it comes. Two of a message list's refresh cycles.
+    static let countFreshness: Duration = .seconds(120)
     /// The same for `inboxUnreadCount`: whether a STATUS has set it this
     /// session (`MailSessionStore.polledInboxUnread`, or INBOX's counts).
     var inboxUnreadIsCounted = false
+    /// Per-folder flagged counts: what a message list's Flagged pill shows.
+    /// Set by a STATUS that asked for them (a list's), or seeded from saved
+    /// state; moved by the mutation service with every flag change and
+    /// removal. The sidebar doesn't draw them, and local changes to them
+    /// aren't saved.
+    private(set) var folderFlaggedCounts: [String: Int] = [:]
+    /// When each folder's flagged count was last set by a STATUS, or by
+    /// Empty Trash, this session: as `countedAt`, for flagged counts.
+    private var flaggedCountedAt: [String: ContinuousClock.Instant] = [:]
     /// Keeps the counts above in step with the saved folder state, for
     /// offline launches (`SavedFolderCounts`).
     let savedFolderCounts = SavedFolderCounts()
@@ -57,7 +74,7 @@ public final class MailCounts {
     /// total in hand (e.g. an optimistic delta-based recovery path).
     func setUnreadCount(folderPath: String, count: Int) {
         folderUnreadCounts[folderPath] = max(0, count)
-        countedFolders.insert(folderPath)
+        countedAt[folderPath] = .now
         savedFolderCounts.countChanged(folderPath, unread: max(0, count), total: folderTotalCounts[folderPath])
     }
 
@@ -67,11 +84,88 @@ public final class MailCounts {
     func setFolderCounts(folderPath: String, unread: Int, total: Int) {
         folderUnreadCounts[folderPath] = max(0, unread)
         folderTotalCounts[folderPath] = max(0, total)
-        countedFolders.insert(folderPath)
+        countedAt[folderPath] = .now
         savedFolderCounts.countChanged(folderPath, unread: max(0, unread), total: max(0, total))
         if Self.isInbox(folderPath) {
             setInboxUnread(unread)
             inboxUnreadIsCounted = true
+        }
+    }
+
+    /// Whether `folderPath`'s unread and total counts are a base a STATUS
+    /// asked at `askedAt` may be bounded against: set by a STATUS (or a
+    /// change with a known result) this session, recently enough
+    /// (`countFreshness`).
+    func isCounted(_ folderPath: String, askedAt: ContinuousClock.Instant) -> Bool {
+        guard let counted = countedAt[folderPath] else { return false }
+        return askedAt - counted < Self.countFreshness
+    }
+
+    /// The same for `folderPath`'s flagged count.
+    func isFlaggedCounted(_ folderPath: String, askedAt: ContinuousClock.Instant) -> Bool {
+        guard let counted = flaggedCountedAt[folderPath] else { return false }
+        return askedAt - counted < Self.countFreshness
+    }
+
+    /// Replace one folder's flagged count, from a STATUS that asked for it
+    /// or a change with a known result (Empty Trash).
+    func setFlaggedCount(folderPath: String, count: Int) {
+        folderFlaggedCounts[folderPath] = max(0, count)
+        flaggedCountedAt[folderPath] = .now
+    }
+
+    /// Bump (or reduce) one folder's flagged count, clamped at zero. A
+    /// folder with no count is left without one (the mutation service moves
+    /// only folders that have one).
+    func applyFlaggedDelta(folderPath: String, delta: Int) {
+        guard let current = folderFlaggedCounts[folderPath] else { return }
+        folderFlaggedCounts[folderPath] = max(0, current + delta)
+    }
+
+    /// Shows counts for a folder without saving them or putting them on the
+    /// app badge. `counted` vouches for them as a base to bound later STATUS
+    /// replies against, as a message list's reply that may predate a removal
+    /// it already applied does (the counts can only have gone down, and are
+    /// bounded); a test setting a list's pills directly vouches for nothing.
+    func show(unread: Int? = nil, flagged: Int? = nil, folderPath: String, counted: Bool = false) {
+        if let unread {
+            folderUnreadCounts[folderPath] = max(0, unread)
+            if counted { countedAt[folderPath] = .now }
+        }
+        if let flagged {
+            folderFlaggedCounts[folderPath] = max(0, flagged)
+            if counted { flaggedCountedAt[folderPath] = .now }
+        }
+    }
+
+    /// Starts a folder's counts from saved state (an earlier STATUS, and the
+    /// changes made here since), where the session has none of its own yet:
+    /// the unread and total counts only when the saved state has both and
+    /// there is no unread count, the flagged count only when there is none.
+    /// Nothing is marked counted, saved, or put on the app badge, which shows
+    /// what this device last set and can be newer. Returns whether the
+    /// unread and total counts were seeded.
+    @discardableResult
+    func seed(folderPath: String, from saved: FolderStatus) -> Bool {
+        if folderFlaggedCounts[folderPath] == nil, let flagged = saved.flagged {
+            folderFlaggedCounts[folderPath] = max(0, flagged)
+        }
+        guard folderUnreadCounts[folderPath] == nil, let unread = saved.unseen, let total = saved.messages else {
+            return false
+        }
+        folderUnreadCounts[folderPath] = max(0, unread)
+        folderTotalCounts[folderPath] = max(0, total)
+        return true
+    }
+
+    /// Drops the counts the folder list seeded from a saved copy
+    /// (`SavedFolderCounts.takeSeeded()`), once a live list has arrived: a
+    /// recount cut short then leaves those badges blank, as online.
+    func clearSeeded() {
+        for path in savedFolderCounts.takeSeeded() {
+            folderUnreadCounts[path] = nil
+            folderTotalCounts[path] = nil
+            if flaggedCountedAt[path] == nil { folderFlaggedCounts[path] = nil }
         }
     }
 
@@ -80,7 +174,7 @@ public final class MailCounts {
     /// drop out.
     func setUnreadCounts(_ counts: [String: Int]) {
         folderUnreadCounts = counts.mapValues { max(0, $0) }
-        countedFolders.formUnion(counts.keys)
+        for path in counts.keys { countedAt[path] = .now }
         if let inbox = counts.first(where: { Self.isInbox($0.key) })?.value {
             setInboxUnread(inbox)
             inboxUnreadIsCounted = true
@@ -152,8 +246,10 @@ public final class MailCounts {
     func reset() {
         folderUnreadCounts = [:]
         folderTotalCounts = [:]
-        countedFolders = []
+        countedAt = [:]
         inboxUnreadIsCounted = false
+        folderFlaggedCounts = [:]
+        flaggedCountedAt = [:]
         subscribedFolderPaths = nil
         savedFolderCounts.reset()
     }

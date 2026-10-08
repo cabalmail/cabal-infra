@@ -23,8 +23,8 @@ extension MessageListViewModel {
     }
 
     /// Flip one custom-flag slot (rules-composition plan, Phase 4). Rides
-    /// the same optimistic primitive; keywords never touch the pills (the
-    /// `default` arm in `applyOptimisticFlag`).
+    /// the same optimistic primitive; keywords move no count (the `default`
+    /// arm in `CountMoves.move`).
     func toggleKeyword(_ envelope: Envelope, slot: String) async {
         let flag = Flag.keyword(slot)
         let add = !envelope.flags.contains(flag)
