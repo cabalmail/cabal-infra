@@ -89,46 +89,25 @@ extension FolderListView {
         .accessibilityIdentifier("folder.section.disclose.\(key)")
     }
 
-    /// The Feeds section (RSS plan, phase 5): "All Feeds", then the RSS
-    /// folder tree with subscriptions as leaves. Shares the mail sections'
-    /// header chrome; rows come from `FeedSidebarRows`.
+    /// The Feeds section (RSS plan, phase 5): the feed list both sidebars
+    /// draw (`FeedSidebarContent`), here as buttons inside the mail list,
+    /// under the mail sections' header chrome.
     @ViewBuilder
     func feedsSection(selection: Binding<RssItemScope?>) -> some View {
         Section {
             if feedsExpandedBinding.wrappedValue, let feedModel {
-                if let error = feedModel.errorMessage {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.footnote)
-                        .foregroundStyle(ColorTokens.dangerFg)
-                }
-                if feedModel.hasLoaded, !feedModel.hasSubscriptions {
-                    Button("Subscribe to a feed…") { feedActions.subscribe() }
-                        .buttonStyle(.plain)
-                        .font(.footnote)
-                        .foregroundStyle(ColorTokens.accentForestFg)
-                        .disabled(feedManagement == nil)
-                        .accessibilityIdentifier("feeds.subscribe.empty")
-                } else {
-                    feedFilterPillRow(feedModel)
-                    allFeedsRow(selection: selection,
-                                unread: FeedSidebarRows.totalUnread(feedModel.unreadCounts),
-                                total: FeedSidebarRows.grandTotal(feedModel.totalCounts))
-                    FeedSidebarRowsView(
-                        rows: feedModel.rows(
-                            collapsed: feedsCollapsed,
-                            filter: activeFilterText,
-                            unreadOnly: feedListFilter.unreadOnly,
-                            keep: selection.wrappedValue
-                        ),
-                        selection: selection,
-                        toggleCollapse: toggleFeedCollapse,
-                        isCollapsed: { feedsCollapsed.contains($0) },
-                        contextMenu: { row in
-                            FeedSidebarContextMenu(scope: row.scope, row: row, actions: feedActions,
-                                                   management: feedManagement)
-                        }
-                    )
-                }
+                FeedSidebarContent(
+                    style: .rowButtons, model: feedModel, selection: selection,
+                    rows: feedModel.rows(
+                        collapsed: feedsCollapsed,
+                        filter: activeFilterText,
+                        unreadOnly: feedListFilter.unreadOnly,
+                        keep: selection.wrappedValue
+                    ),
+                    isCollapsed: { feedsCollapsed.contains($0) }, toggleCollapse: toggleFeedCollapse,
+                    actions: feedActions, management: feedManagement,
+                    leading: { feedFilterPillRow(feedModel) }
+                )
             }
         } header: {
             HStack(spacing: 4) {
@@ -142,29 +121,6 @@ extension FolderListView {
                     .fixedSize()
             }
         }
-    }
-
-    /// The "All Feeds" row at the top of the section: every subscription's
-    /// items in one list, with the catalog's roll-up as its badge.
-    private func allFeedsRow(selection: Binding<RssItemScope?>, unread: Int, total: Int) -> some View {
-        Button {
-            selection.wrappedValue = .all
-        } label: {
-            FeedSidebarRowLabel(
-                row: FeedSidebarRows.allFeedsRow(unread: unread, total: total),
-                isSelected: selection.wrappedValue == .all,
-                isCollapsed: { _ in true }, toggleCollapse: { _ in }
-            )
-        }
-        .buttonStyle(.plain)
-        .listRowBackground(
-            selection.wrappedValue == .all
-                ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.18)) : nil
-        )
-        .contextMenu {
-            FeedSidebarContextMenu(scope: .all, row: nil, actions: feedActions, management: feedManagement)
-        }
-        .accessibilityIdentifier("feed.row.all")
     }
 
     /// Wraps the sidebar list with the feed management sheets, dialogs, and
