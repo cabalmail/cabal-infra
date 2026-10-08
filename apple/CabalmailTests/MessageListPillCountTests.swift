@@ -6,9 +6,11 @@ import CabalmailKit
 // `unseen` / `flagged`, which only STATUS used to write — so a flag or read
 // change (row swipe, detail-view toolbar, mark-as-read on open) updated the
 // row's own indicators but left the pill counts stale until the next server
-// refetch. `applyOptimisticFlag` now adjusts the counters whenever a flag
-// actually flips, which covers every optimistic path (list toggle,
-// detail-view signal, bulk, and their error reverts) without double-counting.
+// refetch. The pills are now the mail store's counts for the folder, which
+// the mutation service moves once for every write that actually flips a flag
+// or removes an unread message (list toggle, reader, bulk, and their error
+// reverts), the same numbers the sidebar shows. The reader's writes go
+// through the service here as the reader sends them.
 @MainActor
 final class MessageListPillCountTests: XCTestCase {
 
@@ -32,24 +34,32 @@ final class MessageListPillCountTests: XCTestCase {
         MessageRef(folder: "INBOX", uid: uid)
     }
 
-    func testDetailOriginatedFlagToggleUpdatesFlaggedPill() throws {
+    /// A reader in no particular window writing through `model`'s store, as
+    /// a reader on one of its messages does.
+    private func reader(for model: MessageListViewModel) -> MailWriter {
+        .reader(ReaderStandIn(), in: nil, through: model.client)
+    }
+
+    func testDetailOriginatedFlagToggleUpdatesFlaggedPill() async throws {
         let model = try makeModel()
-        // The reader's flag toggle reaches the list via applyFlagChange.
-        model.applyFlagChange(ref(2), flag: .flagged, added: true)
+        let mutations = model.mailStore.mutations
+        // The reader's flag toggle goes through the mutation service.
+        await mutations.setFlag(.flagged, added: true, on: [ref(2)], changing: [ref(2)], by: reader(for: model)).value
         XCTAssertEqual(model.flagged, 1, "flagging from the reader bumps the Flagged pill")
-        // A duplicate signal for an already-flagged row must not double-count.
-        model.applyFlagChange(ref(2), flag: .flagged, added: true)
+        // A duplicate for an already-flagged message flips nothing, and must not double-count.
+        await mutations.setFlag(.flagged, added: true, on: [ref(2)], changing: [], by: reader(for: model)).value
         XCTAssertEqual(model.flagged, 1)
-        model.applyFlagChange(ref(2), flag: .flagged, added: false)
+        await mutations.setFlag(.flagged, added: false, on: [ref(2)], changing: [ref(2)], by: reader(for: model)).value
         XCTAssertEqual(model.flagged, 0)
     }
 
-    func testDetailOriginatedMarkAsReadUpdatesUnreadPill() throws {
+    func testDetailOriginatedMarkAsReadUpdatesUnreadPill() async throws {
         let model = try makeModel()
-        // Mark-as-read on open reaches the list via the same signal.
-        model.applyFlagChange(ref(1), flag: .seen, added: true)
+        let mutations = model.mailStore.mutations
+        // Mark-as-read on open goes the same way.
+        await mutations.setFlag(.seen, added: true, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
         XCTAssertEqual(model.unseen, 0, "reading from the reader drops the Unread pill")
-        model.applyFlagChange(ref(1), flag: .seen, added: false)
+        await mutations.setFlag(.seen, added: false, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
         XCTAssertEqual(model.unseen, 1)
     }
 
@@ -65,20 +75,24 @@ final class MessageListPillCountTests: XCTestCase {
         XCTAssertEqual(model.flagged, 0, "failed flag write reverts the Flagged pill")
     }
 
-    func testUnrelatedFlagLeavesPillsAlone() throws {
+    func testUnrelatedFlagLeavesPillsAlone() async throws {
         let model = try makeModel()
-        model.applyFlagChange(ref(1), flag: .answered, added: true)
+        model.flagged = 1
+        await model.mailStore.mutations.setFlag(
+            .answered, added: true, on: [ref(1)], changing: [ref(1)], by: reader(for: model)
+        ).value
         XCTAssertEqual(model.unseen, 1)
-        XCTAssertEqual(model.flagged, 0)
+        XCTAssertEqual(model.flagged, 1)
     }
 
-    func testKeywordToggleLeavesPillsAloneAndTagsTheRow() throws {
+    func testKeywordToggleLeavesPillsAloneAndTagsTheRow() async throws {
         // Custom-flag slots (Phase 4) ride the same optimistic path but are
         // not what the Unread/Flagged pills count.
         let model = try makeModel()
-        model.applyFlagChange(ref(1), flag: .keyword("cabal-flag-01"), added: true)
+        model.flagged = 1
+        await model.toggleKeyword(model.envelopes[0], slot: "cabal-flag-01")
         XCTAssertEqual(model.unseen, 1)
-        XCTAssertEqual(model.flagged, 0)
+        XCTAssertEqual(model.flagged, 1)
         XCTAssertTrue(model.envelopes[0].flags.contains(.keyword("cabal-flag-01")))
     }
 
@@ -107,39 +121,54 @@ final class MessageListPillCountTests: XCTestCase {
 
     // MARK: - #850: a row disposed from the reader
 
-    func testDisposedUnreadRowDropsTheUnreadPill() throws {
+    func testDisposedUnreadRowDropsTheUnreadPill() async throws {
         let model = try makeModel()
         // The reader archives an unread message: the `\Seen` marking rides
-        // along with the move server-side, and the prune signal is all the
-        // list gets before the row is gone.
-        model.pruneEnvelope(ref(1))
+        // along with the move server-side, and the removal is all the list
+        // hears before the row is gone.
+        await model.mailStore.mutations.remove(
+            [ref(1)], .move(to: "Archive", markingSeen: true), unread: [ref(1)], by: reader(for: model)
+        ).value
         XCTAssertEqual(
             model.unseen, 0,
             "a message archived from the reader left the folder unread — the pill must follow"
         )
     }
 
-    func testDisposedReadRowLeavesTheUnreadPill() throws {
+    func testDisposedReadRowLeavesTheUnreadPill() async throws {
         let model = try makeModel()
-        model.pruneEnvelope(ref(2))
+        // The reader shows message 2 read, so its removal names no unread.
+        await model.mailStore.mutations.remove(
+            [ref(2)], .move(to: "Archive", markingSeen: false), unread: [], by: reader(for: model)
+        ).value
         XCTAssertEqual(model.unseen, 1, "the read row was never in the Unread count")
+        XCTAssertEqual(model.envelopes.map(\.uid), [1], "and it left")
     }
 
-    func testFlagSignalAndPruneCountTheDisposedRowOnce() throws {
+    func testFlagSignalAndPruneCountTheDisposedRowOnce() async throws {
         let model = try makeModel()
-        // The reader posts both signals in one turn; if the flag signal wins
-        // the race the row is already `\Seen` by the time it's pruned.
-        model.applyFlagChange(ref(1), flag: .seen, added: true)
-        model.pruneEnvelope(ref(1))
+        // The reader marks the message read, then archives it: by the
+        // archive it is read, so only the mark-read moved the count.
+        let mutations = model.mailStore.mutations
+        await mutations.setFlag(.seen, added: true, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
+        await mutations.remove(
+            [ref(1)], .move(to: "Archive", markingSeen: false), unread: [], by: reader(for: model)
+        ).value
         XCTAssertEqual(model.unseen, 0, "the departed message must be subtracted exactly once")
     }
 
     func testPruneOfAnUnloadedUIDLeavesTheUnreadPill() throws {
         let model = try makeModel()
-        model.pruneEnvelope(ref(99))
+        // A removal posted with no write behind it (a compose session's send
+        // from Drafts) moves no count; only a write the service makes does.
+        model.mailStore.events.post(.removed([ref(99)]), from: nil)
         XCTAssertEqual(
             model.unseen, 1,
             "a signal for a UID we never had loaded says nothing about the unread count"
         )
     }
 }
+
+/// Stands in for the reader making a write: the events' sender, which isn't
+/// sent them.
+private final class ReaderStandIn {}

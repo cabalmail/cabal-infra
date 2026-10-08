@@ -183,18 +183,9 @@ final class MessageListViewModel {
         // A folder whose count moved may hold rows below the window again.
         didSet { if totalMessages != oldValue { hasMore = true } }
     }
-    // Server-sourced folder counts from the last STATUS (+ SEARCH FLAGGED),
-    // independent of how many envelopes are paged in. Drive the Unread/Flagged
-    // filter-pill counts, mirroring the React pills; `totalMessages` is the All
-    // count. Reset alongside `totalMessages` on folder/search change.
-    var unseen: Int = 0
-    var flagged: Int = 0
-    /// Whether `unseen` and `flagged` come from a STATUS this list applied
-    /// (moved since only by its own and others' optimistic changes), rather
-    /// than a guess: zero before any, or the counts saved in an earlier
-    /// launch. A STATUS is bounded by the writes it may predate only against
-    /// a counted base (`applyStatusCounts`).
-    var hasCountedStatus = false
+    // The Unread and Flagged pill counts (`unseen`, `flagged`) are the mail
+    // store's counts for this folder, the same numbers the sidebar shows; see
+    // `+Refresh`. `totalMessages` is the All count.
     /// The All pill's count until a STATUS answers this session: the folder
     /// total last saved (`seedSavedCounts`). Kept apart from `totalMessages`,
     /// which also sizes the list, where a total nothing can load offline
@@ -681,17 +672,6 @@ extension MessageListViewModel {
         // message we never had loaded says nothing reliable about the folder
         // total.
         adjustTotalMessages(by: envelopes.count - loadedBefore)
-        // Same for the Unread pill, which otherwise only moves on a flag flip
-        // against a loaded row: the reader's dispose folds the `\Seen` marking
-        // into the move server-side, and its flag change reaches the list
-        // right beside this prune -- once the row is gone
-        // `applyOptimisticFlag` no-ops, so the count keeps counting a message
-        // that left the folder. Adjusting on the row that actually departed
-        // holds whichever order the two events arrive in: if the flag change
-        // comes first the row is already `\Seen` here and this is a no-op.
-        if let removed, !removed.flags.contains(.seen) {
-            unseen = max(0, unseen - 1)
-        }
         // The folder lost a row (a removal made elsewhere), so a staged
         // bottom window may no longer line up -- drop it.
         invalidateBottomPrefetch()

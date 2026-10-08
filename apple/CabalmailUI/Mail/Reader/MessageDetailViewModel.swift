@@ -287,7 +287,9 @@ final class MessageDetailViewModel {
         _ removal: MailMutationService.Removal,
         unread: Bool
     ) async -> MailMutationService.RemovalOutcome {
-        await mutations.remove([ref], removal, unread: unread ? [ref] : [], by: writer).value
+        await mutations.remove(
+            [ref], removal, unread: unread ? [ref] : [], flagged: isFlagged ? [ref] : [], by: writer
+        ).value
     }
 
     /// Shows a removal the server refused: its error on the reader, and the

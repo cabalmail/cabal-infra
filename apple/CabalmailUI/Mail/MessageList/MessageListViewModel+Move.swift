@@ -36,7 +36,8 @@ extension MessageListViewModel {
         defer { mailStore.shields.endRemoval([ref]) }
         let outcome = await mailStore.mutations.remove(
             [ref], .move(to: destination, markingSeen: false),
-            unread: wasUnread ? [ref] : [], by: .list(self, through: client)
+            unread: wasUnread ? [ref] : [], flagged: envelope.flags.contains(.flagged) ? [ref] : [],
+            by: .list(self, through: client)
         ).value
         if outcome.confirmed.contains(ref) { removalsConfirmed() }
         guard outcome.failed.contains(ref) else { return }
@@ -114,6 +115,7 @@ extension MessageListViewModel {
         let movingRefs = Set(moving)
         let snapshot = envelopes.filter { movingRefs.contains(rowRef(for: $0)) }
         let unread = Set(snapshot.filter { !$0.flags.contains(.seen) }.map { rowRef(for: $0) })
+        let flagged = Set(snapshot.filter { $0.flags.contains(.flagged) }.map { rowRef(for: $0) })
 
         let loadedBefore = envelopes.count
         envelopes.removeAll { movingRefs.contains(rowRef(for: $0)) }
@@ -123,7 +125,7 @@ extension MessageListViewModel {
         defer { mailStore.shields.endRemoval(moving) }
         let outcome = await mailStore.mutations.remove(
             moving, .move(to: destination, markingSeen: markSeenFirst),
-            unread: unread, by: .list(self, through: client)
+            unread: unread, flagged: flagged, by: .list(self, through: client)
         ).value
         if !outcome.confirmed.isEmpty { removalsConfirmed() }
         guard !outcome.failed.isEmpty else { return }
