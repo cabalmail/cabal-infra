@@ -91,21 +91,31 @@ final class SceneNavigator {
 
     private let coordinator: @MainActor () -> NavStateCoordinator?
     private let hasClient: @MainActor () -> Bool
+    private let feedsLaunchTarget: @MainActor (NavStateCoordinator) async -> RssItemScope?
 
     /// - Parameters:
     ///   - coordinator: the session's `NavStateCoordinator`, read live
     ///     (sign-in and sign-out replace it).
     ///   - hasClient: whether a client is wired; the landing waits for one
     ///     because the message list cannot build its model without it.
+    ///   - seed: the section a new window opens on — where the app last
+    ///     was. Read from the stored session rather than the coordinator, so
+    ///     building a navigator observes nothing (the host's initializer
+    ///     runs inside its parent's body).
+    ///   - feedsLaunchTarget: the feed scope a wide landing reopens; the
+    ///     coordinator's local-store lookup, replaceable in tests.
     init(
         coordinator: @escaping @MainActor () -> NavStateCoordinator?,
-        hasClient: @escaping @MainActor () -> Bool
+        hasClient: @escaping @MainActor () -> Bool,
+        seed: ResumeSession.Section? = ResumeSessionStore.storedSection(),
+        feedsLaunchTarget: @escaping @MainActor (NavStateCoordinator) async -> RssItemScope? = {
+            await $0.consumeFeedsLaunchTarget()
+        }
     ) {
         self.coordinator = coordinator
         self.hasClient = hasClient
-        // The coordinator's section when one exists, else the stored
-        // session's: a new window opens where the app last was.
-        let section = coordinator()?.launchSection ?? ResumeSessionStore.storedSection() ?? .mail
+        self.feedsLaunchTarget = feedsLaunchTarget
+        let section = seed ?? .mail
         route = AppRoute(section: section)
         compactTab = CompactTab.initial(for: section)
     }
@@ -175,7 +185,7 @@ final class SceneNavigator {
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
         guard let coordinator = coordinator() else { return nil }
         if isWide, route.section == .feeds {
-            if let scope = await coordinator.consumeFeedsLaunchTarget() { return scope }
+            if let scope = await feedsLaunchTarget(coordinator) { return scope }
             // No scope to open, so the split shows mail: the section moves,
             // as the landing's folder record used to move it.
             moveSection(to: .mail)
@@ -213,7 +223,7 @@ final class SceneNavigator {
         guard !didLand, selectedFolder == nil, !showingFeeds, hasClient() else { return nil }
         didLand = true
         if isWide, coordinator.launchSection == .feeds,
-           let scope = await coordinator.consumeFeedsLaunchTarget() {
+           let scope = await feedsLaunchTarget(coordinator) {
             return scope
         }
         landOnSessionFolder(coordinator)
@@ -232,6 +242,7 @@ final class SceneNavigator {
             coordinator.scheduleRestore(for: restore)
         }
         setFolder(Folder(path: target.folderPath, isSubscribed: true))
+        if let restore = target.messageRestore { nameMessage(of: restore) }
     }
 
     /// The folder list's first load. Finishes a provisional landing, or a
@@ -286,6 +297,7 @@ final class SceneNavigator {
                 coordinator.scheduleRestore(for: restore)
             }
             setFolder(folders.first(where: { $0.path == target.folderPath }) ?? inbox)
+            if let restore = target.messageRestore { nameMessage(of: restore) }
         } else {
             setFolder(inbox)
         }
@@ -314,6 +326,7 @@ final class SceneNavigator {
         if selectedFolder?.path != cursor.folder {
             setFolder(resolvedFolder(path: cursor.folder))
         }
+        nameMessage(of: cursor)
         didLand = true
         // The compact tab bar opens on Mail, noting the section as a tab
         // switch does; the wide layout's folder record moves the session.
@@ -427,13 +440,24 @@ final class SceneNavigator {
         coordinator()?.recordMessage(ref)
     }
 
+    /// Names `cursor`'s message in the route once its restore is parked, so
+    /// a swap before the list applies it re-parks that message rather than
+    /// the one open before. A cursor naming no message leaves the route's.
+    private func nameMessage(of cursor: NavState) {
+        guard let uid = cursor.uid, cursor.folder == route.mail.folderPath else { return }
+        route.mail.message = MessageRef(
+            folder: cursor.folder, uid: uid, uidValidity: cursor.uidValidity, messageId: cursor.messageID
+        )
+    }
+
     /// A landing moved the window to `section`. The wide layout has no tab
-    /// bar; its tab is the one a swap to the compact layout opens on, so it
-    /// follows a change of section.
+    /// bar; its tab is the one a swap to the compact layout opens on, so a
+    /// Mail or Feeds tab follows a change of section. A utility tab stays:
+    /// only a pick in the split moves it (`followSplit`).
     private func moveSection(to section: ResumeSession.Section) {
         guard route.section != section else { return }
         route.section = section
-        if layoutIsWide { compactTab = CompactTab.initial(for: section) }
+        if layoutIsWide, compactTab.resumeSection != nil { compactTab = CompactTab.initial(for: section) }
     }
 
     /// The user acted in the wide split — a folder or feed pick, a different

@@ -30,7 +30,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
     }
 
     private func makeNavigator(_ coordinator: NavStateCoordinator, hasClient: Bool = true) -> SceneNavigator {
-        SceneNavigator(coordinator: { coordinator }, hasClient: { hasClient })
+        SceneNavigator(coordinator: { coordinator }, hasClient: { hasClient }, seed: store.loadSession()?.section)
     }
 
     private let inbox = Folder(path: "INBOX", attributes: ["\\HasNoChildren"], isSubscribed: true)
@@ -74,6 +74,12 @@ final class SceneNavigatorLandingTests: XCTestCase {
 
         navigator.foldersLoaded([inbox, archive])
         XCTAssertEqual(navigator.selectedFolder, archive)
+        XCTAssertTrue(navigator.didLand, "the folder list's landing is the window's landing")
+
+        // So backing out and a later load don't land the user again.
+        navigator.selectFolder(nil)
+        navigator.foldersLoaded([inbox, archive])
+        XCTAssertNil(navigator.selectedFolder)
     }
 
     /// A navigate request parked before the window existed (a cold launch
@@ -149,7 +155,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
 
     /// #1912: the user backed out to the folder list before it loaded. The
     /// launch finishes without landing them in INBOX — then or on a later
-    /// tree's load.
+    /// load of the folder list.
     func testBackingOutBeforeFoldersLoadFinishesTheLaunchWithoutLanding() async throws {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
@@ -226,6 +232,25 @@ final class SceneNavigatorLandingTests: XCTestCase {
 
         XCTAssertEqual(navigator.selectedFolder, Folder(path: "Archive", isSubscribed: true))
         XCTAssertTrue(navigator.awaitingLaunchReconcile)
+    }
+
+    /// A rebuilt tree with no folder lands on the live session even when the
+    /// window's first landing never read the launch snapshot (a cold launch
+    /// from a tapped notification), rather than on that stale snapshot
+    /// (#1555).
+    func testARebuiltTreeAfterANavigateLandingIgnoresTheStaleSnapshot() async throws {
+        store.saveSession(ResumeSession(section: .mail, folder: "Lists", uid: 3))
+        let coordinator = try makeCoordinator()
+        coordinator.navigateRequest = NavState(folder: "Archive", uid: 7, clientID: "push")
+        let navigator = makeNavigator(coordinator)
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: false, showingFeeds: false)
+        navigator.foldersLoaded([inbox, archive])
+        navigator.selectFolder(nil)
+
+        _ = await navigator.mailTreeAppeared(UUID(), isWide: true, showingFeeds: false)
+
+        XCTAssertEqual(navigator.selectedFolder?.path, "Archive", "the live session, not the launch snapshot's Lists")
+        XCTAssertNotEqual(coordinator.pendingRestore?.folderPath, "Lists", "no restore of the snapshot's message")
     }
 
     /// #1664: a compact stack is never handed a list and a reader in one

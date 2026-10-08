@@ -30,7 +30,7 @@ final class SceneNavigatorTests: XCTestCase {
     }
 
     private func makeNavigator(_ coordinator: NavStateCoordinator) -> SceneNavigator {
-        SceneNavigator(coordinator: { coordinator }, hasClient: { true })
+        SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: store.loadSession()?.section)
     }
 
     private let inbox = Folder(path: "INBOX", isSubscribed: true)
@@ -136,9 +136,24 @@ final class SceneNavigatorTests: XCTestCase {
         navigator.navigate(to: NavState(folder: "Archive", clientID: "other-install"))
 
         XCTAssertEqual(navigator.compactTab, .mail)
-        XCTAssertEqual(navigator.route.section, .mail)
         XCTAssertEqual(navigator.selectedFolder, archive, "the fetched folder, not a stand-in")
         XCTAssertEqual(coordinator.session.folder, "Archive")
+    }
+
+    /// On the compact layout, a navigation from the Feeds tab to the folder
+    /// the Mail tab already shows notes the section as the tab switch does —
+    /// no folder record would move it.
+    func testACompactNavigationNotesTheMailSection() async throws {
+        let coordinator = try makeCoordinator()
+        let (navigator, _) = await landed(coordinator)
+        navigator.showTab(.feeds)
+        XCTAssertEqual(coordinator.session.section, .feeds)
+
+        navigator.navigate(to: NavState(folder: "INBOX", uid: 4, clientID: "push"))
+
+        XCTAssertEqual(navigator.compactTab, .mail)
+        XCTAssertEqual(navigator.route.section, .mail)
+        XCTAssertEqual(coordinator.session.section, .mail)
     }
 
     /// A jump within the folder already open keeps the mounted list, which
@@ -247,9 +262,11 @@ final class SceneNavigatorTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let (navigator, tree) = await landed(coordinator)
 
-        navigator.selectMessage(message.inFolder("Archive"), isSearching: true, from: tree)
+        // A result in the sidebar's own folder, so only the search rule
+        // keeps it out (another folder's row is the next test's rule).
+        navigator.selectMessage(message.inFolder("INBOX"), isSearching: true, from: tree)
 
-        XCTAssertEqual(navigator.envelope(in: tree), message.inFolder("Archive"))
+        XCTAssertEqual(navigator.envelope(in: tree), message.inFolder("INBOX"))
         XCTAssertNil(navigator.route.mail.message)
         XCTAssertNil(coordinator.session.uid)
     }
