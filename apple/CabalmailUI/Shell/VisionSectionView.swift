@@ -39,7 +39,7 @@ struct VisionSectionView: View {
     @State private var didLand = false
     /// The folders fetched by the launch landing, so a navigate request can
     /// select the real `Folder` value the Folders tab tags its rows with
-    /// (#1535; see `MailRootView.loadedFolders`).
+    /// (#1535; see `SceneNavigator.loadedFolders`).
     @State private var loadedFolders: [Folder] = []
 
     enum Section: Hashable { case mail, folders, feeds, addresses, settings, search }

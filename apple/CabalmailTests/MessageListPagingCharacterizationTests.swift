@@ -189,39 +189,42 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<600))
     }
 
-    /// Pins current behaviour, which looks like a defect: a fresh jump window
-    /// is one 200-row page (55ec160a), shorter than the 250-row runway, and
-    /// `ensureLoaded` tries the bottom edge first, so every index in or just
-    /// above the window counts as near the bottom. Scrolling up from it, the
-    /// first row above the window loads the page *below* and stays a
-    /// placeholder; only the next appearance loads the rows above. The settle
-    /// backstop would ask for that page below anyway, so the cost is order:
-    /// the rows above wait one extra round trip.
-    /// Tracked in #1823.
-    func testARowJustAboveAFreshJumpWindowLoadsThePageBelowFirst() async throws {
+    /// A fresh jump window is one 200-row page (55ec160a), shorter than the
+    /// 250-row runway, so every index in or just above it is in reach of
+    /// both edges. The nearer edge loads first (#1823): scrolling up from
+    /// the window, the first row above it loads the page above, at once.
+    /// This test pinned the page below loading first until then.
+    func testARowJustAboveAFreshJumpWindowLoadsThePageAboveFirst() async throws {
         let model = try await world.openedList()
         model.ensureLoaded(around: 400)
         await world.settle(model)
         XCTAssertEqual(model.windowStart, 300)
 
         model.ensureLoaded(around: 299)
-        XCTAssertTrue(model.isLoadingMore)
-        XCTAssertFalse(model.isLoadingPrevious)
-        await world.settle(model)
-        XCTAssertNil(model.envelope(at: 299), "the row scrolled to is still a placeholder")
-
-        model.ensureLoaded(around: 299)
         XCTAssertTrue(model.isLoadingPrevious)
+        XCTAssertFalse(model.isLoadingMore)
         await world.settle(model)
 
         let pages = await world.pages()
-        XCTAssertEqual(pages, [
-            Page(offset: 300, limit: 200),
-            Page(offset: 500, limit: 200),
-            Page(offset: 100, limit: 200),
-        ])
+        XCTAssertEqual(pages, [Page(offset: 300, limit: 200), Page(offset: 100, limit: 200)])
         XCTAssertEqual(model.windowStart, 100)
-        XCTAssertEqual(model.envelope(at: 299)?.uid, 701)
+        XCTAssertEqual(model.envelope(at: 299)?.uid, 701, "the row scrolled to is loaded")
+    }
+
+    /// Inside a fresh jump window [300, 500), each half loads toward its own
+    /// edge: a row in the upper half the page above, one in the lower half
+    /// the page below.
+    func testInsideAFreshJumpWindowEachHalfLoadsTowardItsOwnEdge() async throws {
+        for (index, upward) in [(320, true), (399, true), (400, false), (480, false)] {
+            let model = try await world.openedList()
+            model.ensureLoaded(around: 400)
+            await world.settle(model)
+
+            model.ensureLoaded(around: index)
+            XCTAssertEqual(model.isLoadingPrevious, upward, "row \(index)")
+            XCTAssertEqual(model.isLoadingMore, !upward, "row \(index)")
+            await world.settle(model)
+        }
     }
 
     // MARK: - Far jump
