@@ -58,7 +58,7 @@ final class MessageListSearchStandDownTests: XCTestCase {
         XCTAssertTrue(model.isSearchActive, file: file, line: line)
         XCTAssertEqual(model.envelopes.map(\.uid), Self.matches, "no folder row among the matches",
                        file: file, line: line)
-        await model.persistTask?.value
+        await model.window.persistTask?.value
         let after = await world.snapshotUIDs(model)
         XCTAssertEqual(after, snapshotBefore, "the snapshot took neither the page nor the matches",
                        file: file, line: line)
@@ -72,12 +72,12 @@ final class MessageListSearchStandDownTests: XCTestCase {
         await scriptPill()
         await world.imap.answerEnvelopesAfterCancellation()
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 0)
-        XCTAssertTrue(model.isLoadingMore)
+        model.window.ensureLoaded(around: 0)
+        XCTAssertTrue(model.window.isLoadingMore)
         await world.imap.awaitHeld(.envelopes)
 
         await model.selectFilter(.unread)
-        XCTAssertEqual(model.loadMoreTask?.isCancelled, true, "the search stood the page down")
+        XCTAssertEqual(model.window.loadMoreTask?.isCancelled, true, "the search stood the page down")
         await world.imap.releaseHeld(.envelopes)
         await world.settle(model)
 
@@ -86,19 +86,19 @@ final class MessageListSearchStandDownTests: XCTestCase {
 
     func testAPageAboveStillOutWhenAPillStartsLandsNowhere() async throws {
         let model = try await world.openedList(preloaded: 600)
-        model.ensureLoaded(around: 599)
+        model.window.ensureLoaded(around: 599)
         await world.settle(model)
-        XCTAssertEqual(model.windowStart, 200)
+        XCTAssertEqual(model.window.windowStart, 200)
         let before = await world.snapshotUIDs(model)
         await scriptPill()
         await world.imap.answerEnvelopesAfterCancellation()
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 200)
-        XCTAssertTrue(model.isLoadingPrevious)
+        model.window.ensureLoaded(around: 200)
+        XCTAssertTrue(model.window.isLoadingPrevious)
         await world.imap.awaitHeld(.envelopes)
 
         await model.selectFilter(.unread)
-        XCTAssertEqual(model.loadPrevTask?.isCancelled, true, "the search stood the page down")
+        XCTAssertEqual(model.window.loadPrevTask?.isCancelled, true, "the search stood the page down")
         await world.imap.releaseHeld(.envelopes)
         await world.settle(model)
 
@@ -111,12 +111,12 @@ final class MessageListSearchStandDownTests: XCTestCase {
         await scriptPill()
         await world.imap.answerEnvelopesAfterCancellation()
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 900)
-        XCTAssertTrue(model.isLoadingWindow)
+        model.window.ensureLoaded(around: 900)
+        XCTAssertTrue(model.window.isLoadingWindow)
         await world.imap.awaitHeld(.envelopes)
 
         await model.selectFilter(.unread)
-        XCTAssertEqual(model.loadWindowTask?.isCancelled, true, "the search stood the jump down")
+        XCTAssertEqual(model.window.loadWindowTask?.isCancelled, true, "the search stood the jump down")
         await world.imap.releaseHeld(.envelopes)
         await world.settle(model)
 
@@ -198,15 +198,15 @@ final class MessageListSearchStandDownTests: XCTestCase {
         await scriptPill()
         await world.imap.answerEnvelopesAfterCancellation()
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 0)
+        model.window.ensureLoaded(around: 0)
         await world.imap.awaitHeld(.envelopes)
         await world.imap.holdNextSearch()
         let pill = Task { await model.selectFilter(.unread) }
         await world.imap.awaitHeldSearch()
 
-        XCTAssertEqual(model.loadMoreTask?.isCancelled, true, "stood down as the search started")
+        XCTAssertEqual(model.window.loadMoreTask?.isCancelled, true, "stood down as the search started")
         await world.imap.releaseHeld(.envelopes)
-        await model.loadMoreTask?.value
+        await model.window.loadMoreTask?.value
         XCTAssertEqual(model.envelopes.map(\.uid), ListPagingWorld.uids(0..<50), "the page was dropped")
 
         await world.imap.releaseHeldSearch()
@@ -224,10 +224,10 @@ final class MessageListSearchStandDownTests: XCTestCase {
         await world.imap.awaitHeldSearch()
 
         XCTAssertTrue(model.isLoading)
-        model.ensureLoaded(around: 0)
-        model.ensureLoaded(around: 900)
-        XCTAssertFalse(model.isLoadingMore)
-        XCTAssertFalse(model.isLoadingWindow)
+        model.window.ensureLoaded(around: 0)
+        model.window.ensureLoaded(around: 900)
+        XCTAssertFalse(model.window.isLoadingMore)
+        XCTAssertFalse(model.window.isLoadingWindow)
 
         await world.imap.releaseHeldSearch()
         await pill.value
@@ -266,9 +266,9 @@ final class MessageListSearchStandDownTests: XCTestCase {
     /// matches. It writes nothing then: the matches are not the folder's rows.
     func testASnapshotWriteDueUnderThePillWritesNoMatches() async throws {
         let model = try await world.openedList()
-        model.ensureLoaded(around: 0)
+        model.window.ensureLoaded(around: 0)
         await world.settle(model)
-        let due = try XCTUnwrap(model.persistTask, "the page scheduled a write")
+        let due = try XCTUnwrap(model.window.persistTask, "the page scheduled a write")
         await scriptPill()
 
         await model.selectFilter(.unread)
@@ -286,9 +286,9 @@ final class MessageListSearchStandDownTests: XCTestCase {
     /// nowhere. What the viewport shows loads once the list is idle again.
     func testAPillWhoseSearchFailsLoadsTheRowsItStoodDown() async throws {
         let model = try await world.openedList()
-        model.visibleRowIndices = [0: 1, 20: 1]
+        model.window.visibleRowIndices = [0: 1, 20: 1]
         await world.imap.holdNext(.topEnvelopes)
-        let sort = Task { await model.setSort(SortCriterion(field: .subject, direction: .ascending)) }
+        let sort = Task { await model.window.setSort(SortCriterion(field: .subject, direction: .ascending)) }
         await world.imap.awaitHeld(.topEnvelopes)
 
         // Nothing is scripted for the search, so it fails.
@@ -299,7 +299,7 @@ final class MessageListSearchStandDownTests: XCTestCase {
         await sort.value
         XCTAssertTrue(model.envelopes.isEmpty, "the rebuild's top page landed nowhere")
 
-        try await waitUntilOnMainActor { model.envelope(at: 20) != nil }
+        try await waitUntilOnMainActor { model.window.envelope(at: 20) != nil }
         await world.settle(model)
     }
 }

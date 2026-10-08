@@ -52,9 +52,9 @@ final class OfflineListResetTests: XCTestCase {
         let (model, _) = try await offlineInbox()
         let first = model.envelopes.first?.uid
 
-        await model.setSort(subjectOrder)
+        await model.window.setSort(subjectOrder)
 
-        XCTAssertEqual(model.sortCriterion, .default)
+        XCTAssertEqual(model.window.sortCriterion, .default)
         XCTAssertEqual(model.envelopes.count, 22)
         XCTAssertEqual(model.envelopes.first?.uid, first)
         XCTAssertNotNil(model.errorMessage)
@@ -67,10 +67,10 @@ final class OfflineListResetTests: XCTestCase {
         let (model, _) = try await offlineInbox()
         model.isSearchActive = true
 
-        await model.setSort(subjectOrder)
+        await model.window.setSort(subjectOrder)
 
         XCTAssertEqual(model.envelopes.count, 22)
-        XCTAssertEqual(model.sortCriterion, .default)
+        XCTAssertEqual(model.window.sortCriterion, .default)
     }
 
     /// Leaving a search (or the Unread / Flagged pill) offline falls back to
@@ -91,7 +91,7 @@ final class OfflineListResetTests: XCTestCase {
     /// the counts come back.
     func testLeavingASearchOfflineUnderAnotherOrderRestoresOnlyTheCounts() async throws {
         let (model, _) = try await offlineInbox()
-        model.sortCriterion = subjectOrder
+        model.window.sortCriterion = subjectOrder
 
         await model.clearSearch()
 
@@ -125,9 +125,9 @@ final class OfflineListResetTests: XCTestCase {
     func testOnlineSortChangeStillStartsOver() async throws {
         let model = try await onlineInbox()
 
-        await model.setSort(subjectOrder)
+        await model.window.setSort(subjectOrder)
 
-        XCTAssertEqual(model.sortCriterion, subjectOrder)
+        XCTAssertEqual(model.window.sortCriterion, subjectOrder)
         XCTAssertEqual(Set(model.envelopes.map(\.uid)), [1, 2, 3])
     }
 
@@ -139,16 +139,16 @@ final class OfflineListResetTests: XCTestCase {
         let model = try await onlineInbox(imap: imap)
         await imap.holdNext(.status)
 
-        let first = Task { await model.setSort(SortCriterion(field: .subject, direction: .descending)) }
+        let first = Task { await model.window.setSort(SortCriterion(field: .subject, direction: .descending)) }
         await imap.awaitHeld(.status)
-        XCTAssertEqual(model.sortCriterion.field, .subject, "shown while the server is asked")
+        XCTAssertEqual(model.window.sortCriterion.field, .subject, "shown while the server is asked")
         XCTAssertTrue(model.isLoading)
 
-        await model.setSort(subjectOrder)
+        await model.window.setSort(subjectOrder)
         await imap.releaseHeld(.status)
         await first.value
 
-        XCTAssertEqual(model.sortCriterion, subjectOrder)
+        XCTAssertEqual(model.window.sortCriterion, subjectOrder)
         XCTAssertEqual(Set(model.envelopes.map(\.uid)), [1, 2, 3])
         XCTAssertFalse(model.isLoading)
     }

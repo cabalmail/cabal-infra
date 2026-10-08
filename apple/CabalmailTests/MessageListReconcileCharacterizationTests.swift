@@ -39,7 +39,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         await model.refresh()
 
         XCTAssertEqual(model.envelopes.map(\.uid), [5, 4, 3, 2, 1])
-        XCTAssertEqual(model.totalMessages, 5)
+        XCTAssertEqual(model.window.totalMessages, 5)
         XCTAssertEqual(model.allCount, 5)
         XCTAssertEqual(model.unseen, 2)
         XCTAssertEqual(model.flagged, 1)
@@ -93,7 +93,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         await model.refresh()
 
         XCTAssertEqual(model.envelopes.map(\.uid), page)
-        XCTAssertEqual(model.totalMessages, 99)
+        XCTAssertEqual(model.window.totalMessages, 99)
         let cached = await fixture.snapshotUIDs(model)
         XCTAssertEqual(cached, Set(page))
         let removedBody = await fixture.cachedBody(model, uid: 70)
@@ -112,7 +112,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelopes.map(\.uid), [3, 2, 1])
         let cached = await fixture.snapshotUIDs(model)
         XCTAssertEqual(cached, [3, 2, 1])
-        XCTAssertEqual(model.totalMessages, 3)
+        XCTAssertEqual(model.window.totalMessages, 3)
         XCTAssertNil(model.errorMessage)
     }
 
@@ -132,20 +132,20 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         let remaining = fixture.newestFirst(100, through: 1).filter { $0 != 70 }
         let model = try await fixture.makeModel(loaded: loaded, total: 100)
         // The STATUS these rows were paged in against, as paging leaves it.
-        model.alignment.anchor = WindowAnchor(total: 100, uidNext: 101)
+        model.window.alignment.anchor = WindowAnchor(total: 100, uidNext: 101)
         try await fixture.seedSnapshot(model, uids: loaded)
         await fixture.scriptRefresh(messages: 99, page: Array(remaining.prefix(50)))
         await fixture.imap.scriptFolderContents(fixture.rows(remaining))
 
         await model.refresh()
 
-        XCTAssertEqual(model.totalMessages, 99)
+        XCTAssertEqual(model.window.totalMessages, 99)
         XCTAssertEqual(model.envelopes.count, 60)
         XCTAssertFalse(model.envelopes.contains { $0.uid == 70 }, "UID 70 left the folder and the list")
         let cached = await fixture.snapshotUIDs(model)
         XCTAssertEqual(cached?.contains(70), false, "and the snapshot")
 
-        model.ensureLoaded(around: 59)
+        model.window.ensureLoaded(around: 59)
         await fixture.awaitLoadMore(model)
         // Cancels the debounced snapshot write the page scheduled.
         await model.stopWatching()
@@ -171,7 +171,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         await model.loadInitial()
 
         XCTAssertEqual(model.envelopes.map(\.uid), kept)
-        XCTAssertEqual(model.totalMessages, 23)
+        XCTAssertEqual(model.window.totalMessages, 23)
         let cached = await fixture.snapshotUIDs(model)
         XCTAssertEqual(cached, Set(kept), "the 37 stale rows leave the snapshot too")
     }
@@ -201,10 +201,10 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         await model.refresh()
 
         XCTAssertEqual(model.envelopes.map(\.uid), [300, 299, 298])
-        XCTAssertEqual(model.envelope(at: 200)?.uid, 300, "the rows stay where the list draws them")
-        XCTAssertNil(model.envelope(at: 0), "and the top of the folder stays unloaded")
+        XCTAssertEqual(model.window.envelope(at: 200)?.uid, 300, "the rows stay where the list draws them")
+        XCTAssertNil(model.window.envelope(at: 0), "and the top of the folder stays unloaded")
         XCTAssertEqual(fixture.windowStart(model), 200)
-        XCTAssertEqual(model.totalMessages, 510)
+        XCTAssertEqual(model.window.totalMessages, 510)
         XCTAssertEqual(model.unseen, 4)
         XCTAssertEqual(model.flagged, 2)
         XCTAssertNil(model.errorMessage)
@@ -281,7 +281,7 @@ final class MessageListReconcileCharacterizationTests: XCTestCase {
         await model.refresh()
 
         XCTAssertEqual(model.envelopes.map(\.uid), [21, 20])
-        XCTAssertEqual(model.envelope(at: 0)?.uid, 21, "the rebuilt window starts at the top again")
+        XCTAssertEqual(model.window.envelope(at: 0)?.uid, 21, "the rebuilt window starts at the top again")
         XCTAssertEqual(fixture.windowStart(model), 0)
         let wipedBody = await fixture.cachedBody(model, uid: 3, uidValidity: 9)
         XCTAssertNil(wipedBody)

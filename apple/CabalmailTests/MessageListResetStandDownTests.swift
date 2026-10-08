@@ -33,11 +33,11 @@ final class MessageListResetStandDownTests: XCTestCase {
         let model = try await world.openedList()
         await world.imap.answerEnvelopesAfterCancellation()
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 0)
+        model.window.ensureLoaded(around: 0)
         await world.imap.awaitHeld(.envelopes)
 
-        await model.setSort(SortCriterion(field: .subject, direction: .ascending))
-        XCTAssertEqual(model.loadMoreTask?.isCancelled, true, "the reset stood the page down")
+        await model.window.setSort(SortCriterion(field: .subject, direction: .ascending))
+        XCTAssertEqual(model.window.loadMoreTask?.isCancelled, true, "the reset stood the page down")
         await world.imap.releaseHeld(.envelopes)
         await world.settle(model)
 
@@ -52,19 +52,19 @@ final class MessageListResetStandDownTests: XCTestCase {
         let model = try await world.openedList()
         await world.imap.answerEnvelopesAfterCancellation()
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 0)
+        model.window.ensureLoaded(around: 0)
         await world.imap.awaitHeld(.envelopes)
 
         await world.imap.scriptStatusResults([.success(FolderStatus(
             messages: 1000, unseen: 0, flagged: 0, uidValidity: 8, uidNext: 1001
         ))])
         await model.refresh()
-        XCTAssertEqual(model.loadMoreTask?.isCancelled, true, "the reset stood the page down")
+        XCTAssertEqual(model.window.loadMoreTask?.isCancelled, true, "the reset stood the page down")
         await world.imap.releaseHeld(.envelopes)
         await world.settle(model)
 
         XCTAssertEqual(model.envelopes.count, 50, "the new mailbox's top page alone")
-        XCTAssertEqual(model.uidValidity, 8)
+        XCTAssertEqual(model.window.uidValidity, 8)
     }
 
     // MARK: - A refresh waiting on a page

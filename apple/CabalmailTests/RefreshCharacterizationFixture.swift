@@ -43,7 +43,7 @@ final class RefreshCharacterizationFixture {
         let model = try TestFixtures.makeModel(
             imap: imap, envelopes: rows(loaded, flags: flags), folderPath: folderPath, mailStore: mailStore
         )
-        model.totalMessages = total
+        model.window.totalMessages = total
         await track(model.client)
         return model
     }
@@ -191,27 +191,27 @@ final class RefreshCharacterizationFixture {
 
     /// Puts the window where `performLoadMore`'s front trim leaves it.
     func trimFront(_ model: MessageListViewModel, to start: UInt32) {
-        model.windowStart = start
-        model.hasTrimmedFront = true
+        model.window.windowStart = start
+        model.window.hasTrimmedFront = true
     }
 
     func windowStart(_ model: MessageListViewModel) -> UInt32 {
-        model.windowStart
+        model.window.windowStart
     }
 
     func stagedBottomStart(_ model: MessageListViewModel) -> UInt32? {
-        model.bottomPrefetch?.start
+        model.window.bottomPrefetch?.start
     }
 
     func awaitBottomPrefetch(_ model: MessageListViewModel) async {
-        await model.bottomPrefetchTask?.value
+        await model.window.bottomPrefetchTask?.value
     }
 
     func awaitLoadMore(_ model: MessageListViewModel) async {
-        await model.loadMoreTask?.value
+        await model.window.loadMoreTask?.value
     }
 
     func awaitLoadWindow(_ model: MessageListViewModel) async {
-        await model.loadWindowTask?.value
+        await model.window.loadWindowTask?.value
     }
 }
