@@ -3,10 +3,10 @@ import CabalmailKit
 
 // Permanent deletion out of Trash. Lives in a sibling extension so the
 // main view-model file stays under SwiftLint's caps. Mirrors
-// `dispose(_:)`'s optimistic-prune-then-revert shape, but the wire call
-// is `purge` (flag `\Deleted` + expunge server-side) — the message does
-// not land anywhere else, so views must confirm with the user before
-// calling this.
+// `dispose(_:)`'s optimistic-prune-then-revert shape, but the write is a
+// purge (flag `\Deleted` + expunge server-side, through the mutation
+// service) — the message does not land anywhere else, so views must
+// confirm with the user before calling this.
 extension MessageListViewModel {
     /// True when this list shows the Trash folder. Delete affordances
     /// (swipe, context menu, selection menu, action bar, Cmd+Delete)
@@ -49,38 +49,34 @@ extension MessageListViewModel {
         replaceRows(showing: refs)
         let condemned = loadedRows(refs).filter { rowRef(for: $0).folder == FolderTree.trashPath }
         guard !condemned.isEmpty else { return }
-        let condemnedRefs = Set(condemned.map { rowRef(for: $0) })
-        let unreadCount = condemned.filter { !$0.flags.contains(.seen) }.count
+        // Each message once: a row loaded twice is still one message.
+        var listed = Set<MessageRef>()
+        let condemnedRefs = condemned.map { rowRef(for: $0) }.filter { listed.insert($0).inserted }
+        let condemnedSet = Set(condemnedRefs)
+        let unread = Set(condemned.filter { !$0.flags.contains(.seen) }.map { rowRef(for: $0) })
 
-        envelopes.removeAll { condemnedRefs.contains(rowRef(for: $0)) }
+        envelopes.removeAll { condemnedSet.contains(rowRef(for: $0)) }
         adjustTotalMessages(by: -condemned.count)
+        // Held until the refused rows are back, as in `moveTo`.
         mailStore.shields.beginRemoval(condemnedRefs)
         defer { mailStore.shields.endRemoval(condemnedRefs) }
-        if unreadCount > 0 {
-            mailStore.counts.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: -unreadCount)
-        }
-
-        do {
-            try await client.imapClient.purge(
-                folder: FolderTree.trashPath,
-                uids: condemned.map(\.uid)
-            )
-            await confirmRemoval(from: FolderTree.trashPath, uids: condemned.map(\.uid))
-        } catch {
+        let outcome = await mailStore.mutations.remove(
+            condemnedRefs, .purge, unread: unread, by: .list(self, through: client)
+        ).value
+        if !outcome.confirmed.isEmpty { removalsConfirmed() }
+        if !outcome.failed.isEmpty {
             // A search re-run while the purge was out may already have put
             // the rows back; each message is listed once.
-            let restored = condemned.filter { index(of: rowRef(for: $0)) == nil }
+            let restored = condemned.filter {
+                outcome.failed.contains(rowRef(for: $0)) && index(of: rowRef(for: $0)) == nil
+            }
             envelopes.append(contentsOf: restored)
             envelopes.sort(by: envelopeOrder)
             adjustTotalMessages(by: restored.count)
-            // Not once the session has ended (#1851).
-            if unreadCount > 0, mailStore.acceptsCounts(from: client) {
-                mailStore.counts.applyUnreadDelta(folderPath: FolderTree.trashPath, delta: unreadCount)
-            }
-            errorMessage = error.localizedDescription
+            errorMessage = outcome.message
         }
         // Purged rows leave any active selection; like `moveMessages`,
         // messages outside the set stay selected.
-        selectedRefs.subtract(condemnedRefs)
+        selectedRefs.subtract(condemnedSet)
     }
 }

@@ -6,12 +6,12 @@ import CabalmailKit
 // The ref-set primitives (`setSeen(_:refs:)`, `setFlagged(_:refs:)`,
 // `moveMessages(refs:to:)`, `disposeMessages(refs:action:)`) serve the
 // bulk-action bar, the selection context menu, and the keyboard
-// shortcuts; each is a thin wrapper over the existing UID-array wire
-// calls (`setFlags(uids:)`, `move(uids:)`) plus optimistic in-memory
-// updates that mirror the per-row flows. Every ref names its own folder,
-// so a cross-folder search selection is grouped by mailbox before the
-// wire call and each server-side move/store reaches exactly the messages
-// picked — two rows that share a UID are two different refs.
+// shortcuts; each makes its optimistic in-memory updates, mirroring the
+// per-row flows, and hands the write to the mail store's mutation service
+// (`MailMutationService`). Every ref names its own folder, so the service
+// groups a cross-folder search selection by mailbox for the wire calls and
+// each server-side move/store reaches exactly the messages picked — two
+// rows that share a UID are two different refs.
 //
 // Selection lifetime: flag toggles (seen / flagged) leave the selection
 // alone so the user can chain operations on the same messages; moves
@@ -105,63 +105,46 @@ extension MessageListViewModel {
         await setFlagged(shouldBeFlagged, refs: selectedRefs)
     }
 
-    /// \Seen / unset-\Seen for an explicit ref set. Walks the set per-
-    /// source-folder. Optimistically updates the in-memory flags so the
-    /// row styling flips before the wire call lands; rows the server
-    /// rejects (whole-group or `bulkPartialFailure` split) revert to
-    /// their pre-op state. Leaves any active selection intact.
+    /// \Seen / unset-\Seen for an explicit ref set. Optimistically updates
+    /// the in-memory flags so the row styling flips before the wire call
+    /// lands, and sends one write through the mutation service, which
+    /// moves each folder's unread count at once for the rows that actually
+    /// flip (marking an already-read message read moves nothing) and puts
+    /// it back for any the server refuses. Rows the server rejects (a whole
+    /// folder's group, or the failed part of a `bulkPartialFailure`) revert
+    /// to their pre-op state. Leaves any active selection intact.
     func setSeen(_ shouldBeSeen: Bool, refs: Set<MessageRef>) async {
-        let rows = loadedRows(refs)
-        let grouping = groupedByFolder(refs)
-        let loaded = Set(rows.map { rowRef(for: $0) })
-        let prior = priorFlagState(rows, flag: .seen)
-        // Unread badge tracking — capture the actual transition UIDs per
-        // folder BEFORE the optimistic loop rewrites the flags: marking an
-        // already-read message read must not move the sidebar counter, and
-        // a partial failure must only count transitions that landed.
-        let transitionsByFolder = Dictionary(
-            grouping: rows.filter { $0.flags.contains(.seen) != shouldBeSeen }.map { rowRef(for: $0) },
-            by: \.folder
-        ).mapValues { Set($0.map(\.uid)) }
-        for ref in loaded {
-            applyOptimisticFlag(ref, flag: .seen, add: shouldBeSeen)
-        }
-        mailStore.shields.beginFlagWrite(loaded, flag: .seen, added: shouldBeSeen)
-        defer { mailStore.shields.endFlagWrite(loaded, flag: .seen, added: shouldBeSeen) }
-        for (source, groupUIDs) in grouping {
-            let applied = await applyFlagGroup(
-                folder: source, uids: groupUIDs,
-                flag: .seen, add: shouldBeSeen, prior: prior
-            )
-            let transitions = transitionsByFolder[source]?.intersection(applied).count ?? 0
-            // The STORE answered: not once the session has ended (#1851).
-            if transitions > 0, mailStore.acceptsCounts(from: client) {
-                mailStore.counts.applyUnreadDelta(
-                    folderPath: source,
-                    delta: shouldBeSeen ? -transitions : transitions
-                )
-            }
-        }
+        await setFlag(.seen, to: shouldBeSeen, refs: refs)
     }
 
-    /// Flag toggle for an explicit ref set. Mirrors `setSeen` minus the
-    /// unread-count bookkeeping (flagged isn't a count we surface in
-    /// the sidebar).
+    /// Flag toggle for an explicit ref set. The same as `setSeen`, minus the
+    /// unread count.
     func setFlagged(_ shouldBeFlagged: Bool, refs: Set<MessageRef>) async {
+        await setFlag(.flagged, to: shouldBeFlagged, refs: refs)
+    }
+
+    private func setFlag(_ flag: Flag, to target: Bool, refs: Set<MessageRef>) async {
         let rows = loadedRows(refs)
-        let grouping = groupedByFolder(refs)
-        let loaded = Set(rows.map { rowRef(for: $0) })
-        let prior = priorFlagState(rows, flag: .flagged)
-        for ref in loaded {
-            applyOptimisticFlag(ref, flag: .flagged, add: shouldBeFlagged)
+        let prior = priorFlagState(rows, flag: flag)
+        // The loaded rows' refs in list order, each once: the order the
+        // server calls take them in.
+        var listed = Set<MessageRef>()
+        let ordered = rows.map { rowRef(for: $0) }.filter { listed.insert($0).inserted }
+        let changing = Set(ordered.filter { prior[$0] != target })
+        for ref in ordered {
+            applyOptimisticFlag(ref, flag: flag, add: target)
         }
-        mailStore.shields.beginFlagWrite(loaded, flag: .flagged, added: shouldBeFlagged)
-        defer { mailStore.shields.endFlagWrite(loaded, flag: .flagged, added: shouldBeFlagged) }
-        for (source, groupUIDs) in grouping {
-            _ = await applyFlagGroup(
-                folder: source, uids: groupUIDs,
-                flag: .flagged, add: shouldBeFlagged, prior: prior
-            )
+        // Held until the rows the server refused are back, as in `setFlag`.
+        mailStore.shields.beginFlagWrite(ordered, flag: flag, added: target)
+        defer { mailStore.shields.endFlagWrite(ordered, flag: flag, added: target) }
+        let outcome = await mailStore.mutations.setFlag(
+            flag, added: target, on: ordered, changing: changing, by: .list(self, through: client)
+        ).value
+        for ref in ordered where outcome.failed.contains(ref) {
+            applyOptimisticFlag(ref, flag: flag, add: prior[ref] ?? !target)
+        }
+        if let message = outcome.message {
+            errorMessage = message
         }
     }
 
@@ -176,42 +159,6 @@ extension MessageListViewModel {
             rows.map { (rowRef(for: $0), $0.flags.contains(flag)) },
             uniquingKeysWith: { first, _ in first }
         )
-    }
-
-    /// One flag-group wire call plus reconciliation: returns the UIDs the
-    /// server actually applied. A `bulkPartialFailure` keeps the succeeded
-    /// rows, reverts the failed ones, and surfaces an "X of Y" message;
-    /// any other error reverts the whole group. The server's UIDs are the
-    /// group's, so each is reverted as a message in `folder`.
-    private func applyFlagGroup(
-        folder: String,
-        uids: [UInt32],
-        flag: Flag,
-        add: Bool,
-        prior: [MessageRef: Bool]
-    ) async -> Set<UInt32> {
-        func revert(_ uids: some Sequence<UInt32>) {
-            for uid in uids {
-                let ref = MessageRef(folder: folder, uid: uid)
-                applyOptimisticFlag(ref, flag: flag, add: prior[ref] ?? !add)
-            }
-        }
-        do {
-            try await client.imapClient.setFlags(
-                folder: folder, uids: uids, flags: [flag],
-                operation: add ? .add : .remove
-            )
-            return Set(uids)
-        } catch CabalmailError.bulkPartialFailure(let succeeded, let failed) {
-            revert(failed)
-            errorMessage = "Updated \(succeeded.count) of \(uids.count) messages. "
-                + "\(failed.count) could not be updated."
-            return succeeded
-        } catch {
-            revert(uids)
-            errorMessage = error.localizedDescription
-            return []
-        }
     }
 
     /// Move an explicit ref set. The optimistic prune / unread

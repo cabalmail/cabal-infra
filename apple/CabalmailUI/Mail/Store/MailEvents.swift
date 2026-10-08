@@ -1,24 +1,29 @@
 import Foundation
 import CabalmailKit
 
-/// One change to mail made by the reader or the composer, posted on the mail
-/// store (`MailSessionStore.events`) for every message list to hear.
+/// One change to mail, posted on the mail store (`MailSessionStore.events`)
+/// for every message list and reader to hear: a write a list, the reader or
+/// the composer made through the mutation service (`MailMutationService`),
+/// or a compose session's send or save.
 ///
 /// A change names the messages it touched by ref, and each list matches it
 /// against its own rows' refs: a folder list finds its folder's rows, and the
 /// search surface, whose rows come from many folders, finds whichever of its
 /// rows the change names (#1877). `origin` is the main window whose user
 /// action it was (`commandWindowID`), or nil when no main window started it
-/// (a compose window); a list reads it to decide whether its selection moves
-/// (`MailEventSelectionPolicy`, #1845).
+/// (a compose window, or a list, which doesn't know its window); a list reads
+/// it, and `advances`, to decide whether its selection moves
+/// (`MailEventSelectionPolicy`, #1845). `sender` is the view model that made
+/// the change, which has shown it on its own already and isn't sent it.
 struct MailEvent: Equatable, Sendable {
     enum Change: Equatable, Sendable {
-        /// The messages are leaving their folders: a reader dispose, move or
-        /// purge, posted before the server answers, or a send from Drafts,
-        /// which names every copy its compose session left there, since an
-        /// autosave replaces the copy under a new UID and a list may be
-        /// showing any of them (#1071). Lists drop the rows, and a selection
-        /// on one of them moves on per the after-dispose preference.
+        /// The messages are leaving their folders: a dispose, move or purge
+        /// from a list or the reader, posted before the server answers, or a
+        /// send from Drafts, which names every copy its compose session left
+        /// there, since an autosave replaces the copy under a new UID and a
+        /// list may be showing any of them (#1071). Lists drop the rows, and
+        /// a selection on one of them moves on per the after-dispose
+        /// preference.
         case removed([MessageRef])
         /// A removal posted as `.removed` failed on the server, so the message
         /// is back where it was. `markUnread` is set when the removal had
@@ -47,6 +52,23 @@ struct MailEvent: Equatable, Sendable {
     /// The main window whose user action this is (`commandWindowID`), or nil
     /// for a change no main window started.
     let origin: UUID?
+    /// The view model that made the change: a list that has already changed
+    /// its own rows, counts and selection, or the reader, its own toolbar.
+    /// `MailEvents` delivers the event to every subscriber but it. Nil for a
+    /// change the composer made.
+    let sender: ObjectIdentifier?
+    /// Whether a list's selection on the event's rows may move on. False for
+    /// a change a message list made: that list has seen to its own
+    /// selection, and no other list's moves because of it, whatever window
+    /// it is in.
+    let advances: Bool
+
+    init(change: Change, origin: UUID?, sender: ObjectIdentifier? = nil, advances: Bool = true) {
+        self.change = change
+        self.origin = origin
+        self.sender = sender
+        self.advances = advances
+    }
 }
 
 extension MailEvent.Change {
@@ -66,7 +88,8 @@ extension MailEvent.Change {
 }
 
 /// Something that hears the mail store's events: a message list's view model
-/// (`MessageListViewModel`), or a test's recorder.
+/// (`MessageListViewModel`), a reader's (`MessageDetailViewModel`), or a
+/// test's recorder.
 @MainActor
 protocol MailEventSubscriber: AnyObject {
     func receive(_ event: MailEvent)
@@ -112,18 +135,27 @@ final class MailEvents {
     }
 
     /// Posts `change`, started in `origin` (the main window's
-    /// `commandWindowID`, or nil), to every subscriber. An empty change
-    /// (`MailEvent.Change.isEmpty`) is dropped.
-    func post(_ change: MailEvent.Change, from origin: UUID?) {
+    /// `commandWindowID`, or nil), to every subscriber but `sender`, the view
+    /// model that made it (see `MailEvent.sender` and `.advances`). An empty
+    /// change (`MailEvent.Change.isEmpty`) is dropped.
+    func post(
+        _ change: MailEvent.Change,
+        from origin: UUID?,
+        sender: AnyObject? = nil,
+        advances: Bool = true
+    ) {
         guard !change.isEmpty else { return }
-        queued.append(MailEvent(change: change, origin: origin))
+        queued.append(MailEvent(
+            change: change, origin: origin, sender: sender.map(ObjectIdentifier.init), advances: advances
+        ))
         guard !isDelivering else { return }
         isDelivering = true
         defer { isDelivering = false }
         while !queued.isEmpty {
             let event = queued.removeFirst()
             subscribers.removeAll { $0.subscriber == nil }
-            for subscriber in subscribers.compactMap(\.subscriber) {
+            for subscriber in subscribers.compactMap(\.subscriber)
+            where ObjectIdentifier(subscriber) != event.sender {
                 subscriber.receive(event)
             }
         }

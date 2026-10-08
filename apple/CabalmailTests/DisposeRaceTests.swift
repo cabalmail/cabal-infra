@@ -236,25 +236,28 @@ final class DisposeRaceTests: XCTestCase {
     func testTheReaderReportsAConfirmedArchiveButNotAFailedOne() async throws {
         let imap = FakeImapClient()
         await imap.scriptMoveResults([.success(()), .failure(CabalmailError.network("boom"))])
-        var confirmations = 0
-        func makeReader() throws -> MessageDetailViewModel {
+        let store = AppState().mailStore
+        func makeReader(uid: UInt32) throws -> MessageDetailViewModel {
             let reader = MessageDetailViewModel(
                 folder: Folder(path: inbox, attributes: [], isSubscribed: true),
-                envelope: TestFixtures.makeEnvelope(uid: 9, flags: [.seen]),
+                envelope: TestFixtures.makeEnvelope(uid: uid, flags: [.seen]),
                 client: try TestFixtures.makeClient(imap: imap),
                 preferences: Preferences(store: InMemoryPreferenceStore())
             )
-            reader.onMoveConfirmed = { confirmations += 1 }
+            MessageDetailView.relayOutcomes(of: reader, to: store)
             return reader
         }
 
-        let archived = try makeReader()
+        let archived = try makeReader(uid: 9)
         await archived.dispose()
-        XCTAssertEqual(confirmations, 1)
+        XCTAssertEqual(store.shields.confirmedRemovalRefs(folderPath: inbox), [ref(9)])
 
-        let refused = try makeReader()
+        let refused = try makeReader(uid: 8)
         await refused.dispose()
-        XCTAssertEqual(confirmations, 1, "a move the server refused confirms nothing")
+        XCTAssertEqual(
+            store.shields.confirmedRemovalRefs(folderPath: inbox), [ref(9)],
+            "a move the server refused confirms nothing"
+        )
     }
 
     // MARK: - The confirmed-removal window

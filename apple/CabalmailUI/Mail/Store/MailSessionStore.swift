@@ -7,20 +7,22 @@ import CabalmailKit
 /// `counts`, the folder badges and the Inbox count behind the app badge;
 /// `shields`, the one record of writes in flight, which keeps a refresh from
 /// undoing a write made anywhere and a STATUS from counting it twice;
-/// and `events`, the changes the reader and composer post for every message
-/// list. The parts know nothing of each other; what spans two of them (a
-/// change that moves a count, a reply's shielded `\Answered`) is sent through
-/// the store.
+/// `events`, the changes posted for every message list and reader; and
+/// `mutations`, the one place the app's writes go through (a notification's
+/// actions aside, #1973), which uses the other three. The first three know
+/// nothing of each other.
 ///
 /// `AppState` owns one (`mailStore`) for its whole life and resets it in place
-/// at sign-out (`forgetAccount()`), so a view model, or a reader callback that
-/// outlives a session, never writes into a store nobody reads.
+/// at sign-out (`forgetAccount()`), so a view model, or a write that answers
+/// after its session, never writes into a store nobody reads.
 @Observable
 @MainActor
 public final class MailSessionStore {
     public let counts = MailCounts()
     let shields = MessageShields()
     let events = MailEvents()
+    /// The app's writes to mail go through here (`MailMutationService`).
+    let mutations: MailMutationService
 
     /// The session lifecycle's record of which clients' sessions have ended
     /// (`AppState.teardownGate`, which marks a client ended before sign-out
@@ -38,6 +40,8 @@ public final class MailSessionStore {
     /// any other gate would never see that sign-out ended a client.
     init(teardownGate: SessionTeardownGate) {
         self.teardownGate = teardownGate
+        mutations = MailMutationService(counts: counts, shields: shields, events: events, teardownGate: teardownGate)
+        mutations.onListRefreshRequested = { [weak self] in self?.requestListRefresh() }
     }
 
     /// Whether counts fetched through `client` still belong to the account
@@ -104,49 +108,22 @@ public final class MailSessionStore {
         )
     }
 
-    /// The reader changed a flag on `ref` (or a reply marked it
-    /// `\Answered`): post it for the lists, and for `\Seen` move the folder's
-    /// unread count with it. `origin` is the reader's window.
-    func postFlagChange(_ ref: MessageRef, flag: Flag, added: Bool, from origin: UUID?) {
-        events.post(.flagsChanged([ref], flag: flag, added: added), from: origin)
-        if flag == .seen {
-            counts.applyUnreadDelta(folderPath: ref.folder, delta: added ? -1 : 1)
-        }
-    }
-
-    /// The reader's dispose, move or purge of `ref` failed on the server, so
-    /// the row its `.removed` dropped comes back (`.restored`). `markUnread`
-    /// hands back the unread count the dispose's read mark took.
-    func postRemovalFailed(_ ref: MessageRef, markUnread: Bool = false, from origin: UUID?) {
-        events.post(.restored(ref, markUnread: markUnread), from: origin)
-        if markUnread {
-            counts.applyUnreadDelta(folderPath: ref.folder, delta: 1)
-        }
-    }
-
-    /// Marks a replied-to message `\Answered` after its reply sends: post the
-    /// change for the lists optimistically (so the replied arrow appears at
-    /// once), then STORE the flag best-effort through `client`, the
-    /// session's client when the reply sent (`AppState.client`; nil skips the
-    /// STORE but not the event). Shielded via `setFlagWrite` so a refresh
-    /// landing mid-write can't revert the row. No revert on failure — unlike
-    /// the detail view's toggles there's no surface left to show an error on
-    /// (the composer is gone), and the next full refresh restores truth. It
-    /// comes from the composer, not from a main window's reader or list, so
-    /// the change names no window.
+    /// Marks a replied-to message `\Answered` after its reply sends, or once
+    /// the outbox owns it, through the mutation service with `client`, the
+    /// session's client when the reply sent (`AppState.client`): every list
+    /// shows the replied arrow at once. Nothing is taken back if the STORE
+    /// fails (`changing: []`): a reply queued offline still goes, the message
+    /// may be `\Answered` already, and there's no surface left to show an
+    /// error on, so the next full refresh restores truth. A nil client (no
+    /// session) still shows the arrow, and makes no STORE. It comes from the
+    /// composer, not from a main window's reader or list, so the change names
+    /// no window.
     func markAnswered(_ ref: MessageRef, client: CabalmailClient?) {
-        postFlagChange(ref, flag: .answered, added: true, from: nil)
-        guard let client else { return }
-        shields.beginFlagWrite([ref], flag: .answered, added: true)
-        Task {
-            defer { shields.endFlagWrite([ref], flag: .answered, added: true) }
-            try? await client.imapClient.setFlags(
-                folder: ref.folder,
-                uids: [ref.uid],
-                flags: [.answered],
-                operation: .add
-            )
+        guard let client else {
+            events.post(.flagsChanged([ref], flag: .answered, added: true), from: nil)
+            return
         }
+        mutations.setFlag(.answered, added: true, on: [ref], changing: [], by: .composer(through: client))
     }
 
     /// Asks every mounted message list to hard-reload after a change made
