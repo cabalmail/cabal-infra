@@ -90,6 +90,8 @@ final class RecordingPollSubscriber: FolderPollSubscriber {
     private(set) var released: [FolderPollTicket] = []
     private(set) var refreshWasCancelled = false
     var holdsNextRefresh = false
+    /// Runs inside `folderPollFailed`, after the failure is recorded.
+    var onFailure: (() -> Void)?
     private var nextAsk: Int
     private var heldRefresh: CheckedContinuation<Void, Never>?
 
@@ -123,6 +125,7 @@ final class RecordingPollSubscriber: FolderPollSubscriber {
 
     func folderPollFailed(_ error: Error, ticket: FolderPollTicket) async {
         failures.append(error.localizedDescription)
+        onFailure?()
     }
 
     func releaseFolderPoll(_ ticket: FolderPollTicket) {
