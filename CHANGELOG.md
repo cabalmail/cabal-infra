@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.30.0] - 2026-10-09
+
+### Changed
+- Apple: **Changes reach every window at once.** Archiving, moving or
+  flagging a message in one window, by swipe, menu or selection, now updates
+  it in every other window and in the reader straight away, instead of at
+  that window's next refresh. Marking several messages read with Select
+  moves the folder's unread count at once, and puts it back if the server
+  refuses.
+- Apple: **Folder and All Feeds order sticks too.** The Order menu now sits
+  above every feed list, not just a single feed's, and a feed folder and
+  the All Feeds list each open in the order you last picked for them, on
+  this device and your others. A folder's order is its own merged list's;
+  the feeds inside keep theirs.
+- Apple: **Feeds keep their place across a fold.** Narrowing or widening
+  an iPad window, or folding and unfolding an iPhone Duo, while reading a
+  feed item now comes back to that item. On the Mac and iPad, a feed item
+  reopened at launch appears just after its list has loaded, as on iPhone.
+  Tapping Resume on a feed banner opens it in the window you tapped, and
+  opening a message from a banner, a notification or Spotlight while a
+  feed is showing now shows the message instead of staying on the feed.
+- Apple: **A folder open in two windows is checked once.** With the same
+  folder open in more than one window, the app now checks it for new mail
+  once per interval rather than once per window, and every window updates
+  from that one check. New mail still shows within about 30 seconds.
+- Apple: **A multi-message selection survives a layout change.**
+  Narrowing an iPad window to the compact layout, or folding an iPhone
+  Duo, used to clear the messages you had selected; now the list comes
+  back in Select mode with the same messages checked. Widening it again,
+  or unfolding, keeps them too.
+- Apple: **Resume moves only the Vision Pro window you tapped.** With
+  several Cabalmail windows open on Apple Vision Pro, tapping Resume on
+  the "pick up where you left off" banner moves the window you tapped,
+  as it now does on iPad and Mac.
+- Apple: **Each window keeps its own place in mail.** With two iPad
+  windows open, narrowing or widening one keeps its own folder and message
+  instead of picking up the other window's. Widening a narrow window (or
+  unfolding an iPhone Duo) while on the Search, Addresses or Settings tab
+  and narrowing it again brings the tab bar back on that tab. Tapping
+  Resume on the "pick up where you left off" banner moves only the window
+  you tapped.
+- Apple: **Each window keeps its own search.** With two iPad or Mac
+  windows open, a search in one no longer shows up in the other; each
+  window keeps its own query and results, and still keeps them when it is
+  narrowed or widened, or when an iPhone Duo is folded or unfolded.
+
+### Fixed
+- Apple: **Message list refreshes and paging no longer race.** A new
+  message no longer drops out of a small folder when two refreshes overlap
+  (#1820). Folder messages no longer land among search or filter-pill
+  results when a page was still loading as the search started (#1870). A
+  folder whose server count runs high stops re-asking for the same empty
+  page, and scrolling up from a scrollbar jump fills the rows just above
+  first (#1823).
+- Apple: **Unread pill matches the sidebar.** A message list's Unread
+  count is now the same number as its folder's sidebar badge, and its
+  Flagged count moves with the same changes: archiving, moving, flagging or
+  deleting from the list updates both pills at once, as the badge already
+  did; Mark All as Read zeroes the Unread pill without waiting for the list
+  to reload; reloading or leaving a search no longer shows 0 until the
+  server answers; and a folder opened offline shows its saved count on its
+  badge as well as its pill.
+- Apple: **Reader actions reach search results and stay in their window.**
+  Archiving, deleting or moving a search result from the reader now removes
+  its row and moves the reading pane on, as it does in a folder. With two
+  iPad or Mac windows open, archiving or marking read with "then go to"
+  moves only the window you acted in; the other window drops the archived
+  row, and closes it only if it was reading that message.
+- Apple: **Messages removed from search leave the offline copy.**
+  Archiving, moving or deleting a search result now also removes it from
+  its folder's offline list and saved body, so it no longer shows there
+  offline until the folder next refreshes. Moving a message from the
+  reader, or deleting it forever, now updates the folders' unread counts at
+  once.
+- Apple: **Home, End and the arrow keys scroll search results.** On the
+  Mac, End and Home in search results (or in a folder narrowed by the
+  Unread or Flagged pill) now jump to the last and first result, and the
+  arrow keys keep the selected message on screen. Before, the selection
+  moved but the list stayed put, so it slid out of view (#1868).
+- Apple: **Unread counts no longer bounce back after a mark-read.** A
+  refresh, the sidebar's count or the app badge's poll that was asked for
+  before a message was marked read (or unread, archived or moved) could
+  answer with the count from before and put it back until the next refresh.
+  Each now takes only the direction of the changes still on their way.
+
 ## [1.29.0] - 2026-10-08
 
 ### Added
