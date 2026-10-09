@@ -54,12 +54,12 @@ extension MessageListViewModel {
     /// resolve, because the message it points at is gone — plus an inflated
     /// pill, until the next STATUS corrects the count. Unsubscribed folders
     /// (Drafts) get no proactive poll, so that wait runs to minutes rather
-    /// than the ~10s STATUS lag elsewhere. Clamped at zero, and skipped in
+    /// than the ~10s STATUS lag elsewhere. Clamped at zero, skipped in
     /// search mode, where the row count comes from the results rather than
-    /// STATUS.
+    /// STATUS, and a no-op on the search surface, which has no folder total.
     func adjustTotalMessages(by delta: Int) {
         guard !isSearchActive, delta != 0 else { return }
-        window.adjustTotal(by: delta)
+        window?.adjustTotal(by: delta)
     }
 
     /// Leg of the two-stage row-disposal animation a row is currently in.

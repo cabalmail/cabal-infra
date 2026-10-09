@@ -27,8 +27,7 @@ struct WindowSnapshot {
     /// goes to `savedMessageCount` rather than `totalMessages`. The first
     /// STATUS that answers replaces all three (`applyStatusCounts`).
     func seedSavedCounts() async {
-        guard !window.isSearchScope,
-              let saved = await window.client.savedFolderStatus(path: window.folder.path) else { return }
+        guard let saved = await window.client.savedFolderStatus(path: window.folder.path) else { return }
         window.savedMessageCount = saved.messages.map { max(0, $0) }
         guard window.mailStore.acceptsCounts(from: window.client) else { return }
         let counts = window.mailStore.counts

@@ -12,7 +12,7 @@ extension MessageListViewModel {
     /// (swipe, context menu, selection menu, action bar, Cmd+Delete)
     /// switch from "move to Trash" to "delete forever" and route
     /// through a confirmation dialog.
-    var isTrashFolder: Bool { folder.path == FolderTree.trashPath }
+    var isTrashFolder: Bool { folder?.path == FolderTree.trashPath }
 
     /// What the preference-driven dispose affordances (trailing swipe,
     /// Cmd+Delete) mean in this folder, and what an explicitly-Archive
@@ -20,12 +20,14 @@ extension MessageListViewModel {
     /// through `DisposeIntent` so the folder-specific cases — Delete
     /// Forever in Trash, Restore in Archive — can't drift between the
     /// label a surface draws and the operation it runs.
+    /// The search surface has no folder of its own, so its rows take the
+    /// plain moves.
     var disposeIntent: DisposeIntent {
-        .standard(preference: disposeAction, in: folder.path)
+        folder.map { DisposeIntent.standard(preference: disposeAction, in: $0.path) } ?? .move(disposeAction)
     }
 
     var archiveIntent: DisposeIntent {
-        .archiving(in: folder.path)
+        folder.map { DisposeIntent.archiving(in: $0.path) } ?? .move(.archive)
     }
 
     /// Permanently delete an explicit ref set. Serves both the single-

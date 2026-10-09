@@ -74,22 +74,10 @@ extension MessageListViewModel {
     /// first (a pill is a search, and its counts and the sidebar badge would
     /// otherwise stop moving until it is left, #1819), then the submitted
     /// search again at the depth already paged in. `prefetched` is a STATUS the caller already asked
-    /// for (`hardReload`), used rather than asked for again.
+    /// for (`hardReload`), used rather than asked for again. The search
+    /// surface has no folder to count.
     func refreshSearch(prefetched: PrefetchedStatus? = nil) async {
-        if !isSearchScope {
-            let startedAt = prefetched?.askedAt ?? ContinuousClock.now
-            let status: FolderStatus?
-            if let prefetched {
-                status = prefetched.status
-            } else {
-                status = try? await client.folderStatus(path: folder.path, flagged: true)
-            }
-            if let status {
-                _ = window.applyStatusCounts(
-                    status, mayPredateRemoval: window.removalMayPostdate(startedAt), askedAt: startedAt
-                )
-            }
-        }
+        await window?.refreshCounts(prefetched: prefetched)
         guard !Task.isCancelled else { return }
         await runSearch(resetFilterTab: false, preserveDepth: true, rerun: true)
     }
@@ -110,7 +98,7 @@ extension MessageListViewModel {
     /// persistence.
     func selectFilter(_ filter: MessageFilter) async {
         guard filter != filterTab else { return }
-        if !isSearchScope { preferences.setMailFolderFilter(filter, for: folder.path) }
+        if let folder { preferences.setMailFolderFilter(filter, for: folder.path) }
         await applyFilter(filter)
     }
 
@@ -146,15 +134,15 @@ extension MessageListViewModel {
         // can't strand a highlighted pill over a plain folder view.
         filterTab = .all
         search.clear()
+        // Folder scope drops back to the folder view; the global search
+        // surface has no folder to return to, so it just lands on the empty
+        // "type to search" state.
+        guard let window else { return }
         window.envelopes.removeAll()
         window.totalMessages = 0
         window.savedMessageCount = nil
         window.hasMore = true
         window.resetWindow()
-        // Folder scope drops back to the folder view; the global search
-        // surface has no folder to return to, so it just lands on the empty
-        // "type to search" state.
-        guard !isSearchScope else { return }
         await refresh(startingOver: true)
         // Offline the refresh can't answer, and the list used to stay empty
         // (#1796): the saved counts come back, and under the default order

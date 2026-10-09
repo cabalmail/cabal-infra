@@ -47,7 +47,7 @@ extension MessageListView {
             @Bindable var search = model.search
             SearchFiltersSheet(
                 filters: $search.filters,
-                currentFolderName: (model.search.folder ?? folder).name,
+                currentFolderName: model.search.folder?.name ?? "",
                 // The global search surface scopes to the sidebar's selected
                 // folder; where nothing feeds it one (iPhone / visionOS
                 // `SearchView`) there is no folder to offer (#1510).
@@ -108,7 +108,7 @@ extension MessageListView {
         SearchScopeSummary(
             foldersSearched: model.search.foldersSearched,
             thisFolderOnly: model.search.filters.thisFolderOnly,
-            anchorFolderName: (model.search.folder ?? folder).name
+            anchorFolderName: model.search.folder?.name ?? ""
         )
     }
 
