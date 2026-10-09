@@ -32,13 +32,6 @@ import CabalmailKit
 ///   gets the tab idiom instead (the folder list is its own tab there).
 /// - macOS renders `MailRootView` directly and reaches the three sections
 ///   through its dedicated Settings scene (⌘,, `SettingsTabsView`).
-///
-/// The regular-width branch replaced an earlier `TabView(.sidebarAdaptable)`
-/// that governed every iOS width. Its adaptive top-bar / sidebar chrome was
-/// harmless on compact (it renders as a plain tab bar) but collided with
-/// `MailRootView`'s own `NavigationSplitView` at regular width: the section
-/// bar overlapped the split view's headers, and sidebar mode stacked two
-/// redundant rails.
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
@@ -47,6 +40,8 @@ struct SignedInRootView: View {
     /// swap between the tab tree and the split rebuilds only the layout and
     /// the window keeps its folder, message and tab (`SceneNavigator`).
     @State private var navigator: SceneNavigator
+    /// This window's menu commands (`WindowCommands`), published to the menus.
+    @State private var windowCommands: WindowCommands
     @State private var isOffline = false
     @State private var failedSends = FailedSendMonitor()
     /// The window width the section layout was last laid out at; see
@@ -66,12 +61,15 @@ struct SignedInRootView: View {
     ///   session's coordinator (a `@State` initial value can't reach the
     ///   environment). SwiftUI keeps the first navigator for the view's life.
     init(appState: AppState) {
-        _navigator = State(initialValue: SceneNavigator(appState: appState))
+        let navigator = SceneNavigator(appState: appState)
+        _navigator = State(initialValue: navigator)
+        _windowCommands = State(initialValue: WindowCommands(navigator: navigator))
     }
 
     var body: some View {
         sectionLayout
             .environment(navigator)
+            .environment(\.windowCommands, windowCommands)
             // A new navigator — a new sign-in — gets new trees, which land
             // on it rather than keep the last account's.
             .id(ObjectIdentifier(navigator))
@@ -106,6 +104,7 @@ struct SignedInRootView: View {
             // because this view is in the visible hierarchy in every tab,
             // folder, and modal state; see ComposeRequestRouter.
             .composeRequestRouter()
+            .focusedSceneValue(\.windowCommands, windowCommands)
             .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
             #if os(iOS)
             .onChange(of: layoutChoice, initial: true) { _, layout in
@@ -118,6 +117,7 @@ struct SignedInRootView: View {
             // coordinator: nothing of the last account's place carries over.
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
                 navigator = SceneNavigator(appState: appState)
+                windowCommands = WindowCommands(navigator: navigator)
             }
             // Push, Spotlight and Siri write one app-wide request; the first
             // window to see it takes it.
