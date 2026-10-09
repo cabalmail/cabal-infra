@@ -24,11 +24,9 @@ struct FeedItemListView: View {
     @Environment(Preferences.self) private var preferences
     /// Aims this list's compose requests at its own window.
     @Environment(\.commandWindowID) private var commandWindowID
-    #if !os(macOS)
-    /// Whether this is the wide layout, which decides where the scope switch
-    /// is drawn (`scopeSwitchHost`).
-    @Environment(\.showsSettingsGear) var showsSettingsGear
-    #endif
+    /// The window's layout shell, which decides where the scope switch is
+    /// drawn (`scopeSwitchHost`).
+    @Environment(\.shellLayout) var shellLayout
     @State var model: FeedItemListViewModel?
     /// Gates for the launch restore — see `applyLaunchRestoreWhenReady`.
     @State private var hasAppeared = false

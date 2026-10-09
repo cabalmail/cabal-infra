@@ -72,6 +72,7 @@ struct SignedInRootView: View {
     var body: some View {
         sectionLayout
             .environment(navigator)
+            .environment(\.shellLayout, shellLayout)
             // A new navigator — a new sign-in — gets new trees, which land
             // on it rather than keep the last account's.
             .id(ObjectIdentifier(navigator))
@@ -107,13 +108,9 @@ struct SignedInRootView: View {
             // folder, and modal state; see ComposeRequestRouter.
             .composeRequestRouter()
             .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
-            #if os(iOS)
-            .onChange(of: layoutChoice, initial: true) { _, layout in
-                navigator.layoutIsWide = layout == .regularSplit
+            .onChange(of: shellLayout, initial: true) { _, layout in
+                navigator.layoutIsWide = layout.isWideSplit
             }
-            #elseif os(macOS)
-            .onAppear { navigator.layoutIsWide = true }
-            #endif
             // A new sign-in gets a new navigator, as it gets a new
             // coordinator: nothing of the last account's place carries over.
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
@@ -136,30 +133,16 @@ struct SignedInRootView: View {
         appState.showToast(.resumeNavigation(folderName: title, cursor: candidate), duration: 10)
     }
 
+    /// One arm per shell. `ShellLayout.resolve` gives each platform only its
+    /// own shells, so the arms another platform can't reach compile to
+    /// nothing there.
     @ViewBuilder
     private var sectionLayout: some View {
-        #if os(macOS)
-        MailRootView()
-        #elseif os(visionOS)
-        // A floating leading tab bar (Mail / Folders / Addresses / Settings /
-        // Search) rather than the iPad single-sidebar split — see
-        // `VisionSectionView`.
-        VisionSectionView()
-        #else
-        switch layoutChoice {
-        case .compactTabs:
-            // The tab comes from the navigator, so a tree rebuilt mid-process
-            // (a fold, an iPad window narrowing) opens on the tab it left.
-            CompactSectionTabs()
-                // The tab tree is compact width throughout, whatever the raw
-                // size class says in landscape on a Plus / Max: the Mail
-                // tab's split view must never expand into columns and
-                // collapse back, and the addresses inspector must never
-                // change presentation. See `SectionLayoutPolicy`.
-                .transformEnvironment(\.horizontalSizeClass) { sizeClass in
-                    sizeClass = .compact
-                }
-        case .regularSplit:
+        switch shellLayout {
+        case .desktop:
+            MailRootView()
+        case .split:
+            #if os(iOS)
             MailRootView()
                 .environment(\.showsSettingsGear, true)
                 .sheet(isPresented: $settingsPresented) {
@@ -171,23 +154,48 @@ struct SignedInRootView: View {
                 .onWindowCommand(appState.settingsRequestTick) {
                     settingsPresented = true
                 }
+            #endif
+        case .tabs:
+            #if os(iOS)
+            // The tab comes from the navigator, so a tree rebuilt mid-process
+            // (a fold, an iPad window narrowing) opens on the tab it left.
+            CompactSectionTabs()
+                // The tab tree is compact width throughout, whatever the raw
+                // size class says in landscape on a Plus / Max: the Mail
+                // tab's split view must never expand into columns and
+                // collapse back, and the addresses inspector must never
+                // change presentation. See `SectionLayoutPolicy`.
+                .transformEnvironment(\.horizontalSizeClass) { sizeClass in
+                    sizeClass = .compact
+                }
+            #endif
+        case .ornament:
+            #if os(visionOS)
+            // A floating leading tab bar (Mail / Folders / Addresses / Settings /
+            // Search) rather than the iPad single-sidebar split — see
+            // `VisionSectionView`.
+            VisionSectionView()
+            #endif
         }
-        #endif
     }
 
-    #if os(iOS)
-    /// Both size classes, no idiom — see `SectionLayoutPolicy` for why the
-    /// width alone is not enough on an iPhone and why the idiom is too much
-    /// on an iPhone Duo.
-    private var layoutChoice: SectionLayoutPolicy.Layout {
-        SectionLayoutPolicy.layout(
+    /// This window's layout shell. On iOS, both size classes and the measured
+    /// width, no idiom — see `SectionLayoutPolicy` for why the width alone is
+    /// not enough on an iPhone and why the idiom is too much on an iPhone
+    /// Duo. macOS and visionOS have one shell each, and no size classes to
+    /// read on the Mac.
+    private var shellLayout: ShellLayout {
+        #if os(iOS)
+        ShellLayout.resolve(
+            on: .current,
             isCompactWidth: horizontalSizeClass == .compact,
             isCompactHeight: verticalSizeClass == .compact,
             measuredWidth: measuredWidth
         )
+        #else
+        ShellLayout.resolve(on: .current, isCompactWidth: false, isCompactHeight: false, measuredWidth: measuredWidth)
+        #endif
     }
-
-    #endif
 
     @ViewBuilder
     private var statusBanners: some View {
@@ -224,11 +232,7 @@ struct SignedInRootView: View {
     /// the raw size class: a Plus / Max iPhone in landscape is regular-width
     /// but still shows the tab bar.
     private var bannerBottomInset: CGFloat {
-        #if os(iOS)
-        StatusBannerPlacement.bottomInset(isRegularWidth: layoutChoice == .regularSplit)
-        #else
-        StatusBannerPlacement.defaultBottomInset
-        #endif
+        StatusBannerPlacement.bottomInset(in: shellLayout)
     }
 
     /// Builds the banner's trailing action. A `copyAddress` toast copies and
