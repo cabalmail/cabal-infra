@@ -34,7 +34,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
         let list = try TestFixtures.makeModel(
             imap: imap, envelopes: envelopes, folderPath: inbox, mailStore: appState.mailStore
         )
-        list.window.totalMessages = UInt32(uids.count)
+        list.window!.totalMessages = UInt32(uids.count)
         list.unseen = unread.count
         let reader = MessageDetailViewModel(
             folder: Folder(path: inbox, attributes: [], isSubscribed: true),
@@ -68,7 +68,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
 
         XCTAssertEqual(failures, 1, "the user still gets the toast")
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1], "the row is back where it was")
-        XCTAssertEqual(pair.list.window.totalMessages, 3, "and so is its slot in the folder total")
+        XCTAssertEqual(pair.list.window!.totalMessages, 3, "and so is its slot in the folder total")
         XCTAssertEqual(pair.list.unseen, 1, "the message is still unread on the server")
         XCTAssertFalse(pair.list.envelopes[1].flags.contains(.seen))
         XCTAssertFalse(pair.reader.isSeen, "the reader drops its optimistic read mark too")
@@ -82,7 +82,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
         await pair.reader.move(to: "Projects")
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
-        XCTAssertEqual(pair.list.window.totalMessages, 3)
+        XCTAssertEqual(pair.list.window!.totalMessages, 3)
     }
 
     func testAFailedReaderPurgePutsTheRowBack() async throws {
@@ -93,7 +93,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
         await pair.reader.purge()
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
-        XCTAssertEqual(pair.list.window.totalMessages, 3)
+        XCTAssertEqual(pair.list.window!.totalMessages, 3)
     }
 
     func testASuccessfulReaderDisposeKeepsTheRowGone() async throws {
@@ -102,7 +102,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
         await pair.reader.dispose()
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 1])
-        XCTAssertEqual(pair.list.window.totalMessages, 2)
+        XCTAssertEqual(pair.list.window!.totalMessages, 2)
     }
 
     func testAFailureThatBeatsThePruneKeepsTheRow() throws {
@@ -114,7 +114,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
         pair.list.pruneEnvelope(ref(2))
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
-        XCTAssertEqual(pair.list.window.totalMessages, 3)
+        XCTAssertEqual(pair.list.window!.totalMessages, 3)
         XCTAssertEqual(pair.list.unseen, 1)
         XCTAssertFalse(pair.list.envelopes[1].flags.contains(.seen))
     }
@@ -126,12 +126,12 @@ final class ReaderRemovalRevertTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 7, flags: [.seen])],
             folderPath: "Drafts"
         )
-        list.window.totalMessages = 1
+        list.window!.totalMessages = 1
 
         list.pruneEnvelope(ref(7, in: "Drafts"))
         list.restorePrunedEnvelope(ref(7, in: "Drafts"))
 
         XCTAssertTrue(list.envelopes.isEmpty)
-        XCTAssertEqual(list.window.totalMessages, 0)
+        XCTAssertEqual(list.window!.totalMessages, 0)
     }
 }

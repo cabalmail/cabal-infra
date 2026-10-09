@@ -5,28 +5,31 @@ import CabalmailKit
 /// Backs `MessageListView`: one folder's list, or the global search surface.
 /// It coordinates the parts that show the rows -- the folder window
 /// (`window`, a `FolderWindowLoader`: rows, positions, paging, refresh and
-/// the snapshot) and, while one runs, a search in its place -- and owns what
-/// spans them: the filter pills, the selection, the writes made from the
-/// list and the events it hears from other writers, and the routing of a
-/// refresh to whichever part is showing.
+/// the snapshot), which the search surface hasn't got, and the search
+/// (`search`, a `MailSearchSession`: query, results and their paging), whose
+/// rows take the window's place once they land -- and owns what spans them:
+/// the filter pills, the selection, the writes made from the list and the
+/// events it hears from other writers, and the routing of a refresh to
+/// whichever part is showing.
 @Observable
 @MainActor
 final class MessageListViewModel {
     /// What this list is showing — a folder or the global search surface.
     /// `.search` runs no folder lifecycle; see `MessageListScope`.
     let scope: MessageListScope
-    /// Resolved anchor folder (a sentinel in `.search` scope). Folder-keyed
-    /// call sites read this unchanged; the search paths are gated off before
-    /// any of them issue an IMAP request against a `.search` sentinel.
-    let folder: Folder
     let client: CabalmailClient
     let preferences: Preferences
     /// The session's shared mail state: the folder counts this list keeps
     /// the sidebar's in step with, and the shields its merges honour.
     let mailStore: MailSessionStore
     /// The folder window: its rows, their positions and every load that
-    /// fills them. Views and tests reach window state through it.
-    let window: FolderWindowLoader
+    /// fills them. Nil on the global search surface, which shows no folder,
+    /// so nothing there can address one.
+    let window: FolderWindowLoader?
+    /// The list's search: what is asked, what was sent, the results and
+    /// their paging. A folder list's pills are searches; on the search
+    /// surface every search is.
+    let search: MailSearchSession
 
     var errorMessage: String?
 
@@ -35,7 +38,18 @@ final class MessageListViewModel {
     /// them (`selectFilter`). Sticky per folder: a rebuilt view-model
     /// (folder switch, relaunch) opens on the pill the user last chose for
     /// this folder (`Preferences.mailFolderFilters`), All until then.
-    var filterTab: MessageFilter = .all
+    ///
+    /// The pill a folder reopens on follows the pill on screen: leaving
+    /// Unread or Flagged for All by any route -- the search banner's clear,
+    /// a text search in a pill's place, the filter sheet -- records All for
+    /// the folder, as tapping All does (#1826). Tapping a pill records the
+    /// pill itself (`selectFilter`).
+    var filterTab: MessageFilter = .all {
+        didSet {
+            guard oldValue != .all, filterTab == .all, let folder else { return }
+            preferences.setMailFolderFilter(.all, for: folder.path)
+        }
+    }
 
     /// True when the user has tapped Select; rows render checkboxes and
     /// the per-row tap selects rather than opening the detail pane.
@@ -77,48 +91,26 @@ final class MessageListViewModel {
     /// than collapsing it. Plain selection sets cursor == anchor.
     var selectionCursor: MessageRef?
 
-    /// Free-text term submitted from the search field. Filters live in
-    /// `searchFilters`; the two are sent together when `runSearch()` runs.
-    var searchQuery: String = ""
+    /// The term in the search field (`MailSearchSession.query`). Read-write
+    /// for the shell and `SearchView`'s binding.
+    var searchQuery: String {
+        get { search.query }
+        set { search.query = newValue }
+    }
 
-    /// Structured filter form state — mirrors the React filter panel.
-    var searchFilters = MessageSearchFilters()
+    /// The folder the search surface's "This folder only" narrows to
+    /// (`MailSearchSession.anchor`).
+    var searchAnchor: Folder? {
+        get { search.anchor }
+        set { search.anchor = newValue }
+    }
 
-    /// The folder the global search surface's "This folder only" narrows to:
-    /// the wide layout's sidebar selection, fed in through
-    /// `setSearchAnchor(_:)`. Unused in folder scope, which narrows to
-    /// `folder`; see `searchFolder`.
-    var searchAnchor: Folder?
-
-    /// The trimmed term the most recent submitted search ran with. Distinct
-    /// from `searchQuery`, which tracks the field as the user types: search is
-    /// submit-driven, so the two diverge for every keystroke between typing
-    /// and Return, and that gap is what tells a pending query from an
-    /// exhausted one.
-    /// Written by `runSearch()` / `clearSearch()` only.
-    var submittedQuery: String = ""
-
-    /// `true` while search results are showing in `envelopes`.
-    var isSearchActive: Bool = false
-
-    /// Search-banner metadata. All zero when no search is active.
-    var searchTotalEstimate: Int = 0
-    var searchTruncated: Bool = false
-    var searchFoldersSearched: [String] = []
-
-    /// Opaque next-page cursor for the active search; nil = every match
-    /// loaded (or no search active). Cleared before every fresh search so
-    /// an in-flight load-more can detect it raced a reset and drop its
-    /// page. Written by the `+Search.swift` extension only.
-    var searchNextCursor: String?
-
-    /// A search load-more page is in flight — guards re-entry and drives
-    /// the list's tail spinner.
-    var isLoadingMoreSearch = false
-
-    /// Model-owned task for the search load-more fetch, so it outlives the
-    /// triggering row's `.task` cancellation (the `loadMoreTask` pattern).
-    var loadMoreSearchTask: Task<Void, Never>?
+    /// A search is the list's mode (`MailSearchSession.isActive`): its
+    /// banner shows, a refresh re-runs it, the folder window stands down.
+    var isSearchActive: Bool {
+        get { search.isActive }
+        set { search.isActive = newValue }
+    }
 
     /// Foreground-only change watcher (`MailboxWatcher`, which polls folder
     /// status). Nil when the view is offscreen; started on
@@ -173,35 +165,51 @@ final class MessageListViewModel {
 
     init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore) {
         self.scope = scope
-        self.folder = scope.folder
         self.client = client
         self.preferences = preferences
         self.mailStore = mailStore
-        self.window = FolderWindowLoader(scope: scope, client: client, mailStore: mailStore)
-        window.host = self
+        self.window = scope.folder.map { FolderWindowLoader(folder: $0, client: client, mailStore: mailStore) }
+        self.search = MailSearchSession(client: client, listFolder: scope.folder)
+        window?.host = self
+        search.host = self
         // For the model's whole life, not the view's: a list under a pushed
         // reader has had `.onDisappear` and still has to hear its archive.
         mailStore.events.subscribe(self)
     }
 
-    /// The rows on screen: the folder window's, or a search's in their place
-    /// (both live in the window's array until the search moves out). The
-    /// `_modify` accessor hands the window's storage through, so an in-place
-    /// edit (a flag flip, a removal) doesn't copy the whole array.
+    /// The folder this list shows; nil on the search surface. A request that
+    /// names it has to unwrap it, so none can be built there.
+    var folder: Folder? { window?.folder }
+
+    /// The folder window while its rows are the ones on screen: not on the
+    /// search surface, which has none, nor once a search's results have
+    /// taken the list over.
+    private var shownWindow: FolderWindowLoader? { search.showsResults ? nil : window }
+
+    /// The rows on screen: the folder window's, or the search's once its
+    /// results have landed (always on the search surface). `_modify` hands
+    /// the chosen store's storage through, so an in-place edit (a flag flip,
+    /// a removal) doesn't copy the whole array.
     var envelopes: [Envelope] {
-        get { window.envelopes }
-        set { window.envelopes = newValue }
-        _modify { yield &window.envelopes }
+        get { shownWindow?.envelopes ?? search.rows }
+        set {
+            if let shown = shownWindow { shown.envelopes = newValue } else { search.rows = newValue }
+        }
+        _modify {
+            if let shown = shownWindow { yield &shown.envelopes } else { yield &search.rows }
+        }
     }
 
-    /// A refresh, a reset or a search is in flight (`FolderWindowLoader.isLoading`).
-    var isLoading: Bool { window.isLoading }
+    /// A refresh, a reset or a search is in flight: the folder window's
+    /// holds (a search over the folder takes one too) or the search's own
+    /// runs.
+    var isLoading: Bool { (window?.isLoading ?? false) || search.isLoading }
 
     /// The removals in flight that touch this list: its folder's, from any
     /// writer, or on the search surface any. It includes, on the dispose
     /// path, the few hundred milliseconds where the row is still present but
     /// animating out (`rowDisposalPhases`).
-    var pendingRemovedRefs: Set<MessageRef> { window.pendingRemovedRefs }
+    var pendingRemovedRefs: Set<MessageRef> { window?.pendingRemovedRefs ?? mailStore.shields.pendingMoveRefs }
 
     /// Start the watcher-driven auto-refresh loop. Called from the view's
     /// `.task` after `loadInitial()` settles. The watcher runs on its own
@@ -210,8 +218,8 @@ final class MessageListViewModel {
     /// collapse bursts to a single refresh by gating on elapsed time, since
     /// one poll can report both.
     func startWatching() async {
-        // The global search surface has no anchor folder to watch.
-        guard !isSearchScope, watcher == nil else { return }
+        // The global search surface has no folder to watch.
+        guard let folder, watcher == nil else { return }
         let client = self.client
         let watcher = MailboxWatcher(
             folder: folder.path,
@@ -238,7 +246,7 @@ final class MessageListViewModel {
     func stopWatching() async {
         watcherTask?.cancel()
         watcherTask = nil
-        window.cancelTasks()
+        window?.cancelTasks()
         // Let go of the watcher before waiting for it to stop, so a list back
         // on screen in the meantime starts a fresh one (`startWatching`).
         let stopping = watcher
@@ -270,7 +278,7 @@ final class MessageListViewModel {
             await refreshSearch(prefetched: prefetched)
             return
         }
-        await window.refresh(prefetched: prefetched, startingOver: startingOver)
+        await window?.refresh(prefetched: prefetched, startingOver: startingOver)
     }
 
     /// Messages this list removed are confirmed gone on the server (a
@@ -302,7 +310,7 @@ extension MessageListViewModel {
     /// `disposeAction`).
     var flagPalette: [FlagPaletteEntry] { preferences.flagPalette }
 
-    /// True when this is the global search surface (no anchor folder).
+    /// True when this is the global search surface (no folder, no window).
     var isSearchScope: Bool { scope.isSearch }
 
     /// Whether the sort menu means anything for the rows shown. Search
@@ -320,12 +328,13 @@ extension MessageListViewModel {
     }
 
     /// The order the rows on screen sort in, for the writes that put a row
-    /// back (`FolderWindowLoader.envelopeOrder`).
-    var envelopeOrder: (Envelope, Envelope) -> Bool { window.envelopeOrder }
+    /// back (`FolderWindowLoader.envelopeOrder`). The search surface's rows
+    /// keep the default order, as its sort menu is off.
+    var envelopeOrder: (Envelope, Envelope) -> Bool { window?.envelopeOrder ?? EnvelopeOrder(.default).precedes }
 
     /// Drops the window's staged bottom page: the rows moved under it.
     func invalidateBottomPrefetch() {
-        window.invalidateBottomPrefetch()
+        window?.invalidateBottomPrefetch()
     }
 
     /// Drop a message's row from the in-memory envelope list after it was
@@ -375,8 +384,11 @@ extension MessageListViewModel {
     }
 
     /// The identity of `envelope`'s row (`FolderWindowLoader.rowRef(for:)`).
+    /// On the search surface every row carries its own folder
+    /// (`SearchedEnvelope`), so the empty default is never taken, and no
+    /// request is built from it.
     func rowRef(for envelope: Envelope) -> MessageRef {
-        window.rowRef(for: envelope)
+        window?.rowRef(for: envelope) ?? envelope.ref(defaultFolder: "")
     }
 
     /// Position of `ref`'s row in `envelopes`, while it is loaded.
@@ -389,9 +401,10 @@ extension MessageListViewModel {
         index(of: ref).map { envelopes[$0] }
     }
 
-    /// `fetched` placed in this folder (`FolderWindowLoader.placedInFolder(_:)`).
+    /// `fetched` placed in this folder (`FolderWindowLoader.placedInFolder(_:)`);
+    /// as they are on the search surface, whose rows carry their own.
     func placedInFolder(_ fetched: [Envelope]) -> [Envelope] {
-        window.placedInFolder(fetched)
+        window?.placedInFolder(fetched) ?? fetched
     }
 }
 
@@ -453,7 +466,7 @@ extension MessageListViewModel: MailEventSubscriber {
     func applyRemoval(of refs: [MessageRef], from origin: UUID?, advancing: Bool) {
         var seen = Set<MessageRef>()
         let named = refs.filter {
-            (isSearchScope ? index(of: $0) != nil : $0.folder == folder.path) && seen.insert($0).inserted
+            (isSearchScope ? index(of: $0) != nil : $0.folder == folder?.path) && seen.insert($0).inserted
         }
         guard !named.isEmpty else { return }
         let current = envelopes.first { seen.contains(rowRef(for: $0)) }
@@ -501,7 +514,7 @@ extension MessageListViewModel: MailEventSubscriber {
         if isSearchScope {
             guard retired.contains(where: { index(of: $0) != nil }) else { return }
         } else {
-            guard folder.path == folderPath else { return }
+            guard folder?.path == folderPath else { return }
         }
         for ref in retired {
             pruneEnvelope(ref)

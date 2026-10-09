@@ -223,7 +223,7 @@ final class MessageDetailMarkSeenTests: XCTestCase {
         let store = AppState().mailStore
         let list = try TestFixtures.makeModel(imap: imap, envelopes: envelopes, mailStore: store)
         await fixture.track(list.client)
-        list.window.totalMessages = 3
+        list.window!.totalMessages = 3
         list.unseen = 1
         await imap.scriptBody(folder: "INBOX", uid: uid, [.success(MessageDetailMimeFixture.alternative)])
         let reader = try await fixture.makeReader(imap: imap, envelope: envelopes[2], markAsRead: .onOpen)

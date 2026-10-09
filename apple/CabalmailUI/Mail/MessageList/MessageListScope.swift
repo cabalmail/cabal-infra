@@ -5,28 +5,19 @@ import CabalmailKit
 /// - `.folder` is the classic per-folder mailbox view: STATUS-driven counts,
 ///   positional pagination, the change watcher, the on-disk envelope snapshot,
 ///   and the All / Unread / Flagged filter pills.
-/// - `.search` is the global, cross-folder search surface. It has no anchor
-///   folder, runs no folder lifecycle (no STATUS / pagination / watcher /
-///   60s poll), and populates `envelopes` only via `runSearch`. Every row
-///   carries its own folder (`Envelope.folder`), so dispose / flag / move /
+/// - `.search` is the global, cross-folder search surface. It shows no folder:
+///   its list has no folder window, and its rows come only from a search, each
+///   carrying its own folder (`Envelope.folder`), so dispose / flag / move /
 ///   read still route to each result's true mailbox.
-///
-/// The view model keeps a resolved `folder` anchor either way (a sentinel for
-/// `.search`) so the existing folder-keyed call sites compile unchanged; the
-/// `.search` paths are gated off before any of them issue an IMAP request
-/// against the sentinel.
 enum MessageListScope: Equatable {
     case folder(Folder)
     case search
 
-    /// Resolved anchor folder. `.search` has no real folder, so it yields a
-    /// sentinel whose `path` is never sent to the server (search runs
-    /// cross-folder and every result carries its own source folder).
-    var folder: Folder {
-        switch self {
-        case .folder(let folder): return folder
-        case .search: return Folder(path: "")
-        }
+    /// The folder a folder list shows; nil for the search surface, which shows
+    /// none.
+    var folder: Folder? {
+        if case .folder(let folder) = self { return folder }
+        return nil
     }
 
     var isSearch: Bool {

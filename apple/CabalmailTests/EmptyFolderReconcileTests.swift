@@ -33,7 +33,7 @@ final class EmptyFolderReconcileTests: XCTestCase {
             loaded: [572]
         )
         await model.refresh()
-        XCTAssertEqual(model.window.totalMessages, 0, "STATUS said the folder is empty")
+        XCTAssertEqual(model.window!.totalMessages, 0, "STATUS said the folder is empty")
         XCTAssertTrue(
             model.envelopes.isEmpty,
             "a row the server no longer has can't outlive a STATUS that reports zero messages"

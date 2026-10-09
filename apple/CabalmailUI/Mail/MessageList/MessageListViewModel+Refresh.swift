@@ -21,15 +21,15 @@ extension MessageListViewModel {
     /// retry it. Mirrors `refreshFromPull`.
     func loadInitial() async {
         guard envelopes.isEmpty else { return }
-        let sticky = isSearchScope ? .all : preferences.mailFolderFilter(for: folder.path)
+        let sticky = folder.map { preferences.mailFolderFilter(for: $0.path) } ?? .all
         filterTab = sticky
         await Task {
-            await self.window.hydrateFromCache()
-            await self.window.seedSavedCounts()
+            await self.window?.hydrateFromCache()
+            await self.window?.seedSavedCounts()
             await self.refresh()
             if sticky != .all { await self.applyFilter(sticky) }
         }.value
-        window.scheduleBottomPrefetch()
+        window?.scheduleBottomPrefetch()
     }
 
     /// Pull-to-refresh entry point. Runs `refresh()` on an unstructured,
@@ -44,7 +44,7 @@ extension MessageListViewModel {
     }
 
     /// The All pill's folder count: the saved one until a STATUS answers.
-    var allCount: Int { window.savedMessageCount ?? Int(window.totalMessages) }
+    var allCount: Int { window.map { $0.savedMessageCount ?? Int($0.totalMessages) } ?? 0 }
 
     /// The Unread pill's count: the mail store's unread count for this
     /// folder, which the sidebar shows too, so the two are one number. None
@@ -52,9 +52,9 @@ extension MessageListViewModel {
     /// shows a count without vouching for it (`MailCounts.show`); nothing in
     /// the app does, since the mutation service moves the store's counts.
     var unseen: Int {
-        get { isSearchScope ? 0 : mailStore.counts.folderUnreadCounts[folder.path] ?? 0 }
+        get { folder.map { mailStore.counts.folderUnreadCounts[$0.path] ?? 0 } ?? 0 }
         set {
-            guard !isSearchScope else { return }
+            guard let folder else { return }
             mailStore.counts.show(unread: newValue, folderPath: folder.path)
         }
     }
@@ -62,9 +62,9 @@ extension MessageListViewModel {
     /// The Flagged pill's count: the mail store's flagged count for this
     /// folder. As `unseen`.
     var flagged: Int {
-        get { isSearchScope ? 0 : mailStore.counts.folderFlaggedCounts[folder.path] ?? 0 }
+        get { folder.map { mailStore.counts.folderFlaggedCounts[$0.path] ?? 0 } ?? 0 }
         set {
-            guard !isSearchScope else { return }
+            guard let folder else { return }
             mailStore.counts.show(flagged: newValue, folderPath: folder.path)
         }
     }
@@ -85,7 +85,7 @@ extension MessageListViewModel {
     /// active search, or does nothing. The refresh is routed, so a pill
     /// search that started during the probe re-runs instead.
     func hardReload() async {
-        if isSearchScope {
+        guard let window else {
             if isSearchActive { await refreshSearch() }
             return
         }
@@ -93,6 +93,10 @@ extension MessageListViewModel {
         window.holdLoading()
         defer { window.releaseLoading() }
         guard let probe = await window.resetForHardReload() else { return }
+        // The reset wiped only the folder window's rows. A pill's results
+        // live in the search, so they go here, and the re-run below walks one
+        // page, as a fresh pill does.
+        if search.showsResults { search.rows.removeAll() }
         await refresh(prefetched: probe, startingOver: true)
     }
 }

@@ -27,8 +27,6 @@ struct WindowRefresher {
     /// down whatever the pass out was for. The pass runs in the caller's task,
     /// so a cancelled caller's refresh stops without applying anything.
     func refresh(prefetched: PrefetchedStatus?, startingOver: Bool) async {
-        // The search surface has no folder to STATUS.
-        guard !window.isSearchScope else { return }
         window.holdLoading()
         defer { window.releaseLoading() }
         let ask = prefetched?.ask ?? window.refreshFlight.ask()
@@ -88,33 +86,27 @@ struct WindowRefresher {
         // The spinner holds from the probe through the refresh it hands to.
         window.holdLoading()
         defer { window.releaseLoading() }
-        var probe: PrefetchedStatus?
-        if !window.isSearchScope {
-            // The new order comes from the server, so ask it before dropping
-            // the list. Offline the wipe used to run anyway and leave the list
-            // empty (#1796); now the list stays, and the order goes back
-            // unless a newer pick has replaced it. Cached rows can't stand in:
-            // they're a window of the old order, and merged with the new
-            // order's first page they'd leave gaps in it.
-            guard let answered = await probeBeforeReset() else {
-                if window.sortCriterion == criterion { window.sortCriterion = previous }
-                return
-            }
-            // A newer pick arrived during the wait, and does the reset itself.
-            guard window.sortCriterion == criterion else { return }
-            probe = answered
+        // The new order comes from the server, so ask it before dropping the
+        // list. Offline the wipe used to run anyway and leave the list empty
+        // (#1796); now the list stays, and the order goes back unless a newer
+        // pick has replaced it. Cached rows can't stand in: they're a window
+        // of the old order, and merged with the new order's first page they'd
+        // leave gaps in it.
+        guard let probe = await probeBeforeReset() else {
+            if window.sortCriterion == criterion { window.sortCriterion = previous }
+            return
         }
+        // A newer pick arrived during the wait, and does the reset itself.
+        guard window.sortCriterion == criterion else { return }
         // A search started while the probe was out (a pill, say). Its results
         // keep the server's order (see `sortApplies`), so the pick is kept for
         // the folder view the search returns to: wiping the rows to re-run
         // the search would only cut a deep result set back to one page. The
         // probe's counts are applied rather than dropped (#1822).
         if window.isSearchActive {
-            if let probe {
-                _ = window.applyStatusCounts(
-                    probe.status, mayPredateRemoval: window.removalMayPostdate(probe.askedAt), askedAt: probe.askedAt
-                )
-            }
+            _ = window.applyStatusCounts(
+                probe.status, mayPredateRemoval: window.removalMayPostdate(probe.askedAt), askedAt: probe.askedAt
+            )
             return
         }
         window.envelopes.removeAll()
@@ -306,6 +298,24 @@ struct WindowRefresher {
             into: window.folder.path
         )
         return licensed
+    }
+
+    /// The folder's counts from one STATUS (or the one prefetched), with no
+    /// page: a search showing in the window's place still moves the pills
+    /// and the sidebar badge (#1819). A STATUS that fails changes nothing.
+    func refreshCounts(prefetched: PrefetchedStatus?) async {
+        let startedAt = prefetched?.askedAt ?? ContinuousClock.now
+        let status: FolderStatus?
+        if let prefetched {
+            status = prefetched.status
+        } else {
+            status = try? await window.client.folderStatus(path: window.folder.path, flagged: true)
+        }
+        if let status {
+            _ = window.applyStatusCounts(
+                status, mayPredateRemoval: window.removalMayPostdate(startedAt), askedAt: startedAt
+            )
+        }
     }
 
     /// Asks the server for this folder's STATUS before a reset that drops the

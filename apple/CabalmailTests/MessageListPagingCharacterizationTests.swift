@@ -44,21 +44,21 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
     func testLoadMoreFetchesThe200RowPageAfterTheWindowAndAppendsIt() async throws {
         let model = try await world.openedList()
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<50))
-        XCTAssertEqual(model.window.totalMessages, 1000)
+        XCTAssertEqual(model.window!.totalMessages, 1000)
         let opened = await world.pages()
         XCTAssertEqual(opened, [], "opening loads only the top page")
 
-        model.window.ensureLoaded(around: 0)
-        XCTAssertTrue(model.window.isLoadingMore, "raised synchronously, before the page is asked for")
+        model.window!.ensureLoaded(around: 0)
+        XCTAssertTrue(model.window!.isLoadingMore, "raised synchronously, before the page is asked for")
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 50, limit: 200)])
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<250))
-        XCTAssertEqual(model.window.windowStart, 0)
-        XCTAssertFalse(model.window.hasTrimmedFront)
-        XCTAssertEqual(model.window.envelope(at: 249)?.uid, 751)
-        XCTAssertNil(model.window.envelope(at: 250), "past the window the row is a placeholder")
+        XCTAssertEqual(model.window!.windowStart, 0)
+        XCTAssertFalse(model.window!.hasTrimmedFront)
+        XCTAssertEqual(model.window!.envelope(at: 249)?.uid, 751)
+        XCTAssertNil(model.window!.envelope(at: 250), "past the window the row is a placeholder")
         XCTAssertNil(model.errorMessage)
     }
 
@@ -67,9 +67,9 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
         let subject = SortCriterion(field: .subject, direction: .ascending)
         let model = try await world.openedList()
 
-        await model.window.setSort(subject)
+        await model.window!.setSort(subject)
         await world.settle(model)
-        model.window.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.settle(model)
 
         let pages = await world.pages()
@@ -88,7 +88,7 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
         let model = try await world.openedList()
         await world.imap.scriptFolderContents(ListPagingWorld.serverFolder(size: 1010))
 
-        model.window.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.settle(model)
 
         let pages = await world.pages()
@@ -96,7 +96,7 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
         let shown = model.envelopes.map(\.uid)
         XCTAssertEqual(shown.count, Set(shown).count, "no row twice")
         XCTAssertEqual(shown, uids(0..<240), "1000 down to 761: 50 loaded plus 190 new")
-        XCTAssertEqual(model.window.windowStart, 0)
+        XCTAssertEqual(model.window!.windowStart, 0)
     }
 
     // MARK: - Trim at the window cap
@@ -111,17 +111,17 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
         let model = try await world.openedList(preloaded: 500)
         XCTAssertEqual(model.envelopes.count, 500)
 
-        model.window.ensureLoaded(around: 499)
+        model.window!.ensureLoaded(around: 499)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 500, limit: 200)])
         XCTAssertEqual(model.envelopes.count, 600)
-        XCTAssertEqual(model.window.windowStart, 100)
-        XCTAssertTrue(model.window.hasTrimmedFront)
+        XCTAssertEqual(model.window!.windowStart, 100)
+        XCTAssertTrue(model.window!.hasTrimmedFront)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(100..<700))
-        XCTAssertNil(model.window.envelope(at: 99))
-        XCTAssertEqual(model.window.envelope(at: 100)?.uid, 900)
+        XCTAssertNil(model.window!.envelope(at: 99))
+        XCTAssertEqual(model.window!.envelope(at: 100)?.uid, 900)
 
         let topFetches = await world.imap.topEnvelopesCalls.count
         let statuses = await world.imap.statusCalls.count
@@ -136,8 +136,8 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
         XCTAssertEqual(statusesAfter, statuses + 1, "STATUS still runs")
         XCTAssertEqual(topFetchesAfter, topFetches, "no top page once the front is trimmed")
         XCTAssertEqual(pagesAfter.last, Page(offset: 275, limit: 250), "one page centred on the window")
-        XCTAssertEqual(model.window.totalMessages, 1003, "the counts move")
-        XCTAssertEqual(model.window.windowStart, 275)
+        XCTAssertEqual(model.window!.totalMessages, 1003, "the counts move")
+        XCTAssertEqual(model.window!.windowStart, 275)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(275..<525, size: 1003), "and so do the rows")
         XCTAssertNil(model.errorMessage)
     }
@@ -149,19 +149,19 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
     /// top, which turns the top-page refresh back on.
     func testLoadPreviousRefillsTheFrontAndReanchorsTheWindowAtTheTop() async throws {
         let model = try await world.openedList(preloaded: 600)
-        model.window.ensureLoaded(around: 599)
+        model.window!.ensureLoaded(around: 599)
         await world.settle(model)
-        XCTAssertEqual(model.window.windowStart, 200)
-        XCTAssertTrue(model.window.hasTrimmedFront)
+        XCTAssertEqual(model.window!.windowStart, 200)
+        XCTAssertTrue(model.window!.hasTrimmedFront)
 
-        model.window.ensureLoaded(around: 200)
-        XCTAssertTrue(model.window.isLoadingPrevious)
+        model.window!.ensureLoaded(around: 200)
+        XCTAssertTrue(model.window!.isLoadingPrevious)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 600, limit: 200), Page(offset: 0, limit: 200)])
-        XCTAssertEqual(model.window.windowStart, 0)
-        XCTAssertFalse(model.window.hasTrimmedFront)
+        XCTAssertEqual(model.window!.windowStart, 0)
+        XCTAssertFalse(model.window!.hasTrimmedFront)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<600), "the bottom 200 trimmed away")
 
         let topFetches = await world.imap.topEnvelopesCalls.count
@@ -174,18 +174,18 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
     /// just those rows.
     func testLoadPreviousAsksOnlyForTheRowsAboveAShortTrimmedFront() async throws {
         let model = try await world.openedList(preloaded: 500)
-        model.window.ensureLoaded(around: 499)
+        model.window!.ensureLoaded(around: 499)
         await world.settle(model)
-        XCTAssertEqual(model.window.windowStart, 100)
+        XCTAssertEqual(model.window!.windowStart, 100)
 
-        model.window.ensureLoaded(around: 100)
-        XCTAssertTrue(model.window.isLoadingPrevious)
+        model.window!.ensureLoaded(around: 100)
+        XCTAssertTrue(model.window!.isLoadingPrevious)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 500, limit: 200), Page(offset: 0, limit: 100)])
-        XCTAssertEqual(model.window.windowStart, 0)
-        XCTAssertFalse(model.window.hasTrimmedFront)
+        XCTAssertEqual(model.window!.windowStart, 0)
+        XCTAssertFalse(model.window!.hasTrimmedFront)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<600))
     }
 
@@ -196,19 +196,19 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
     /// This test pinned the page below loading first until then.
     func testARowJustAboveAFreshJumpWindowLoadsThePageAboveFirst() async throws {
         let model = try await world.openedList()
-        model.window.ensureLoaded(around: 400)
+        model.window!.ensureLoaded(around: 400)
         await world.settle(model)
-        XCTAssertEqual(model.window.windowStart, 300)
+        XCTAssertEqual(model.window!.windowStart, 300)
 
-        model.window.ensureLoaded(around: 299)
-        XCTAssertTrue(model.window.isLoadingPrevious)
-        XCTAssertFalse(model.window.isLoadingMore)
+        model.window!.ensureLoaded(around: 299)
+        XCTAssertTrue(model.window!.isLoadingPrevious)
+        XCTAssertFalse(model.window!.isLoadingMore)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 300, limit: 200), Page(offset: 100, limit: 200)])
-        XCTAssertEqual(model.window.windowStart, 100)
-        XCTAssertEqual(model.window.envelope(at: 299)?.uid, 701, "the row scrolled to is loaded")
+        XCTAssertEqual(model.window!.windowStart, 100)
+        XCTAssertEqual(model.window!.envelope(at: 299)?.uid, 701, "the row scrolled to is loaded")
     }
 
     /// Inside a fresh jump window [300, 500), each half loads toward its own
@@ -217,12 +217,12 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
     func testInsideAFreshJumpWindowEachHalfLoadsTowardItsOwnEdge() async throws {
         for (index, upward) in [(320, true), (399, true), (400, false), (480, false)] {
             let model = try await world.openedList()
-            model.window.ensureLoaded(around: 400)
+            model.window!.ensureLoaded(around: 400)
             await world.settle(model)
 
-            model.window.ensureLoaded(around: index)
-            XCTAssertEqual(model.window.isLoadingPrevious, upward, "row \(index)")
-            XCTAssertEqual(model.window.isLoadingMore, !upward, "row \(index)")
+            model.window!.ensureLoaded(around: index)
+            XCTAssertEqual(model.window!.isLoadingPrevious, upward, "row \(index)")
+            XCTAssertEqual(model.window!.isLoadingMore, !upward, "row \(index)")
             await world.settle(model)
         }
     }
@@ -237,18 +237,18 @@ final class MessageListPagingCharacterizationTests: XCTestCase {
             let model = try await world.openedList()
             let asked = await world.pages().count
 
-            model.window.ensureLoaded(around: target)
-            XCTAssertTrue(model.window.isLoadingWindow)
+            model.window!.ensureLoaded(around: target)
+            XCTAssertTrue(model.window!.isLoadingWindow)
             await world.settle(model)
 
             let pages = await world.pages()
             XCTAssertEqual(pages.count, asked + 1, "one page for a jump to \(target)")
             XCTAssertEqual(pages.last, Page(offset: UInt32(start), limit: 200), "jump to \(target)")
-            XCTAssertEqual(model.window.windowStart, UInt32(start))
+            XCTAssertEqual(model.window!.windowStart, UInt32(start))
             XCTAssertEqual(model.envelopes.map(\.uid), uids(start..<(start + 200)))
-            XCTAssertTrue(model.window.hasTrimmedFront)
-            XCTAssertNil(model.window.envelope(at: 0), "the top page is dropped, not merged")
-            XCTAssertEqual(model.window.envelope(at: target)?.uid, UInt32(1000 - target))
+            XCTAssertTrue(model.window!.hasTrimmedFront)
+            XCTAssertNil(model.window!.envelope(at: 0), "the top page is dropped, not merged")
+            XCTAssertEqual(model.window!.envelope(at: target)?.uid, UInt32(1000 - target))
         }
     }
 }

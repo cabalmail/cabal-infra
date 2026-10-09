@@ -103,7 +103,7 @@ extension MessageListView {
     ) -> some View {
         let hasUnread = bulkSelectionContainsUnread(model)
         let hasUnflagged = bulkSelectionContainsUnflagged(model)
-        let archive = BulkArchiveButtonPolicy.button(in: model.folder.path)
+        let archive = BulkArchiveButtonPolicy.button(in: model.folder?.path)
         bulkActionButton(
             systemImage: archive.systemImage,
             label: archive.title,

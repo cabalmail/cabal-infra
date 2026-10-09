@@ -40,14 +40,14 @@ final class SearchPagingTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
         XCTAssertTrue(model.isSearchActive)
         XCTAssertEqual(model.envelopes.count, 50, "a fresh pill search fetches exactly one page")
-        XCTAssertEqual(model.searchNextCursor, "c1")
+        XCTAssertEqual(model.search.nextCursor, "c1")
 
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
         XCTAssertEqual(
             model.envelopes.count, 53,
             "the next page appends, minus the boundary row already loaded"
         )
-        XCTAssertNil(model.searchNextCursor, "the match set is exhausted")
+        XCTAssertNil(model.search.nextCursor, "the match set is exhausted")
         let calls = await imap.searchCalls
         XCTAssertEqual(calls.count, 2)
         XCTAssertEqual(calls[1].cursor, "c1", "load-more resumes from the stored cursor")
@@ -64,7 +64,7 @@ final class SearchPagingTests: XCTestCase {
         ])
         let model = try TestFixtures.makeModel(imap: imap, envelopes: [])
         await model.selectFilter(.unread)
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
         XCTAssertEqual(model.envelopes.count, 100)
 
         // Pull-to-refresh and the background pass route through `refresh()`,
@@ -72,7 +72,7 @@ final class SearchPagingTests: XCTestCase {
         // position must not collapse back to one page.
         await model.refresh()
         XCTAssertEqual(model.envelopes.count, 100)
-        XCTAssertEqual(model.searchNextCursor, "r2")
+        XCTAssertEqual(model.search.nextCursor, "r2")
         let calls = await imap.searchCalls
         XCTAssertEqual(calls.count, 4)
         XCTAssertNil(calls[2].cursor, "the re-walk starts over from the first page")
@@ -94,7 +94,7 @@ final class SearchPagingTests: XCTestCase {
         let model = try TestFixtures.makeModel(imap: imap, envelopes: [])
         model.searchQuery = "probe"
         await model.runSearch()
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
 
         XCTAssertEqual(
             model.envelopes.count, 51,
@@ -115,14 +115,14 @@ final class SearchPagingTests: XCTestCase {
         let model = try TestFixtures.makeModel(imap: imap, envelopes: [])
         model.searchQuery = "probe"
         await model.runSearch()
-        XCTAssertEqual(model.searchNextCursor, "c1")
+        XCTAssertEqual(model.search.nextCursor, "c1")
 
         // `clearSearch` runs a folder refresh the fake traps on; the state
         // reset it does first is what this asserts.
         await model.clearSearch()
-        XCTAssertNil(model.searchNextCursor)
+        XCTAssertNil(model.search.nextCursor)
         let before = await imap.searchCalls.count
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
         let after = await imap.searchCalls.count
         XCTAssertEqual(after, before, "no cursor after clearing — nothing is fetched")
     }

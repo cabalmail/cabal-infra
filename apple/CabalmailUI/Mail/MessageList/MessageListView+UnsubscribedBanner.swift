@@ -46,7 +46,7 @@ extension MessageListView {
     }
 
     private func refreshFolderStatus() async {
-        guard let client = appState.client else { return }
+        guard let folder, let client = appState.client else { return }
         let askedAt = ContinuousClock.now
         if let status = try? await client.imapClient.status(path: folder.path),
            appState.mailStore.acceptsCounts(from: client) {

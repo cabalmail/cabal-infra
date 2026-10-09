@@ -29,8 +29,8 @@ import CabalmailKit
 extension MessageListView {
     /// The menu's rows for the folder list loaded so far, with the current
     /// folder checked.
-    var folderSwitchGroups: FolderSwitchMenuPolicy.Groups {
-        FolderSwitchMenuPolicy.groups(folders: switchFolders, current: folder)
+    func folderSwitchGroups(current: Folder) -> FolderSwitchMenuPolicy.Groups {
+        FolderSwitchMenuPolicy.groups(folders: switchFolders, current: current)
     }
 
     /// Hangs the folder menu on `content`'s title. The search surface's
@@ -81,26 +81,28 @@ extension MessageListView {
     /// same identifier, so one driver reads both.
     @ViewBuilder
     var folderSwitchHeaderMenu: some View {
-        Menu {
-            folderSwitchMenuItems
-        } label: {
-            HStack(spacing: 4) {
-                Text(folder.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+        if let folder {
+            Menu {
+                folderSwitchMenuItems
+            } label: {
+                HStack(spacing: 4) {
+                    Text(folder.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel("Folder, \(folder.name)")
+            .accessibilityHint("Switch folder")
+            .accessibilityIdentifier("list.folderSwitch")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal)
+            .padding(.vertical, 4)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Folder, \(folder.name)")
-        .accessibilityHint("Switch folder")
-        .accessibilityIdentifier("list.folderSwitch")
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal)
-        .padding(.vertical, 4)
     }
     #endif
 
@@ -109,40 +111,42 @@ extension MessageListView {
     /// for, as a menu with the system's pull-down chevron.
     @ViewBuilder
     var folderSwitchMenu: some View {
-        let groups = folderSwitchGroups
-        Menu {
-            folderSwitchMenuItems
-        } label: {
-            Text(folder.name)
-                .font(.headline)
-                .lineLimit(1)
+        if let folder {
+            let groups = folderSwitchGroups(current: folder)
+            Menu {
+                folderSwitchMenuItems
+            } label: {
+                Text(folder.name)
+                    .font(.headline)
+                    .lineLimit(1)
+            }
+            // Borderless, or macOS 27 drops the label: the toolbar's default
+            // bordered style draws a `Menu` as a 36x36 circle holding only the
+            // chevron, whatever the label is (#1601; measured with a `Text`, a
+            // `Label`, an `HStack` with its own chevron, the title initializer,
+            // `.fixedSize()` and `.menuIndicator(.visible)`, all 36-44pt wide
+            // with no name). The borderless button style is the one that lays
+            // the label out: `INBOX` plus the chevron at 62x16.
+            .menuStyle(.button)
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Folder, \(folder.name)")
+            .accessibilityHint("Switch folder")
+            .accessibilityIdentifier("list.folderSwitch")
+            // The global search field shares this toolbar section and is sized
+            // to what the menu leaves it (`ToolbarSearchFieldWidth`). The menu's
+            // width is the folder name's, so it is measured here rather than
+            // assumed: a toolbar item can measure itself, and this is the only
+            // place that knows how wide the name came out.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { width in
+                onFolderMenuWidthChanged(width)
+            }
+            // macOS keeps the AppKit menu it built the first time this `Menu`
+            // was opened — checkmarks and row titles included — so the identity
+            // carries what the rows draw (#1337, same mechanism as #1329).
+            .id(FolderSwitchMenuPolicy.identity(groups))
         }
-        // Borderless, or macOS 27 drops the label: the toolbar's default
-        // bordered style draws a `Menu` as a 36x36 circle holding only the
-        // chevron, whatever the label is (#1601; measured with a `Text`, a
-        // `Label`, an `HStack` with its own chevron, the title initializer,
-        // `.fixedSize()` and `.menuIndicator(.visible)`, all 36-44pt wide
-        // with no name). The borderless button style is the one that lays
-        // the label out: `INBOX` plus the chevron at 62x16.
-        .menuStyle(.button)
-        .buttonStyle(.borderless)
-        .accessibilityLabel("Folder, \(folder.name)")
-        .accessibilityHint("Switch folder")
-        .accessibilityIdentifier("list.folderSwitch")
-        // The global search field shares this toolbar section and is sized
-        // to what the menu leaves it (`ToolbarSearchFieldWidth`). The menu's
-        // width is the folder name's, so it is measured here rather than
-        // assumed: a toolbar item can measure itself, and this is the only
-        // place that knows how wide the name came out.
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { width in
-            onFolderMenuWidthChanged(width)
-        }
-        // macOS keeps the AppKit menu it built the first time this `Menu`
-        // was opened — checkmarks and row titles included — so the identity
-        // carries what the rows draw (#1337, same mechanism as #1329).
-        .id(FolderSwitchMenuPolicy.identity(groups))
     }
     #endif
 
@@ -150,12 +154,14 @@ extension MessageListView {
     /// for the rest when there are any.
     @ViewBuilder
     var folderSwitchMenuItems: some View {
-        let groups = folderSwitchGroups
-        folderSwitchRows(groups.subscribed)
-        if !groups.other.isEmpty {
-            Divider()
-            Menu(FolderSwitchMenuPolicy.otherFoldersLabel) {
-                folderSwitchRows(groups.other)
+        if let folder {
+            let groups = folderSwitchGroups(current: folder)
+            folderSwitchRows(groups.subscribed)
+            if !groups.other.isEmpty {
+                Divider()
+                Menu(FolderSwitchMenuPolicy.otherFoldersLabel) {
+                    folderSwitchRows(groups.other)
+                }
             }
         }
     }

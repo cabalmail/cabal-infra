@@ -46,7 +46,7 @@ final class StatusAcrossWriteTests: XCTestCase {
         await fixture.track(list.client)
         // A STATUS this session has counted the folder: the base the next
         // one is bounded against.
-        _ = list.window.applyStatusCounts(FolderStatus(messages: 3, unseen: unread.count, flagged: 0))
+        _ = list.window!.applyStatusCounts(FolderStatus(messages: 3, unseen: unread.count, flagged: 0))
         XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts[work], unread.count, "precondition")
         await imap.scriptInitialLoad(
             status: FolderStatus(messages: 3, unseen: statusUnread, flagged: 0, uidValidity: 7, uidNext: 4),
@@ -204,7 +204,7 @@ final class StatusAcrossWriteTests: XCTestCase {
         await imap.awaitHeld(.setFlags)
         let dispose = Task { await first.dispose(rows[1].inFolder(self.work)) }
         await imap.awaitHeld(.move)
-        let merged = second.window.shieldFetched(rows)
+        let merged = second.window!.shieldFetched(rows)
 
         XCTAssertEqual(merged.map { second.rowRef(for: $0) }, [ref(3), ref(1)], "2 is being removed by the first list")
         XCTAssertTrue(

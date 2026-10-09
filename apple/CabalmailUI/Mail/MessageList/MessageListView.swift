@@ -13,9 +13,9 @@ struct MessageListView: View {
     /// same model). Nil in folder scope: the view self-creates the folder model
     /// in `.task` and owns its full lifecycle.
     var injectedSearchModel: MessageListViewModel?
-    /// Resolved anchor folder (a sentinel in `.search` scope). Computed so the
-    /// folder-keyed extensions read it unchanged.
-    var folder: Folder { scope.folder }
+    /// The folder this list shows; nil on the global search surface, which
+    /// shows none. The folder-only chrome unwraps it.
+    var folder: Folder? { scope.folder }
     /// True for the global search surface.
     var isSearchScope: Bool { scope.isSearch }
     /// The row the reader shows. Every row carries its own folder
@@ -265,7 +265,7 @@ struct MessageListView: View {
         // the cursor runs dry.
         .onChange(of: visible.isEmpty) { _, isEmpty in
             guard isEmpty, model.isSearchActive else { return }
-            model.requestMoreSearchResults()
+            model.search.requestMore()
         }
         // Search input lives on the search *surface*, not the folder list:
         // `.searchable` on the iPhone search tab (driving the iOS 26 tab-bar
@@ -290,7 +290,7 @@ struct MessageListView: View {
             VStack(spacing: 0) {
                 // The unsubscribed-folder banner is a folder-view concern; the
                 // global search surface has no single folder to subscribe to.
-                if !isSearchScope,
+                if let folder,
                    UnsubscribedBannerPolicy.shouldShow(
                        folder: folder, subscribedPaths: appState.mailStore.counts.subscribedFolderPaths
                    ) {
@@ -324,7 +324,7 @@ extension MessageListView {
                     ProgressView()
                 }
             }
-            .navigationTitle(isSearchScope ? "Search" : folder.name)
+            .navigationTitle(folder?.name ?? "Search")
         ))
         // The folder-switch menu's rows (`+FolderSwitch`); a no-op on the
         // search surface.
@@ -625,7 +625,7 @@ extension MessageListView {
     /// then by the restore's ref. A miss (deleted, or not in the loaded
     /// window) leaves the list unselected — the graceful-degradation path.
     private func applyPendingRestore(model: MessageListViewModel) {
-        guard !isSearchScope,
+        guard let folder,
               let restore = appState.navCoordinator?.consumePendingRestore(for: folder.path)
         else { return }
         let match = restore.messageID.flatMap { messageID in

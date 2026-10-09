@@ -86,14 +86,14 @@ final class OfflineCountTests: XCTestCase {
         let model = fixture.makeListModel(
             client: try fixture.makeClient(folderState: cache), mailStore: appState.mailStore
         )
-        _ = model.window.applyStatusCounts(FolderStatus(messages: 22, unseen: 2, flagged: 1))
+        _ = model.window!.applyStatusCounts(FolderStatus(messages: 22, unseen: 2, flagged: 1))
         // An unread message archived here: the list shows one fewer of each.
-        model.window.totalMessages = 21
+        model.window!.totalMessages = 21
         model.unseen = 1
         let stale = FolderStatus(messages: 22, unseen: 2, flagged: 1)
         await cache.recordStatus(stale, for: "INBOX", ifUnchangedSince: 0)
 
-        _ = model.window.applyStatusCounts(stale, mayPredateRemoval: true)
+        _ = model.window!.applyStatusCounts(stale, mayPredateRemoval: true)
 
         XCTAssertEqual(model.unseen, 1)
         try await eventually { await cache.lastKnownStatus(for: "INBOX")?.unseen == 1 }
@@ -115,7 +115,7 @@ final class OfflineCountTests: XCTestCase {
         XCTAssertEqual(model.flagged, 1)
         // The saved total is for the pill only: the list keeps sizing itself
         // from what it holds, so it draws no rows it can't load offline.
-        XCTAssertEqual(model.window.totalMessages, 0)
+        XCTAssertEqual(model.window!.totalMessages, 0)
     }
 
     /// Negative control: with no saved counts, as before, the pills read 0
@@ -158,11 +158,11 @@ final class OfflineCountTests: XCTestCase {
         let client = try fixture.makeClient(folderState: await fixture.savedState(), transport: FolderServerTransport())
         let model = fixture.makeListModel(client: client)
 
-        await model.window.seedSavedCounts()
+        await model.window!.seedSavedCounts()
         XCTAssertEqual(model.allCount, 22)
-        _ = model.window.applyStatusCounts(FolderStatus(messages: 30, unseen: 4, flagged: 2))
+        _ = model.window!.applyStatusCounts(FolderStatus(messages: 30, unseen: 4, flagged: 2))
 
-        XCTAssertNil(model.window.savedMessageCount)
+        XCTAssertNil(model.window!.savedMessageCount)
         XCTAssertEqual(model.allCount, 30)
         XCTAssertEqual(model.unseen, 4)
         XCTAssertEqual(model.flagged, 2)

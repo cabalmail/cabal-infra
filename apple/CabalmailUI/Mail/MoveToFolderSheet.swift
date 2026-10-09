@@ -6,14 +6,14 @@ import CabalmailKit
 /// while the Apple clients had only Archive and Trash.
 ///
 /// The sheet loads the user's subscribed folders on appear (filtered to
-/// remove the source folder and any `\Noselect` containers), sorts them
-/// through `FolderTree.sortUserTree` so the visible order matches the
-/// sidebar, and indents each row by its tree depth so nested folders
-/// read as nested. A `.searchable` filter lets the user narrow by name
+/// remove the source folder, if there is one, and any `\Noselect`
+/// containers), sorts them through `FolderTree.sortUserTree` so the
+/// visible order matches the sidebar, and indents each row by its tree
+/// depth so nested folders read as nested. A `.searchable` filter lets the user narrow by name
 /// or full path. Tapping a row hands the destination back to the caller
 /// and dismisses; the caller owns the actual move and the optimistic UI.
 struct MoveToFolderSheet: View {
-    let currentFolder: Folder
+    let currentFolder: Folder?
     let client: CabalmailClient
     let onSelect: (Folder) -> Void
     let onCancel: () -> Void
@@ -102,7 +102,7 @@ struct MoveToFolderSheet: View {
     private func sortForPicker(_ input: [Folder]) -> [Folder] {
         let candidates = input.filter { folder in
             folder.isSubscribed
-                && folder.path != currentFolder.path
+                && folder.path != currentFolder?.path
                 && !folder.attributes.contains("\\Noselect")
         }
         return FolderTree.sidebarOrder(candidates)

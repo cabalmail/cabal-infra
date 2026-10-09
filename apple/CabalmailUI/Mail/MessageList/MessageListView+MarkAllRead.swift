@@ -16,14 +16,12 @@ extension MessageListView {
     /// with the compose / refresh items the main body declares.
     @ViewBuilder
     func markAllReadChrome<Content: View>(_ content: Content) -> some View {
-        if isSearchScope {
-            content
-        } else {
+        if let folder {
             content
                 .toolbar {
                     ToolbarItem {
                         Menu {
-                            markAllReadMenuItem
+                            markAllReadMenuItem(in: folder)
                         } label: {
                             Label("More", systemImage: "ellipsis.circle")
                         }
@@ -48,12 +46,14 @@ extension MessageListView {
                 // folder and the new list appears before the old one goes.
                 .onAppear { appState.mailboxMenuAvailability.folderListAppeared(folder.path) }
                 .onDisappear { appState.mailboxMenuAvailability.folderListDisappeared(folder.path) }
+        } else {
+            content
         }
     }
 
     /// Dimmed once the sidebar badge says the folder has nothing unread; a
     /// folder whose STATUS has not arrived stays live.
-    private var markAllReadMenuItem: some View {
+    private func markAllReadMenuItem(in folder: Folder) -> some View {
         Button {
             markAllReadConfirmPresented = true
         } label: {

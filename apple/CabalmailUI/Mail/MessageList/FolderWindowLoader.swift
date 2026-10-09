@@ -49,14 +49,14 @@ struct WindowAlignment {
 /// nothing but this window: `WindowPager` (paging and the bottom prefetch),
 /// `WindowRefresher` (the single-flight refresh, the reset and the sort),
 /// `WindowReconciler` (the re-read) and `WindowSnapshot` (what the folder
-/// keeps for the next launch). Until the search session moves out, a
-/// search's rows live in `envelopes` too, and a search holds `isLoading`.
+/// keeps for the next launch). A search the list runs over this folder
+/// holds `isLoading` and stands the loads down
+/// (`MessageListViewModel.runSearch`); its rows live in the list's
+/// `MailSearchSession`, so `envelopes` only ever holds this folder's rows.
 @Observable
 @MainActor
 final class FolderWindowLoader {
     let folder: Folder
-    /// The global search surface's window: it has no folder to load.
-    let isSearchScope: Bool
     let client: CabalmailClient
     /// The session's shared mail state: the counts this window's STATUS
     /// sets, and the record of writes in flight its merges honour.
@@ -82,11 +82,11 @@ final class FolderWindowLoader {
     let prefetchDistance = 250
 
     /// A contiguous run [windowStart, windowStart + count) of the folder's
-    /// sorted rows; a search's rows while one shows.
+    /// sorted rows.
     var envelopes: [Envelope] = []
-    /// A refresh, a reset or a search is in flight: the list's spinner, the
-    /// Refresh button's disabled state, and the gate that keeps page loads
-    /// out meanwhile. It falls only once the last of them has returned
+    /// A refresh, a reset, or a search the list runs over this folder is in
+    /// flight: the gate that keeps page loads out meanwhile, and half of the
+    /// list's `isLoading`. It falls only once the last of them has returned
     /// (`holdLoading()`), so an overlapping one can't lower it for another.
     private(set) var isLoading = false
     /// A page below the window is loading.
@@ -99,7 +99,7 @@ final class FolderWindowLoader {
     /// The order the rows load and show in, server-side and here.
     var sortCriterion: SortCriterion = .default
     /// The folder's UIDVALIDITY, from the last STATUS or the snapshot; nil
-    /// until one answers, and always on the search surface.
+    /// until one answers.
     var uidValidity: UInt32?
     /// The folder's message count from the last STATUS: the All count and
     /// the list's length.
@@ -148,9 +148,8 @@ final class FolderWindowLoader {
     @ObservationIgnored var bottomPrefetch: BottomPrefetch?
     @ObservationIgnored var bottomPrefetchTask: Task<Void, Never>?
 
-    init(scope: MessageListScope, client: CabalmailClient, mailStore: MailSessionStore) {
-        self.folder = scope.folder
-        self.isSearchScope = scope.isSearch
+    init(folder: Folder, client: CabalmailClient, mailStore: MailSessionStore) {
+        self.folder = folder
         self.client = client
         self.mailStore = mailStore
     }
@@ -167,16 +166,15 @@ final class FolderWindowLoader {
     var envelopeOrder: (Envelope, Envelope) -> Bool { EnvelopeOrder(sortCriterion).precedes }
 
     /// The removals in flight that touch this window: its folder's, from any
-    /// writer, or on the search surface any. Paging waits while it is
-    /// non-empty, since a removal moves every row below it up a place.
+    /// writer. Paging waits while it is non-empty, since a removal moves
+    /// every row below it up a place.
     var pendingRemovedRefs: Set<MessageRef> {
-        let removing = mailStore.shields.pendingMoveRefs
-        return isSearchScope ? removing : removing.filter { $0.folder == folder.path }
+        mailStore.shields.pendingMoveRefs.filter { $0.folder == folder.path }
     }
 
     /// The identity of `envelope`'s row. Every row this window loads carries
-    /// its folder (`placedInFolder(_:)`, and `SearchedEnvelope` for search
-    /// rows); one that doesn't is taken to be this folder's.
+    /// its folder (`placedInFolder(_:)`); one that doesn't is taken to be
+    /// this folder's.
     func rowRef(for envelope: Envelope) -> MessageRef {
         envelope.ref(defaultFolder: folder.path, uidValidity: uidValidity)
     }
@@ -283,7 +281,6 @@ final class FolderWindowLoader {
         if messages != totalMessages { invalidateBottomPrefetch() }
         totalMessages = messages
         savedMessageCount = nil
-        guard !isSearchScope else { return serverMessages }
         if mayPredateRemoval {
             mailStore.takeStatus(
                 status, predatingRemovalIn: folder.path, askedAt: askedAt,
@@ -359,7 +356,6 @@ final class FolderWindowLoader {
     /// the viewport shows loads once `isLoading` falls, and the bottom window
     /// is staged again.
     func resumeWindowLoads() {
-        guard !isSearchScope else { return }
         alignment.needsSettleLoad = true
         scheduleBottomPrefetch()
     }
@@ -418,6 +414,7 @@ final class FolderWindowLoader {
     }
 
     func resetForHardReload() async -> PrefetchedStatus? { await refresher.resetForHardReload() }
+    func refreshCounts(prefetched: PrefetchedStatus?) async { await refresher.refreshCounts(prefetched: prefetched) }
     func setSort(_ criterion: SortCriterion) async { await refresher.setSort(criterion) }
     func hydrateFromCache() async { await snapshot.hydrateFromCache() }
     func seedSavedCounts() async { await snapshot.seedSavedCounts() }

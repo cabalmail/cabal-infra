@@ -66,7 +66,25 @@ extension MessageListViewModel {
 
     /// The absolute index `ref`'s message occupies, while it's loaded.
     func slotIndex(of ref: MessageRef) -> Int? {
-        index(of: ref).map { Int(window.windowStart) + $0 }
+        index(of: ref).map { Int(window?.windowStart ?? 0) + $0 }
+    }
+
+    /// How many slots the virtualized list spans: on a folder list the
+    /// folder's whole position range -- the STATUS total, or the loaded
+    /// extent where that runs past it (a cache hydrate fills the rows before
+    /// a refresh sets the total) -- and on the search surface the rows it
+    /// holds.
+    var slotCount: Int {
+        guard let window else { return envelopes.count }
+        return max(Int(window.totalMessages), Int(window.windowStart) + envelopes.count)
+    }
+
+    /// The row in slot `index`, or nil while the folder window doesn't hold
+    /// it (the slot then draws a placeholder). The search surface's slots are
+    /// its rows.
+    func envelope(inSlot index: Int) -> Envelope? {
+        guard let window else { return envelopes.indices.contains(index) ? envelopes[index] : nil }
+        return window.envelope(at: index)
     }
 
     /// Gives each message in `refs` a new row in place of the one it has now,

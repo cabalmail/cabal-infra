@@ -1,13 +1,15 @@
 import Foundation
 import CabalmailKit
 
-/// Structured `/search_envelopes` plumbing for `MessageListViewModel`.
-/// Lives in its own file so the primary type body stays under SwiftLint's
-/// length cap; same `@MainActor` extension as the rest of the view model.
+// The list's search entries: they start a search over whatever the list
+// shows -- standing the folder window down for it, and giving it back when
+// the search doesn't take the list over -- refresh it, end it, and drive the
+// filter pills that run one. The search itself (its query, results and
+// paging) is `search`, a `MailSearchSession`.
 @MainActor
 extension MessageListViewModel {
     /// Runs a structured search against `/search_envelopes`. Builds the
-    /// wire query from the free-text term + `searchFilters`; defaults to
+    /// wire query from the free-text term + `search.filters`; defaults to
     /// cross-folder (no `folder` param) unless the user has flipped on
     /// "This folder only" in the filters, matching the React webmail.
     /// Empty query AND empty filters drop back to the folder view via
@@ -28,182 +30,62 @@ extension MessageListViewModel {
         // search isn't silently AND-ed with it; sheet-set filters (filterTab
         // stays .all) are untouched.
         if resetFilterTab {
-            if filterTab != .all { searchFilters = MessageSearchFilters() }
+            if filterTab != .all { search.filters = MessageSearchFilters() }
             filterTab = .all
         }
         // A refresh re-runs the search that was submitted, not whatever has
         // been typed into the field since (#1821).
-        let trimmed = rerun ? submittedQuery : searchQuery.trimmingCharacters(in: .whitespaces)
+        let trimmed = rerun ? search.submittedQuery : searchQuery.trimmingCharacters(in: .whitespaces)
         // Nothing to match on drops back to the folder view. "This folder
         // only" alone is not something to match on (see `hasNoPredicate`):
         // a sidebar pick empties the query and then moves the anchor, so
         // counting the scope re-ran the search with no term and drew the
         // whole folder as matches (#1536).
-        if trimmed.isEmpty && searchFilters.hasNoPredicate {
+        if trimmed.isEmpty && search.filters.hasNoPredicate {
             await clearSearch()
             return
         }
-        // Recorded at submit time, not on success: the question the
-        // placeholder asks is "has this term been sent yet", which a failed
-        // request answers just as much as a successful one.
-        submittedQuery = trimmed
         // The depth an in-place refresh re-walks to. A fresh search starts
-        // from one page and pages in from there (`loadMoreSearchResults`);
+        // from one page and pages in from there (`MailSearchSession.loadMore`);
         // a refresh of an active search (pull, the 60-second background
         // pass) re-fetches as many rows as the user has already paged in,
         // so it can't silently truncate their scroll position back to one
         // page. Cost stays proportional to the depth the user opted into.
         let targetDepth = preserveDepth && isSearchActive
-            ? max(envelopes.count, Self.searchPageSize)
-            : Self.searchPageSize
-        // Invalidate the old cursor before the await: a load-more that's
-        // mid-flight checks its cursor is still current before appending,
-        // so this reset makes it drop a page that belongs to the outgoing
-        // result set.
-        let priorCursor = searchNextCursor
-        searchNextCursor = nil
-        window.holdLoading()
-        defer { window.releaseLoading() }
+            ? max(envelopes.count, MailSearchSession.pageSize)
+            : MailSearchSession.pageSize
+        // A search over a folder holds its window as a refresh does (#1820):
+        // no folder page starts while it is out, and what the viewport lacks
+        // loads once the last hold falls.
+        window?.holdLoading()
+        defer { window?.releaseLoading() }
         // A folder page or refresh still out was addressed to the rows this
         // search replaces; landing later, it would mix folder rows into the
         // results (#1870). They stand down now, and again as the results
-        // land, for any that started meanwhile. A search that ends without
-        // taking the list over leaves the folder rows they were filling.
-        window.standDownWindowLoads()
-        defer { if !isSearchActive { window.resumeWindowLoads() } }
-        // Snapshotted for the staleness check below: the filters this request
-        // asked with, not whatever they hold when it answers.
-        let filters = searchFilters
-        do {
-            let query = buildSearchQuery(text: trimmed, filters: filters)
-            // Fetch in bounded `searchPageSize` chunks by walking the cursor,
-            // rather than asking for the whole set in one request (Layer 3.2
-            // of the large-mailbox-hardening plan).
-            let result = try await client.imapClient.searchEnvelopesChunked(
-                query,
-                pageSize: Self.searchPageSize,
-                maxResults: targetDepth
-            )
-            // A `clearSearch()` (or a newer submission) during the await owns
-            // the surface now, so this answer belongs to a search that is
-            // over: applying it would raise the banner back over a search the
-            // user has already ended (#1536). Same staleness rule
-            // `loadMoreSearchResults` applies to its cursor.
-            guard submittedQuery == trimmed, searchFilters == filters else { return }
-            window.standDownWindowLoads()
-            envelopes = distinctRows(result.envelopes, after: [])
-            searchTotalEstimate = result.totalEstimate
-            searchTruncated = result.truncated
-            searchFoldersSearched = result.foldersSearched
-            searchNextCursor = result.nextCursor
-            isSearchActive = true
-            errorMessage = nil
-        } catch {
-            // Same staleness rule: an ended search's failure is not worth a
-            // banner over the folder view the user is now looking at.
-            guard submittedQuery == trimmed, searchFilters == filters else { return }
-            // Nor is a refresh's whose task was cancelled (#1816); its rows
-            // are still the loaded ones, so they keep their cursor.
-            guard !Task.isCancelled else {
-                if rerun { searchNextCursor = priorCursor }
-                return
-            }
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    /// View-facing trigger for the next search page. Hops onto a model-owned
-    /// task so the row `.task` that fired it can be cancelled by scrolling
-    /// without cancelling the fetch mid-flight — the folder window's
-    /// `loadMoreTask` pattern, and the same reason: a propagated cancellation
-    /// would surface as a spurious "cancelled" error. The guards make
-    /// redundant kicks free.
-    func requestMoreSearchResults() {
-        guard isSearchActive, !isLoading, !isLoadingMoreSearch,
-              searchNextCursor != nil else { return }
-        loadMoreSearchTask = Task { [weak self] in await self?.loadMoreSearchResults() }
-    }
-
-    /// Fetches the next page of the active search and appends it — the
-    /// scroll-driven leg of search pagination. Triggered (via
-    /// `requestMoreSearchResults`) by the list nearing the end of the loaded
-    /// matches, and by the visible rows emptying (a pill page the user has
-    /// fully dealt with — every row marked read under Unread — must still be
-    /// able to pull the next page). No-op unless a search is active with a
-    /// cursor and nothing else is fetching.
-    func loadMoreSearchResults() async {
-        guard isSearchActive, !isLoading, !isLoadingMoreSearch,
-              let cursor = searchNextCursor else { return }
-        isLoadingMoreSearch = true
-        defer { isLoadingMoreSearch = false }
-        do {
-            let query = buildSearchQuery(text: submittedQuery, filters: searchFilters)
-            let page = try await client.imapClient.searchEnvelopes(
-                query.page(limit: Self.searchPageSize, cursor: cursor)
-            )
-            // A clearSearch or fresh runSearch during the await owns
-            // `envelopes` now; this page belongs to the outgoing result set.
-            guard isSearchActive, searchNextCursor == cursor else { return }
-            appendSearchPage(page)
-            errorMessage = nil
-        } catch {
-            // Same staleness check: an error from a fetch the user has
-            // already navigated away from isn't worth a banner.
-            guard isSearchActive, searchNextCursor == cursor else { return }
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    /// Appends one search page, dropping rows already loaded: the cursor is
-    /// date-based, so a page boundary shifting under mailbox churn can
-    /// re-deliver a row from the previous page, and a duplicate would draw
-    /// as a repeated row.
-    private func appendSearchPage(_ page: SearchResult) {
-        envelopes.append(contentsOf: distinctRows(page.envelopes, after: envelopes))
-        searchTotalEstimate = page.totalEstimate
-        searchTruncated = searchTruncated || page.truncated
-        searchNextCursor = page.nextCursor
+        // land (`searchWillShowResults`), for any that started meanwhile. A
+        // search that ends without taking the list over leaves the folder
+        // rows they were filling.
+        window?.standDownWindowLoads()
+        defer { if !isSearchActive { window?.resumeWindowLoads() } }
+        await search.run(trimmed, depth: targetDepth, rerun: rerun)
     }
 
     /// A refresh of the active search: the folder's counts from STATUS
     /// first (a pill is a search, and its counts and the sidebar badge would
     /// otherwise stop moving until it is left, #1819), then the submitted
     /// search again at the depth already paged in. `prefetched` is a STATUS the caller already asked
-    /// for (`hardReload`), used rather than asked for again.
+    /// for (`hardReload`), used rather than asked for again. The search
+    /// surface has no folder to count.
     func refreshSearch(prefetched: PrefetchedStatus? = nil) async {
-        if !isSearchScope {
-            let startedAt = prefetched?.askedAt ?? ContinuousClock.now
-            let status: FolderStatus?
-            if let prefetched {
-                status = prefetched.status
-            } else {
-                status = try? await client.folderStatus(path: folder.path, flagged: true)
-            }
-            if let status {
-                _ = window.applyStatusCounts(
-                    status, mayPredateRemoval: window.removalMayPostdate(startedAt), askedAt: startedAt
-                )
-            }
-        }
+        await window?.refreshCounts(prefetched: prefetched)
         guard !Task.isCancelled else { return }
         await runSearch(resetFilterTab: false, preserveDepth: true, rerun: true)
-    }
-
-    /// `rows`' envelopes, each placed in its own folder, minus any message
-    /// `loaded` or an earlier row already holds. A message is one ref
-    /// (folder + UID), however many pages deliver it: the date-based cursor
-    /// can re-deliver a row across a page boundary, inside a chunked walk as
-    /// well as between load-more pages, and the list draws each ref as one
-    /// row (`MessageRowIdentity`).
-    private func distinctRows(_ rows: [SearchedEnvelope], after loaded: [Envelope]) -> [Envelope] {
-        var seen = Set(loaded.map { rowRef(for: $0) })
-        return rows.filter { seen.insert($0.ref).inserted }.map(\.envelope)
     }
 
     /// Drive a filter pill. Unread / Flagged run a fresh folder-scoped server
     /// search so every match in the folder is reachable -- the first page
     /// loads here and scrolling pages in the rest via
-    /// `loadMoreSearchResults` -- while All returns to folder mode. A pill
+    /// `MailSearchSession.loadMore` -- while All returns to folder mode. A pill
     /// replaces any text search; the richer text-plus-flag combination stays
     /// available through the filter sheet. The pill stays highlighted via
     /// `filterTab`, and because `filterTab` is non-`.all` the counts stay
@@ -216,11 +98,13 @@ extension MessageListViewModel {
     /// persistence.
     func selectFilter(_ filter: MessageFilter) async {
         guard filter != filterTab else { return }
-        if !isSearchScope { preferences.setMailFolderFilter(filter, for: folder.path) }
+        if let folder { preferences.setMailFolderFilter(filter, for: folder.path) }
         await applyFilter(filter)
     }
 
-    /// `selectFilter`'s effect on the list, without recording the choice.
+    /// `selectFilter`'s effect on the list, without recording the pill it
+    /// picks. Leaving Unread or Flagged for All is still recorded, by
+    /// `filterTab`'s `didSet`, as it is by every route there.
     func applyFilter(_ filter: MessageFilter) async {
         filterTab = filter
         guard filter != .all else {
@@ -228,7 +112,7 @@ extension MessageListViewModel {
             return
         }
         searchQuery = ""
-        searchFilters = MessageSearchFilters(
+        search.filters = MessageSearchFilters(
             unread: filter == .unread,
             flagged: filter == .flagged,
             thisFolderOnly: true
@@ -241,36 +125,26 @@ extension MessageListViewModel {
     /// Called by the search banner's clear button and by `runSearch()`
     /// when the user submits an empty query with no filters set.
     ///
-    /// The in-memory envelope list is wiped before refreshing. Search
-    /// is cross-folder by default, so `envelopes` can hold UIDs from
-    /// other folders (e.g. Archive UID 957). `applyRefreshPage`'s
-    /// disappear-detection only reconciles the current folder's top
-    /// page, so foreign UIDs would otherwise survive as phantom rows
-    /// that 502 on tap (IMAP fetch can't find
-    /// them in this folder, helper.py raises `KeyError`). Same pattern
-    /// as `setSort(_:)`.
+    /// The folder window's rows are wiped before refreshing: a search's
+    /// rows stay in the search, but the window's are the folder's as they
+    /// stood when the search took the list over, and `applyRefreshPage`'s
+    /// disappear-detection only reconciles the current folder's top page.
+    /// Same pattern as `setSort(_:)`.
     func clearSearch() async {
-        searchQuery = ""
-        submittedQuery = ""
-        searchFilters = MessageSearchFilters()
         // Folder mode is "All" mode: reset the pill too, so clearing a search
         // (including the banner's clear button while a pill filter is active)
         // can't strand a highlighted pill over a plain folder view.
         filterTab = .all
-        isSearchActive = false
-        searchTotalEstimate = 0
-        searchTruncated = false
-        searchFoldersSearched = []
-        searchNextCursor = nil
-        envelopes.removeAll()
+        search.clear()
+        // Folder scope drops back to the folder view; the global search
+        // surface has no folder to return to, so it just lands on the empty
+        // "type to search" state.
+        guard let window else { return }
+        window.envelopes.removeAll()
         window.totalMessages = 0
         window.savedMessageCount = nil
         window.hasMore = true
         window.resetWindow()
-        // Folder scope drops back to the folder view; the global search
-        // surface has no folder to return to, so it just lands on the empty
-        // "type to search" state.
-        guard !isSearchScope else { return }
         await refresh(startingOver: true)
         // Offline the refresh can't answer, and the list used to stay empty
         // (#1796): the saved counts come back, and under the default order
@@ -281,15 +155,6 @@ extension MessageListViewModel {
             if window.sortCriterion == .default { await window.hydrateFromCache() }
             await window.seedSavedCounts()
         }
-    }
-
-    /// The folder "This folder only" narrows to. Folder scope is its own
-    /// folder; the global search surface's `folder` is a sentinel, so it
-    /// narrows to `searchAnchor` instead — nil where nothing feeds one in
-    /// (the iPhone / visionOS `SearchView`), which is what hides the toggle
-    /// there (#1510).
-    var searchFolder: Folder? {
-        isSearchScope ? searchAnchor : folder
     }
 
     /// Moves the search surface's anchor. An active single-folder search
@@ -304,35 +169,20 @@ extension MessageListViewModel {
     func setSearchAnchor(_ anchor: Folder?) async {
         guard anchor?.path != searchAnchor?.path else { return }
         searchAnchor = anchor
-        guard searchFilters.thisFolderOnly else { return }
-        if anchor == nil { searchFilters.thisFolderOnly = false }
+        guard search.filters.thisFolderOnly else { return }
+        if anchor == nil { search.filters.thisFolderOnly = false }
         guard isSearchActive else { return }
         await runSearch(resetFilterTab: false)
     }
+}
 
-    /// Per-request page size for search fetches — `runSearch`'s initial page
-    /// (and an in-place refresh's chunked re-walk) and each
-    /// `loadMoreSearchResults` page. No single request asks the Lambda for
-    /// the whole match set (Layer 3.2 of the large-mailbox-hardening plan);
-    /// depth comes from scroll-driven paging instead of an up-front cap.
-    /// Mirrors the folder view's page size and the Lambda's DEFAULT_LIMIT.
-    static let searchPageSize = 50
+// MARK: - The search's host
 
-    private func buildSearchQuery(text: String, filters: MessageSearchFilters) -> SearchQuery {
-        SearchQuery(
-            folder: filters.thisFolderOnly ? searchFolder?.path : nil,
-            text: text.isEmpty ? nil : text,
-            from: filters.from.isEmpty ? nil : filters.from,
-            to: filters.to.isEmpty ? nil : filters.to,
-            subject: filters.subject.isEmpty ? nil : filters.subject,
-            since: filters.since,
-            before: filters.before,
-            unread: filters.unread,
-            flagged: filters.flagged,
-            hasAttachment: filters.hasAttachment
-            // `limit` and `cursor` are owned by the fetch paths: `runSearch`'s
-            // chunked walk and `loadMoreSearchResults`' single page both fill
-            // them per request via `page(limit:cursor:)`.
-        )
+extension MessageListViewModel: MailSearchHost {
+    /// A search's results are landing in place of the rows on screen: the
+    /// folder window's loads stand down again, for any that started while
+    /// the search was out (#1870).
+    func searchWillShowResults() {
+        window?.standDownWindowLoads()
     }
 }

@@ -82,7 +82,7 @@ extension MessageListView {
         let placeholder = SearchResultsPlaceholder(
             isSearchScope: isSearchScope,
             query: model.searchQuery,
-            submittedQuery: model.submittedQuery,
+            submittedQuery: model.search.submittedQuery,
             isLoading: model.isLoading,
             hasError: model.errorMessage != nil,
             visibleRowCount: visibleRowCount

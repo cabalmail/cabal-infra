@@ -27,8 +27,8 @@ final class MessageListWindowReconcileTests: XCTestCase {
         XCTAssertFalse(world.model.envelopes.contains { $0.uid == 330 })
         try await world.assertAligned()
 
-        world.model.window.ensureLoaded(around: 249)
-        await world.model.window.loadMoreTask?.value
+        world.model.window!.ensureLoaded(around: 249)
+        await world.model.window!.loadMoreTask?.value
         XCTAssertEqual(world.model.envelopes.count, 399, "the next page loads the rest of the folder")
         try await world.assertAligned()
         XCTAssertTrue(world.model.envelopes.contains { $0.uid == 150 }, "the row at the old page boundary is loaded")
@@ -81,7 +81,7 @@ final class MessageListWindowReconcileTests: XCTestCase {
         await world.model.refresh()
 
         XCTAssertTrue(world.model.envelopes.isEmpty)
-        XCTAssertEqual(world.model.window.totalMessages, 0)
+        XCTAssertEqual(world.model.window!.totalMessages, 0)
     }
 
     // MARK: - The common cases cost nothing extra
@@ -173,7 +173,7 @@ final class MessageListWindowReconcileTests: XCTestCase {
     /// change and reads the window again, centred on the viewport.
     func testARefreshAskedForWhileOneIsOutRealignsTheWindowOnceThatOneLands() async throws {
         let world = try await World.opened(size: 1000, pages: 2)
-        world.model.window.visibleRowIndices = [380: 1, 420: 1]
+        world.model.window!.visibleRowIndices = [380: 1, 420: 1]
         await world.server.holdNext(.top)
         let quiet = Task { await world.model.refresh() }
         await world.server.awaitHeld(.top)
@@ -183,13 +183,13 @@ final class MessageListWindowReconcileTests: XCTestCase {
         await world.server.arrive(200)
         await world.server.remove(900)
         let rerun = Task { await world.model.refresh() }
-        try await waitUntilOnMainActor { world.model.window.refreshFlight.waiting == 1 }
-        XCTAssertFalse(world.model.window.hasTrimmedFront, "nothing moves the window while the quiet pass is out")
+        try await waitUntilOnMainActor { world.model.window!.refreshFlight.waiting == 1 }
+        XCTAssertFalse(world.model.window!.hasTrimmedFront, "nothing moves the window while the quiet pass is out")
 
         await world.server.release(.top)
         await quiet.value
         await rerun.value
-        XCTAssertTrue(world.model.window.hasTrimmedFront)
+        XCTAssertTrue(world.model.window!.hasTrimmedFront)
         try await world.assertAligned()
     }
 
@@ -211,15 +211,15 @@ final class MessageListWindowReconcileTests: XCTestCase {
 
     func testNewMailAboveATrimmedWindowRealignsItAndScrollingUpSkipsNothing() async throws {
         let world = try await World.opened(size: 600, jumpTo: 500)
-        XCTAssertTrue(world.model.window.hasTrimmedFront)
+        XCTAssertTrue(world.model.window!.hasTrimmedFront)
         await world.server.arrive(1)
 
         await world.model.refresh()
         try await world.assertAligned()
 
         let loaded = world.model.envelopes.count
-        world.model.window.ensureLoaded(around: Int(world.model.window.windowStart))
-        await world.model.window.loadPrevTask?.value
+        world.model.window!.ensureLoaded(around: Int(world.model.window!.windowStart))
+        await world.model.window!.loadPrevTask?.value
         XCTAssertGreaterThan(world.model.envelopes.count, loaded, "scrolling up loads the page above")
         try await world.assertAligned()
     }
@@ -232,8 +232,8 @@ final class MessageListWindowReconcileTests: XCTestCase {
         try await world.assertAligned()
 
         let loaded = world.model.envelopes.count
-        world.model.window.ensureLoaded(around: Int(world.model.window.windowStart))
-        await world.model.window.loadPrevTask?.value
+        world.model.window!.ensureLoaded(around: Int(world.model.window!.windowStart))
+        await world.model.window!.loadPrevTask?.value
         XCTAssertGreaterThan(world.model.envelopes.count, loaded)
         try await world.assertAligned()
     }
@@ -454,8 +454,8 @@ private struct World {
         let world = try World(size: size)
         await world.model.loadInitial()
         for _ in 0..<pages {
-            world.model.window.ensureLoaded(around: world.model.envelopes.count - 1)
-            await world.model.window.loadMoreTask?.value
+            world.model.window!.ensureLoaded(around: world.model.envelopes.count - 1)
+            await world.model.window!.loadMoreTask?.value
         }
         return world
     }
@@ -465,8 +465,8 @@ private struct World {
     static func opened(size: Int, jumpTo index: Int) async throws -> World {
         let world = try World(size: size)
         await world.model.loadInitial()
-        world.model.window.ensureLoaded(around: index)
-        await world.model.window.loadWindowTask?.value
+        world.model.window!.ensureLoaded(around: index)
+        await world.model.window!.loadWindowTask?.value
         return world
     }
 
@@ -532,7 +532,7 @@ private struct World {
         let list = list ?? model
         let serverUids = await server.uids
         XCTAssertFalse(list.envelopes.isEmpty, "nothing loaded", file: file, line: line)
-        let start = Int(list.window.windowStart)
+        let start = Int(list.window!.windowStart)
         let end = start + list.envelopes.count
         XCTAssertLessThanOrEqual(end, serverUids.count, "window runs past the folder", file: file, line: line)
         let loaded = Set(list.envelopes.map(\.uid))

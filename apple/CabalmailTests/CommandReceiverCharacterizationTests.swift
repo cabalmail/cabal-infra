@@ -59,7 +59,7 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
         let calls = await imap.searchCalls
         XCTAssertEqual(calls.count, 2, "exactly one more search")
         XCTAssertEqual(calls.last?.text, "invoice")
-        XCTAssertEqual(calls.last?.limit, MessageListViewModel.searchPageSize)
+        XCTAssertEqual(calls.last?.limit, MailSearchSession.pageSize)
         XCTAssertNil(calls.last?.cursor)
         await assertNoFolderTraffic(imap)
         XCTAssertTrue(model.isSearchActive)
@@ -77,7 +77,7 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
         model.searchQuery = "invoice"
         await model.runSearch()
         await imap.scriptSearchPages([page(firstUID: 51, count: 10, cursor: nil)])
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
         XCTAssertEqual(model.envelopes.count, 60)
 
         await imap.scriptSearchPages([
@@ -139,7 +139,7 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
 
         let calls = await imap.searchCalls
         XCTAssertEqual(calls.map(\.text), ["invoice", "invoice"])
-        XCTAssertEqual(model.submittedQuery, "invoice")
+        XCTAssertEqual(model.search.submittedQuery, "invoice")
         XCTAssertEqual(model.searchQuery, "receipt", "the field keeps what was typed")
     }
 
@@ -156,7 +156,7 @@ final class RefreshReceiverCharacterizationTests: XCTestCase {
         XCTAssertFalse(model.isSearchActive)
         XCTAssertFalse(model.isLoading)
         XCTAssertNil(model.errorMessage)
-        XCTAssertEqual(model.submittedQuery, "")
+        XCTAssertEqual(model.search.submittedQuery, "")
     }
 }
 

@@ -103,7 +103,7 @@ protocol MailEventSubscriber: AnyObject {
 /// These replace the `last…` signal payloads the list used to observe with
 /// `.onChange`. Those kept only their latest value, so two changes in one
 /// update lost all but the last; they matched on the list's folder, so the
-/// search surface, whose folder is a sentinel, ignored them (#1877); and they
+/// search surface, whose folder was a sentinel, ignored them (#1877); and they
 /// named no window, so a reader action moved the selection in every window
 /// (#1845). Nothing here is kept once delivered, so there is nothing to
 /// replay and nothing for sign-out to reset.

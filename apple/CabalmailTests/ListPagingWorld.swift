@@ -106,7 +106,7 @@ final class ListPagingWorld {
             // so the window carries that anchor; a bare window would be read
             // again by position, as one hydrated from the snapshot is.
             let total = UInt32(statusCount ?? size)
-            model.window.alignment.anchor = WindowAnchor(total: total, uidNext: total + 1)
+            model.window!.alignment.anchor = WindowAnchor(total: total, uidNext: total + 1)
         }
         await model.refresh()
         XCTAssertNil(model.errorMessage, "the opening refresh failed", file: file, line: line)
@@ -123,13 +123,13 @@ final class ListPagingWorld {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        await model.window.loadMoreTask?.value
-        await model.window.loadPrevTask?.value
-        await model.window.loadWindowTask?.value
-        await model.window.bottomPrefetchTask?.value
-        XCTAssertFalse(model.window.isLoadingMore, "a load-more is still running", file: file, line: line)
-        XCTAssertFalse(model.window.isLoadingPrevious, "a load-previous is still running", file: file, line: line)
-        XCTAssertFalse(model.window.isLoadingWindow, "a jump is still running", file: file, line: line)
+        await model.window!.loadMoreTask?.value
+        await model.window!.loadPrevTask?.value
+        await model.window!.loadWindowTask?.value
+        await model.window!.bottomPrefetchTask?.value
+        XCTAssertFalse(model.window!.isLoadingMore, "a load-more is still running", file: file, line: line)
+        XCTAssertFalse(model.window!.isLoadingPrevious, "a load-previous is still running", file: file, line: line)
+        XCTAssertFalse(model.window!.isLoadingWindow, "a jump is still running", file: file, line: line)
     }
 
     /// The UIDs the folder's envelope snapshot holds for `model`'s client.
@@ -146,18 +146,18 @@ final class ListPagingWorld {
     /// page. Returns the list and the refresh, parked in that wait.
     func refreshWaitingOnAPage() async throws -> (MessageListViewModel, Task<Void, Never>) {
         let model = try await openedList()
-        model.window.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await settle(model)
-        await model.window.persistTask?.value
+        await model.window!.persistTask?.value
         await imap.answerEnvelopesAfterCancellation()
         await imap.holdNext(.envelopes)
-        model.window.ensureLoaded(around: 100)
-        XCTAssertTrue(model.window.isLoadingMore)
+        model.window!.ensureLoaded(around: 100)
+        XCTAssertTrue(model.window!.isLoadingMore)
         await imap.awaitHeld(.envelopes)
         await scriptServer(size: 999)
         let refresh = Task { await model.refresh() }
         // Everything from the counts to the wait runs without a suspension.
-        try await waitUntilOnMainActor { model.window.totalMessages == 999 }
+        try await waitUntilOnMainActor { model.window!.totalMessages == 999 }
         return (model, refresh)
     }
 

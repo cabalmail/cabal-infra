@@ -25,8 +25,10 @@ enum BulkArchiveButtonPolicy {
         let intent: DisposeIntent
     }
 
-    static func button(in folderPath: String) -> Button {
-        let intent = DisposeIntent.archiving(in: folderPath)
+    /// The button for a list showing `folderPath`; nil on the search
+    /// surface, which shows no folder, so its selection files into Archive.
+    static func button(in folderPath: String?) -> Button {
+        let intent = folderPath.map(DisposeIntent.archiving(in:)) ?? .move(.archive)
         switch intent {
         case .restore:
             // Inside Archive an archive would be a same-folder move, so the

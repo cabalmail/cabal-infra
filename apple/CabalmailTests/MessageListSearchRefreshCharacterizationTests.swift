@@ -98,9 +98,9 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
         model.unseen = 2
         await fixture.scriptRefresh(messages: 9, page: [9], unseen: 5)
 
-        await model.window.setSort(subjectOrder)
+        await model.window!.setSort(subjectOrder)
 
-        XCTAssertEqual(model.window.sortCriterion, subjectOrder, "kept for the folder view")
+        XCTAssertEqual(model.window!.sortCriterion, subjectOrder, "kept for the folder view")
         XCTAssertEqual(model.envelopes.map(\.uid), [1, 3, 2], "the server's order")
         let statuses = await fixture.statusCalls()
         XCTAssertEqual(statuses, ["Work flagged=true"], "the probe")
@@ -127,17 +127,17 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
             fixture.searchResult(older),
         ])
         await model.selectFilter(.unread)
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
         XCTAssertEqual(model.envelopes.count, 100)
         await fixture.scriptRefresh(messages: 100, page: [100], unseen: 100)
 
-        await model.window.setSort(subjectOrder)
+        await model.window!.setSort(subjectOrder)
 
         XCTAssertEqual(model.envelopes.count, 100, "every row paged in stays")
         XCTAssertEqual(model.envelopes.map(\.uid), fixture.newestFirst(100, through: 1), "in the server's order")
-        XCTAssertEqual(model.window.sortCriterion, subjectOrder)
+        XCTAssertEqual(model.window!.sortCriterion, subjectOrder)
         XCTAssertNil(model.errorMessage)
-        XCTAssertNil(model.searchNextCursor)
+        XCTAssertNil(model.search.nextCursor)
         let statuses = await fixture.statusCalls()
         XCTAssertEqual(statuses, ["Work flagged=true"], "the probe")
         let searches = await fixture.imap.searchCalls
@@ -157,7 +157,7 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
         XCTAssertFalse(model.isSearchActive)
         XCTAssertEqual(model.filterTab, .all)
         XCTAssertEqual(model.envelopes.map(\.uid), [3, 2, 1])
-        XCTAssertEqual(model.window.totalMessages, 3)
+        XCTAssertEqual(model.window!.totalMessages, 3)
         XCTAssertEqual(model.unseen, 1)
         XCTAssertEqual(model.flagged, 1)
         XCTAssertNil(model.errorMessage)
@@ -167,31 +167,42 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
         XCTAssertEqual(tops, ["Work limit=50 total=3 dateReceived/descending"])
     }
 
-    /// Pins a quirk that looks like a defect: clearing a pill's search (the
-    /// search banner's clear button calls `clearSearch` directly) puts the
-    /// list back on All but leaves the folder's sticky pill at the Unread
-    /// that `selectFilter` saved, so the folder opens on Unread again next
-    /// time. Choosing All on the pill itself saves All.
-    /// Tracked in #1826.
-    func testClearingAPillSearchLeavesTheStickyPillSetWeakness() async throws {
+    /// The pill a folder reopens on follows the pill on screen (#1826): a pill search ended by a route
+    /// other than the pill -- the search banner's clear button calls `clearSearch` directly, and a text
+    /// search takes a pill's place through `runSearch` -- records All for the folder, as choosing All on
+    /// the pill does. A clear with no pill showing leaves the folder's choice alone.
+    func testEndingAPillSearchAnotherWayRecordsAllForTheFolder() async throws {
         let model = try await fixture.makeModel()
         await fixture.imap.scriptSearch(fixture.searchResult(fixture.rows([7, 5])))
         await model.selectFilter(.unread)
+        XCTAssertEqual(model.preferences.mailFolderFilter(for: fixture.folderPath), .unread, "the tap records it")
         await fixture.scriptRefresh(messages: 3, page: [3, 2, 1], unseen: 1)
 
         await model.clearSearch()
 
         XCTAssertEqual(model.filterTab, .all)
-        XCTAssertEqual(model.preferences.mailFolderFilter(for: fixture.folderPath), .unread)
+        XCTAssertEqual(model.preferences.mailFolderFilter(for: fixture.folderPath), .all)
         let reopened = fixture.reopen(model)
         await reopened.loadInitial()
-        XCTAssertEqual(reopened.filterTab, .unread, "the folder opens on the pill the banner cleared")
-        XCTAssertTrue(reopened.isSearchActive)
-        XCTAssertEqual(reopened.envelopes.map(\.uid), [7, 5])
+        XCTAssertEqual(reopened.filterTab, .all, "the folder opens on the pill the clear left on screen")
+        XCTAssertFalse(reopened.isSearchActive)
+        XCTAssertEqual(reopened.envelopes.map(\.uid), [3, 2, 1])
+        let searches = await fixture.imap.searchCalls
+        XCTAssertEqual(searches.count, 1, "only the pill's own search ran")
 
-        await reopened.selectFilter(.all)
+        await model.selectFilter(.flagged)
+        model.searchQuery = "invoice"
+        await model.runSearch()
+        XCTAssertEqual(model.filterTab, .all)
+        XCTAssertEqual(
+            model.preferences.mailFolderFilter(for: fixture.folderPath), .all, "a text search in the pill's place"
+        )
 
-        XCTAssertEqual(reopened.preferences.mailFolderFilter(for: fixture.folderPath), .all)
+        model.preferences.setMailFolderFilter(.flagged, for: fixture.folderPath)
+        await model.clearSearch()
+        XCTAssertEqual(
+            model.preferences.mailFolderFilter(for: fixture.folderPath), .flagged, "no pill was on screen to end"
+        )
     }
 
     // MARK: - Opening on a sticky pill
