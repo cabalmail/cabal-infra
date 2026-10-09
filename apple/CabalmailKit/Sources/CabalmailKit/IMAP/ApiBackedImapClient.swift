@@ -17,7 +17,7 @@ import Foundation
 ///     drops). The first poll runs before the stream is returned, so an
 ///     unreachable API fails the open the way a refused IMAP connection
 ///     would. `MailboxWatcher` applies the reconnect backoff and
-///     `MessageListViewModel` coalesces bursts, so callers see the same
+///     the app's `FolderPoller` coalesces bursts, so callers see the same
 ///     observable contract.
 ///   * SEARCH is mediated by the `/search_envelopes` Lambda — clients
 ///     pass a structured `SearchQuery` and receive envelopes plus a

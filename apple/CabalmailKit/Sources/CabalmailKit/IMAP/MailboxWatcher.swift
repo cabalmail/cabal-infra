@@ -9,17 +9,17 @@ public typealias IdleStreamFactory = @Sendable (String) async throws -> AsyncThr
 
 /// Foreground change watcher for a single folder.
 ///
-/// `MessageListViewModel` starts one when a folder's list comes on screen
-/// and stops it when the list goes away. The stream it watches is
+/// The app's `FolderPoller` starts one when the first message list shows a
+/// folder and stops it when the last goes away. The stream it watches is
 /// `ImapClient.idle(folder:)`, which the production client
 /// (`ApiBackedImapClient`) implements by polling the folder's status over
 /// the API — there is no IMAP connection and no server push; the `idle`
 /// and `IdleEvent` names are kept from the protocol's IMAP origins.
 ///
 /// The watcher doesn't drive the refresh itself — instead it exposes an
-/// async stream of `WatchEvent.changed` ticks. `MessageListViewModel`
-/// consumes the stream and decides whether to call `refresh()` or a
-/// lighter incremental fetch. Separating observation from reaction keeps
+/// async stream of `WatchEvent.changed` ticks. The app's `FolderPoller`
+/// consumes the stream, coalesces bursts and asks the folder's STATUS once
+/// for all the lists showing it. Separating observation from reaction keeps
 /// the kit policy-free (no UI preferences, no debouncing decisions) and
 /// testable — unit tests script the stream's end and assert the watcher
 /// emits the expected ticks.

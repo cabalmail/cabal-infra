@@ -3,7 +3,7 @@ import CabalmailKit
 @testable import CabalmailUI
 
 // A search result read in the reader loses its unread dot (#1859). The global
-// search surface's `folder` is a sentinel (path ""), and its rows come from
+// search surface's `folder` was a sentinel (path ""), and its rows come from
 // many folders, so the list's flag observer, which took only the signals that
 // named its own folder, dropped every one of them there: the row kept its dot
 // until the next search. The list now hears the store's mail events itself

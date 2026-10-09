@@ -46,8 +46,8 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
     }
 
     func testSearchScopeDoesNotPublishAgainstItsSentinelFolder() throws {
-        // `.search` resolves to a sentinel folder with an empty path; writing
-        // counts under it would put a phantom row in the badge map.
+        // `.search` has no folder, so no folder window to take the counts;
+        // any written for it would put a phantom row in the badge map.
         let appState = AppState()
         let model = MessageListViewModel(
             scope: .search,

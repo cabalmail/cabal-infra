@@ -11,19 +11,19 @@ import CabalmailKit
 // It protects:
 // - the stream's end on `.onDisappear`, and a restart on the same model
 //   (52b4c039).
-// - the cancel of the model-owned paging tasks (16b07580, 563c3fc6,
+// - the cancel of the folder window's paging tasks (16b07580, 563c3fc6,
 //   35105d26, dd885cbf) and of the debounced scroll-settle loader
 //   (efccb400): each drops its page without an error.
 // - a stop mid-refresh, which cancels it without an error (#1816).
 //
 // Not pinned:
-// - `persistTask`, the 1 s envelope-snapshot debounce `stopWatching` also
-//   cancels, is private and sleeps a real second, so it has no seam (like
-//   W4).
-// - `stopWatching` leaves `loadMoreSearchTask` running. That is not pinned
-//   because nothing a test can see through the fake would change if it
-//   were cancelled: the fake's search ignores cancellation and
-//   `loadMoreSearchResults` checks for none, so the page merges either way.
+// - the folder window's `persistTask`, the 1 s envelope-snapshot debounce
+//   `stopWatching` also cancels, sleeps a real second, so it has no seam.
+// - `stopWatching` leaves the search's `loadMoreTask` running. That is not
+//   pinned because nothing a test can see through the fake would change if
+//   it were cancelled: the fake's search ignores cancellation and
+//   `MailSearchSession.loadMore` checks for none, so the page merges either
+//   way.
 
 @MainActor
 final class MessageListWatcherTeardownCharacterizationTests: XCTestCase {
@@ -40,7 +40,7 @@ final class MessageListWatcherTeardownCharacterizationTests: XCTestCase {
     }
 
     /// The view calls this from `.onDisappear`. Either half of the stop ends
-    /// the stream on its own (cancelling the list's task terminates the
+    /// the stream on its own (cancelling the poller's task terminates the
     /// watcher through the stream's `onTermination`, and stopping the
     /// watcher cancels its runner), so this catches only the loss of both.
     /// The event emitted afterwards documents the outcome: the fake drops it
@@ -60,10 +60,11 @@ final class MessageListWatcherTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelopes.map(\.uid), [5, 4, 3, 2, 1])
     }
 
-    /// `stopWatching()` clears the watcher, so a later `startWatching()` on
-    /// the same model opens a new stream on the folder, and that stream
-    /// refreshes the list. The view makes that second call when the list
-    /// comes back on screen with the model it kept (#1816).
+    /// `stopWatching()` takes the folder's last list off its poller, which
+    /// stops and drops the poller, so a later `startWatching()` on the same
+    /// model makes a fresh one with a new stream on the folder, and that
+    /// stream refreshes the list. The view makes that second call when the
+    /// list comes back on screen with the model it kept (#1816).
     func testWatchingStartsAgainAfterAStop() async throws {
         let imap = harness.imap
         await harness.scriptNewMessage()
@@ -83,11 +84,11 @@ final class MessageListWatcherTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelopes.map(\.uid), [6, 5, 4, 3, 2, 1])
     }
 
-    /// A watcher refresh runs inside the watcher's task, so stopping the
-    /// watcher cancels the refresh while it is in flight, and no top page is
-    /// fetched. The cancelled STATUS leaves no "Couldn't reach the server"
-    /// banner on the model the view keeps. Fixed in #1816; this test pinned
-    /// the banner until then.
+    /// A change's STATUS is asked in the folder poller's task, so stopping
+    /// the poller cancels the poll while it is in flight: its answer reaches
+    /// no list, and no top page is fetched. The cancelled STATUS leaves no
+    /// "Couldn't reach the server" banner on the model the view keeps. Fixed
+    /// in #1816; this test pinned the banner until then.
     func testStoppingMidRefreshCancelsItWithoutAnError() async throws {
         let imap = harness.imap
         await harness.scriptNewMessage()
@@ -107,7 +108,7 @@ final class MessageListWatcherTeardownCharacterizationTests: XCTestCase {
         XCTAssertTrue(topCalls.isEmpty)
     }
 
-    // MARK: Model-owned paging tasks
+    // MARK: The folder window's paging tasks
 
     /// The 1000-message folder on the server and a list showing `window` of it.
     private func pagedModel(window: Range<Int>) async throws -> MessageListViewModel {

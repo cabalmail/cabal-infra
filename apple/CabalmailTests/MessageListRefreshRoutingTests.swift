@@ -3,11 +3,11 @@ import CabalmailKit
 @testable import CabalmailUI
 
 /// The refresh-routing fixes (#1816, #1819, #1821, #1822, #1814) beyond the
-/// characterization tests they flipped: the watcher coming back with the
-/// list, a pill's counts on Refresh, a search refresh that is cancelled, the
+/// characterization tests they flipped: the list's watching coming back with
+/// it, a pill's counts on Refresh, a search refresh that is cancelled, the
 /// sort menu during a search, and the user-facing error copy on the list's
-/// own write paths. A stopped watcher starting again on the same model is
-/// `MessageListWatcherTeardownCharacterizationTests`' to pin.
+/// own write paths. Watching that starts again on the same model after a
+/// stop is `MessageListWatcherTeardownCharacterizationTests`' to pin.
 @MainActor
 final class MessageListRefreshRoutingTests: XCTestCase {
     private var harness: ListWatcherHarness!
@@ -22,12 +22,12 @@ final class MessageListRefreshRoutingTests: XCTestCase {
         harness = nil
     }
 
-    // MARK: - #1816: the watcher comes back with the list
+    // MARK: - #1816: the list's watching comes back with it
 
-    /// The view stops the watcher on an unstructured task, so a start can
-    /// land while the stop is still waiting for the old watcher. That start
-    /// gets a fresh watcher rather than finding the old one and doing
-    /// nothing, which would leave the list unwatched once the stop finished.
+    /// The view stops the list's watching on an unstructured task, so a start
+    /// can land while the stop is still waiting for the old poller's watcher.
+    /// That start makes a fresh poller rather than joining the stopped one,
+    /// which would leave the list unwatched.
     func testAStartDuringAStopStillLeavesTheListWatched() async throws {
         let imap = harness.imap
         await harness.scriptNewMessage()
@@ -47,11 +47,11 @@ final class MessageListRefreshRoutingTests: XCTestCase {
     }
 
     /// The view half (#1816): the list's `.task` runs on every appearance,
-    /// and with a model already built it starts the watcher again, since
-    /// `.onDisappear` stopped it, then refreshes for whatever arrived while
-    /// it was away, which the new watcher takes as already there. A scan,
-    /// because no test here renders the list; the model behaviour it relies
-    /// on is the test above and the teardown suite's restart test.
+    /// and with a model already built it puts the list back on its folder's
+    /// poller, since `.onDisappear` took it off, then refreshes for whatever
+    /// arrived while it was away, which no poll of its folder handed it. A
+    /// scan, because no test here renders the list; the model behaviour it
+    /// relies on is the test above and the teardown suite's restart test.
     func testTheListStartsItsWatcherAgainWhenItReappears() throws {
         let source = try String(
             contentsOf: Self.apple.appendingPathComponent("CabalmailUI/Mail/MessageList/MessageListView.swift"),

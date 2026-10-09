@@ -3,33 +3,37 @@ import CabalmailKit
 @testable import CabalmailUI
 
 // Characterization suite for workstream 0.8: pins how `MessageListViewModel`
-// drives `MailboxWatcher` today (`startWatching`, `stopWatching`,
-// `handleWatcherChanged`), so the CabalmailUI move, the AppState split and
-// the mail store layer show any change to it explicitly. Some pins describe
-// weaknesses; those tests say so. The teardown half (W3) lives in
+// watches its folder today (`startWatching` and `stopWatching` put it on and
+// off the folder's `FolderPoller`, which drives `MailboxWatcher`), so the
+// CabalmailUI move, the AppState split and the mail store layer show any
+// change to it explicitly. Some pins describe weaknesses; those tests say so.
+// The teardown half (W3) lives in
 // MessageListWatcherTeardownCharacterizationTests.swift and shares the
 // harness below.
 //
 // It protects:
 // - the change-driven auto-refresh from the Phase 7 client (52b4c039): one
-//   change stream per folder list and none on the global search surface
-//   (32f398c5). Every `.changed` tick runs the ordinary `refresh()`, which
-//   leaves a trimmed deep window in place (64794213) and, with a pill on,
-//   asks STATUS for the counts and then re-runs the pill's search (#1819).
+//   change stream per open folder and none on the global search surface
+//   (32f398c5). Every `.changed` tick has the folder's poller ask STATUS
+//   and hand it to the list's ordinary refresh, which leaves a trimmed deep
+//   window in place (64794213) and, with a pill on, takes the counts from
+//   that STATUS and then re-runs the pill's search (#1819).
 // - the Phase 7 reconnect as the list sees it: a failed stream is reopened
 //   and the list keeps refreshing through it. #1797's open-failure backoff
 //   (b039d2d6) is pinned in the Kit's MailboxWatcherTests, not here.
 //
-// The 1 s burst coalescing in `handleWatcherChanged` reads the wall clock
-// through no seam, so it is not pinned here (W4). It still shapes these
-// tests: each drives at most one watcher refresh per model, because a
-// second event inside a second of the first is dropped.
+// The 1 s burst coalescing (W4) is the folder poller's, pinned on a stepped
+// clock in `FolderPollersTests`. Each model here has a store of its own, so
+// a poller of its own on the real clock, and the coalesce still shapes these
+// tests: each drives at most one watcher refresh per model, because a second
+// event inside a second of the first is dropped.
 //
 // Every test scripts the fake's idle stream before a watcher starts (an
 // unscripted one ends at once, leaving the watcher in its real-sleep
-// reconnect loop), and teardown stops every model's watcher. Waits on the
-// fake go through `arrive`, which fails the test at waitUntil's ceiling
-// rather than hanging when a refactor moves the call being waited for.
+// reconnect loop), and teardown takes every model off its poller, which
+// stops the poller's watcher. Waits on the fake go through `arrive`, which
+// fails the test at waitUntil's ceiling rather than hanging when a refactor
+// moves the call being waited for.
 
 // MARK: - Harness
 
@@ -178,11 +182,12 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         harness = nil
     }
 
-    /// Two overlapping calls and a later third open one stream. The watcher
-    /// is recorded before `startWatching` first suspends, so the overlapping
-    /// call already finds it. The "one" is read after a refresh's round trip
-    /// through the stream, by which time a second watcher's open would have
-    /// landed; nothing orders it more strictly than that.
+    /// Two overlapping calls and a later third open one stream.
+    /// `startWatching` puts the list on its folder's poller without
+    /// suspending, so the overlapping call finds it already there. The "one"
+    /// is read after a refresh's round trip through the stream, by which time
+    /// a second poller's open would have landed; nothing orders it more
+    /// strictly than that.
     func testStartWatchingOpensOneStreamEvenWhenCalledConcurrentlyOrAgain() async throws {
         let imap = harness.imap
         await harness.scriptNewMessage()
@@ -360,10 +365,10 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
     }
 
     /// The Phase 7 reconnect (52b4c039) as the list sees it: a stream that
-    /// fails mid-flight is reopened on the same folder, and the list's
-    /// consumer keeps refreshing across the watcher's `.reconnecting` and
-    /// `.active` events. The list builds its watcher with the default 2 s
-    /// backoff on the real clock, so this test spends that long. The
+    /// fails mid-flight is reopened on the same folder, and the folder's
+    /// poller keeps refreshing the list across the watcher's `.reconnecting`
+    /// and `.active` events. The poller builds its watcher with the default
+    /// 2 s backoff on the real clock, so this test spends that long. The
     /// open-failure backoff of #1797 is pinned in the Kit's
     /// `MailboxWatcherTests.testWatcherOverTheApiBackedClientBacksOffWhileOffline`.
     func testAFailedStreamIsReopenedOnTheSameFolderAndStillRefreshes() async throws {

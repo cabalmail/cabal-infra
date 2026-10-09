@@ -69,7 +69,7 @@ extension MessageListView {
                                         // pulls the next search page (no-op
                                         // outside an active search or once the
                                         // cursor runs dry). The fetch itself
-                                        // runs on a model-owned task so this
+                                        // runs on the search's own task so this
                                         // row scrolling away can't cancel it.
                                         if rows.suffix(searchPrefetchMargin)
                                             .contains(where: { $0.id == row.id }) {

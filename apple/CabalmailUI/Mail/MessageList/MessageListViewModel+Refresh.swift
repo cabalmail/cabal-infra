@@ -76,8 +76,8 @@ extension MessageListViewModel {
     /// and the message-list toolbar's arrow.clockwise button route through
     /// this path, so the user has a way to escape stale state (e.g. rows
     /// that leaked into the snapshot, which a refresh prunes only where it
-    /// can prove them gone). The change watcher and the 60-second fallback
-    /// keep calling `refresh()`: they fire often, and the merge is the cheap
+    /// can prove them gone). The folder's poller keeps calling
+    /// `refresh(prefetched:)`: it fires often, and the merge is the cheap
     /// "fold new mail in" loop the cache is designed around. The body cache
     /// is left alone: it's keyed per UID and never blindly batch-written.
     ///

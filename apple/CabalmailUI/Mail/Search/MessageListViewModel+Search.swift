@@ -47,8 +47,8 @@ extension MessageListViewModel {
         }
         // The depth an in-place refresh re-walks to. A fresh search starts
         // from one page and pages in from there (`MailSearchSession.loadMore`);
-        // a refresh of an active search (pull, the 60-second background
-        // pass) re-fetches as many rows as the user has already paged in,
+        // a refresh of an active search (pull, a poll of the folder)
+        // re-fetches as many rows as the user has already paged in,
         // so it can't silently truncate their scroll position back to one
         // page. Cost stays proportional to the depth the user opted into.
         let targetDepth = preserveDepth && isSearchActive
@@ -60,11 +60,12 @@ extension MessageListViewModel {
         window?.holdLoading()
         defer { window?.releaseLoading() }
         // A folder page or refresh still out was addressed to the rows this
-        // search replaces; landing later, it would mix folder rows into the
-        // results (#1870). They stand down now, and again as the results
-        // land (`searchWillShowResults`), for any that started meanwhile. A
-        // search that ends without taking the list over leaves the folder
-        // rows they were filling.
+        // search replaces; landing later, it would write folder rows into the
+        // window under the results, a refresh into the folder's snapshot as
+        // well (#1870). They stand down now, and again as the results land
+        // (`searchWillShowResults`), for any that started meanwhile. A search
+        // that ends without taking the list over leaves the folder rows they
+        // were filling.
         window?.standDownWindowLoads()
         defer { if !isSearchActive { window?.resumeWindowLoads() } }
         await search.run(trimmed, depth: targetDepth, rerun: rerun)
@@ -74,7 +75,7 @@ extension MessageListViewModel {
     /// first (a pill is a search, and its counts and the sidebar badge would
     /// otherwise stop moving until it is left, #1819), then the submitted
     /// search again at the depth already paged in. `prefetched` is a STATUS the caller already asked
-    /// for (`hardReload`), used rather than asked for again. The search
+    /// for (`hardReload`, the folder's poller), used rather than asked for again. The search
     /// surface has no folder to count.
     func refreshSearch(prefetched: PrefetchedStatus? = nil) async {
         await window?.refreshCounts(prefetched: prefetched)
