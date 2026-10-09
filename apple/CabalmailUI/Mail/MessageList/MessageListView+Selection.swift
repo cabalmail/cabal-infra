@@ -183,8 +183,8 @@ extension MessageListView {
     /// (a stale cache window, or `windowStart + count` transiently past
     /// `totalMessages`), and a row past `total - 1` can never be filled by a
     /// positional fetch, so scrolling there would strand a permanent
-    /// placeholder. Filtered / search rows are id-addressed, so scroll to the
-    /// first / last loaded envelope instead.
+    /// placeholder. Filtered / search rows are keyed by `MessageRowIdentity`,
+    /// so scroll to the first / last loaded row by that (#1868).
     private func homeEndScroll(
         toEnd: Bool,
         model: MessageListViewModel,
@@ -201,7 +201,8 @@ extension MessageListView {
             model.window?.ensureLoaded(around: target)
             withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(model.rowSlot(at: target), anchor: anchor) }
         } else if let edge = toEnd ? visible.last : visible.first {
-            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(edge.id, anchor: anchor) }
+            let row = MessageRowIdentity.of(edge, generations: model.rowGenerations)
+            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(row, anchor: anchor) }
         }
         return .handled
     }
@@ -512,14 +513,15 @@ extension MessageListView {
             model.selectionCursor = targetRef
         }
         // The virtualized `ForEach` is keyed by slot (absolute folder index
-        // plus generation); the filtered fallback by envelope id. Scroll to
-        // whichever the active `ForEach` uses (in virtualize mode `visible` ==
-        // `envelopes`, so the absolute index is `windowStart + next`).
+        // plus generation); the filtered fallback by `MessageRowIdentity`
+        // (#1868). Scroll to whichever the active `ForEach` uses (in
+        // virtualize mode `visible` == `envelopes`, so the absolute index is
+        // `windowStart + next`).
         withAnimation(.easeOut(duration: 0.12)) {
             if virtualize {
                 proxy.scrollTo(model.rowSlot(at: Int(model.window?.windowStart ?? 0) + next), anchor: .center)
             } else {
-                proxy.scrollTo(target.id, anchor: .center)
+                proxy.scrollTo(MessageRowIdentity.of(target, generations: model.rowGenerations), anchor: .center)
             }
         }
         return .handled

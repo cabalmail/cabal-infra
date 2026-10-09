@@ -66,6 +66,16 @@ final class MessageRowIdentityTests: XCTestCase {
         XCTAssertNotEqual(after[1], before[1], "the replaced message's row must not keep its identity")
     }
 
+    /// A scroll to a row names the identity it is drawn under, generation
+    /// included; the bare UID it used to pass matched no row (#1868).
+    func testAScrollNamesTheIdentityTheRowIsDrawnUnder() {
+        let generations = [MessageRef(folder: "alpha0803/kid", uid: 1): 2]
+        let drawn = MessageRowIdentity.identify(collidingMatches, generations: generations).map(\.id)
+        let named = collidingMatches.map { MessageRowIdentity.of($0, generations: generations) }
+        XCTAssertEqual(named, drawn)
+        XCTAssertEqual(named.map(\.generation), [0, 2])
+    }
+
     func testTheIdentityIsTheRowsRef() {
         let rows = MessageRowIdentity.identify([
             TestFixtures.makeEnvelope(uid: 1, messageId: "<probe1@example.com>").inFolder("INBOX"),
