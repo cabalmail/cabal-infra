@@ -53,9 +53,9 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         let rebuilt = UUID()
         await navigator.mailTreeAppeared(rebuilt, isWide: true)
         XCTAssertEqual(navigator.selectedFolder, inbox)
-        XCTAssertEqual(coordinator.pendingRestore?.folderPath, "INBOX")
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
-        XCTAssertEqual(coordinator.pendingRestore?.messageID, "<nine@example.com>")
+        XCTAssertEqual(navigator.restores.pendingRestore?.folderPath, "INBOX")
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 9)
+        XCTAssertEqual(navigator.restores.pendingRestore?.messageID, "<nine@example.com>")
         XCTAssertEqual(navigator.route.mail.message, MessageRef(folder: "INBOX", uid: 9))
     }
 
@@ -93,7 +93,9 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         await navigator.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive", "the live session, not the launch snapshot's Lists")
-        XCTAssertNotEqual(coordinator.pendingRestore?.folderPath, "Lists", "no restore of the snapshot's message")
+        XCTAssertNotEqual(
+            navigator.restores.pendingRestore?.folderPath, "Lists", "no restore of the snapshot's message"
+        )
     }
 
     /// A swap before the list has applied the launch landing's restore keeps
@@ -106,8 +108,8 @@ final class SceneNavigatorRebuildTests: XCTestCase {
 
         await navigator.mailTreeAppeared(UUID(), isWide: true)
 
-        XCTAssertEqual(coordinator.pendingRestore?.folderPath, "Lists.Cabal")
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 42)
+        XCTAssertEqual(navigator.restores.pendingRestore?.folderPath, "Lists.Cabal")
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 42)
     }
 
     /// A same-folder navigation whose restore the list consumed but could not
@@ -121,11 +123,11 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         navigator.foldersLoaded([inbox])
         navigator.selectMessage(message, isSearching: false, from: first)
         navigator.navigate(to: NavState(folder: "INBOX", uid: 4, clientID: "push"))
-        _ = coordinator.consumePendingRestore(for: "INBOX")
+        _ = navigator.restores.consumePendingRestore(for: "INBOX")
 
         await navigator.mailTreeAppeared(UUID(), isWide: true)
 
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 9)
     }
 
     /// #1664: a compact stack is never handed a list and a reader in one
@@ -149,7 +151,7 @@ final class SceneNavigatorRebuildTests: XCTestCase {
 
         await navigator.mailTreeAppeared(rebuilt, isWide: false)
         XCTAssertEqual(navigator.folder(in: rebuilt), inbox)
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 9)
         XCTAssertNil(navigator.envelope(in: rebuilt))
         XCTAssertEqual(navigator.compactColumn(in: rebuilt), .content)
 
@@ -173,7 +175,7 @@ final class SceneNavigatorRebuildTests: XCTestCase {
 
         XCTAssertEqual(navigator.envelope(in: tree), message)
         XCTAssertEqual(navigator.compactColumn(in: tree), .detail)
-        XCTAssertNil(coordinator.pendingRestore)
+        XCTAssertNil(navigator.restores.pendingRestore)
     }
 
     /// A swap tears the old tree down after the new one is built; whatever

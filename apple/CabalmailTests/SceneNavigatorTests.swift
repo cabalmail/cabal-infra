@@ -79,7 +79,8 @@ final class SceneNavigatorTests: XCTestCase {
         XCTAssertNil(coordinator.navigateRequest)
         XCTAssertEqual(first.selectedFolder?.path, "Archive")
         XCTAssertNil(second.selectedFolder)
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 7)
+        XCTAssertEqual(first.restores.pendingRestore?.uid, 7)
+        XCTAssertNil(second.restores.pendingRestore, "only the window that took it parks it")
     }
 
     /// Tapping Resume supersedes a request still parked for the window's
@@ -94,7 +95,7 @@ final class SceneNavigatorTests: XCTestCase {
 
         XCTAssertNil(coordinator.navigateRequest)
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 7)
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 7)
     }
 
     /// On the wide layout a navigation moves the tab a swap opens on, but
@@ -165,7 +166,7 @@ final class SceneNavigatorTests: XCTestCase {
         navigator.navigate(to: NavState(folder: "INBOX", uid: 4, uidValidity: 77, clientID: "other-install"))
 
         XCTAssertEqual(navigator.selectedFolder, inbox)
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 4)
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 4)
         XCTAssertEqual(coordinator.workingCursor?.uidValidity, 77)
     }
 

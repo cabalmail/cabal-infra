@@ -3,11 +3,12 @@ import CabalmailKit
 @testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8 of the 2026-10 rearchitecture
-/// proposal: `NavStateCoordinator`'s restore tick, the one navigation tick
-/// its per-window navigation state (workstream 3.1, after defect 11,
-/// window-scoped menu commands, #1783) inherits. Every launch,
-/// push, Spotlight, Siri and resume-toast jump goes through `scheduleRestore`,
-/// and the matching `MessageListView` picks it up through
+/// proposal: the restore tick, the one navigation tick that per-window
+/// navigation state inherited. Since workstream 3.3 each window parks its own
+/// restores (`WindowRestores`) and the coordinator only primes the working
+/// cursor (`NavStateCoordinator.primeCursor`). Every launch, push, Spotlight,
+/// Siri and resume-toast jump goes through `WindowRestores.schedule`, and the
+/// window's matching `MessageListView` picks it up through
 /// `consumePendingRestore(for:)` once its first page lands
 /// (`LaunchRestoreSequencingSourceScanTests` pins only the call order).
 ///
@@ -52,38 +53,40 @@ final class RestoreTickCharacterizationTests: XCTestCase {
 
     func testEachScheduleRestorePublishesAFreshTickEvenForTheSameCursor() throws {
         let coordinator = try makeCoordinator()
-        XCTAssertNil(coordinator.pendingRestore)
+        let restores = WindowRestores()
+        XCTAssertNil(restores.pendingRestore)
 
-        coordinator.scheduleRestore(for: cursor())
-        let first = try XCTUnwrap(coordinator.pendingRestore)
+        restores.schedule(cursor(), priming: coordinator)
+        let first = try XCTUnwrap(restores.pendingRestore)
         XCTAssertEqual(first.folderPath, "Lists")
         XCTAssertEqual(first.messageID, "<seven@example.com>")
         XCTAssertEqual(first.uid, 7)
         XCTAssertEqual(first.listScroll, 3)
 
-        coordinator.scheduleRestore(for: cursor())
-        let second = try XCTUnwrap(coordinator.pendingRestore)
+        restores.schedule(cursor(), priming: coordinator)
+        let second = try XCTUnwrap(restores.pendingRestore)
         XCTAssertGreaterThan(second.tick, first.tick)
         XCTAssertNotEqual(second, first, "a mounted list re-applies a same-folder jump")
     }
 
     func testAScrollRestoreIsPublishedOnlyWhenTheCursorCarriesAnOffsetOrAnAnchor() throws {
         let coordinator = try makeCoordinator()
+        let restores = WindowRestores()
 
-        coordinator.scheduleRestore(for: cursor())
-        XCTAssertNil(coordinator.pendingScrollRestore, "a message saved at the top is not forced back to it")
+        restores.schedule(cursor(), priming: coordinator)
+        XCTAssertNil(restores.pendingScrollRestore, "a message saved at the top is not forced back to it")
 
-        coordinator.scheduleRestore(for: cursor(messageScroll: 640))
-        let offset = try XCTUnwrap(coordinator.pendingScrollRestore)
+        restores.schedule(cursor(messageScroll: 640), priming: coordinator)
+        let offset = try XCTUnwrap(restores.pendingScrollRestore)
         XCTAssertEqual(offset.offset, 640)
         XCTAssertNil(offset.anchor)
         XCTAssertEqual(offset.folderPath, "Lists")
         XCTAssertEqual(offset.uid, 7)
         XCTAssertEqual(offset.messageID, "<seven@example.com>")
 
-        coordinator.scheduleRestore(for: cursor(messageAnchor: "i3|-4"))
-        XCTAssertEqual(coordinator.pendingScrollRestore?.anchor, "i3|-4")
-        XCTAssertNil(coordinator.pendingScrollRestore?.offset)
+        restores.schedule(cursor(messageAnchor: "i3|-4"), priming: coordinator)
+        XCTAssertEqual(restores.pendingScrollRestore?.anchor, "i3|-4")
+        XCTAssertNil(restores.pendingScrollRestore?.offset)
 
         // A fraction alone is not a scroll position on the mail path, so a
         // cursor carrying only one loses its position here. The feed path
@@ -91,23 +94,24 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         // anchor from it. No client writes a fraction alone today (Android
         // sends one only beside an anchor), but the two paths disagree, and
         // workstream 3.1 should not standardise on this one by accident.
-        coordinator.scheduleRestore(for: cursor(messageFraction: 0.5))
-        XCTAssertNil(coordinator.pendingScrollRestore, "a later plain restore also clears an earlier one")
+        restores.schedule(cursor(messageFraction: 0.5), priming: coordinator)
+        XCTAssertNil(restores.pendingScrollRestore, "a later plain restore also clears an earlier one")
     }
 
     func testConsumeAnswersOnlyTheMatchingFolderAndClearsTheRestore() throws {
         let coordinator = try makeCoordinator()
-        coordinator.scheduleRestore(for: cursor(messageScroll: 120))
-        let scheduled = try XCTUnwrap(coordinator.pendingRestore)
+        let restores = WindowRestores()
+        restores.schedule(cursor(messageScroll: 120), priming: coordinator)
+        let scheduled = try XCTUnwrap(restores.pendingRestore)
 
-        XCTAssertNil(coordinator.consumePendingRestore(for: "INBOX"))
-        XCTAssertEqual(coordinator.pendingRestore, scheduled, "another folder's list leaves it for the right one")
+        XCTAssertNil(restores.consumePendingRestore(for: "INBOX"))
+        XCTAssertEqual(restores.pendingRestore, scheduled, "another folder's list leaves it for the right one")
 
-        XCTAssertEqual(coordinator.consumePendingRestore(for: "Lists"), scheduled)
-        XCTAssertNil(coordinator.pendingRestore)
-        XCTAssertNil(coordinator.consumePendingRestore(for: "Lists"), "one-shot")
+        XCTAssertEqual(restores.consumePendingRestore(for: "Lists"), scheduled)
+        XCTAssertNil(restores.pendingRestore)
+        XCTAssertNil(restores.consumePendingRestore(for: "Lists"), "one-shot")
         XCTAssertEqual(
-            coordinator.pendingScrollRestore?.offset, 120,
+            restores.pendingScrollRestore?.offset, 120,
             "the reader consumes the scroll restore separately, once the message opens"
         )
     }
@@ -116,27 +120,29 @@ final class RestoreTickCharacterizationTests: XCTestCase {
     /// case-insensitive INBOX check.
     func testConsumeMatchesTheFolderPathExactly() throws {
         let coordinator = try makeCoordinator()
-        coordinator.scheduleRestore(for: cursor(folder: "inbox"))
+        let restores = WindowRestores()
+        restores.schedule(cursor(folder: "inbox"), priming: coordinator)
 
-        XCTAssertNil(coordinator.consumePendingRestore(for: "INBOX"))
-        XCTAssertNotNil(coordinator.consumePendingRestore(for: "inbox"))
+        XCTAssertNil(restores.consumePendingRestore(for: "INBOX"))
+        XCTAssertNotNil(restores.consumePendingRestore(for: "inbox"))
     }
 
     func testClearPendingRestoreDropsBothAndTheTickKeepsCounting() throws {
         let coordinator = try makeCoordinator()
-        coordinator.scheduleRestore(for: cursor(messageAnchor: "i1|0"))
-        let cleared = try XCTUnwrap(coordinator.pendingRestore)
+        let restores = WindowRestores()
+        restores.schedule(cursor(messageAnchor: "i1|0"), priming: coordinator)
+        let cleared = try XCTUnwrap(restores.pendingRestore)
 
-        coordinator.clearPendingRestore()
-        XCTAssertNil(coordinator.pendingRestore)
-        XCTAssertNil(coordinator.pendingScrollRestore)
+        restores.clearPendingRestore()
+        XCTAssertNil(restores.pendingRestore)
+        XCTAssertNil(restores.pendingScrollRestore)
 
-        coordinator.scheduleRestore(for: cursor())
-        let next = try XCTUnwrap(coordinator.pendingRestore)
+        restores.schedule(cursor(), priming: coordinator)
+        let next = try XCTUnwrap(restores.pendingRestore)
         XCTAssertGreaterThan(next.tick, cleared.tick, "clearing does not reset the tick")
     }
 
-    /// `scheduleRestore` primes every working-cursor field from the cursor,
+    /// `primeCursor` primes every working-cursor field from the cursor,
     /// `messageFraction` included, so the fraction recorded for the message
     /// the user was reading doesn't ride along on the restored one. Until
     /// #1826 it skipped the fraction and this pinned the stale value.
@@ -151,7 +157,7 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         )
         XCTAssertEqual(coordinator.workingCursor?.messageFraction, 0.4, "precondition: the message left has one")
 
-        coordinator.scheduleRestore(for: NavState(
+        coordinator.primeCursor(for: NavState(
             folder: "Archive", messageID: "<nine@example.com>", uid: 9, uidValidity: 77,
             listScroll: 2, messageScroll: 120, clientID: "other-install"
         ))
@@ -168,7 +174,7 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         XCTAssertNil(working.requestBody["msg_fraction"])
         XCTAssertEqual(working.clientID, "this-install", "a restore is saved as this install's own")
 
-        coordinator.scheduleRestore(for: NavState(
+        coordinator.primeCursor(for: NavState(
             folder: "Archive", messageID: "<nine@example.com>", uid: 9,
             messageAnchor: "f0.6500", messageFraction: 0.65, clientID: "other-install"
         ))
@@ -182,7 +188,7 @@ final class RestoreTickCharacterizationTests: XCTestCase {
     func testARestoredUIDValidityStaysOnlyWithTheRestoredMessage() throws {
         let coordinator = try makeCoordinator()
         defer { coordinator.flushSession() }
-        coordinator.scheduleRestore(for: NavState(
+        coordinator.primeCursor(for: NavState(
             folder: "Archive", messageID: "<nine@example.com>", uid: 9, uidValidity: 77,
             clientID: "other-install"
         ))
@@ -194,7 +200,7 @@ final class RestoreTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(coordinator.workingCursor?.uid, 12)
         XCTAssertNil(coordinator.workingCursor?.uidValidity, "another message in the same folder drops it")
 
-        coordinator.scheduleRestore(for: NavState(
+        coordinator.primeCursor(for: NavState(
             folder: "Archive", messageID: "<nine@example.com>", uid: 9, uidValidity: 77,
             clientID: "other-install"
         ))
@@ -209,7 +215,7 @@ final class RestoreTickCharacterizationTests: XCTestCase {
     func testClosingTheMessageClearsItsFraction() throws {
         let coordinator = try makeCoordinator()
         defer { coordinator.flushSession() }
-        coordinator.scheduleRestore(for: NavState(
+        coordinator.primeCursor(for: NavState(
             folder: "Archive", messageID: "<nine@example.com>", uid: 9, uidValidity: 77,
             messageAnchor: "i2|0", messageFraction: 0.3, clientID: "other-install"
         ))

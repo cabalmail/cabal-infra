@@ -18,16 +18,16 @@ import CabalmailKit
 /// **Trees.** Each `MailRootView` instance is a tree with an identity of its
 /// own (`mailTreeAppeared`), and so is visionOS's tab view, which has no
 /// layout swap and so only ever one. The first tree in a window lands — on a
-/// parked navigate request, else the launch snapshot of the resume session. A tree
-/// built later by a layout swap renders the window's route instead: the
-/// folder stays, and an open message is re-parked through
-/// `NavStateCoordinator.scheduleRestore`, so the new list selects it once it
-/// has appeared and loaded. (A route with no folder lands on the live
-/// session, as a rebuilt tree always did.) Until a tree has taken over it
-/// sees no folder and no message, exactly as a fresh tree did before, so its
-/// list mounts only after the restore is parked and a compact stack is never
-/// handed a list and a reader in one update (#1664). Once a new tree has
-/// appeared, writes from the tree a swap is tearing down are dropped.
+/// parked navigate request, else the launch snapshot of the resume session. A
+/// tree built later by a layout swap renders the window's route instead: the
+/// folder stays, and an open message is re-parked in the window's own
+/// `WindowRestores`, so the new list selects it once it has appeared and
+/// loaded. (A route with no folder lands on the live session, as a rebuilt
+/// tree always did.) Until a tree has taken over it sees no folder and no
+/// message, exactly as a fresh tree did before, so its list mounts only after
+/// the restore is parked and a compact stack is never handed a list and a
+/// reader in one update (#1664). Once a new tree has appeared, writes from
+/// the tree a swap is tearing down are dropped.
 ///
 /// **Feeds** follow the same pattern with trees of their own: `FeedRootView`
 /// (the Feeds tab on the compact layout and visionOS) and the wide
@@ -74,6 +74,9 @@ final class SceneNavigator {
     /// The window's place in the feed reader, read and written by the feed
     /// trees (`FeedNavigationState`).
     private(set) var feeds = FeedNavigationState()
+
+    /// What this window's lists and reader take once they are ready.
+    let restores = WindowRestores()
 
     /// The window's search model (`searchModel(client:preferences:mailStore:)`).
     @ObservationIgnored private var search: MessageListViewModel?
@@ -126,7 +129,7 @@ final class SceneNavigator {
 
     private let coordinator: @MainActor () -> NavStateCoordinator?
     private let hasClient: @MainActor () -> Bool
-    private let feedsLaunchTarget: @MainActor (NavStateCoordinator) async -> RssItemScope?
+    private let feedsLaunchTarget: @MainActor (NavStateCoordinator) async -> NavStateCoordinator.FeedLaunchTarget?
 
     /// - Parameters:
     ///   - coordinator: the session's `NavStateCoordinator`, read live
@@ -137,15 +140,14 @@ final class SceneNavigator {
     ///     was. Read from the stored session rather than the coordinator, so
     ///     building a navigator observes nothing (the host's initializer
     ///     runs inside its parent's body).
-    ///   - feedsLaunchTarget: the feed scope a landing in feeds reopens; the
-    ///     coordinator's local-store lookup, replaceable in tests.
+    ///   - feedsLaunchTarget: the feed scope and item a landing in feeds
+    ///     reopens; the coordinator's local-store lookup, replaceable in tests.
     init(
         coordinator: @escaping @MainActor () -> NavStateCoordinator?,
         hasClient: @escaping @MainActor () -> Bool,
         seed: ResumeSession.Section? = ResumeSessionStore.storedSection(),
-        feedsLaunchTarget: @escaping @MainActor (NavStateCoordinator) async -> RssItemScope? = {
-            await $0.consumeFeedsLaunchTarget()
-        }
+        feedsLaunchTarget: @escaping @MainActor (NavStateCoordinator) async
+            -> NavStateCoordinator.FeedLaunchTarget? = { await $0.consumeFeedsLaunchTarget() }
     ) {
         self.coordinator = coordinator
         self.hasClient = hasClient
@@ -238,12 +240,12 @@ final class SceneNavigator {
             // Where the user is now, not where the process started (#1555).
             coordinator.didConsumeLaunchSession = true
             if hasClient() { landOnSessionFolder(coordinator) }
-        } else if let message = route.mail.message, !coordinator.hasPendingRestore(in: message.folder) {
+        } else if let message = route.mail.message, !restores.hasPendingRestore(in: message.folder) {
             // Unless a restore for the folder is already waiting: a
             // navigation or a landing the list has not applied yet, newer
             // than the open message and carrying any reading position with
             // it, which a bare re-park would replace.
-            coordinator.scheduleRestore(for: message)
+            restores.schedule(coordinator.restoreCursor(for: message), priming: coordinator)
         }
     }
 
@@ -298,7 +300,7 @@ final class SceneNavigator {
         awaitingLaunchReconcile = true
         coordinator.armProvisionalLanding()
         if let restore = target.messageRestore {
-            coordinator.scheduleRestore(for: restore)
+            restores.schedule(restore, priming: coordinator)
         }
         setFolder(Folder(path: target.folderPath, isSubscribed: true), records: hasShownMail)
     }
@@ -343,7 +345,7 @@ final class SceneNavigator {
             if let fetched = folders.first(where: { $0.path == current.path }) {
                 setFolder(fetched)
             } else if let inbox {
-                coordinator?.clearPendingRestore()
+                restores.clearPendingRestore()
                 setFolder(inbox, records: hasShownMail)
             }
         } else if let coordinator {
@@ -352,7 +354,7 @@ final class SceneNavigator {
             let target = coordinator.mailLaunchTarget()
             coordinator.armProvisionalLanding()
             if let restore = target.messageRestore {
-                coordinator.scheduleRestore(for: restore)
+                restores.schedule(restore, priming: coordinator)
             }
             setFolder(folders.first(where: { $0.path == target.folderPath }) ?? inbox)
         } else {
@@ -370,16 +372,16 @@ final class SceneNavigator {
     // MARK: Navigation
 
     /// Takes a cursor to this window — a tapped notification, a Spotlight
-    /// result, Siri, the resume banner: schedules its message for the list
-    /// to select, and moves to its folder and the Mail tab. Selecting a new
-    /// folder re-mounts its list, which consumes the restore; a same-folder
-    /// jump relies on the mounted list observing the new `pendingRestore`.
-    /// Supersedes a request still parked for a window's first landing, as a
-    /// tap writing over the request slot did.
+    /// result, Siri, the resume banner: parks its message for this window's
+    /// list and moves to its folder and the Mail tab. A new folder re-mounts
+    /// the list, which takes the restore; a mounted list sees the new
+    /// `pendingRestore`. Supersedes a request parked for a first landing. A
+    /// window opened after it lands where the user went (#1966).
     func navigate(to cursor: NavState) {
         guard let coordinator = coordinator() else { return }
         coordinator.navigateRequest = nil
-        coordinator.scheduleRestore(for: cursor)
+        coordinator.didConsumeLaunchSession = true
+        restores.schedule(cursor, priming: coordinator)
         if selectedFolder?.path != cursor.folder {
             setFolder(resolvedFolder(path: cursor.folder))
         }
@@ -536,12 +538,12 @@ extension SceneNavigator {
     func feedTreeAppeared(_ tree: UUID) async {
         feedTreeArrived(tree, showsReader: true)
         guard !feeds.didLand, feeds.scope == nil, let coordinator = coordinator() else { return }
-        let scope = await feedsLaunchTarget(coordinator)
+        let target = await feedsLaunchTarget(coordinator)
         // A tree a swap replaced during the lookup lands nothing; one that
         // took over meanwhile may have landed already.
         guard feeds.isAppearing(tree), !feeds.didLand else { return }
         feeds.markLanded()
-        if let scope { record(feeds.selectScope(scope)) }
+        if let target { record(feeds.selectScope(restores.park(target))) }
     }
 
     /// A feed pick on the wide layout, where feeds and mail share one split:
@@ -576,11 +578,11 @@ extension SceneNavigator {
         record(feeds.setColumn(column, from: tree))
     }
 
-    /// A tapped feed banner: this window opens the scope its item was parked
-    /// for (`NavStateCoordinator.requestFeedNavigation`), which the list
-    /// selects once it has appeared and loaded, or at once when it is already
-    /// on screen.
-    func navigateFeeds(to scope: RssItemScope) {
+    /// A tapped feed banner (`NavStateCoordinator.requestFeedNavigation`):
+    /// this window opens the item's scope and parks the item, which the list
+    /// selects once it has appeared and loaded, or at once if it is on screen.
+    func navigateFeeds(to target: NavStateCoordinator.FeedLaunchTarget) {
+        let scope = restores.park(target)
         feeds.markLanded()
         feedNavigations += 1
         if layoutIsWide {
@@ -597,26 +599,24 @@ extension SceneNavigator {
     /// replaced it during the lookup and the tree that takes over lands
     /// instead. False sends it on to mail.
     private func landsInFeeds(_ tree: UUID, _ coordinator: NavStateCoordinator) async -> Bool {
-        let scope = await feedsLaunchTarget(coordinator)
+        let target = await feedsLaunchTarget(coordinator)
         guard isCurrent(tree, isWide: true) else { return true }
         feeds.markLanded()
-        guard let scope else { return false }
+        guard let target else { return false }
         enterFeeds()
-        record(feeds.openScope(scope))
+        record(feeds.openScope(restores.park(target)))
         return true
     }
 
     /// A tree that hosts feeds appeared: `FeedRootView`, or a wide
     /// `MailRootView`. One a layout swap built takes the reader over. When it
     /// shows the reader, the open item is parked for its list to select once
-    /// it has appeared and loaded (#1664), unless the list is already waiting
-    /// on one (a banner's); a wide split showing mail keeps the item for the
-    /// compact Feeds tab.
+    /// it has appeared and loaded (#1664), unless the list already waits on
+    /// one (a banner's); a wide split showing mail keeps it for the Feeds tab.
     private func feedTreeArrived(_ tree: UUID, showsReader: Bool) {
         if feeds.appear(tree), showsReader, let scope = feeds.scope,
-           let item = feeds.takeItemForHandOff(),
-           let coordinator = coordinator(), coordinator.pendingFeedRestore?.scope != scope {
-            coordinator.pendingFeedRestore = .init(scope: scope, item: item)
+           let item = feeds.takeItemForHandOff(), restores.pendingFeedRestore?.scope != scope {
+            restores.parkFeedItem(item, in: scope)
         }
         feeds.mount(tree)
     }
@@ -630,8 +630,8 @@ extension SceneNavigator {
                 coordinator()?.recordFeedScope(scope)
                 // An item parked for another list is stale now: the list
                 // would otherwise open it the next time it comes back.
-                if let parked = coordinator()?.pendingFeedRestore?.scope, parked != scope {
-                    _ = coordinator()?.consumeFeedItemRestore(for: parked)
+                if let parked = restores.pendingFeedRestore?.scope, parked != scope {
+                    _ = restores.consumeFeedItemRestore(for: parked)
                 }
             case .item(let item):
                 route.feeds.item = item.map(AppRoute.Item.init)
@@ -639,7 +639,7 @@ extension SceneNavigator {
                 // Picked before the list applied the item parked for it:
                 // the pick wins, and a later hand-off parks the pick.
                 if item != nil, let scope = feeds.scope {
-                    _ = coordinator()?.consumeFeedItemRestore(for: scope)
+                    _ = restores.consumeFeedItemRestore(for: scope)
                 }
             }
         }

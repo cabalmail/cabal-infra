@@ -101,7 +101,7 @@ extension MessageDetailView {
         guard !didConsumeScrollRestore, let model, let coordinator = appState.navCoordinator else { return }
         guard model.htmlBody != nil || model.plainText != nil else { return }
         didConsumeScrollRestore = true
-        if let restore = coordinator.consumeScrollRestore(for: messageRef) {
+        if let restore = navigator?.restores.consumeScrollRestore(for: messageRef) {
             restoreScrollAnchor = restore.anchor
             restoreScrollOffset = restore.offset
         } else if let position = coordinator.readingPosition(for: messageRef) {

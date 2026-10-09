@@ -590,7 +590,7 @@ extension MessageListView {
         // run, so re-apply here; a folder-switch jump re-mounts the list and
         // is handled by the `.task` consume instead. `consumePendingRestore`
         // makes the two paths idempotent.
-        .onChange(of: appState.navCoordinator?.pendingRestore) { _, _ in
+        .onChange(of: navigator?.restores.pendingRestore) { _, _ in
             if let model { applyPendingRestore(model: model) }
         }
     }
@@ -615,7 +615,7 @@ extension MessageListView {
     /// window) leaves the list unselected — the graceful-degradation path.
     private func applyPendingRestore(model: MessageListViewModel) {
         guard let folder,
-              let restore = appState.navCoordinator?.consumePendingRestore(for: folder.path)
+              let restore = navigator?.restores.consumePendingRestore(for: folder.path)
         else { return }
         let match = restore.messageID.flatMap { messageID in
             model.envelopes.first { $0.messageId == messageID }

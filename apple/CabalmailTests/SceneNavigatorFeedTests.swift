@@ -65,7 +65,8 @@ final class SceneNavigatorFeedTests: XCTestCase {
         launch: @escaping @MainActor () async -> RssItemScope? = { nil }
     ) -> SceneNavigator {
         SceneNavigator(
-            coordinator: { coordinator }, hasClient: { true }, seed: seed, feedsLaunchTarget: { _ in await launch() }
+            coordinator: { coordinator }, hasClient: { true }, seed: seed,
+            feedsLaunchTarget: { _ in (await launch()).map { .init(scope: $0) } }
         )
     }
 
@@ -129,7 +130,7 @@ final class SceneNavigatorFeedTests: XCTestCase {
         let navigator = makeNavigator(coordinator, launch: { .subscription("session") })
         await navigator.mailTreeAppeared(UUID(), isWide: false)
 
-        navigator.navigateFeeds(to: .all)
+        navigator.navigateFeeds(to: .init(scope: .all))
         let tree = UUID()
         await navigator.feedTreeAppeared(tree)
 
@@ -166,7 +167,7 @@ final class SceneNavigatorFeedTests: XCTestCase {
     func testAFeedBannerOpensItsScopeInThisWindow() async throws {
         let compact = makeNavigator(try makeCoordinator())
         await compact.mailTreeAppeared(UUID(), isWide: false)
-        compact.navigateFeeds(to: .subscription("b"))
+        compact.navigateFeeds(to: .init(scope: .subscription("b")))
         XCTAssertEqual(compact.compactTab, .feeds)
         XCTAssertEqual(compact.route.section, .feeds)
         XCTAssertEqual(compact.feeds.scope, .subscription("b"))
@@ -174,7 +175,7 @@ final class SceneNavigatorFeedTests: XCTestCase {
         let wide = makeNavigator(try makeCoordinator())
         let tree = UUID()
         await wide.mailTreeAppeared(tree, isWide: true)
-        wide.navigateFeeds(to: .subscription("b"))
+        wide.navigateFeeds(to: .init(scope: .subscription("b")))
         XCTAssertTrue(wide.splitShowsFeeds)
         XCTAssertEqual(wide.feeds.scope(in: tree), .subscription("b"))
         XCTAssertNil(wide.folder(in: tree))
@@ -189,7 +190,7 @@ final class SceneNavigatorFeedTests: XCTestCase {
         let lookups = Counter()
         let navigator = makeNavigator(coordinator, launch: { lookups.count += 1; return .subscription("session") })
         await navigator.mailTreeAppeared(UUID(), isWide: true)
-        navigator.navigateFeeds(to: .all)
+        navigator.navigateFeeds(to: .init(scope: .all))
         navigator.selectFolder(inbox)
         navigator.layoutIsWide = false
         navigator.showTab(.feeds)

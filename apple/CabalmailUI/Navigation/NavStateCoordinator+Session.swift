@@ -7,13 +7,21 @@ import CabalmailKit
 // the network. See `docs/1.x/resume-session-plan.md`.
 extension NavStateCoordinator {
     /// Where the mail UI should land at launch: the session's folder (INBOX
-    /// when there is none) and, if a message was open, a cursor to hand to
-    /// `scheduleRestore` so the list selects it after its initial load. The
+    /// when there is none) and, if a message was open, a cursor for the
+    /// window to park so its list selects it after its initial load. The
     /// folder is provisional — `MailRootView` swaps the fetched `Folder` in
     /// when the list arrives and falls back to INBOX if it no longer exists.
     struct MailLaunchTarget: Equatable {
         let folderPath: String
         let messageRestore: NavState?
+    }
+
+    /// Where the feed reader should land: a scope, and the item that was open
+    /// in it, for the window to park until the scope's list has appeared and
+    /// loaded (#1664). Also what a tapped feed banner opens.
+    struct FeedLaunchTarget: Equatable {
+        let scope: RssItemScope
+        var item: RssItem?
     }
 
     /// The record a landing restores from: the launch snapshot for the first
@@ -46,13 +54,13 @@ extension NavStateCoordinator {
     /// The feed scope the feed reader should open when it mounts, or nil to
     /// stay at the feed list. Checks the scope against the local `RssStore`
     /// (a departed subscription or folder degrades to the list) and, if an
-    /// item was open and is still in the store, parks it as
-    /// `pendingFeedRestore` for the scope's list to select once loaded. Local
+    /// item was open and is still in the store, returns it beside the scope
+    /// for the window to park until the scope's list has loaded. Local
     /// SQLite reads only — no network at launch. Reads `restoreSource`: the
     /// launch snapshot for the process's first landing, the live session for
     /// a window that lands in feeds later. A tree a layout swap rebuilds
     /// never asks; it takes over its window's place (`SceneNavigator`).
-    func consumeFeedsLaunchTarget() async -> RssItemScope? {
+    func consumeFeedsLaunchTarget() async -> FeedLaunchTarget? {
         let source = restoreSource
         didConsumeLaunchSession = true
         guard let saved = source, let scope = saved.feedScope, let store = client.rssStore else {
@@ -68,20 +76,11 @@ extension NavStateCoordinator {
             scopeExists = ((try? await store.folders()) ?? []).contains { $0.folderId == id }
         }
         guard scopeExists else { return nil }
-        if let feedID = saved.feedItemFeedID, let sortKey = saved.feedItemSortKey,
-           let item = (try? await store.item(feedId: feedID, sortKey: sortKey)) ?? nil {
-            pendingFeedRestore = PendingFeedRestore(scope: scope, item: item)
+        var target = FeedLaunchTarget(scope: scope)
+        if let feedID = saved.feedItemFeedID, let sortKey = saved.feedItemSortKey {
+            target.item = (try? await store.item(feedId: feedID, sortKey: sortKey)) ?? nil
         }
-        return scope
-    }
-
-    /// Returns and clears the parked feed item if it belongs to `scope`. Called
-    /// by the scope's `FeedItemListView` once it is on screen and loaded, so
-    /// the reader never arrives in the same update as its list (#1664).
-    func consumeFeedItemRestore(for scope: RssItemScope) -> RssItem? {
-        guard let restore = pendingFeedRestore, restore.scope == scope else { return nil }
-        pendingFeedRestore = nil
-        return restore.item
+        return target
     }
 
     // MARK: Recording (session)
@@ -208,7 +207,6 @@ extension NavStateCoordinator {
         session = ResumeSession(section: .mail)
         positions = ReadingPositionCache()
         positionsDirty = false
-        pendingFeedRestore = nil
         store.clear()
     }
 }
