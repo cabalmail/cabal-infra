@@ -31,20 +31,25 @@ struct IdentifiedEnvelope: Identifiable, Hashable {
 extension MessageRowIdentity {
     /// Pairs each envelope with its row identity, preserving order. What
     /// `ForEach` iterates in the search / filtered list. `generations` is
-    /// the model's per-message row generation. Every row the model loads
-    /// carries its folder (`MessageListViewModel.placedInFolder(_:)`, and
-    /// `SearchedEnvelope` for search rows); a row without one keys on its
-    /// UID alone, which is all a single-folder list needs.
+    /// the model's per-message row generation.
     static func identify(
         _ envelopes: [Envelope],
         generations: [MessageRef: Int] = [:]
     ) -> [IdentifiedEnvelope] {
         envelopes.map { envelope in
-            let ref = envelope.ref ?? MessageRef(folder: "", uid: envelope.uid)
-            return IdentifiedEnvelope(
-                id: MessageRowIdentity(ref: ref, generation: generations[ref] ?? 0),
-                envelope: envelope
-            )
+            IdentifiedEnvelope(id: of(envelope, generations: generations), envelope: envelope)
         }
+    }
+
+    /// The identity `envelope`'s row is drawn under in the search / filtered
+    /// list, and so what a scroll to that row has to name: a scroll by
+    /// `Envelope.id`, the bare UID, matches no row there and does nothing
+    /// (#1868). Every row the model loads carries its folder
+    /// (`MessageListViewModel.placedInFolder(_:)`, and `SearchedEnvelope`
+    /// for search rows); a row without one keys on its UID alone, which is
+    /// all a single-folder list needs.
+    static func of(_ envelope: Envelope, generations: [MessageRef: Int] = [:]) -> MessageRowIdentity {
+        let ref = envelope.ref ?? MessageRef(folder: "", uid: envelope.uid)
+        return MessageRowIdentity(ref: ref, generation: generations[ref] ?? 0)
     }
 }

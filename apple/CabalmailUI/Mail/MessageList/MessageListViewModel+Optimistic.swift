@@ -8,70 +8,42 @@ import CabalmailKit
 extension MessageListViewModel {
     /// Optimistic flag toggle for one row. Updates the in-memory envelope
     /// before the server round trip so the swipe action and context-menu
-    /// commands feel instant; reverts the change, and any unread-badge
-    /// delta, if `setFlags` fails so the row goes back to the truthful
-    /// state. Selections take their own path (`setSeen(_:refs:)` and
-    /// `setFlagged(_:refs:)` in the bulk extension).
+    /// commands feel instant, and sends the write through the mutation
+    /// service, which shields it, tells every other list and reader, and
+    /// moves the unread count when `.seen` flips (in cross-folder search,
+    /// the row's own folder's). If the server refuses, the row goes back to
+    /// what it was and the service takes back the rest. Selections take
+    /// their own path (`setSeen(_:refs:)` and `setFlagged(_:refs:)` in the
+    /// bulk extension).
     func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
         let ref = rowRef(for: envelope)
-        let source = ref.folder
+        // Only a real flip moves the count or is taken back: a no-op toggle
+        // (the row already in the target state) changes nothing.
+        let flips = envelope.flags.contains(flag) != add
         applyOptimisticFlag(ref, flag: flag, add: add)
-        // Shield the optimistic flag from a concurrent refresh until our own
-        // write resolves; the next refresh after that carries server truth.
-        pendingFlagRefs.insert(ref)
-        defer { pendingFlagRefs.remove(ref) }
-        // Mirror the optimistic flag flip onto the source folder's unread
-        // count when `.seen` changes — adding `.seen` to an unread message
-        // drops one from the badge, removing it adds one back. Only fires
-        // when the message wasn't already in the target state to avoid
-        // double-counting a no-op toggle. In cross-folder search mode the
-        // source folder is per-row, so the badge update reaches the right
-        // mailbox.
-        let unreadDelta: Int
-        if flag == .seen, envelope.flags.contains(.seen) != add {
-            unreadDelta = add ? -1 : 1
-            mailStore.counts.applyUnreadDelta(folderPath: source, delta: unreadDelta)
-        } else {
-            unreadDelta = 0
-        }
-        do {
-            try await client.imapClient.setFlags(
-                folder: source,
-                uids: [ref.uid],
-                flags: [flag],
-                operation: add ? .add : .remove
-            )
-        } catch {
+        // The service records the write until the server answers; this list
+        // keeps the row shielded a moment longer, until it has taken its own
+        // change back, so a merge in between can't settle the row first.
+        mailStore.shields.beginFlagWrite([ref], flag: flag, added: add)
+        defer { mailStore.shields.endFlagWrite([ref], flag: flag, added: add) }
+        let outcome = await mailStore.mutations.setFlag(
+            flag, added: add, on: [ref], changing: flips ? [ref] : [], by: .list(self, through: client)
+        ).value
+        guard outcome.failed.contains(ref) else { return }
+        if flips {
             applyOptimisticFlag(ref, flag: flag, add: !add)
-            // Not once the session has ended (#1851).
-            if unreadDelta != 0, mailStore.acceptsCounts(from: client) {
-                mailStore.counts.applyUnreadDelta(folderPath: source, delta: -unreadDelta)
-            }
-            errorMessage = error.localizedDescription
         }
+        errorMessage = outcome.message
     }
 
+    /// Flips `flag` on `ref`'s row, if it is loaded. Rows only: the Unread
+    /// and Flagged pills are the mail store's counts, which the mutation
+    /// service moves once for each write.
     func applyOptimisticFlag(_ ref: MessageRef, flag: Flag, add: Bool) {
         guard let position = index(of: ref) else { return }
         var flags = envelopes[position].flags
-        let flipped = flags.contains(flag) != add
         if add { flags.insert(flag) } else { flags.remove(flag) }
         envelopes[position] = rebuildEnvelope(envelopes[position], flags: flags)
-        // Keep the Unread/Flagged pill counts in step with the optimistic row
-        // state — STATUS only corrects them on the next refresh, so without
-        // this the pills lag every flag/read change until a server round trip.
-        // Every optimistic flag path (list toggle, detail-view signal, bulk,
-        // and their reverts) funnels through here, so adjusting on a real flip
-        // only can't double-count.
-        guard flipped else { return }
-        switch flag {
-        case .seen:
-            unseen = max(0, unseen + (add ? -1 : 1))
-        case .flagged:
-            flagged = max(0, flagged + (add ? 1 : -1))
-        default:
-            break
-        }
     }
 
     /// Keep the server-sourced folder total in step with an optimistic prune
@@ -82,17 +54,12 @@ extension MessageListViewModel {
     /// resolve, because the message it points at is gone — plus an inflated
     /// pill, until the next STATUS corrects the count. Unsubscribed folders
     /// (Drafts) get no proactive poll, so that wait runs to minutes rather
-    /// than the ~10s STATUS lag elsewhere. Clamped at zero, and skipped in
+    /// than the ~10s STATUS lag elsewhere. Clamped at zero, skipped in
     /// search mode, where the row count comes from the results rather than
-    /// STATUS.
+    /// STATUS, and a no-op on the search surface, which has no folder total.
     func adjustTotalMessages(by delta: Int) {
         guard !isSearchActive, delta != 0 else { return }
-        totalMessages = UInt32(max(0, Int(totalMessages) + delta))
-        // The removal is this list's own, so the next STATUS mustn't read it
-        // as a change made elsewhere (`WindowAnchor`).
-        if let anchor = alignment.anchor {
-            alignment.anchor?.total = UInt32(max(0, Int(anchor.total) + delta))
-        }
+        window?.adjustTotal(by: delta)
     }
 
     /// Leg of the two-stage row-disposal animation a row is currently in.
@@ -126,9 +93,10 @@ extension MessageListViewModel {
     /// trip so the swipe feels instant, but it leaves the list on the two-leg
     /// fade-then-collapse animation rather than blinking out (see
     /// `beginRowDisposal`), and it leaves `envelopes` the moment that
-    /// animation ends -- not when the server answers. Cache pruning still
-    /// waits for server confirmation, so a transient failure can't leave the
-    /// persistent snapshot disagreeing with the server.
+    /// animation ends -- not when the server answers. The offline caches
+    /// forget the message only once the server confirms (the mutation
+    /// service), so a transient failure can't leave the persistent snapshot
+    /// disagreeing with the server.
     ///
     /// Why the row can't wait for the server: once the collapse has played,
     /// the disposed slot is zero height and the next message sits under the
@@ -150,11 +118,28 @@ extension MessageListViewModel {
     /// (see `replaceRows(showing:)`).
     func dispose(_ envelope: Envelope) async {
         let ref = rowRef(for: envelope)
-        guard pendingRemovedRefs.insert(ref).inserted else { return }
-        defer { pendingRemovedRefs.remove(ref) }
-
+        // A message already on its way out short-circuits: a duplicate
+        // rapid-swipe tap here, preventing re-entrant `ForEach(model.envelopes)`
+        // diffing while several in-flight moves are still returning, or a
+        // removal another list or the reader already has out. In that case
+        // this row isn't fading, and a full swipe that got here holds it slid
+        // open for the deletion it announced; only a new row lets go of that
+        // (`replaceRows(showing:)`).
+        guard !mailStore.shields.isRemoving(ref) else {
+            if rowDisposalPhases[ref] == nil {
+                replaceRows(showing: [ref])
+            }
+            return
+        }
+        // The service records the removal until the server answers. The row
+        // stays in `envelopes` until its animation ends, which on a fast
+        // network is later, so this list holds the removal in the record
+        // until then as well: a refresh must not pull the leaving row out
+        // under the animation, paging must not count it, and a second swipe
+        // must not reach it.
+        mailStore.shields.beginRemoval([ref])
+        defer { mailStore.shields.endRemoval([ref]) }
         let destination = preferences.disposeAction.destinationFolder
-        let source = ref.folder
         let wasUnread = !envelope.flags.contains(.seen)
         // Where the swipe happened. A refresh that adds mail above the row
         // during the animation moves the message down a slot, but the row
@@ -169,32 +154,27 @@ extension MessageListViewModel {
         // stable -- the index-addressed list would otherwise shift the rows
         // below instantly.
         let disposal = beginRowDisposal(ref)
-        // Optimistic count drop for the source folder: the dispose path
-        // marks the message `\Seen` before moving, so an unread message
-        // both loses its unread state AND leaves the folder. One -1 covers
-        // both — the post-move STATUS walk will fix it if the server
-        // disagrees. In cross-folder search mode `source` may differ from
-        // `folder.path`; the unread delta routes to the row's true mailbox.
-        if wasUnread {
-            mailStore.counts.applyUnreadDelta(folderPath: source, delta: -1)
-        }
-
         // Mark-seen + move in one round trip (the Lambda adds `\Seen` before
         // moving). Collapsing the old STORE-then-MOVE pair matters when the
         // swipe lands just as the app is being backgrounded: there's only a
         // brief window to reach the network, so halving the calls makes the
-        // archive far likelier to commit in time.
-        let client = self.client
-        let uid = ref.uid
-        let move = Task {
-            try await client.imapClient.move(
-                folder: source, uids: [uid], destination: destination, markSeen: wasUnread
-            )
-        }
+        // archive far likelier to commit in time. The service records the
+        // removal, drops the row from every other list, and takes one off
+        // the source folder's unread count for an unread message: the
+        // dispose marks it read AND moves it out, and one -1 covers both. In
+        // cross-folder search mode the row's own folder's count moves.
+        let removal = mailStore.mutations.remove(
+            [ref], .move(to: destination, markingSeen: wasUnread),
+            unread: wasUnread ? [ref] : [], flagged: envelope.flags.contains(.flagged) ? [ref] : [],
+            by: .list(self, through: client)
+        )
         // An early failure stops the collapse, so a row that is staying never
-        // closes its gap.
+        // closes its gap; a confirmed removal drops a staged bottom window at
+        // once (`removalsConfirmed`).
         Task {
-            if case .failure = await move.result { disposal.cancel() }
+            let outcome = await removal.value
+            if outcome.failed.contains(ref) { disposal.cancel() }
+            if outcome.confirmed.contains(ref) { removalsConfirmed() }
         }
         await disposal.value
 
@@ -213,29 +193,12 @@ extension MessageListViewModel {
         }
         endRowDisposal(ref)
 
-        do {
-            try await move.value
-            await confirmRemoval(from: source, uids: [uid])
-        } catch {
-            if dropped {
-                restoreEnvelope(envelope, at: originalIndex)
-            }
-            if wasUnread, mailStore.acceptsCounts(from: client) {
-                mailStore.counts.applyUnreadDelta(folderPath: source, delta: 1)
-            }
-            errorMessage = error.localizedDescription
+        let outcome = await removal.value
+        guard outcome.failed.contains(ref) else { return }
+        if dropped {
+            restoreEnvelope(envelope, at: originalIndex)
         }
-    }
-
-    /// The server confirmed `uids` gone from `folder` (a dispose, move or
-    /// purge succeeded): record it so a refresh that was already in flight
-    /// can't bring them back (see `MessageShields.confirmedRemovals`), then prune
-    /// the caches. Called only on success, while the messages are still in
-    /// `pendingRemovedRefs`, so the two shields overlap rather than leave a
-    /// gap between them.
-    func confirmRemoval(from folder: String, uids: [UInt32]) async {
-        mailStore.shields.recordConfirmedRemovals(uids.map { MessageRef(folder: folder, uid: $0) })
-        await pruneCachesAfter(move: folder, uids: uids)
+        errorMessage = outcome.message
     }
 
     /// Starts the two-stage disposal animation for a row and hands back the
@@ -295,11 +258,13 @@ extension MessageListViewModel {
         adjustTotalMessages(by: 1)
     }
 
-    /// Keeps a row `pruneEnvelope(_:)` is about to drop, if the reader's
-    /// move for it is still in flight, so `restorePrunedEnvelope` can bring
-    /// it back should the move fail. Entries whose move has since resolved
-    /// are dropped here, which keeps the stash to in-flight moves. A prune
-    /// with no move behind it (a send-from-draft) isn't kept.
+    /// Keeps a row `pruneEnvelope(_:)` is about to drop, with the index it
+    /// held before its removal pruned anything (`index`), if the removal
+    /// behind it (the reader's, or another list's) is still in flight, so
+    /// `restorePrunedEnvelope` can bring it back should the removal fail.
+    /// Entries whose removal has since resolved are dropped here, which
+    /// keeps the stash to removals in flight. A prune with no removal behind
+    /// it (a send-from-draft) isn't kept.
     func stashForReaderRevert(_ envelope: Envelope, at index: Int) {
         let inFlight = mailStore.shields.pendingMoveRefs
         readerPrunedEnvelopes = readerPrunedEnvelopes.filter { inFlight.contains($0.key) }
@@ -308,17 +273,22 @@ extension MessageListViewModel {
         readerPrunedEnvelopes[ref] = (envelope, index)
     }
 
-    /// Undo `pruneEnvelope(_:)` after the reader's dispose, move or purge
-    /// failed on the server: the row comes back where it was, with the
-    /// folder total and Unread pill adjustments the prune made. `markUnread`
-    /// is set when the reader's dispose had marked an unread message read;
-    /// the row comes back unread. Carried here rather than as a separate
-    /// flag signal so it can't land before the row is back.
+    /// Undo `pruneEnvelope(_:)` after a dispose, move or purge made by the
+    /// reader or another list failed on the server: the row comes back where
+    /// it was, with the folder total the prune took. A removal that named several of this list's rows stashed each at
+    /// the index it held before any of them left, and they come back in any
+    /// order, so each goes in ahead of the rows from that removal still
+    /// stashed (still on their way back, or gone for good). `markUnread` is
+    /// set when the dispose had marked an unread message read; the row comes
+    /// back unread. Carried here rather than as a separate flag change so it
+    /// can't land before the row is back.
     ///
-    /// The failure normally arrives after the prune. If it beat it (both
-    /// signals in one update), the row is still here: it is remembered in
-    /// `readerFailedRefs` so the prune skips it. A message this list never
-    /// had loaded is left alone, as its prune left the counts alone.
+    /// A failure for a row this list still has, with nothing stashed (a list
+    /// built while the removal was out, or a failure that reached the list
+    /// first), is remembered in `readerFailedRefs`, so a prune of that
+    /// message with no removal in flight behind it is skipped. A message
+    /// this list never had loaded is left alone, as its prune left the
+    /// counts alone.
     func restorePrunedEnvelope(_ ref: MessageRef, markUnread: Bool = false) {
         if let stashed = readerPrunedEnvelopes.removeValue(forKey: ref) {
             guard index(of: ref) == nil else { return }
@@ -326,10 +296,10 @@ extension MessageListViewModel {
             if markUnread {
                 envelope = rebuildEnvelope(envelope, flags: envelope.flags.subtracting([.seen]))
             }
-            restoreEnvelope(envelope, at: stashed.index)
-            if !envelope.flags.contains(.seen) {
-                unseen += 1
-            }
+            let inFlight = mailStore.shields.pendingMoveRefs
+            readerPrunedEnvelopes = readerPrunedEnvelopes.filter { inFlight.contains($0.key) }
+            let stillOut = readerPrunedEnvelopes.values.filter { $0.index < stashed.index }.count
+            restoreEnvelope(envelope, at: max(0, stashed.index - stillOut))
             invalidateBottomPrefetch()
         } else if index(of: ref) != nil {
             readerFailedRefs.insert(ref)

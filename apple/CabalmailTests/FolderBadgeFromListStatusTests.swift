@@ -17,7 +17,7 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
             envelopes: [],
             mailStore: appState.mailStore
         )
-        _ = model.applyStatusCounts(
+        _ = model.window!.applyStatusCounts(
             FolderStatus(messages: 12, unseen: 3, uidValidity: 7, uidNext: 13)
         )
         XCTAssertEqual(model.unseen, 3, "the chip's own count")
@@ -38,7 +38,7 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
             envelopes: [],
             mailStore: appState.mailStore
         )
-        _ = model.applyStatusCounts(
+        _ = model.window!.applyStatusCounts(
             FolderStatus(messages: nil, unseen: nil, uidValidity: 7, uidNext: 13)
         )
         XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 4)
@@ -46,8 +46,8 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
     }
 
     func testSearchScopeDoesNotPublishAgainstItsSentinelFolder() throws {
-        // `.search` resolves to a sentinel folder with an empty path; writing
-        // counts under it would put a phantom row in the badge map.
+        // `.search` has no folder, so no folder window to take the counts;
+        // any written for it would put a phantom row in the badge map.
         let appState = AppState()
         let model = MessageListViewModel(
             scope: .search,
@@ -55,7 +55,7 @@ final class FolderBadgeFromListStatusTests: XCTestCase {
             preferences: Preferences(store: InMemoryPreferenceStore()),
             mailStore: appState.mailStore
         )
-        _ = model.applyStatusCounts(
+        _ = model.window?.applyStatusCounts(
             FolderStatus(messages: 12, unseen: 3, uidValidity: 7, uidNext: 13)
         )
         XCTAssertTrue(appState.mailStore.counts.folderUnreadCounts.isEmpty)

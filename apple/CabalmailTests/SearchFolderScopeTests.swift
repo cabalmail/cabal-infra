@@ -3,7 +3,7 @@ import CabalmailKit
 @testable import CabalmailUI
 
 // "This folder only" on the global search surface (#1510). The surface's own
-// folder is a sentinel, so the toggle was hidden there — the only place the
+// folder was a sentinel, so the toggle was hidden there — the only place the
 // Filters sheet is presented — and single-folder search was unreachable. It
 // now narrows to the anchor the wide layout feeds in from the sidebar.
 @MainActor
@@ -35,7 +35,7 @@ final class SearchFolderScopeTests: XCTestCase {
         let model = try makeSearchModel(imap: imap)
         await model.setSearchAnchor(Folder(path: "Archive"))
         model.searchQuery = "invoice"
-        model.searchFilters.thisFolderOnly = true
+        model.search.filters.thisFolderOnly = true
         await model.runSearch()
         return model
     }
@@ -45,7 +45,7 @@ final class SearchFolderScopeTests: XCTestCase {
         let model = try await makeScopedSearch(imap: imap)
 
         XCTAssertNil(model.errorMessage)
-        XCTAssertEqual(model.searchFolder?.path, "Archive", "the toggle is offered with the anchor's name")
+        XCTAssertEqual(model.search.folder?.path, "Archive", "the toggle is offered with the anchor's name")
         let calls = await imap.searchCalls
         XCTAssertEqual(calls.map(\.folder), ["Archive"], "the wire query narrows to the anchor, not the sentinel")
     }
@@ -67,11 +67,11 @@ final class SearchFolderScopeTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptSearch(result(folder: "INBOX"))
         let model = try makeSearchModel(imap: imap)
-        XCTAssertNil(model.searchFolder, "the iPhone / visionOS search tab has nothing to narrow to")
+        XCTAssertNil(model.search.folder, "the iPhone / visionOS search tab has nothing to narrow to")
 
-        // Even a stray flag can't send the sentinel's empty path.
+        // Even a stray flag can't send a folder: there is none to narrow to.
         model.searchQuery = "invoice"
-        model.searchFilters.thisFolderOnly = true
+        model.search.filters.thisFolderOnly = true
         await model.runSearch()
         let calls = await imap.searchCalls
         XCTAssertEqual(calls.count, 1)
@@ -88,7 +88,7 @@ final class SearchFolderScopeTests: XCTestCase {
             calls.map(\.folder), ["Archive", "Sent"],
             "the banner must not keep naming a folder the rows no longer came from"
         )
-        XCTAssertTrue(model.searchFilters.thisFolderOnly)
+        XCTAssertTrue(model.search.filters.thisFolderOnly)
     }
 
     func testAnchorMoveLeavesACrossFolderSearchAlone() async throws {
@@ -121,7 +121,7 @@ final class SearchFolderScopeTests: XCTestCase {
             "the scope alone is not a search; no request goes out for the folder just picked"
         )
         XCTAssertFalse(model.isSearchActive, "the pick ends the search rather than re-scoping it")
-        XCTAssertFalse(model.searchFilters.thisFolderOnly)
+        XCTAssertFalse(model.search.filters.thisFolderOnly)
         XCTAssertTrue(model.envelopes.isEmpty, "the folder view owns the column again")
     }
 
@@ -134,7 +134,7 @@ final class SearchFolderScopeTests: XCTestCase {
         let model = try makeSearchModel(imap: imap)
         await model.setSearchAnchor(Folder(path: "Archive"))
         model.searchQuery = "invoice"
-        model.searchFilters.thisFolderOnly = true
+        model.search.filters.thisFolderOnly = true
 
         await imap.holdNextSearch()
         let search = Task { await model.runSearch() }
@@ -153,7 +153,7 @@ final class SearchFolderScopeTests: XCTestCase {
         let model = try await makeScopedSearch(imap: imap)
 
         await model.setSearchAnchor(nil)
-        XCTAssertFalse(model.searchFilters.thisFolderOnly)
+        XCTAssertFalse(model.search.filters.thisFolderOnly)
         let calls = await imap.searchCalls
         XCTAssertEqual(calls.map(\.folder), ["Archive", nil])
     }

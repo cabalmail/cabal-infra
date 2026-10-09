@@ -2,8 +2,8 @@ import Foundation
 import CabalmailKit
 
 /// What a session's start and end do to `AppState`'s own state: the mail
-/// store, a parked Spotlight result, attachment folders, compose windows, the
-/// shared search model and the contacts prompt. `AppState.init` installs
+/// store, a parked Spotlight result, attachment folders, compose windows and
+/// the contacts prompt. `AppState.init` installs
 /// them on its `SessionManager`, which calls each at the point in the
 /// wiring or teardown where it always ran. Until then they do nothing.
 @MainActor
@@ -28,6 +28,6 @@ struct SessionOwnerHooks {
     /// about the account goes, with or without a client (#1825).
     var forgetAccount: @MainActor () -> Void = {}
     /// Teardown, in the same turn the client is dropped: compose windows
-    /// end their session and the shared search model goes.
+    /// end their session.
     var clientDropped: @MainActor () -> Void = {}
 }

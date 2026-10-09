@@ -34,7 +34,7 @@ final class DisposingRowSwipeGuardTests: XCTestCase {
             imap: imap,
             envelopes: [1, 2, 3, 4].map { TestFixtures.makeEnvelope(uid: $0, flags: [.seen]) }
         )
-        model.totalMessages = 4
+        model.window!.totalMessages = 4
         let acted = ActedOn()
         let harness = try await SwipeTestHarness.make(rows: 4) {
             IndexedList(model: model, acted: acted)
@@ -78,7 +78,7 @@ private struct IndexedList: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
-                ForEach(0..<max(Int(model.totalMessages), model.envelopes.count), id: \.self) { index in
+                ForEach(0..<max(Int(model.window!.totalMessages), model.envelopes.count), id: \.self) { index in
                     if index < model.envelopes.count {
                         let uid = model.envelopes[index].uid
                         let ref = model.rowRef(for: model.envelopes[index])

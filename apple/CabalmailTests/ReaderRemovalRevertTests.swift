@@ -7,7 +7,8 @@ import CabalmailKit
 // the folder total and Unread pill stayed short) until a later refresh. The
 // reader now reports the failure and the list puts the row back. These tests
 // wire a reader to a list the way `MessageDetailView` / `MessageListView` do:
-// the reader's success signal prunes, its failure signal restores.
+// the reader writes through the store's mutation service, whose removal
+// prunes the row and whose refusal restores it.
 @MainActor
 final class ReaderRemovalRevertTests: XCTestCase {
 
@@ -33,7 +34,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
         let list = try TestFixtures.makeModel(
             imap: imap, envelopes: envelopes, folderPath: inbox, mailStore: appState.mailStore
         )
-        list.totalMessages = UInt32(uids.count)
+        list.window!.totalMessages = UInt32(uids.count)
         list.unseen = unread.count
         let reader = MessageDetailViewModel(
             folder: Folder(path: inbox, attributes: [], isSubscribed: true),
@@ -41,20 +42,9 @@ final class ReaderRemovalRevertTests: XCTestCase {
             client: try TestFixtures.makeClient(imap: imap),
             preferences: Preferences(store: InMemoryPreferenceStore())
         )
-        let folder = inbox
-        let openRef = MessageRef(folder: folder, uid: open)
-        reader.onFlagChanged = { [weak list] flag, added in
-            list?.applyFlagChange(openRef, flag: flag, added: added)
-        }
         // The list holds the store, not `appState`, which goes when this
-        // returns; so does the reader's relay in the app (`relayOutcomes`).
-        let mailStore = appState.mailStore
-        reader.onMoveInFlight = { [weak mailStore] inFlight in
-            mailStore?.shields.setMoveInFlight(openRef, inFlight: inFlight)
-        }
-        reader.onMoveFailed = { [weak list] markUnread in
-            list?.restorePrunedEnvelope(openRef, markUnread: markUnread)
-        }
+        // returns; the reader writes through the store's mutation service.
+        MessageDetailView.relayOutcomes(of: reader, to: appState.mailStore)
         return Pair(list: list, reader: reader)
     }
 
@@ -67,17 +57,18 @@ final class ReaderRemovalRevertTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
         let pair = try makePair(imap: imap, uids: [3, 2, 1], unread: [2], open: 2)
-        let row = ref(2)
         var failures = 0
+        await imap.holdNext(.move)
 
-        await pair.reader.dispose(
-            onSuccess: { pair.list.pruneEnvelope(row) },
-            onFailure: { _ in failures += 1 }
-        )
+        let dispose = Task { await pair.reader.dispose(onFailure: { _ in failures += 1 }) }
+        await imap.awaitHeld(.move)
+        XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 1], "precondition: the reader's archive pruned the row")
+        await imap.releaseHeld(.move)
+        await dispose.value
 
         XCTAssertEqual(failures, 1, "the user still gets the toast")
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1], "the row is back where it was")
-        XCTAssertEqual(pair.list.totalMessages, 3, "and so is its slot in the folder total")
+        XCTAssertEqual(pair.list.window!.totalMessages, 3, "and so is its slot in the folder total")
         XCTAssertEqual(pair.list.unseen, 1, "the message is still unread on the server")
         XCTAssertFalse(pair.list.envelopes[1].flags.contains(.seen))
         XCTAssertFalse(pair.reader.isSeen, "the reader drops its optimistic read mark too")
@@ -87,34 +78,31 @@ final class ReaderRemovalRevertTests: XCTestCase {
         let imap = FakeImapClient()
         await imap.scriptMoveResults([.failure(CabalmailError.network("boom"))])
         let pair = try makePair(imap: imap, uids: [3, 2, 1], open: 2)
-        let row = ref(2)
 
-        await pair.reader.move(to: "Projects", onSuccess: { pair.list.pruneEnvelope(row) })
+        await pair.reader.move(to: "Projects")
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
-        XCTAssertEqual(pair.list.totalMessages, 3)
+        XCTAssertEqual(pair.list.window!.totalMessages, 3)
     }
 
     func testAFailedReaderPurgePutsTheRowBack() async throws {
         let imap = FakeImapClient()
         await imap.scriptPurgeResults([.failure(CabalmailError.network("boom"))])
         let pair = try makePair(imap: imap, uids: [3, 2, 1], open: 2)
-        let row = ref(2)
 
-        await pair.reader.purge(onSuccess: { pair.list.pruneEnvelope(row) })
+        await pair.reader.purge()
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
-        XCTAssertEqual(pair.list.totalMessages, 3)
+        XCTAssertEqual(pair.list.window!.totalMessages, 3)
     }
 
     func testASuccessfulReaderDisposeKeepsTheRowGone() async throws {
         let pair = try makePair(imap: FakeImapClient(), uids: [3, 2, 1], open: 2)
-        let row = ref(2)
 
-        await pair.reader.dispose(onSuccess: { pair.list.pruneEnvelope(row) })
+        await pair.reader.dispose()
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 1])
-        XCTAssertEqual(pair.list.totalMessages, 2)
+        XCTAssertEqual(pair.list.window!.totalMessages, 2)
     }
 
     func testAFailureThatBeatsThePruneKeepsTheRow() throws {
@@ -126,7 +114,7 @@ final class ReaderRemovalRevertTests: XCTestCase {
         pair.list.pruneEnvelope(ref(2))
 
         XCTAssertEqual(pair.list.envelopes.map(\.uid), [3, 2, 1])
-        XCTAssertEqual(pair.list.totalMessages, 3)
+        XCTAssertEqual(pair.list.window!.totalMessages, 3)
         XCTAssertEqual(pair.list.unseen, 1)
         XCTAssertFalse(pair.list.envelopes[1].flags.contains(.seen))
     }
@@ -138,12 +126,12 @@ final class ReaderRemovalRevertTests: XCTestCase {
             envelopes: [TestFixtures.makeEnvelope(uid: 7, flags: [.seen])],
             folderPath: "Drafts"
         )
-        list.totalMessages = 1
+        list.window!.totalMessages = 1
 
         list.pruneEnvelope(ref(7, in: "Drafts"))
         list.restorePrunedEnvelope(ref(7, in: "Drafts"))
 
         XCTAssertTrue(list.envelopes.isEmpty)
-        XCTAssertEqual(list.totalMessages, 0)
+        XCTAssertEqual(list.window!.totalMessages, 0)
     }
 }

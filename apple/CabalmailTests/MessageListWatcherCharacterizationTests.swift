@@ -3,33 +3,37 @@ import CabalmailKit
 @testable import CabalmailUI
 
 // Characterization suite for workstream 0.8: pins how `MessageListViewModel`
-// drives `MailboxWatcher` today (`startWatching`, `stopWatching`,
-// `handleWatcherChanged`), so the CabalmailUI move, the AppState split and
-// the mail store layer show any change to it explicitly. Some pins describe
-// weaknesses; those tests say so. The teardown half (W3) lives in
+// watches its folder today (`startWatching` and `stopWatching` put it on and
+// off the folder's `FolderPoller`, which drives `MailboxWatcher`), so the
+// CabalmailUI move, the AppState split and the mail store layer show any
+// change to it explicitly. Some pins describe weaknesses; those tests say so.
+// The teardown half (W3) lives in
 // MessageListWatcherTeardownCharacterizationTests.swift and shares the
 // harness below.
 //
 // It protects:
 // - the change-driven auto-refresh from the Phase 7 client (52b4c039): one
-//   change stream per folder list and none on the global search surface
-//   (32f398c5). Every `.changed` tick runs the ordinary `refresh()`, which
-//   leaves a trimmed deep window in place (64794213) and, with a pill on,
-//   asks STATUS for the counts and then re-runs the pill's search (#1819).
+//   change stream per open folder and none on the global search surface
+//   (32f398c5). Every `.changed` tick has the folder's poller ask STATUS
+//   and hand it to the list's ordinary refresh, which leaves a trimmed deep
+//   window in place (64794213) and, with a pill on, takes the counts from
+//   that STATUS and then re-runs the pill's search (#1819).
 // - the Phase 7 reconnect as the list sees it: a failed stream is reopened
 //   and the list keeps refreshing through it. #1797's open-failure backoff
 //   (b039d2d6) is pinned in the Kit's MailboxWatcherTests, not here.
 //
-// The 1 s burst coalescing in `handleWatcherChanged` reads the wall clock
-// through no seam, so it is not pinned here (W4). It still shapes these
-// tests: each drives at most one watcher refresh per model, because a
-// second event inside a second of the first is dropped.
+// The 1 s burst coalescing (W4) is the folder poller's, pinned on a stepped
+// clock in `FolderPollersTests`. Each model here has a store of its own, so
+// a poller of its own on the real clock, and the coalesce still shapes these
+// tests: each drives at most one watcher refresh per model, because a second
+// event inside a second of the first is dropped.
 //
 // Every test scripts the fake's idle stream before a watcher starts (an
 // unscripted one ends at once, leaving the watcher in its real-sleep
-// reconnect loop), and teardown stops every model's watcher. Waits on the
-// fake go through `arrive`, which fails the test at waitUntil's ceiling
-// rather than hanging when a refactor moves the call being waited for.
+// reconnect loop), and teardown takes every model off its poller, which
+// stops the poller's watcher. Waits on the fake go through `arrive`, which
+// fails the test at waitUntil's ceiling rather than hanging when a refactor
+// moves the call being waited for.
 
 // MARK: - Harness
 
@@ -57,7 +61,7 @@ final class ListWatcherHarness {
             mailStore: AppState().mailStore
         )
         model.envelopes = Self.rows(uids)
-        model.totalMessages = UInt32(uids.count)
+        model.window?.totalMessages = UInt32(uids.count)
         models.append(model)
         return model
     }
@@ -79,9 +83,9 @@ final class ListWatcherHarness {
     func makeWindowModel(window: Range<Int>) throws -> MessageListViewModel {
         let model = try makeModel(uids: [])
         model.envelopes = Array(Self.thousand[window])
-        model.windowStart = UInt32(window.lowerBound)
-        model.hasTrimmedFront = window.lowerBound > 0
-        model.totalMessages = 1000
+        model.window!.windowStart = UInt32(window.lowerBound)
+        model.window!.hasTrimmedFront = window.lowerBound > 0
+        model.window!.totalMessages = 1000
         return model
     }
 
@@ -178,11 +182,12 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         harness = nil
     }
 
-    /// Two overlapping calls and a later third open one stream. The watcher
-    /// is recorded before `startWatching` first suspends, so the overlapping
-    /// call already finds it. The "one" is read after a refresh's round trip
-    /// through the stream, by which time a second watcher's open would have
-    /// landed; nothing orders it more strictly than that.
+    /// Two overlapping calls and a later third open one stream.
+    /// `startWatching` puts the list on its folder's poller without
+    /// suspending, so the overlapping call finds it already there. The "one"
+    /// is read after a refresh's round trip through the stream, by which time
+    /// a second poller's open would have landed; nothing orders it more
+    /// strictly than that.
     func testStartWatchingOpensOneStreamEvenWhenCalledConcurrentlyOrAgain() async throws {
         let imap = harness.imap
         await harness.scriptNewMessage()
@@ -237,7 +242,7 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         try await waitUntilOnMainActor { !model.isLoading }
 
         XCTAssertEqual(model.envelopes.map(\.uid), [6, 5, 4, 3, 2, 1])
-        XCTAssertEqual(model.totalMessages, 6)
+        XCTAssertEqual(model.window!.totalMessages, 6)
         XCTAssertNil(model.errorMessage)
         let statusCalls = await imap.statusCalls
         XCTAssertEqual(statusCalls, [.init(path: "INBOX", flagged: true)])
@@ -265,7 +270,7 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         await imap.releaseHeld(.status)
         try await waitUntilOnMainActor { !model.isLoading }
 
-        XCTAssertEqual(model.totalMessages, 4)
+        XCTAssertEqual(model.window!.totalMessages, 4)
         let statusCalls = await imap.statusCalls
         XCTAssertEqual(statusCalls, [.init(path: "INBOX", flagged: true)])
         let topCalls = await imap.topEnvelopesCalls
@@ -286,7 +291,7 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         await imap.scriptFolderContents(ListWatcherHarness.folder(of: 1001))
         let model = try harness.makeWindowModel(window: 300..<600)
         // The STATUS these rows were paged in against, as paging leaves it.
-        model.alignment.anchor = WindowAnchor(total: 1000, uidNext: 1001)
+        model.window!.alignment.anchor = WindowAnchor(total: 1000, uidNext: 1001)
         await model.startWatching()
         try await harness.awaitStreams()
 
@@ -294,25 +299,25 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         await imap.releaseHeld(.status)
         try await waitUntilOnMainActor { !model.isLoading }
 
-        XCTAssertEqual(model.totalMessages, 1001)
-        XCTAssertEqual(model.windowStart, 325, "one page centred on the old window")
+        XCTAssertEqual(model.window!.totalMessages, 1001)
+        XCTAssertEqual(model.window!.windowStart, 325, "one page centred on the old window")
         XCTAssertEqual(model.envelopes.count, 250)
-        XCTAssertEqual(model.envelope(at: 325)?.uid, 676, "the row the server has at 325")
+        XCTAssertEqual(model.window!.envelope(at: 325)?.uid, 676, "the row the server has at 325")
         XCTAssertNil(model.errorMessage)
         let topCalls = await imap.topEnvelopesCalls
         XCTAssertTrue(topCalls.isEmpty, "no top page while the front is trimmed")
 
-        model.ensureLoaded(around: 300)
-        let previous = try XCTUnwrap(model.loadPrevTask)
+        model.window!.ensureLoaded(around: 300)
+        let previous = try XCTUnwrap(model.window!.loadPrevTask)
         await previous.value
         let calls = await imap.envelopesCalls
         XCTAssertEqual(calls, [
             .init(folder: "INBOX", offset: 325, limit: 250, sort: .default),
             .init(folder: "INBOX", offset: 125, limit: 200, sort: .default),
         ])
-        XCTAssertEqual(model.windowStart, 125)
-        XCTAssertEqual(model.envelope(at: 299)?.uid, 702)
-        XCTAssertEqual(model.envelope(at: 300)?.uid, 701, "the server holds UID 701 at index 300")
+        XCTAssertEqual(model.window!.windowStart, 125)
+        XCTAssertEqual(model.window!.envelope(at: 299)?.uid, 702)
+        XCTAssertEqual(model.window!.envelope(at: 300)?.uid, 701, "the server holds UID 701 at index 300")
     }
 
     /// While the Unread or Flagged pill is showing, a change event asks for
@@ -351,7 +356,7 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
         let statusCalls = await imap.statusCalls
         XCTAssertEqual(statusCalls.count, 1, "STATUS for the counts")
         XCTAssertEqual(model.unseen, 0, "as the scripted STATUS says")
-        XCTAssertEqual(model.totalMessages, 6)
+        XCTAssertEqual(model.window!.totalMessages, 6)
         XCTAssertEqual(
             model.mailStore.counts.folderUnreadCounts["INBOX"], 0, "and pushed to the sidebar badge"
         )
@@ -360,10 +365,10 @@ final class MessageListWatcherCharacterizationTests: XCTestCase {
     }
 
     /// The Phase 7 reconnect (52b4c039) as the list sees it: a stream that
-    /// fails mid-flight is reopened on the same folder, and the list's
-    /// consumer keeps refreshing across the watcher's `.reconnecting` and
-    /// `.active` events. The list builds its watcher with the default 2 s
-    /// backoff on the real clock, so this test spends that long. The
+    /// fails mid-flight is reopened on the same folder, and the folder's
+    /// poller keeps refreshing the list across the watcher's `.reconnecting`
+    /// and `.active` events. The poller builds its watcher with the default
+    /// 2 s backoff on the real clock, so this test spends that long. The
     /// open-failure backoff of #1797 is pinned in the Kit's
     /// `MailboxWatcherTests.testWatcherOverTheApiBackedClientBacksOffWhileOffline`.
     func testAFailedStreamIsReopenedOnTheSameFolderAndStillRefreshes() async throws {

@@ -31,6 +31,14 @@ final class CompactTabSeedTests: XCTestCase {
         XCTAssertNil(CompactTab.search.resumeSection)
     }
 
+    func testVisionsFoldersTabIsInTheMailSection() {
+        // visionOS's Folders tab picks the Mail tab's folder: the menus that
+        // share a chord across mail and feeds treat it as mail, and a
+        // launch never opens on it.
+        XCTAssertEqual(CompactTab.folders.resumeSection, .mail)
+        XCTAssertNotEqual(CompactTab.initial(for: .mail), .folders)
+    }
+
     func testContentTabsRoundTripThroughTheSession() {
         for tab in [CompactTab.mail, .feeds] {
             XCTAssertEqual(CompactTab.initial(for: tab.resumeSection), tab)

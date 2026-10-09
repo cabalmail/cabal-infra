@@ -47,10 +47,11 @@ extension NavStateCoordinator {
     /// stay at the feed list. Checks the scope against the local `RssStore`
     /// (a departed subscription or folder degrades to the list) and, if an
     /// item was open and is still in the store, parks it as
-    /// `pendingFeedRestore` for the scope's `onChange` to select. Local
-    /// SQLite reads only — no network at launch. Reads `restoreSource`, so a
-    /// Feeds view rebuilt mid-process reopens the live position; a view that
-    /// merely re-appears keeps its own state and never asks.
+    /// `pendingFeedRestore` for the scope's list to select once loaded. Local
+    /// SQLite reads only — no network at launch. Reads `restoreSource`: the
+    /// launch snapshot for the process's first landing, the live session for
+    /// a window that lands in feeds later. A tree a layout swap rebuilds
+    /// never asks; it takes over its window's place (`SceneNavigator`).
     func consumeFeedsLaunchTarget() async -> RssItemScope? {
         let source = restoreSource
         didConsumeLaunchSession = true
@@ -74,11 +75,9 @@ extension NavStateCoordinator {
         return scope
     }
 
-    /// Returns and clears the parked feed item if it belongs to `scope` — the
-    /// scope the feed navigation just selected. Called from
-    /// `onChange(of: selectedScope)`, which is the first point after the
-    /// scope change where setting the item won't be undone by the change
-    /// handler itself.
+    /// Returns and clears the parked feed item if it belongs to `scope`. Called
+    /// by the scope's `FeedItemListView` once it is on screen and loaded, so
+    /// the reader never arrives in the same update as its list (#1664).
     func consumeFeedItemRestore(for scope: RssItemScope) -> RssItem? {
         guard let restore = pendingFeedRestore, restore.scope == scope else { return nil }
         pendingFeedRestore = nil

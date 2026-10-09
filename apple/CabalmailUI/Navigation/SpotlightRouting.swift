@@ -24,8 +24,9 @@ extension AppState {
     /// Drives the same `navigateRequest` machinery as a push-notification
     /// tap. Before the session is wired (cold launch from a Spotlight
     /// result) the ref parks on `pendingSpotlightRef` and `wireSession`
-    /// re-routes it — `MailRootView` drains a pre-mount request from its
-    /// `.task`, so parking works even before any view exists.
+    /// re-routes it — a window's first landing drains a request parked
+    /// before it (`SceneNavigator`), so parking works even before any view
+    /// exists.
     func routeSpotlightRef(_ ref: SpotlightMessageRef) {
         guard let coordinator = navCoordinator, let client else {
             pendingSpotlightRef = ref

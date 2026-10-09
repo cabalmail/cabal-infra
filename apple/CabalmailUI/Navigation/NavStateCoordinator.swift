@@ -60,9 +60,10 @@ public final class NavStateCoordinator {
     /// position; consumed by the reader after the message loads.
     private(set) var pendingScrollRestore: PendingScrollRestore?
 
-    /// A feed item to select once its scope is on screen (the launch restore
-    /// of the feed reader). Consumed by the feed navigation's
-    /// `onChange(of: selectedScope)` — see `consumeFeedItemRestore`.
+    /// A feed item to select once its scope's list is on screen and loaded:
+    /// the feed reader's launch restore, a tapped feed banner, or a layout
+    /// swap's hand-off (`SceneNavigator`). Consumed by `FeedItemListView`
+    /// through `consumeFeedItemRestore`.
     struct PendingFeedRestore: Equatable, Sendable {
         let scope: RssItemScope
         let item: RssItem
@@ -70,8 +71,10 @@ public final class NavStateCoordinator {
 
     var pendingFeedRestore: PendingFeedRestore?
 
-    /// Set by the resume toast's action; observed by `MailRootView`, which
-    /// selects the folder and schedules the message restore, then clears it.
+    /// A cursor to open, from push, Spotlight or App Intents, which don't
+    /// know which window should answer. Each main window's `SceneNavigator`
+    /// observes it and the first to see it takes it; a window landing for the
+    /// first time drains one parked before it existed.
     public var navigateRequest: NavState?
 
     /// True once the launch-time cursor fetch has run. `MailRootView` uses it
@@ -104,16 +107,6 @@ public final class NavStateCoordinator {
     /// very cursor the probe is about to look for.
     var serverWritesHeld = true
     var heldSnapshot: NavState?
-
-    /// A feed position the views should open (a tapped cross-device feed
-    /// toast). The item itself is parked as `pendingFeedRestore`.
-    struct FeedNavigateRequest: Equatable, Sendable {
-        let scope: RssItemScope
-        let tick: Int
-    }
-
-    var feedNavigateRequest: FeedNavigateRequest?
-    var feedNavigateTick = 0
 
     // Local resume layer (see the `+Session` extension).
     let store: ResumeSessionStore
@@ -421,6 +414,21 @@ public final class NavStateCoordinator {
 // never written into the cursor: it carries the one a restore primed it
 // with while it still names that message, or none.
 extension NavStateCoordinator {
+    /// Schedules a restore of the message `ref` names: a window re-parking
+    /// its open message for the list a layout swap rebuilt
+    /// (`SceneNavigator`). Carries the ref's UIDVALIDITY when it has one.
+    func scheduleRestore(for ref: MessageRef) {
+        scheduleRestore(for: NavState(
+            folder: ref.folder, messageID: ref.messageId, uid: ref.uid, uidValidity: ref.uidValidity,
+            clientID: clientID
+        ))
+    }
+
+    /// Whether a restore for `folderPath` is waiting for its list.
+    func hasPendingRestore(in folderPath: String) -> Bool {
+        pendingRestore?.folderPath == folderPath
+    }
+
     /// Records that the user opened the message `ref` names.
     func recordMessage(_ ref: MessageRef) {
         recordMessage(folderPath: ref.folder, uid: ref.uid, messageID: ref.messageId)

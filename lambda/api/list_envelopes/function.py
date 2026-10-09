@@ -6,6 +6,7 @@ from helper import ( # pylint: disable=import-error
     envelope_dict,
     folder_message_count,
     get_imap_client,
+    invalid_input_response,
     log_folder_size_bucket,
     query_params,
     validate_folder_name,
@@ -25,7 +26,7 @@ def handler(event, _context):
         folder = validate_folder_name(query_string.get('folder'))
         ids = validate_uid_list(_parse_ids(query_string.get('ids')))
     except ValueError as err:
-        return _invalid(err)
+        return invalid_input_response(err)
     imap_folder = folder.replace("/", ".")
     client = get_imap_client(query_string['host'], user, imap_folder, True)
     envelopes = {}
@@ -55,10 +56,3 @@ def _parse_ids(raw):
         return json.loads(raw)
     except (TypeError, json.JSONDecodeError) as exc:
         raise ValueError('ids is not valid JSON') from exc
-
-def _invalid(err):
-    '''Builds the 400 returned when a validator rejects the request.'''
-    return {
-        "statusCode": 400,
-        "body": json.dumps({"status": f"Invalid input: {err}"})
-    }

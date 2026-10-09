@@ -163,7 +163,7 @@ final class SelfSentSearchCopyTests: XCTestCase {
         model.searchQuery = "note"
         await model.runSearch()
         XCTAssertEqual(model.envelopes.count, 50, "page 1 alone; the copy arrives with the next page")
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
         XCTAssertEqual(model.envelopes.count, 51, "the copy from Sent is a new row, not a repeat of INBOX's")
 
         await model.setFlagged(true, refs: [sent])
@@ -203,7 +203,7 @@ final class SelfSentSearchCopyTests: XCTestCase {
         await model.runSearch()
         XCTAssertEqual(model.envelopes.count, 50)
 
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
 
         XCTAssertEqual(model.envelopes.count, 51, "only the new Receipts row is appended")
         XCTAssertEqual(listed(model).filter { $0 == inbox }.count, 1)
@@ -240,7 +240,7 @@ final class SelfSentSearchCopyTests: XCTestCase {
         let model = try TestFixtures.makeModel(imap: imap, envelopes: [])
         model.searchQuery = "note"
         await model.runSearch()
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
         XCTAssertEqual(model.envelopes.count, 51)
 
         await model.runSearch(resetFilterTab: false, preserveDepth: true, rerun: true)

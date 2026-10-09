@@ -13,7 +13,7 @@ import CabalmailKit
 extension MessageListView {
     @ViewBuilder
     var sortMenu: some View {
-        let rows = model.map { SortMenuPolicy.rows(criterion: $0.sortCriterion) } ?? []
+        let rows = model.map { SortMenuPolicy.rows(criterion: $0.window?.sortCriterion ?? .default) } ?? []
         Menu {
             if let model {
                 sortMenuItems(rows: rows, model: model)
@@ -52,9 +52,9 @@ extension MessageListView {
                 get: { row.isOn },
                 set: { _ in
                     Task {
-                        await model.setSort(SortMenuPolicy.criterion(
+                        await model.window?.setSort(SortMenuPolicy.criterion(
                             picking: row.option,
-                            from: model.sortCriterion
+                            from: model.window?.sortCriterion ?? .default
                         ))
                     }
                 }

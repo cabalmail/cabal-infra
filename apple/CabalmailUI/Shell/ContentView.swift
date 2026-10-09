@@ -20,7 +20,7 @@ public struct ContentView: View {
         Group {
             switch appState.status {
             case .signedIn:
-                SignedInRootView()
+                SignedInRootView(appState: appState)
             case .restoring:
                 RestoringSplash()
             default:

@@ -20,4 +20,18 @@ enum CompactColumnPolicy {
         // column where it is.
         return current == .detail ? .content : current
     }
+
+    /// The column a folder change leaves the collapsed navigation on: the
+    /// new folder's list, or the folder list when the folder cleared. Any
+    /// open message went with the old folder, so never the reader.
+    static func afterFolderChange(hasFolder: Bool) -> NavigationSplitViewColumn {
+        hasFolder ? .content : .sidebar
+    }
+
+    /// Whether moving to `column` drops the open message. Anything but the
+    /// reader does: navigating back out by hand clears the selection, so the
+    /// same row can be opened again.
+    static func dropsMessage(movingTo column: NavigationSplitViewColumn) -> Bool {
+        column != .detail
+    }
 }

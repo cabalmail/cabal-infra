@@ -83,7 +83,7 @@ final class FolderMarkAllReadTests: XCTestCase {
             preferences: Preferences(store: InMemoryPreferenceStore()),
             mailStore: appState.mailStore
         )
-        await list.hydrateFromCache()
+        await list.window!.hydrateFromCache()
         XCTAssertEqual(list.envelopes.map(\.uid).sorted(), [1, 2])
         XCTAssertTrue(list.envelopes.allSatisfy { $0.flags.contains(.seen) })
         XCTAssertTrue(list.envelopes.first { $0.uid == 2 }?.flags.contains(.flagged) == true)

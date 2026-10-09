@@ -7,59 +7,60 @@ import CabalmailKit
 /// regular iPad the feeds live in the mail sidebar instead (see
 /// `FolderListView`'s Feeds section), so this view is never mounted there.
 ///
-/// Restores the scope and item the resume session recorded the first time it
-/// appears in a process, and records every selection change back, so a
-/// relaunch reopens the same list — or the same item, at the same place
-/// (`FeedItemDetailView` handles the scroll position).
+/// The scope, the open item and the collapsed column are the window's
+/// (`SceneNavigator`), so a layout swap keeps them. The window's first feed
+/// tree reopens the scope and item the resume session recorded; every
+/// selection change is recorded back, so a relaunch reopens the same list —
+/// or the same item, at the same place (`FeedItemDetailView` handles the
+/// scroll position).
 struct FeedRootView: View {
-    @State private var selectedScope: RssItemScope?
-    @State private var selectedItem: RssItem?
-    @State private var compactColumn: NavigationSplitViewColumn = .sidebar
-    @Environment(AppState.self) private var appState
+    @Environment(SceneNavigator.self) private var navigator
+    /// This view's identity as one of the window's feed trees
+    /// (`SceneNavigator.feedTreeAppeared`).
+    @State private var tree = UUID()
+
+    private var selectedScope: RssItemScope? { navigator.feeds.scope(in: tree) }
+    private var selectedItem: RssItem? { navigator.feeds.item(in: tree) }
+
+    private var scopeSelection: Binding<RssItemScope?> {
+        Binding(get: { selectedScope }, set: { navigator.selectFeedScope($0) })
+    }
+
+    private var itemSelection: Binding<RssItem?> {
+        Binding(get: { selectedItem }, set: { navigator.selectFeedItem($0, from: tree) })
+    }
+
+    private var columnSelection: Binding<NavigationSplitViewColumn> {
+        Binding(get: { navigator.feeds.column(in: tree) }, set: { navigator.setFeedColumn($0, from: tree) })
+    }
 
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $compactColumn) {
-            FeedSidebarList(selection: $selectedScope)
+        NavigationSplitView(preferredCompactColumn: columnSelection) {
+            FeedSidebarList(selection: scopeSelection)
         } content: {
             if let selectedScope {
                 // A pick from the list's scope-switch menu lands on the same
                 // state a sidebar tap does, so the sidebar highlight and the
                 // resume record follow it.
-                FeedItemListView(scope: selectedScope, selection: $selectedItem,
-                                 onSwitchScope: { self.selectedScope = $0 })
+                FeedItemListView(scope: selectedScope, selection: itemSelection,
+                                 onSwitchScope: { navigator.selectFeedScope($0) })
                     .id(selectedScope)
-                    // The launch restore's parked item is applied by the list
-                    // itself, once it is on screen and loaded — not from the
-                    // scope's `onChange` below. See `FeedItemListView` and
-                    // #1664.
+                    // A parked item (the launch restore, a tapped feed banner,
+                    // a layout swap's hand-off) is applied by the list itself,
+                    // once it is on screen and loaded. See `FeedItemListView`
+                    // and #1664.
             } else {
                 ContentUnavailableView("Select a feed", systemImage: "sidebar.left",
                                        description: Text("Pick a feed or folder from the sidebar."))
             }
         } detail: {
             if let selectedItem {
-                FeedItemDetailView(item: selectedItem, subscription: subscription(for: selectedItem))
+                FeedItemDetailView(item: selectedItem)
                     .id(selectedItem.id)
             } else {
                 ContentUnavailableView("No item selected", systemImage: "doc.text",
                                        description: Text("Pick an item from the list to read it."))
             }
-        }
-        .onChange(of: selectedScope) { _, scope in
-            // A launch restore's parked item is NOT consumed here: the item
-            // list applies it once it is on screen and loaded, so the reader
-            // is pushed in its own update (#1664). This handler only moves to
-            // the list; the item's own `onChange` below moves on to
-            // `.detail` when the list selects it.
-            compactColumn = scope == nil ? .sidebar : .content
-            appState.navCoordinator?.recordFeedScope(scope)
-        }
-        .onChange(of: selectedItem) { _, item in
-            compactColumn = CompactColumnPolicy.column(hasSelectedMessage: item != nil, current: compactColumn)
-            appState.navCoordinator?.recordFeedItem(item)
-        }
-        .onChange(of: compactColumn) { _, column in
-            if column != .detail, selectedItem != nil { selectedItem = nil }
         }
         // What the Feeds menu's item commands can act on (the iPadOS
         // hardware-keyboard menu reaches this tab); the section itself is
@@ -69,38 +70,7 @@ struct FeedRootView: View {
             hasOpenItem: selectedItem != nil,
             hasScope: selectedScope != nil
         )
-        // A tapped cross-device feed toast: open its scope. The item list
-        // (re-mounted for a new scope, or already showing it) selects the
-        // parked item once it is on screen and loaded.
-        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
-            guard let request, selectedScope != request.scope else { return }
-            selectedScope = request.scope
-        }
-        .task(id: selectedItem?.subscriptionId) { await resolveSubscription() }
-        .task {
-            // Reopen the scope the session is in: the launch snapshot on the
-            // first landing in the process, the live session for a view
-            // rebuilt after it (`NavStateCoordinator.restoreSource`). The
-            // item, if still in the store, is parked for the scope handler
-            // above.
-            guard selectedScope == nil,
-                  let scope = await appState.navCoordinator?.consumeFeedsLaunchTarget()
-            else { return }
-            selectedScope = scope
-        }
-    }
-
-    @State private var resolved: RssSubscription?
-
-    private func subscription(for item: RssItem) -> RssSubscription? {
-        resolved?.subscriptionId == item.subscriptionId ? resolved : nil
-    }
-
-    private func resolveSubscription() async {
-        guard let id = selectedItem?.subscriptionId, let store = appState.client?.rssStore else {
-            resolved = nil
-            return
-        }
-        resolved = try? await store.subscription(id: id)
+        // The window's first feed landing, or a layout swap's hand-off.
+        .task { await navigator.feedTreeAppeared(tree) }
     }
 }

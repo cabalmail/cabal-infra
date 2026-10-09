@@ -19,8 +19,7 @@ final class AllFeedsRowSourceScanTests: XCTestCase {
 
     /// The two files that draw an All Feeds row.
     private static let sidebarSources = [
-        "CabalmailUI/Feeds/Sidebar/FeedSidebarSection.swift",   // compact: the Feeds tab
-        "CabalmailUI/Mail/Folders/FolderListView+Helpers.swift", // regular-width sidebar
+        "CabalmailUI/Feeds/Sidebar/FeedSidebarContent.swift", // both: the Feeds tab and the regular-width sidebar
     ]
 
     func testBothSidebarsAskForTheSharedRow() throws {
@@ -61,7 +60,7 @@ final class AllFeedsRowSourceScanTests: XCTestCase {
     /// The compact list's own defect, named: SwiftUI's `.badge` draws plain
     /// trailing text where every sibling row draws a capsule.
     func testTheCompactFeedsTabDrawsNoNativeBadge() throws {
-        let body = try Self.source("CabalmailUI/Feeds/Sidebar/FeedSidebarSection.swift")
+        let body = try Self.source("CabalmailUI/Feeds/Sidebar/FeedSidebarContent.swift")
         XCTAssertFalse(
             body.contains(".badge("),
             "a native badge is not the capsule the sibling rows draw (#1548)"

@@ -5,6 +5,18 @@ import CabalmailKit
 // lifted into a sibling extension so `MailRootView`'s body stays under the
 // lint caps - the same arrangement as its search and sidebar chrome.
 extension MailRootView {
+    /// The wide split's feed list (RSS plan, phase 5): the window's, while
+    /// it is in the feeds section (`SceneNavigator.splitShowsFeeds`), and
+    /// mutually exclusive with the mail folder there. The compact layout
+    /// shows feeds in their own tab instead.
+    var selectedFeedScope: RssItemScope? {
+        isWideSidebar && navigator.splitShowsFeeds ? navigator.feeds.scope(in: tree) : nil
+    }
+
+    var selectedFeedItem: RssItem? {
+        selectedFeedScope == nil ? nil : navigator.feeds.item(in: tree)
+    }
+
     /// The Feeds section's selection: a pick clears the mail selection so the
     /// content and detail columns swap to the item list and reader; a mail
     /// folder pick (`sidebarSelection`) clears this in turn.
@@ -12,16 +24,25 @@ extension MailRootView {
         Binding(
             get: { selectedFeedScope },
             set: { picked in
-                if picked != nil {
-                    if isSearching { endGlobalSearch() }
-                    dismissFolderPanel()
-                    selectedFolder = nil
-                    selectedEnvelope = nil
-                    listSelectionCount = 0
-                }
-                selectedFeedScope = picked
+                if picked != nil { feedListOpened(endingSearch: true) }
+                navigator.showFeeds(picked)
             }
         )
+    }
+
+    /// The item list's selection, through the navigator.
+    var feedItemSelection: Binding<RssItem?> {
+        Binding(get: { selectedFeedItem }, set: { navigator.selectFeedItem($0, from: tree) })
+    }
+
+    /// The view's half of opening a feed list: the folder panel closes and
+    /// the mail multi-selection goes. A pick or a tapped feed banner also
+    /// ends a search, as the search field's × does; a landing or a layout
+    /// swap's hand-off leaves it on screen (#1654).
+    func feedListOpened(endingSearch: Bool) {
+        if endingSearch, isSearching { endGlobalSearch() }
+        dismissFolderPanel()
+        listSelectionCount = 0
     }
 
     /// Content column: the feed item list while a feed scope is selected,
@@ -31,7 +52,7 @@ extension MailRootView {
         if let selectedFeedScope, !isSearching {
             FeedItemListView(
                 scope: selectedFeedScope,
-                selection: $selectedFeedItem,
+                selection: feedItemSelection,
                 // A pick from the list's scope-switch menu goes through the
                 // same binding as a sidebar tap, so it clears the mail
                 // selection and records the resume session the same way.
@@ -88,13 +109,6 @@ extension MailRootView {
         }
     }
 
-    func feedNavigation() -> FeedNavigationModifier {
-        FeedNavigationModifier(
-            selectedFeedScope: $selectedFeedScope, selectedFeedItem: $selectedFeedItem,
-            selectedFeedSubscription: $selectedFeedSubscription, compactColumn: $compactColumn
-        )
-    }
-
     /// Slide the iPad-regular folder panel away after a pick, so the message
     /// list is fully interactive again. One routine, two callers: the sidebar
     /// binding (a user pick) and the folder-change handler (a programmatic
@@ -122,7 +136,7 @@ extension MailRootView {
     @ViewBuilder
     var feedDetailPane: some View {
         if let selectedFeedItem {
-            FeedItemDetailView(item: selectedFeedItem, subscription: selectedFeedSubscription)
+            FeedItemDetailView(item: selectedFeedItem)
                 .id(selectedFeedItem.id)
         } else {
             ContentUnavailableView(
@@ -134,47 +148,5 @@ extension MailRootView {
             .toolbar { EmptyFeedDetailToolbar() }
             #endif
         }
-    }
-}
-
-/// Feed navigation state transitions: a scope shows its list, an item
-/// pushes the reader on compact and pops it when the column falls back, and
-/// the reader is handed the item's subscription (per-feed preferences and
-/// web-view storage) as soon as it is known. Every transition is recorded on
-/// the local resume session so a relaunch reopens the same scope and item.
-struct FeedNavigationModifier: ViewModifier {
-    @Binding var selectedFeedScope: RssItemScope?
-    @Binding var selectedFeedItem: RssItem?
-    @Binding var selectedFeedSubscription: RssSubscription?
-    @Binding var compactColumn: NavigationSplitViewColumn
-    @Environment(AppState.self) private var appState
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: selectedFeedScope) { _, scope in
-                // A launch restore parks the item to reopen under this scope;
-                // consuming it here — after the scope change landed — is what
-                // keeps this very handler from clearing it. Jump straight to
-                // `.detail` in that case so the column handler below never
-                // sees an intermediate `.content` and drops the item again.
-                let restored = scope.flatMap { appState.navCoordinator?.consumeFeedItemRestore(for: $0) }
-                selectedFeedItem = restored
-                if scope != nil { compactColumn = restored == nil ? .content : .detail }
-                appState.navCoordinator?.recordFeedScope(scope)
-            }
-            .onChange(of: selectedFeedItem) { _, item in
-                compactColumn = CompactColumnPolicy.column(hasSelectedMessage: item != nil, current: compactColumn)
-                appState.navCoordinator?.recordFeedItem(item)
-            }
-            .onChange(of: compactColumn) { _, column in
-                if column != .detail, selectedFeedItem != nil { selectedFeedItem = nil }
-            }
-            .task(id: selectedFeedItem?.subscriptionId) {
-                guard let id = selectedFeedItem?.subscriptionId, let store = appState.client?.rssStore else {
-                    selectedFeedSubscription = nil
-                    return
-                }
-                selectedFeedSubscription = try? await store.subscription(id: id)
-            }
     }
 }

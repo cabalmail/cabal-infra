@@ -229,6 +229,29 @@ final class ApiClientRssTests: XCTestCase {
         XCTAssertFalse(RssFolderUpdate(defaultFilter: .unread).isEmpty)
     }
 
+    /// A folder's sticky order goes out as `ordering_mode` and comes back on
+    /// the row; a folder from before the field, or with an order this build
+    /// does not know, opens newest first.
+    func testUpdateFolderSendsStickyOrderAndDecodesItLeniently() async throws {
+        let json = #"{"folder": {"folder_id": "fo", "name": "Tech", "ordering_mode": "oldest_first"}}"#
+        let (client, http) = makeClient([(json, 200)])
+        let updated = try await client.updateFolder("fo", RssFolderUpdate(orderingMode: .oldestDayNewestWithin))
+        let sent = body(await http.requests[0])
+        XCTAssertEqual(sent["ordering_mode"] as? String, "oldest_day_newest_within")
+        XCTAssertNil(sent["default_filter"], "only the order is sent")
+        XCTAssertEqual(updated.orderingMode, .oldestFirst)
+
+        let absent = try JSONDecoder().decode(
+            RssFolder.self, from: Data(#"{"folder_id": "fo", "name": "Tech"}"#.utf8))
+        XCTAssertEqual(absent.orderingMode, .newestFirst)
+        let unknown = try JSONDecoder().decode(
+            RssFolder.self, from: Data(#"{"folder_id": "fo", "name": "Tech", "ordering_mode": "spiral"}"#.utf8))
+        XCTAssertEqual(unknown.orderingMode, .newestFirst)
+        let folder = RssFolder(folderId: "fo", name: "Tech").applying(RssFolderUpdate(orderingMode: .oldestFirst))
+        XCTAssertEqual(folder.orderingMode, .oldestFirst)
+        XCTAssertFalse(RssFolderUpdate(orderingMode: .newestFirst).isEmpty)
+    }
+
     func testSubscriptionApplyingUpdate() {
         let sub = RssSubscription(subscriptionId: "s", feedId: "f")
         let applied = sub.applying(RssSubscriptionUpdate(defaultOpenMode: .article, defaultRemoteContent: .show))

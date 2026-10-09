@@ -7,8 +7,10 @@ import UIKit
 /// Root of the signed-in navigation.
 ///
 /// Single `NavigationSplitView` serves every platform — iPhone compact
-/// collapses it to a stack push sequence automatically. Selection is lifted
-/// to this view so the three columns stay in sync.
+/// collapses it to a stack push sequence automatically. The folder, the open
+/// message and the compact column live on the window's `SceneNavigator`,
+/// above the layout switch, so the three columns stay in sync and a layout
+/// swap that rebuilds this view keeps them.
 ///
 /// `.id(...)` on the content and detail columns forces SwiftUI to rebuild
 /// the view (and its `@State` / `@Observable` view models) when selection
@@ -16,42 +18,21 @@ import UIKit
 /// or envelope prop and its one-shot `.task` never re-fires — which is the
 /// bug that made "select a second folder" do nothing on the split layout.
 struct MailRootView: View {
-    @State var selectedFolder: Folder?
-    @State var selectedEnvelope: Envelope?
-    /// Feeds section selection (RSS plan, phase 5). Mutually exclusive with
-    /// `selectedFolder`: picking a feed clears the mail folder and the
-    /// columns show the item list and reader; picking a folder clears this.
-    @State var selectedFeedScope: RssItemScope?
-    @State var selectedFeedItem: RssItem?
-    @State var selectedFeedSubscription: RssSubscription?
-    /// Whether the launch `.task` has already landed (see there): on the
-    /// session's mail folder, provisionally, or in the feed reader. Never
-    /// reset — a later re-appearance with a deliberately cleared selection
-    /// must not yank the user back to the landing.
-    @State var didProvisionalLand = false
-    /// Set alongside a provisional mail landing and consumed by the sidebar's
-    /// first `onFoldersLoaded`, which swaps the fetched folder into the
-    /// selection and probes the cross-device cursor (`finishLaunchLanding`).
-    @State var awaitingLaunchReconcile = false
-    /// The sidebar's fetched folders, kept so a navigate request (resume
-    /// toast, push, Spotlight, Siri) can select the real `Folder` value
-    /// rather than a `Folder(path:)` stand-in. The sidebar's `List` tags its
-    /// rows with the fetched value and `Folder` equality spans attributes and
-    /// subscription, so a stand-in never earns the row highlight (#1535).
-    @State var loadedFolders: [Folder] = []
+    /// This window's navigation; see `selectedFolder` and `selectedEnvelope`.
+    @Environment(SceneNavigator.self) var navigator
+    /// This view's identity as one of the window's trees. The navigator shows
+    /// a tree the open message only once it has appeared, and ignores writes
+    /// from a tree a layout swap is tearing down (`SceneNavigator`).
+    @State var tree = UUID()
+    var selectedFolder: Folder? { navigator.folder(in: tree) }
+    var selectedEnvelope: Envelope? { navigator.envelope(in: tree) }
+    // The wide split's feed list and item are the window's too
+    // (`selectedFeedScope`, in the +Feeds sibling).
     /// How many messages the list currently has selected, reported by
     /// `MessageListView` on wide/keyboard layouts. Drives the "N messages
     /// selected" reading-pane placeholder when a multi-selection is active;
     /// stays 0 on compact iPhone (single-selection there).
     @State var listSelectionCount = 0
-    /// Which column the collapsed (iPhone-compact) navigation shows. The
-    /// virtualized message list is a `ScrollView`, not a `List(selection:)`,
-    /// so NavigationSplitView no longer auto-pushes the reader when a row is
-    /// tapped on compact (it works on regular width / iPad, where all columns
-    /// are visible). Driving this binding restores the push: a selected
-    /// message shows `.detail`, a selected folder `.content`, and navigating
-    /// back drops the selection. Ignored on regular-width layouts.
-    @State var compactColumn: NavigationSplitViewColumn = .sidebar
     /// Wide-layout sidebar visibility. iOS pins this COLLAPSED (`.doubleColumn`,
     /// via the constant `splitVisibility` binding): on regular-width iPad the
     /// folder sidebar never tiles into the split — revealing folders floats
@@ -64,7 +45,7 @@ struct MailRootView: View {
     /// it, too, would shove the list rightward.) macOS keeps the sidebar
     /// visible (`.all`): a NavigationSplitView there is AppKit-backed with no
     /// gesture conflict, and it's a desktop multi-pane window. Ignored on
-    /// compact iPhone (navigates via `compactColumn`).
+    /// compact iPhone (navigates via `compactColumnSelection`).
     #if os(macOS)
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     #endif
@@ -114,11 +95,13 @@ struct MailRootView: View {
     @State private var contentColumnWidth: CGFloat = 0
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
-    /// Global-search model for the wide (iPad-regular / macOS) layout, owned
-    /// here so the toolbar search field and the content column share one query
-    /// and result set. The compact-width analogue is `SearchView` (the iPhone
-    /// `Tab(role: .search)`); there's no bottom tab bar here, so search is
-    /// reached from the message-list column's toolbar instead.
+    /// Global-search model for the wide (iPad-regular / macOS) layout: the
+    /// window's (`SceneNavigator.searchModel`), held here so the toolbar
+    /// search field and the content column share one query and result set.
+    /// The compact-width analogue is `SearchView` (the iPhone
+    /// `Tab(role: .search)`), which takes the same model; there's no bottom
+    /// tab bar here, so search is reached from the message-list column's
+    /// toolbar instead.
     @State var searchModel: MessageListViewModel?
     /// Focus on the global search field. Drives the content-column swap: while
     /// the field is focused (or holds a query / active search) the content
@@ -194,6 +177,29 @@ struct MailRootView: View {
         )
     }
 
+    /// The list's selection, through the navigator, which records it.
+    var envelopeSelection: Binding<Envelope?> {
+        Binding(
+            get: { selectedEnvelope },
+            set: { navigator.selectMessage($0, isSearching: isSearching, from: tree) }
+        )
+    }
+
+    /// Which column the collapsed (iPhone-compact) navigation shows. The
+    /// virtualized message list is a `ScrollView`, not a `List(selection:)`,
+    /// so NavigationSplitView no longer auto-pushes the reader when a row is
+    /// tapped on compact (it works on regular width / iPad, where all columns
+    /// are visible). Driving this binding restores the push: a selected
+    /// message shows `.detail`, a selected folder `.content`, and navigating
+    /// back drops the selection (`SceneNavigator.setCompactColumn`). Ignored
+    /// on regular-width layouts.
+    var compactColumnSelection: Binding<NavigationSplitViewColumn> {
+        Binding(
+            get: { navigator.compactColumn(in: tree) },
+            set: { navigator.setCompactColumn($0, isSearching: isSearching, from: tree) }
+        )
+    }
+
     /// The sidebar's selection, with the search dismissal on the write
     /// (#1217).
     ///
@@ -216,11 +222,8 @@ struct MailRootView: View {
                 // Same reason the dismissal is here: re-picking the selected
                 // folder leaves the panel up otherwise, which is the half of
                 // #1217 where the tap produced no feedback at all.
-                if picked != nil {
-                    dismissFolderPanel()
-                    selectedFeedScope = nil
-                }
-                selectedFolder = picked
+                if picked != nil { dismissFolderPanel() }
+                navigator.selectFolder(picked)
             }
         )
     }
@@ -246,7 +249,7 @@ struct MailRootView: View {
                 MessageListView(
                     scope: .search,
                     injectedSearchModel: searchModel,
-                    selection: $selectedEnvelope,
+                    selection: envelopeSelection,
                     onSelectionCountChanged: { listSelectionCount = $0 }
                 )
                 .id("search")
@@ -255,7 +258,7 @@ struct MailRootView: View {
             if let selectedFolder {
                 MessageListView(
                     scope: .folder(selectedFolder),
-                    selection: $selectedEnvelope,
+                    selection: envelopeSelection,
                     onSelectionCountChanged: { listSelectionCount = $0 },
                     // A pick from the list's folder-switch menu goes through
                     // the same binding as a sidebar tap, so it ends a global
@@ -275,7 +278,7 @@ struct MailRootView: View {
     }
 
     var body: some View {
-        NavigationSplitView(columnVisibility: splitVisibility, preferredCompactColumn: $compactColumn) {
+        NavigationSplitView(columnVisibility: splitVisibility, preferredCompactColumn: compactColumnSelection) {
             #if os(iOS)
             if isWideSidebar {
                 // Regular-width iPad: the folder list lives in the floating
@@ -362,106 +365,55 @@ struct MailRootView: View {
         } action: { newWidth in
             splitWidth = newWidth
         }
-        // Clearing the envelope selection when the folder changes keeps the
-        // detail column from briefly rendering an old message against the
-        // new mailbox.
-        .onChange(of: selectedFolder) { old, folder in
-            // A same-path change is a metadata reconcile — the launch landing
-            // swapping its provisional `Folder(path: "INBOX")` for the fetched
-            // one (`finishLaunchLanding`). Same mailbox, so keep the user's
-            // message selection and don't re-record the cursor.
-            guard old?.path != folder?.path else { return }
-            selectedEnvelope = nil
+        // A folder change's view-side effects. The navigator has already
+        // cleared the open message (so the detail column never renders an old
+        // message against the new mailbox), moved the compact column and
+        // recorded the folder; a same-path write is a metadata reconcile and
+        // changes nothing here either.
+        .onChange(of: selectedFolder?.path) { _, path in
             listSelectionCount = 0
             // Search's "This folder only" narrows to the sidebar selection
             // (#1510), including programmatic writes that land mid-search.
+            let folder = selectedFolder
             Task { await searchModel?.setSearchAnchor(folder) }
-            // Picking a folder shows its list on compact (it's pushed natively
-            // from the sidebar List, but keep the binding in step).
-            compactColumn = folder == nil ? .sidebar : .content
             // Programmatic folder writes (Spotlight routing, a deep link, the
             // cursor restore) don't go through `sidebarSelection`, so they
             // still slide the panel away from here. A sidebar pick has
             // already done it and this is a no-op for it.
-            if folder != nil { dismissFolderPanel() }
-            // Record the folder move for the cross-client cursor (highest-
-            // priority field). Fires on user navigation and on restore alike;
-            // the coordinator debounces and de-dupes writes.
-            if let path = folder?.path {
-                appState.navCoordinator?.recordFolder(path)
-            }
+            if path != nil { dismissFolderPanel() }
         }
-        // Compact navigation: a selected message pushes the reader, and losing
-        // the selection while the reader is up pops back to the list (see
-        // `CompactColumnPolicy`); navigating back out by hand (the binding
-        // falls off `.detail`) clears the selection so the same row can be
-        // reopened. No-ops on regular width / iPad.
-        .onChange(of: selectedEnvelope) { _, envelope in
-            compactColumn = CompactColumnPolicy.column(hasSelectedMessage: envelope != nil, current: compactColumn)
-            // Record the open message (or its absence) for the cursor. Skipped
-            // while searching — the search surface has no single folder to
-            // anchor the cursor to.
-            if !isSearching, let folderPath = selectedFolder?.path {
-                if let envelope {
-                    // Anchored to the sidebar's folder: a row from another
-                    // folder is not this folder's cursor.
-                    let ref = envelope.ref(defaultFolder: folderPath)
-                    if ref.folder == folderPath { appState.navCoordinator?.recordMessage(ref) }
-                } else {
-                    appState.navCoordinator?.recordNoMessage(folderPath: folderPath)
-                }
-            }
+        // A feed list opening without a pick (RSS plan, phase 5; see
+        // MailRootView+Feeds): a landing or a hand-off, or a tapped feed
+        // banner, which ends a search as a pick does.
+        .onChange(of: selectedFeedScope) { _, scope in
+            if scope != nil { feedListOpened(endingSearch: false) }
         }
-        .onChange(of: compactColumn) { _, column in
-            if column != .detail, selectedEnvelope != nil { selectedEnvelope = nil }
+        .onChange(of: navigator.feedNavigations) {
+            if isWideSidebar { feedListOpened(endingSearch: true) }
         }
-        // Feed reader navigation (RSS plan, phase 5); see MailRootView+Feeds.
-        .modifier(feedNavigation())
         // Catch-all drop target behind the whole split view: a message
         // released anywhere that isn't a folder row (the message list, the
-        // reading pane, sidebar chrome) ends the drag so the sidebar flips
-        // back. Folder rows are nested, more-specific drop targets, so a real
-        // drop onto a folder is handled there and never reaches this. Returns
-        // false - nothing is moved on a cancelled drag.
+        // reading pane, sidebar chrome) is refused. Folder rows are nested,
+        // more-specific drop targets, so a real drop onto a folder is handled
+        // there and never reaches this. Kept, though it moves nothing, so a
+        // drag over the split looks as it always has.
         .dropDestination(for: MessageDragPayload.self) { _, _ in
-            appState.endMessageDrag()
-            return false
-        }
-        // The cross-device probe (launch and foreground) lives on
-        // `SignedInRootView`, which every layout keeps mounted. A tapped feed
-        // toast lands here on the wide layouts, where the feed reader shares
-        // this split view: open the scope, or — already showing it — the
-        // parked item directly.
-        .onChange(of: appState.navCoordinator?.feedNavigateRequest) { _, request in
-            guard isWideSidebar, let request, let coordinator = appState.navCoordinator else { return }
-            if selectedFeedScope == request.scope {
-                if let item = coordinator.consumeFeedItemRestore(for: request.scope) { selectedFeedItem = item }
-            } else {
-                feedSidebarSelection.wrappedValue = request.scope
-            }
-        }
-        // The resume toast was tapped: navigate to the cross-client cursor.
-        // Selecting a new folder re-mounts its list (which consumes the
-        // scheduled restore); a same-folder jump relies on the list observing
-        // the new `pendingRestore`.
-        .onChange(of: appState.navCoordinator?.navigateRequest) { _, request in
-            guard let request, let coordinator = appState.navCoordinator else { return }
-            coordinator.navigateRequest = nil
-            coordinator.scheduleRestore(for: request)
-            if selectedFolder?.path != request.folder {
-                selectedFolder = resolvedFolder(path: request.folder)
-            }
+            false
         }
         .task {
-            // Launch landing (`MailRootView+Launch`): a parked navigate
-            // request, else the resume session's folder / feed scope.
-            await landAtLaunch()
-            // Shared with the compact Search tab so a layout swap keeps the
-            // query and results (#1654); this split anchors it to the folder.
+            // The window's launch landing — or, for a tree a layout swap has
+            // just built, the window's route (`SceneNavigator`). A wide tree
+            // may land in the feed reader instead.
+            await navigator.mailTreeAppeared(tree, isWide: isWideSidebar)
+            // The window's, shared with its compact Search tab so a layout
+            // swap keeps the query and results (#1654); this split anchors it
+            // to the folder.
             if searchModel == nil, let client = appState.client {
-                let shared = appState.sharedSearchModel(client: client, preferences: preferences)
-                shared.searchAnchor = selectedFolder
-                searchModel = shared
+                let model = navigator.searchModel(
+                    client: client, preferences: preferences, mailStore: appState.mailStore
+                )
+                model.searchAnchor = selectedFolder
+                searchModel = model
             }
         }
         // Addresses live in a trailing panel rather than the left sidebar,
@@ -571,38 +523,10 @@ extension MailRootView {
                 selection: sidebarSelection,
                 externalFilter: isWideSidebar ? $folderListFilter : nil,
                 feedSelection: isWideSidebar ? feedSidebarSelection : nil,
-                onFoldersLoaded: { folders in
-                    loadedFolders = folders
-                    // First load: swap the fetched folder into the launch
-                    // task's provisional landing and probe the cross-device
-                    // cursor (see `finishLaunchLanding`). Guarded so a later
-                    // re-fire (the sidebar remounts on an iPad layout swap)
-                    // can't re-seed the selection out from under the user;
-                    // the nil check covers a launch whose client wasn't wired
-                    // in time for the provisional landing. A launch that
-                    // landed in the feed reader (or on a parked navigate
-                    // request) has no mail landing to finish, but the probe
-                    // still runs once so the cross-device toast — and the
-                    // foreground reconcile it arms — work from there too.
-                    if awaitingLaunchReconcile, selectedFolder == nil {
-                        // The user left the provisional landing before the
-                        // list arrived (on iPhone, back to this sidebar):
-                        // finish the launch without landing them again.
-                        awaitingLaunchReconcile = false
-                        appState.navCoordinator?.materializeLanding()
-                    } else if awaitingLaunchReconcile || (!didProvisionalLand && selectedFolder == nil) {
-                        awaitingLaunchReconcile = false
-                        finishLaunchLanding(from: folders)
-                    } else {
-                        // A navigate request may have selected a stand-in
-                        // before the list arrived; swap the fetched value in
-                        // (same path, so the mounted list survives — #1535).
-                        if let current = selectedFolder,
-                           let fetched = folders.first(where: { $0.path == current.path }), fetched != current {
-                            selectedFolder = fetched
-                        }
-                    }
-                }
+                // The first load finishes the window's launch landing, or
+                // swaps the fetched folder in for a stand-in
+                // (`SceneNavigator.foldersLoaded`).
+                onFoldersLoaded: { navigator.foldersLoaded($0) }
             )
         }
         // Sidebar branding (see `SidebarBranding.swift`): the wash paints this

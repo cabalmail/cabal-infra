@@ -75,8 +75,14 @@ final class FeedSidebarViewModel {
     func load() async {
         guard let store else { return }
         do {
-            folders = try await store.folders()
-            subscriptions = try await store.subscriptions()
+            // Published together: between the two reads a view would see the
+            // folders without their subscriptions, and a selected
+            // subscription would look deleted, so the sidebar would drop it
+            // for All Feeds (#1962).
+            let folders = try await store.folders()
+            let subscriptions = try await store.subscriptions()
+            self.folders = folders
+            self.subscriptions = subscriptions
             unreadCounts = try await store.unreadCounts()
             totalCounts = try await store.totalCounts()
             hasLoaded = true

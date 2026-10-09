@@ -70,6 +70,43 @@ final class RssStoreTests: XCTestCase {
         XCTAssertEqual(updated.map(\.name), ["Tech"], "the other columns survive the upsert")
     }
 
+    /// A folder's sticky order round-trips through its row (schema version
+    /// 6), and a folder that never set it reads newest first.
+    func testFolderOrderRoundTrips() async throws {
+        let ordered = RssFolder(folderId: "fo", name: "Tech", orderingMode: .newestDayOldestWithin)
+        _ = try await store.replaceCatalog(RssCatalog(folders: [ordered, RssFolder(folderId: "f2", name: "News")],
+                                                      subscriptions: []))
+        let stored = try await store.folders()
+        XCTAssertEqual(Dictionary(uniqueKeysWithValues: stored.map { ($0.folderId, $0.orderingMode) }),
+                       ["fo": .newestDayOldestWithin, "f2": .newestFirst])
+        try await store.upsertFolder(ordered.applying(RssFolderUpdate(orderingMode: .oldestFirst)))
+        let updated = try await store.folder(id: "fo")
+        XCTAssertEqual(updated?.orderingMode, .oldestFirst)
+        XCTAssertEqual(updated?.defaultFilter, .unread, "the other columns survive the upsert")
+    }
+
+    /// A version-5 store (no folder order) migrates in place, and its
+    /// folders read newest first.
+    func testMigrationFromVersionFiveAddsFolderOrderColumn() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cabalmail-rss-store-v5-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let database = try SQLiteDatabase(path: dir.appendingPathComponent("rss.sqlite").path)
+        for step in [Schema.version1, Schema.version2, Schema.version3, Schema.version4, Schema.version5] {
+            try database.exec(step)
+        }
+        try database.run("""
+            INSERT INTO folders (folder_id, name, default_filter) VALUES ('fo', 'Tech', 'all')
+            """, [])
+        database.userVersion = 5
+        let migrated = try RssStore(directory: dir)
+        let loaded = try await migrated.folder(id: "fo")
+        XCTAssertEqual(loaded?.orderingMode, .newestFirst)
+        XCTAssertEqual(loaded?.defaultFilter, .all)
+        XCTAssertEqual(database.userVersion, RssStore.schemaVersion)
+    }
+
     /// The per-feed defaults round-trip through the row, including the
     /// remote-content column added in schema version 3.
     func testSubscriptionDefaultsRoundTrip() async throws {

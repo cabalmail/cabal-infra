@@ -11,13 +11,13 @@ import CabalmailKit
 //
 // Re-entrance: the sheet binding gates double-fire at the UI layer
 // (one envelope owns one sheet at a time), so we skip the
-// `pendingRemovedRefs` guard that `dispose(_:)` uses for rapid-swipe
-// protection.
+// `MessageShields.isRemoving` guard that `dispose(_:)` uses for
+// rapid-swipe protection. The writes themselves go through the mail
+// store's mutation service (`MailMutationService`).
 extension MessageListViewModel {
     func moveTo(_ envelope: Envelope, destination: String) async {
         let ref = rowRef(for: envelope)
-        let source = ref.folder
-        guard source != destination else { return }
+        guard ref.folder != destination else { return }
         let originalIndex = index(of: ref)
         let wasUnread = !envelope.flags.contains(.seen)
         let loadedBefore = envelopes.count
@@ -26,32 +26,23 @@ extension MessageListViewModel {
         // addressed list keeps rendering an unresolvable skeleton row in it
         // (and the All pill keeps counting it) until the next STATUS.
         adjustTotalMessages(by: envelopes.count - loadedBefore)
-        // Shield the removal from a concurrent refresh: until the move lands
-        // the source folder still returns this UID, and an unshielded merge
-        // would resurrect the row.
-        pendingRemovedRefs.insert(ref)
-        defer { pendingRemovedRefs.remove(ref) }
-        if wasUnread {
-            mailStore.counts.applyUnreadDelta(folderPath: source, delta: -1)
-            mailStore.counts.applyUnreadDelta(folderPath: destination, delta: 1)
-        }
-
-        do {
-            try await client.imapClient.move(
-                folder: source,
-                uids: [ref.uid],
-                destination: destination
-            )
-            await confirmRemoval(from: source, uids: [ref.uid])
-        } catch {
-            restoreEnvelope(envelope, at: originalIndex)
-            // Not once the session has ended (#1851).
-            if wasUnread, mailStore.acceptsCounts(from: client) {
-                mailStore.counts.applyUnreadDelta(folderPath: source, delta: 1)
-                mailStore.counts.applyUnreadDelta(folderPath: destination, delta: -1)
-            }
-            errorMessage = error.localizedDescription
-        }
+        // The service shields the removal from a concurrent refresh (until
+        // the move lands the source folder still returns this UID, and an
+        // unshielded merge would resurrect the row), drops the row from every
+        // other list, and moves an unread message's count with it. This list
+        // holds the removal a moment longer, until it has put a refused row
+        // back itself, so a merge in between can't put it back first.
+        mailStore.shields.beginRemoval([ref])
+        defer { mailStore.shields.endRemoval([ref]) }
+        let outcome = await mailStore.mutations.remove(
+            [ref], .move(to: destination, markingSeen: false),
+            unread: wasUnread ? [ref] : [], flagged: envelope.flags.contains(.flagged) ? [ref] : [],
+            by: .list(self, through: client)
+        ).value
+        if outcome.confirmed.contains(ref) { removalsConfirmed() }
+        guard outcome.failed.contains(ref) else { return }
+        restoreEnvelope(envelope, at: originalIndex)
+        errorMessage = outcome.message
     }
 
     /// What dragging `envelope`'s row carries. When a multi-selection exists
@@ -92,7 +83,19 @@ extension MessageListViewModel {
     /// `markSeenFirst` mirrors the dispose path: bulk-archive marks each
     /// message `\Seen` before the move (archived == read) so the source
     /// loses the unread but the destination doesn't gain it; a plain move
-    /// carries unread state with the message.
+    /// carries unread state with the message. Bulk archive folds the
+    /// mark-seen into the move (the server adds `\Seen` before relocating),
+    /// so a large dispose is one round trip per source instead of a STORE
+    /// plus a MOVE -- the same background-window economy as the single-row
+    /// swipe path.
+    ///
+    /// The rows leave this list at once; the mutation service shields the
+    /// whole batch from a concurrent refresh until it settles, drops the
+    /// rows from every other list, and moves the unread counts. A source
+    /// whose move fails outright puts all its rows back; one the server
+    /// moved in part puts back only the refused rows, read on a dispose
+    /// (the seen-marking landed server-side before the move failed), with
+    /// an "X of Y" message.
     ///
     /// The groups are already folder-qualified, so the prune, the shield and
     /// every revert work on the moving messages' refs: a row elsewhere in a
@@ -105,107 +108,36 @@ extension MessageListViewModel {
     ) async {
         let groups = uidsBySource.filter { $0.key != destination && !$0.value.isEmpty }
         guard !groups.isEmpty else { return }
-        let movingRefs = Set(groups.flatMap { folder, uids in uids.map { MessageRef(folder: folder, uid: $0) } })
+        // Each message once: a row loaded twice is still one message.
+        var listed = Set<MessageRef>()
+        let moving = groups.flatMap { folder, uids in uids.map { MessageRef(folder: folder, uid: $0) } }
+            .filter { listed.insert($0).inserted }
+        let movingRefs = Set(moving)
         let snapshot = envelopes.filter { movingRefs.contains(rowRef(for: $0)) }
-        let unreadBySource = Dictionary(
-            grouping: snapshot.filter { !$0.flags.contains(.seen) },
-            by: { rowRef(for: $0).folder }
-        ).mapValues { $0.count }
+        let unread = Set(snapshot.filter { !$0.flags.contains(.seen) }.map { rowRef(for: $0) })
+        let flagged = Set(snapshot.filter { $0.flags.contains(.flagged) }.map { rowRef(for: $0) })
 
-        // Optimistic prune. A per-source failure reinserts that group below.
-        // Shield every moving message from a concurrent refresh until the
-        // whole batch settles - the source folders keep returning them until
-        // their move lands, and an unshielded merge would resurrect the rows.
         let loadedBefore = envelopes.count
         envelopes.removeAll { movingRefs.contains(rowRef(for: $0)) }
         adjustTotalMessages(by: envelopes.count - loadedBefore)
-        pendingRemovedRefs.formUnion(movingRefs)
-        defer { pendingRemovedRefs.subtract(movingRefs) }
-        for (source, count) in unreadBySource {
-            mailStore.counts.applyUnreadDelta(folderPath: source, delta: -count)
-            if !markSeenFirst {
-                mailStore.counts.applyUnreadDelta(folderPath: destination, delta: count)
-            }
-        }
-
-        for (source, uids) in groups {
-            do {
-                // Bulk archive folds the mark-seen into the move (server adds
-                // `\Seen` before relocating), so a large dispose is one round
-                // trip per source instead of a STORE plus a MOVE — the same
-                // background-window economy as the single-row swipe path.
-                try await client.imapClient.move(
-                    folder: source, uids: uids,
-                    destination: destination, markSeen: markSeenFirst
-                )
-                await confirmRemoval(from: source, uids: uids)
-            } catch CabalmailError.bulkPartialFailure(let succeeded, let failed) {
-                restoreAfterPartialMove(
-                    source: source, destination: destination, snapshot: snapshot,
-                    failed: failed, markSeenFirst: markSeenFirst
-                )
-                await confirmRemoval(from: source, uids: Array(succeeded))
-                errorMessage = "Moved \(succeeded.count) of \(uids.count) messages. "
-                    + "\(failed.count) could not be moved."
-            } catch {
-                restoreAfterFailedMove(
-                    source: source, destination: destination, snapshot: snapshot,
-                    unread: unreadBySource[source] ?? 0, markSeenFirst: markSeenFirst
-                )
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    /// Whole-group revert for a move that failed outright: every row from
-    /// `source` comes back and its unread count returns to the source (and
-    /// leaves the destination, when the optimistic pass had granted it).
-    private func restoreAfterFailedMove(
-        source: String,
-        destination: String,
-        snapshot: [Envelope],
-        unread: Int,
-        markSeenFirst: Bool
-    ) {
-        let restored = snapshot.filter { rowRef(for: $0).folder == source && index(of: rowRef(for: $0)) == nil }
-        envelopes.append(contentsOf: restored)
-        envelopes.sort(by: envelopeOrder)
-        adjustTotalMessages(by: restored.count)
-        // Not once the session has ended (#1851).
-        guard mailStore.acceptsCounts(from: client) else { return }
-        mailStore.counts.applyUnreadDelta(folderPath: source, delta: unread)
-        if !markSeenFirst {
-            mailStore.counts.applyUnreadDelta(folderPath: destination, delta: -unread)
-        }
-    }
-
-    /// Partial-failure counterpart of `performMove`'s whole-group revert:
-    /// only the failed rows come back. On a dispose (`markSeenFirst`) the
-    /// restored rows re-appear as read — the seen-marking already landed
-    /// server-side and the top-of-move unread subtraction assumed it — so
-    /// no unread deltas move; a plain move hands the failed rows' unread
-    /// counts back to the source and reclaims them from the destination.
-    private func restoreAfterPartialMove(
-        source: String,
-        destination: String,
-        snapshot: [Envelope],
-        failed: Set<UInt32>,
-        markSeenFirst: Bool
-    ) {
+        // Held until the refused rows are back, as in `moveTo`.
+        mailStore.shields.beginRemoval(moving)
+        defer { mailStore.shields.endRemoval(moving) }
+        let outcome = await mailStore.mutations.remove(
+            moving, .move(to: destination, markingSeen: markSeenFirst),
+            unread: unread, flagged: flagged, by: .list(self, through: client)
+        ).value
+        if !outcome.confirmed.isEmpty { removalsConfirmed() }
+        guard !outcome.failed.isEmpty else { return }
         let restored = snapshot.filter {
-            rowRef(for: $0).folder == source && failed.contains($0.uid) && index(of: rowRef(for: $0)) == nil
+            outcome.failed.contains(rowRef(for: $0)) && index(of: rowRef(for: $0)) == nil
         }
         envelopes.append(contentsOf: restored)
         envelopes.sort(by: envelopeOrder)
         adjustTotalMessages(by: restored.count)
-        if markSeenFirst {
-            for envelope in restored {
-                applyOptimisticFlag(rowRef(for: envelope), flag: .seen, add: true)
-            }
-        } else if mailStore.acceptsCounts(from: client) {
-            let unread = restored.filter { !$0.flags.contains(.seen) }.count
-            mailStore.counts.applyUnreadDelta(folderPath: source, delta: unread)
-            mailStore.counts.applyUnreadDelta(folderPath: destination, delta: -unread)
+        for envelope in restored where outcome.markedRead.contains(rowRef(for: envelope)) {
+            applyOptimisticFlag(rowRef(for: envelope), flag: .seen, add: true)
         }
+        errorMessage = outcome.message
     }
 }

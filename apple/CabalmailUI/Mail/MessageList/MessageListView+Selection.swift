@@ -20,7 +20,7 @@ extension MessageListView {
     /// `ForEach` spans the full, stable `0..<rowCount` folder index range, so
     /// scrolling never re-diffs or restructures the list (no jump) and
     /// `LazyVStack` realizes only the ~visible rows. Each slot looks up its
-    /// envelope via `model.envelope(at:)` and renders a placeholder until the
+    /// envelope via `model.envelope(inSlot:)` and renders a placeholder until the
     /// loaded window covers it; `ensureLoaded(around:)` (on each row's `.task`)
     /// slides/jumps the window to follow the scroll. All rows are pinned to
     /// `rowHeight`, so the extent is exactly `rowCount * height`
@@ -39,10 +39,7 @@ extension MessageListView {
     @ViewBuilder
     func virtualizedList(model: MessageListViewModel, visible: [Envelope]) -> some View {
         let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
-        // Use the larger of the STATUS total and the loaded extent so a cache
-        // hydrate (which fills `envelopes` before `refresh` sets the total)
-        // still shows its rows.
-        let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
+        let rowCount = model.slotCount
         ScrollViewReader { proxy in
             keyboardScoped(
                 ScrollView {
@@ -72,15 +69,15 @@ extension MessageListView {
                                         // pulls the next search page (no-op
                                         // outside an active search or once the
                                         // cursor runs dry). The fetch itself
-                                        // runs on a model-owned task so this
+                                        // runs on the search's own task so this
                                         // row scrolling away can't cancel it.
                                         if rows.suffix(searchPrefetchMargin)
                                             .contains(where: { $0.id == row.id }) {
-                                            model.requestMoreSearchResults()
+                                            model.search.requestMore()
                                         }
                                     }
                             }
-                            if model.isLoadingMoreSearch {
+                            if model.search.isLoadingMore {
                                 ProgressView()
                                     .frame(maxWidth: .infinity)
                                     .padding()
@@ -118,7 +115,7 @@ extension MessageListView {
         proxy: ScrollViewProxy
     ) -> some View {
         let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
-        let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
+        let rowCount = model.slotCount
         content
             .focusable(isWideLayout)
             .focusEffectDisabled()
@@ -162,14 +159,14 @@ extension MessageListView {
         virtualize: Bool
     ) -> KeyPress.Result {
         guard isWideLayout, virtualize, rowCount > 0,
-              let first = model.firstVisibleRow, let last = model.lastVisibleRow
+              let first = model.window?.firstVisibleRow, let last = model.window?.lastVisibleRow
         else { return .ignored }
         withAnimation(.easeOut(duration: 0.12)) {
             proxy.scrollTo(model.rowSlot(at: down ? last : first), anchor: down ? .top : .bottom)
         }
         // The post-scroll row appears re-arm the settle backstop, which loads
         // the window at the new visible center once it stops.
-        model.scheduleEnsureLoaded()
+        model.window?.scheduleEnsureLoaded()
         return .handled
     }
 
@@ -186,8 +183,8 @@ extension MessageListView {
     /// (a stale cache window, or `windowStart + count` transiently past
     /// `totalMessages`), and a row past `total - 1` can never be filled by a
     /// positional fetch, so scrolling there would strand a permanent
-    /// placeholder. Filtered / search rows are id-addressed, so scroll to the
-    /// first / last loaded envelope instead.
+    /// placeholder. Filtered / search rows are keyed by `MessageRowIdentity`,
+    /// so scroll to the first / last loaded row by that (#1868).
     private func homeEndScroll(
         toEnd: Bool,
         model: MessageListViewModel,
@@ -196,15 +193,16 @@ extension MessageListView {
     ) -> KeyPress.Result {
         guard isWideLayout else { return .ignored }
         let virtualize = !model.isSearchActive && visible.count == model.envelopes.count
-        let rowCount = max(Int(model.totalMessages), Int(model.windowStart) + model.envelopes.count)
+        let rowCount = model.slotCount
         let anchor: UnitPoint = toEnd ? .bottom : .top
         if virtualize, rowCount > 0 {
-            let total = Int(model.totalMessages)
+            let total = Int(model.window?.totalMessages ?? 0)
             let target = toEnd ? (total > 0 ? min(rowCount - 1, total - 1) : rowCount - 1) : 0
-            model.ensureLoaded(around: target)
+            model.window?.ensureLoaded(around: target)
             withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(model.rowSlot(at: target), anchor: anchor) }
         } else if let edge = toEnd ? visible.last : visible.first {
-            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(edge.id, anchor: anchor) }
+            let row = MessageRowIdentity.of(edge, generations: model.rowGenerations)
+            withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(row, anchor: anchor) }
         }
         return .handled
     }
@@ -216,17 +214,17 @@ extension MessageListView {
     @ViewBuilder
     private func indexedRow(_ index: Int, model: MessageListViewModel, visible: [Envelope]) -> some View {
         Group {
-            if let envelope = model.envelope(at: index) {
+            if let envelope = model.envelope(inSlot: index) {
                 messageRow(envelope, model: model, visible: visible)
             } else {
                 placeholderRow()
             }
         }
-        .task { model.ensureLoaded(around: index) }
+        .task { model.window?.ensureLoaded(around: index) }
         // Track the rendered index range (main-actor callbacks) so PgUp/PgDown
         // can page by the actual visible extent. Cheap, @ObservationIgnored.
-        .onAppear { model.noteRowVisible(index) }
-        .onDisappear { model.noteRowHidden(index) }
+        .onAppear { model.window?.noteRowVisible(index) }
+        .onDisappear { model.window?.noteRowHidden(index) }
     }
 
     /// One row slot, gated on scene phase. Once the app is actually
@@ -394,6 +392,12 @@ extension MessageListView {
                 selection = refs.count == 1 ? refs.first.flatMap(model.envelope(for:)) : nil
                 onSelectionCountChanged(refs.count)
             }
+            // A selection a layout swap handed this list was never a change
+            // here, so the reading pane's "N messages selected" hears its
+            // count as the list appears (`SceneNavigator.mailSelection(for:)`).
+            .onAppear {
+                if !model.selectedRefs.isEmpty { onSelectionCountChanged(model.selectedRefs.count) }
+            }
     }
 
     /// Single-selection list for compact iPhone: a tap opens the reader.
@@ -509,14 +513,15 @@ extension MessageListView {
             model.selectionCursor = targetRef
         }
         // The virtualized `ForEach` is keyed by slot (absolute folder index
-        // plus generation); the filtered fallback by envelope id. Scroll to
-        // whichever the active `ForEach` uses (in virtualize mode `visible` ==
-        // `envelopes`, so the absolute index is `windowStart + next`).
+        // plus generation); the filtered fallback by `MessageRowIdentity`
+        // (#1868). Scroll to whichever the active `ForEach` uses (in
+        // virtualize mode `visible` == `envelopes`, so the absolute index is
+        // `windowStart + next`).
         withAnimation(.easeOut(duration: 0.12)) {
             if virtualize {
-                proxy.scrollTo(model.rowSlot(at: Int(model.windowStart) + next), anchor: .center)
+                proxy.scrollTo(model.rowSlot(at: Int(model.window?.windowStart ?? 0) + next), anchor: .center)
             } else {
-                proxy.scrollTo(target.id, anchor: .center)
+                proxy.scrollTo(MessageRowIdentity.of(target, generations: model.rowGenerations), anchor: .center)
             }
         }
         return .handled

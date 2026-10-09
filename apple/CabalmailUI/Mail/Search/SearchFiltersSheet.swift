@@ -26,7 +26,7 @@ struct SearchFiltersSheet: View {
     let allowFolderScope: Bool
     /// Fires when the user taps Apply. The sheet hands the modified
     /// snapshot back to the caller, which assigns to the view-model's
-    /// `searchFilters` and re-runs the search.
+    /// `MailSearchSession.filters` and re-runs the search.
     let onApply: (MessageSearchFilters) -> Void
     /// Fires when the user dismisses the sheet without applying.
     let onCancel: () -> Void

@@ -36,7 +36,7 @@ final class ListRowPlacementTests: XCTestCase {
     func testAFetchedPageIsPlacedInTheListsFolder() async throws {
         let model = try await fixture.makeModel()
 
-        model.mergeFetched(fixture.rows([3, 2, 1]))
+        model.window!.mergeFetched(fixture.rows([3, 2, 1]))
 
         assertPlaced(model)
         XCTAssertEqual(model.envelopes.map { model.rowRef(for: $0) }, [3, 2, 1].map { fixture.ref($0) })
@@ -46,7 +46,7 @@ final class ListRowPlacementTests: XCTestCase {
         let model = try await fixture.makeModel()
         try await fixture.seedSnapshot(model, uids: [3, 2, 1])
 
-        await model.hydrateFromCache()
+        await model.window!.hydrateFromCache()
 
         assertPlaced(model)
     }
@@ -70,7 +70,7 @@ final class ListRowPlacementTests: XCTestCase {
         // What the filtered / search list draws after a full swipe that left
         // its message in place: a new row for that message only.
         let model = try await fixture.makeModel()
-        model.mergeFetched(fixture.rows([3, 2, 1]))
+        model.window!.mergeFetched(fixture.rows([3, 2, 1]))
 
         model.replaceRows(showing: [fixture.ref(2)])
 

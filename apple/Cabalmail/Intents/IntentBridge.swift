@@ -52,8 +52,9 @@ final class IntentBridge {
     }
 
     /// Routes the UI to a folder through the same `navigateRequest`
-    /// machinery as a notification tap; `MailRootView` drains a pre-mount
-    /// request from its `.task`, so the cold-launch case works too.
+    /// machinery as a notification tap; a window's first landing drains a
+    /// request parked before it (`SceneNavigator`), so the cold-launch case
+    /// works too.
     func requestOpenFolder(_ path: String) {
         guard let coordinator = appState?.navCoordinator else {
             pendingFolderPath = path

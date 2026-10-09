@@ -5,10 +5,10 @@ import CabalmailKit
 // action that runs the move. Lifted into a sibling extension so
 // `MessageDetailView` stays under SwiftLint's body-length cap (the struct's
 // stored properties are kept internal precisely so these same-module
-// extensions can reach them). `move(...)` brackets the server round trip with
-// `onMoveInFlight` so the list shields the optimistically-pruned row from a
-// concurrent refresh; on success it posts `signalDisposed` so the list prunes
-// the row and advances selection exactly as archive/trash does.
+// extensions can reach them). `move(...)` goes through the mail store's
+// mutation service, which shields the move from a concurrent refresh and
+// drops the row from every list at once, so this window's selection
+// advances exactly as archive/trash does.
 extension MessageDetailView {
     @ViewBuilder
     var moveSheet: some View {
@@ -27,16 +27,10 @@ extension MessageDetailView {
 
     func performMove(to destination: String) async {
         guard let model else { return }
-        let movedRef = messageRef
+        // Like dispose, the write drops the row from every list at once and
+        // this window's selection advances to the next message.
         await model.move(
             to: destination,
-            onSuccess: {
-                // Match dispose's signal so MessageListView prunes the row
-                // and advances selection to the next unread message — same
-                // optimistic UX, just routed through `signalDisposed` since
-                // the row is gone from the source folder either way.
-                appState.mailStore.signals.signalDisposed(movedRef)
-            },
             onFailure: { error in
                 appState.showToast(Toast(
                     kind: .error,

@@ -1019,18 +1019,18 @@ Loose files in a feature folder are shared by that feature's subfolders.
 
 | Folder | What lives there |
 | --- | --- |
-| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the commands and menus, compose hand-off, drag and drop, the search model, contacts, BIMI and `mailStore`; its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
+| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the commands and menus, compose hand-off, drag and drop, contacts, BIMI and `mailStore`; its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
 | `Session/` | The session lifecycle, in `SessionManager`: sign-in and its second factor, restoring the last session, signing out and its ordering (`SessionTeardownGate`), the session's client, cursor, preferences sync and expiry observer, the Inbox badge and feed pollers (`SessionPollers`), and lending the client to the push and App Intents paths (`borrowClient()`, one client per account). `SessionEnvironment` and `SessionHooks` are its seams to the outside; `SessionOwnerHooks` are what a session does to `AppState`'s state. Also the sign-in screen and its error wording |
-| `Navigation/` | `NavStateCoordinator` (resume, restore and the cross-device cursor) and Spotlight routing |
+| `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, its folder list's selection, and the hand-off to a tree a layout swap rebuilds, which takes a multi-selection along), with the feed reader's `FeedNavigationState` and the `TreeGate` both use; `NavStateCoordinator` (resume, restore and the cross-device cursor) and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
 | `Shell/` | How a window is laid out: the sign-in / signed-in router, the iPhone tab bar, the iPad and Mac split view (`MailRootView`), the Vision Pro tabs, the layout and column policies, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
 | `Shell/Columns/` | Column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
 | `Mail/` | Mail pieces used by more than one mail column: drag and drop, Move to Folder, the sender avatar, the authentication line |
-| `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts and the Inbox count behind the app badge), `MessageShields` (what keeps a refresh from undoing a write made elsewhere) and `MessageSignals` (the one-way signals the reader and composer send the list, and their payload types); also saved folder counts and Mark All as Read |
+| `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts: the unread ones are the sidebar badges and a message list's Unread pill, the flagged ones its Flagged pill; and the Inbox count behind the app badge), `MessageShields` (the one record of writes in flight and removals just confirmed, which every list's merge and every writer of a fetched STATUS asks, so a refresh can't undo a write made anywhere or count it twice), `MailEvents` (every change to mail, delivered at once and in order to every message list's and reader's view model but the one that made it, naming the window that started it when a reader did, and saying whether another list's selection may move on), and `MailMutationService` (the one place the app's writes go through: every flag change, move, dispose and purge from a list, the reader or the composer is recorded, posted and counted before it goes out, made through the writer's client, then confirmed, forgetting a removed message in the offline caches, or taken back; Mark All as Read and Empty Trash go through it too, acting once the server answers; a notification's actions are the exception, #1973); and `FolderPollers` (the change watching of the folders open in message lists: one `FolderPoller` per folder, made by the first list showing it and stopped with the last or at sign-out, whose watcher events and 60-second tick each ask one STATUS that every list on the folder takes); also saved folder counts |
 | `Mail/Folders/` | The folder sidebar and its view model, filters, rows, New Folder |
-| `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu |
+| `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu; `FolderWindowLoader`, a folder list's window (rows, positions, paging, refresh; the search surface has none), with its engines `WindowPager`, `WindowRefresher`, `WindowReconciler` and `WindowSnapshot`, and the value types `EnvelopeOrder` and `WindowPlanner` |
 | `Mail/Reader/` | `MessageDetailView`, `MessageDetailViewModel` and their extension files: the header, the toolbar and its policies, attachments, calendar invites, View Source |
-| `Mail/Search/` | The search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
+| `Mail/Search/` | `MailSearchSession`, a list's search (query, filters, results and their paging), the search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
 | `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
@@ -1039,7 +1039,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
 | `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), branding |
-| `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout |
+| `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout, a list's selection (`SelectionModel`: the rows picked, Select mode, and the anchor and cursor a range selection works from) |
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
 | `Platform/` | Small per-OS adapters: host platform, confirmation-dialog roles, the pasteboard |
@@ -1245,7 +1245,9 @@ then marked failed and offered back to the user (`FailedSendBanner`).
 There is no IDLE. `ApiBackedImapClient.idle(folder:)` polls folder status
 and yields an `IdleEvent` when `UIDNEXT` advances or the message count
 drops; `MailboxWatcher` turns those events into refresh ticks and applies
-the reconnect backoff, and the message list coalesces bursts of ticks. Terminating the stream cancels the polling task.
+the reconnect backoff, and the folder's poller (`FolderPoller`) coalesces
+bursts of ticks into one STATUS for every list showing the folder.
+Terminating the stream cancels the polling task.
 
 ### Rich-text editor: WKWebView contenteditable + fetched marked/turndown
 
@@ -1466,18 +1468,32 @@ spinning up the full view model.
 
 `MailboxWatcher` consumes `ApiBackedImapClient.idle(folder:)`, which
 polls folder status (see "New-mail polling" above), and emits `.changed` /
-`.reconnecting` / `.active` ticks on an `AsyncStream`.
-`MessageListViewModel.startWatching()` drives it from the message list's
-`.task { }` and stops it on `.onDisappear`. The watcher stays off while
-the user is elsewhere — mailbox management, compose sheet, settings — so
-only the mailbox on screen is polled. When the polling stream ends or
-fails, the watcher reopens it after a backoff that doubles from 2s to 60s
-while reopening keeps failing. `idle(folder:)` makes its first poll
-before it returns the stream, so an unreachable API fails the reopen
-itself and the backoff grows.
-Consecutive `EXISTS` bursts are coalesced on the view-model side with a
-1-second refresh floor so a message sweep doesn't trigger N envelope
-fetches.
+`.reconnecting` / `.active` ticks on an `AsyncStream`. Each folder open in
+a message list has one `FolderPoller` (`MailSessionStore.folderPollers`),
+which owns the folder's watcher and a 60-second tick however many windows
+show the folder. `MessageListViewModel.startWatching()`, from the list's
+`.task { }`, puts the list on its folder's poller, making the poller if
+the list is the first; `stopWatching()`, on `.onDisappear`, takes it off,
+and the last list off stops the poller. Sign-out
+(`MailSessionStore.forgetAccount()`) stops every poller. The watcher stays
+off while no list shows its folder — mailbox management, compose sheet,
+settings — so only the mailboxes on screen are polled. When the polling
+stream ends or fails, the watcher reopens it after a backoff that doubles
+from 2s to 60s while reopening keeps failing. `idle(folder:)` makes its
+first poll before it returns the stream, so an unreachable API fails the
+reopen itself and the backoff grows.
+
+Each `.changed` tick asks one flagged STATUS of the folder, and so does
+the 60-second tick, which catches what the status poll can't see: read and
+flag changes made elsewhere, and whatever arrives while the watcher backs
+off. A change within a second of the last one that polled is covered by
+it, so a message sweep doesn't trigger N envelope fetches, and one poll
+runs at a time. Before the STATUS goes out, every list on the folder
+numbers a refresh ask and holds its spinner, as its own refresh would;
+each then takes the answer through `refresh(prefetched:)`, so a list with
+a pill or search showing re-runs it, and a list whose own refresh is in
+flight waits for it. A failed STATUS shows on a folder list as its own
+refresh's failure would, and re-runs a pill's search.
 
 ### Send failures classify transient vs permanent before queueing
 

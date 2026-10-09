@@ -41,7 +41,7 @@ final class DisposeRaceTests: XCTestCase {
             folderPath: inbox,
             mailStore: mailStore
         )
-        model.totalMessages = UInt32(uids.count)
+        model.window!.totalMessages = UInt32(uids.count)
         return model
     }
 
@@ -88,7 +88,7 @@ final class DisposeRaceTests: XCTestCase {
             once the fade and collapse have played the row must leave -- waiting for the server \
             leaves the next message under the pointer in the slot below
             """)
-        XCTAssertEqual(model.totalMessages, 2)
+        XCTAssertEqual(model.window!.totalMessages, 2)
         XCTAssertFalse(model.isDisposingRow, "rows take hits again once the gap has closed")
         XCTAssertTrue(
             model.pendingRemovedRefs.contains(ref(1)),
@@ -119,7 +119,7 @@ final class DisposeRaceTests: XCTestCase {
         await dispose.value
 
         XCTAssertEqual(model.envelopes.map(\.uid), [1, 2, 3], "the failed row comes back at its old index")
-        XCTAssertEqual(model.totalMessages, 3)
+        XCTAssertEqual(model.window!.totalMessages, 3)
         XCTAssertNotNil(model.errorMessage)
         XCTAssertTrue(model.rowDisposalPhases.isEmpty)
         XCTAssertTrue(
@@ -177,13 +177,13 @@ final class DisposeRaceTests: XCTestCase {
         await imap.awaitHeld(.status)
 
         await model.dispose(model.envelopes[0])
-        XCTAssertEqual(model.totalMessages, 2)
+        XCTAssertEqual(model.window!.totalMessages, 2)
 
         await imap.releaseHeld(.status)
         await refresh.value
 
         XCTAssertEqual(
-            model.totalMessages, 2,
+            model.window!.totalMessages, 2,
             "a STATUS answered before the move landed still counts the departed message; it can't restore the slot"
         )
         XCTAssertEqual(model.envelopes.map(\.uid), [4, 3])
@@ -205,7 +205,7 @@ final class DisposeRaceTests: XCTestCase {
         await model.refresh()
 
         XCTAssertEqual(model.envelopes.map(\.uid), [6, 4, 3])
-        XCTAssertEqual(model.totalMessages, 3, "the clamp is only for replies that may predate a removal")
+        XCTAssertEqual(model.window!.totalMessages, 3, "the clamp is only for replies that may predate a removal")
     }
 
     func testAMessageTheReaderMovedStaysGoneFromAStaleRefresh() async throws {
@@ -228,7 +228,7 @@ final class DisposeRaceTests: XCTestCase {
         await refresh.value
 
         XCTAssertEqual(model.envelopes.map(\.uid), [4], "the page predates the move; the message stays gone")
-        XCTAssertEqual(model.totalMessages, 1, "and its STATUS, taken mid-move, can't restore the slot")
+        XCTAssertEqual(model.window!.totalMessages, 1, "and its STATUS, taken mid-move, can't restore the slot")
     }
 
     // MARK: - The reader reports its confirmed moves
@@ -236,25 +236,28 @@ final class DisposeRaceTests: XCTestCase {
     func testTheReaderReportsAConfirmedArchiveButNotAFailedOne() async throws {
         let imap = FakeImapClient()
         await imap.scriptMoveResults([.success(()), .failure(CabalmailError.network("boom"))])
-        var confirmations = 0
-        func makeReader() throws -> MessageDetailViewModel {
+        let store = AppState().mailStore
+        func makeReader(uid: UInt32) throws -> MessageDetailViewModel {
             let reader = MessageDetailViewModel(
                 folder: Folder(path: inbox, attributes: [], isSubscribed: true),
-                envelope: TestFixtures.makeEnvelope(uid: 9, flags: [.seen]),
+                envelope: TestFixtures.makeEnvelope(uid: uid, flags: [.seen]),
                 client: try TestFixtures.makeClient(imap: imap),
                 preferences: Preferences(store: InMemoryPreferenceStore())
             )
-            reader.onMoveConfirmed = { confirmations += 1 }
+            MessageDetailView.relayOutcomes(of: reader, to: store)
             return reader
         }
 
-        let archived = try makeReader()
+        let archived = try makeReader(uid: 9)
         await archived.dispose()
-        XCTAssertEqual(confirmations, 1)
+        XCTAssertEqual(store.shields.confirmedRemovalRefs(folderPath: inbox), [ref(9)])
 
-        let refused = try makeReader()
+        let refused = try makeReader(uid: 8)
         await refused.dispose()
-        XCTAssertEqual(confirmations, 1, "a move the server refused confirms nothing")
+        XCTAssertEqual(
+            store.shields.confirmedRemovalRefs(folderPath: inbox), [ref(9)],
+            "a move the server refused confirms nothing"
+        )
     }
 
     // MARK: - The confirmed-removal window

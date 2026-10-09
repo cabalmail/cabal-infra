@@ -104,4 +104,31 @@ final class PreferencesListFilterTests: XCTestCase {
         prefs.applyRemote(["filter:feeds:all": "flagged"])
         XCTAssertEqual(prefs.rssAllFeedsFilter, .all, "the mail pill name is not a feed pill")
     }
+
+    // MARK: - All feeds order
+
+    func testAllFeedsOrderDefaultsToNewestFirstAndIsNotSentUntilKnown() {
+        let prefs = makePreferences()
+        XCTAssertEqual(prefs.rssAllFeedsOrdering, .newestFirst)
+        XCTAssertNil(prefs.appPreferencesPayload()["order:feeds:all"],
+                     "a server from before the key would 400 the whole map")
+    }
+
+    func testAllFeedsOrderUserChangeMakesItRide() {
+        let prefs = makePreferences()
+        prefs.rssAllFeedsOrdering = .oldestFirst
+        XCTAssertEqual(prefs.appPreferencesPayload()["order:feeds:all"], "oldest_first")
+        prefs.rssAllFeedsOrdering = .newestFirst
+        XCTAssertEqual(prefs.appPreferencesPayload()["order:feeds:all"], "newest_first",
+                       "choosing the default again still syncs over an earlier choice")
+    }
+
+    func testAllFeedsOrderRemoteValueAppliesAndMakesItRide() {
+        let prefs = makePreferences()
+        prefs.applyRemote(["order:feeds:all": "newest_day_oldest_within"])
+        XCTAssertEqual(prefs.rssAllFeedsOrdering, .newestDayOldestWithin)
+        XCTAssertEqual(prefs.appPreferencesPayload()["order:feeds:all"], "newest_day_oldest_within")
+        prefs.applyRemote(["order:feeds:all": "oldest"])
+        XCTAssertEqual(prefs.rssAllFeedsOrdering, .newestDayOldestWithin, "an unknown order is ignored")
+    }
 }

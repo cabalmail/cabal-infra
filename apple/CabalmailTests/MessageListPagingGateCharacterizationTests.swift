@@ -9,8 +9,8 @@ import CabalmailKit
 /// search, an optimistic removal or another page load is in flight. Failed
 /// pages are swallowed by design (best-effort pagination since 750dba7a),
 /// which the P8 tests pin so a refactor does not start surfacing page errors
-/// by accident. `hasMore` is written but never read, which the P9 test pins
-/// as a weakness so the refactor flips it on purpose rather than by accident.
+/// by accident. An empty page stops paging down until the folder's count
+/// changes, the window's end moves, or the window is reset (P9, #1823).
 ///
 /// Races are staged with the fake's hold-and-release gates, never with
 /// timing; see ListPagingWorld.swift.
@@ -42,11 +42,11 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        model.ensureLoaded(around: 0)
-        model.ensureLoaded(around: 900)
-        XCTAssertFalse(model.isLoadingMore, file: file, line: line)
-        XCTAssertFalse(model.isLoadingWindow, file: file, line: line)
-        XCTAssertFalse(model.isLoadingPrevious, file: file, line: line)
+        model.window!.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 900)
+        XCTAssertFalse(model.window!.isLoadingMore, file: file, line: line)
+        XCTAssertFalse(model.window!.isLoadingWindow, file: file, line: line)
+        XCTAssertFalse(model.window!.isLoadingPrevious, file: file, line: line)
     }
 
     // MARK: - P7: the gates
@@ -67,7 +67,7 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
         let gated = await world.pages()
         XCTAssertEqual(gated, [])
 
-        model.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.settle(model)
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 50, limit: 200)], "control: the same call loads once the refresh is done")
@@ -86,7 +86,7 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
         XCTAssertEqual(gated, [])
 
         model.isSearchActive = false
-        model.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.settle(model)
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 50, limit: 200)])
@@ -109,9 +109,9 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
         let gated = await world.pages()
         XCTAssertEqual(gated, [])
         XCTAssertEqual(model.envelopes.count, 49)
-        XCTAssertEqual(model.totalMessages, 999)
+        XCTAssertEqual(model.window!.totalMessages, 999)
 
-        model.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.settle(model)
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 49, limit: 200)])
@@ -122,9 +122,9 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
     func testNothingLoadsOnceTheWindowHoldsTheWholeFolder() async throws {
         let model = try await world.openedList(size: 50)
         for index in [0, 25, 49] {
-            model.ensureLoaded(around: index)
-            XCTAssertFalse(model.isLoadingMore, "row \(index)")
-            XCTAssertFalse(model.isLoadingPrevious, "row \(index)")
+            model.window!.ensureLoaded(around: index)
+            XCTAssertFalse(model.window!.isLoadingMore, "row \(index)")
+            XCTAssertFalse(model.window!.isLoadingPrevious, "row \(index)")
         }
         await world.settle(model)
         let pages = await world.pages()
@@ -135,18 +135,18 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
     /// above, never one below.
     func testAtTheFolderBottomARowLoadsThePageAboveNeverOneBelow() async throws {
         let model = try await world.openedList()
-        model.ensureLoaded(around: 990)
+        model.window!.ensureLoaded(around: 990)
         await world.settle(model)
-        XCTAssertEqual(model.windowStart, 800)
+        XCTAssertEqual(model.window!.windowStart, 800)
 
-        model.ensureLoaded(around: 999)
-        XCTAssertFalse(model.isLoadingMore)
-        XCTAssertTrue(model.isLoadingPrevious)
+        model.window!.ensureLoaded(around: 999)
+        XCTAssertFalse(model.window!.isLoadingMore)
+        XCTAssertTrue(model.window!.isLoadingPrevious)
         await world.settle(model)
 
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 800, limit: 200), Page(offset: 600, limit: 200)])
-        XCTAssertEqual(model.windowStart, 600)
+        XCTAssertEqual(model.window!.windowStart, 600)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(600..<1000))
     }
 
@@ -155,14 +155,14 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
     func testCallsWhileAPageIsInFlightAreDropped() async throws {
         let model = try await world.openedList()
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.imap.awaitHeld(.envelopes)
 
-        model.ensureLoaded(around: 0)
-        model.ensureLoaded(around: 40)
-        model.ensureLoaded(around: 900)
-        XCTAssertTrue(model.isLoadingMore)
-        XCTAssertFalse(model.isLoadingWindow)
+        model.window!.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 40)
+        model.window!.ensureLoaded(around: 900)
+        XCTAssertTrue(model.window!.isLoadingMore)
+        XCTAssertFalse(model.window!.isLoadingWindow)
         await world.imap.releaseHeld(.envelopes)
         await world.settle(model)
 
@@ -176,13 +176,13 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
     func testNoPageLoadsWhileAJumpIsInFlight() async throws {
         let model = try await world.openedList()
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 900)
+        model.window!.ensureLoaded(around: 900)
         await world.imap.awaitHeld(.envelopes)
 
-        model.ensureLoaded(around: 0)
-        model.ensureLoaded(around: 500)
-        XCTAssertFalse(model.isLoadingMore)
-        XCTAssertFalse(model.isLoadingPrevious)
+        model.window!.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 500)
+        XCTAssertFalse(model.window!.isLoadingMore)
+        XCTAssertFalse(model.window!.isLoadingPrevious)
         await world.imap.releaseHeld(.envelopes)
         await world.settle(model)
 
@@ -194,25 +194,25 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
 
     /// Pins intended best-effort paging (750dba7a): a failed page shows no
     /// error and leaves the rows alone. Only a list blocked entirely shows
-    /// one, through `refresh()` (a failed STATUS or top page), which the
-    /// view's poll and the watcher keep running. Pinned so a refactor does
-    /// not start surfacing page errors by accident. An open design question,
-    /// not a defect: offline, rows past the window stay placeholders with no
+    /// one, through a refresh (a failed STATUS or top page), which the
+    /// folder's poller keeps running. Pinned so a refactor does not start
+    /// surfacing page errors by accident. An open design question, not a
+    /// defect: offline, rows past the window stay placeholders with no
     /// feedback until the next refresh. The next row to appear retries.
     func testAFailedPageIsSilentAndTheNextRowRetriesIt() async throws {
         let model = try await world.openedList()
         await world.imap.scriptEnvelopesResults([.failure(CabalmailError.network("offline"))])
 
-        model.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.settle(model)
 
         XCTAssertNil(model.errorMessage)
-        // `hasMore` is write-only state (see P9): nothing reads it, so the
-        // retry below, not this flag, is what carries the pin.
-        XCTAssertTrue(model.hasMore)
+        // A failed page isn't an empty one: it leaves `hasMore` set, which
+        // is what lets the next row retry it.
+        XCTAssertTrue(model.window!.hasMore)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<50))
 
-        model.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.settle(model)
         let pages = await world.pages()
         XCTAssertEqual(pages, [Page(offset: 50, limit: 200), Page(offset: 50, limit: 200)])
@@ -224,23 +224,23 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
     func testAFailedJumpOrPreviousPageIsSilentAndLeavesTheWindowAlone() async throws {
         let jumped = try await world.openedList()
         await world.imap.scriptEnvelopesResults([.failure(CabalmailError.network("offline"))])
-        jumped.ensureLoaded(around: 900)
-        XCTAssertTrue(jumped.isLoadingWindow)
+        jumped.window!.ensureLoaded(around: 900)
+        XCTAssertTrue(jumped.window!.isLoadingWindow)
         await world.settle(jumped)
         XCTAssertNil(jumped.errorMessage)
-        XCTAssertEqual(jumped.windowStart, 0)
+        XCTAssertEqual(jumped.window!.windowStart, 0)
         XCTAssertEqual(jumped.envelopes.map(\.uid), uids(0..<50))
 
         let trimmed = try await world.openedList(preloaded: 600)
-        trimmed.ensureLoaded(around: 599)
+        trimmed.window!.ensureLoaded(around: 599)
         await world.settle(trimmed)
         await world.imap.scriptEnvelopesResults([.failure(CabalmailError.network("offline"))])
-        trimmed.ensureLoaded(around: 200)
-        XCTAssertTrue(trimmed.isLoadingPrevious)
+        trimmed.window!.ensureLoaded(around: 200)
+        XCTAssertTrue(trimmed.window!.isLoadingPrevious)
         await world.settle(trimmed)
         XCTAssertNil(trimmed.errorMessage)
-        XCTAssertEqual(trimmed.windowStart, 200)
-        XCTAssertTrue(trimmed.hasTrimmedFront)
+        XCTAssertEqual(trimmed.window!.windowStart, 200)
+        XCTAssertTrue(trimmed.window!.hasTrimmedFront)
         XCTAssertEqual(trimmed.envelopes.map(\.uid), uids(200..<800))
 
         let pages = await world.pages()
@@ -253,25 +253,63 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
 
     // MARK: - P9: an empty page
 
-    /// Pins a known weakness: `hasMore` is written but never read; paging gates
-    /// on the window's end against STATUS's total. When STATUS over-counts
-    /// (1000 reported, 50 there), the empty page sets `hasMore` false, yet
-    /// every row that appears asks for the same empty page again.
-    /// Tracked in #1823.
-    func testAnEmptyPageEndsHasMoreButTheNextRowAsksForTheSamePageAgain() async throws {
+    /// When STATUS over-counts (1000 reported, 50 there), the empty page
+    /// clears `hasMore` and `ensureLoaded` reads it, so the rows that appear
+    /// after it don't ask for the same empty page again (#1823), nor do they
+    /// after a refresh that finds the same count. A change in the folder's
+    /// count sets it again: the folder is asked once more, and stays quiet
+    /// once that page comes back empty too. This test pinned one request per
+    /// row until then.
+    func testAnEmptyPageStopsPagingDownUntilTheFolderCountChanges() async throws {
         let model = try await world.openedList(size: 50, statusCount: 1000)
-        XCTAssertEqual(model.totalMessages, 1000)
+        XCTAssertEqual(model.window!.totalMessages, 1000)
 
         for index in [0, 10, 49] {
-            model.ensureLoaded(around: index)
+            model.window!.ensureLoaded(around: index)
             await world.settle(model)
-            XCTAssertFalse(model.hasMore, "after row \(index)")
+            XCTAssertFalse(model.window!.hasMore, "after row \(index)")
+        }
+        let quiet = await world.pages()
+        XCTAssertEqual(quiet, [Page(offset: 50, limit: 200)], "one request, not one per row")
+
+        await model.refresh()
+        XCTAssertFalse(model.window!.hasMore, "the same count again")
+        model.window!.ensureLoaded(around: 49)
+        await world.settle(model)
+        let stillQuiet = await world.pages()
+        XCTAssertEqual(stillQuiet, quiet, "a refresh with the same count asks nothing more")
+
+        await world.scriptServer(size: 50, statusCount: 1001)
+        await model.refresh()
+        XCTAssertEqual(model.window!.totalMessages, 1001)
+        XCTAssertTrue(model.window!.hasMore, "a changed count may mean rows below again")
+        for index in [0, 49] {
+            model.window!.ensureLoaded(around: index)
+            await world.settle(model)
         }
 
         let pages = await world.pages()
-        XCTAssertEqual(pages, Array(repeating: Page(offset: 50, limit: 200), count: 3))
+        XCTAssertEqual(pages, [Page(offset: 50, limit: 200), Page(offset: 50, limit: 200)])
+        XCTAssertFalse(model.window!.hasMore)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<50, size: 50))
         XCTAssertNil(model.errorMessage)
+    }
+
+    /// What sets `hasMore` again, whichever path moves the count: a changed
+    /// `totalMessages` (a removal here, a STATUS there) and a reset do; the
+    /// same count written again does not.
+    func testAChangedCountOrAResetSetsHasMoreAgainButTheSameCountDoesNot() async throws {
+        let model = try await world.openedList(size: 50, statusCount: 1000)
+        model.window!.hasMore = false
+
+        model.window!.totalMessages = 1000
+        XCTAssertFalse(model.window!.hasMore, "the same count")
+        model.window!.totalMessages = 999
+        XCTAssertTrue(model.window!.hasMore, "a changed count")
+
+        model.window!.hasMore = false
+        model.window!.resetWindow()
+        XCTAssertTrue(model.window!.hasMore, "a reset")
     }
 
     // MARK: - P10: a refresh while a page is out
@@ -282,17 +320,17 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
     /// before the refresh, so it repeats ten rows that the merge dedups.
     func testARefreshWhileAPageIsInFlightMergesWithoutDuplicates() async throws {
         let model = try await world.openedList()
-        model.ensureLoaded(around: 0)
+        model.window!.ensureLoaded(around: 0)
         await world.settle(model)
         await world.imap.holdNext(.envelopes)
-        model.ensureLoaded(around: 249)
+        model.window!.ensureLoaded(around: 249)
         await world.imap.awaitHeld(.envelopes)
 
         await world.scriptServer(size: 1010)
         await model.refresh()
-        XCTAssertTrue(model.isLoadingMore, "the page is still out")
+        XCTAssertTrue(model.window!.isLoadingMore, "the page is still out")
         XCTAssertFalse(model.isLoading)
-        XCTAssertEqual(model.totalMessages, 1010)
+        XCTAssertEqual(model.window!.totalMessages, 1010)
         XCTAssertEqual(model.envelopes.map(\.uid), uids(0..<260, size: 1010))
 
         await world.imap.releaseHeld(.envelopes)
@@ -303,6 +341,6 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
         let shown = model.envelopes.map(\.uid)
         XCTAssertEqual(shown.count, Set(shown).count, "no row twice")
         XCTAssertEqual(shown, uids(0..<450, size: 1010), "1010 down to 561")
-        XCTAssertEqual(model.windowStart, 0)
+        XCTAssertEqual(model.window!.windowStart, 0)
     }
 }

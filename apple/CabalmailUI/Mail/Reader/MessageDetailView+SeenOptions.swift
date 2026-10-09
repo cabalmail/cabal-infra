@@ -67,13 +67,14 @@ extension MessageDetailView {
         }
     }
 
-    /// Marks the open message read and asks the list to move the selection
-    /// per `advance`. The advance signal fires optimistically alongside the
-    /// `\Seen` write, matching the dispose flow — a failed STORE reverts the
-    /// flag but leaves the user on the message they navigated to.
+    /// Marks the open message read and asks this window's list to move the
+    /// selection per `advance`. The advance event is posted optimistically
+    /// alongside the `\Seen` write, matching the dispose flow — a failed
+    /// STORE reverts the flag but leaves the user on the message they
+    /// navigated to.
     private func markRead(model: MessageDetailViewModel, advance: MarkReadAdvance) {
         Task { await model.setSeen(true) }
-        appState.mailStore.signals.signalReadAdvance(messageRef, advance: advance)
+        appState.mailStore.events.post(.readAdvance(messageRef, advance: advance), from: commandWindowID)
     }
 
     /// The rows the menu offers, read here so the enclosing body observes

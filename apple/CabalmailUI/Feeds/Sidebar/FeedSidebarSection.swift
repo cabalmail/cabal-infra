@@ -1,41 +1,9 @@
 import SwiftUI
 import CabalmailKit
 
-/// The Feeds section of the mail sidebar (wide layouts) and the whole
-/// sidebar of the Feeds tab (compact / visionOS): the folder tree with
-/// subscriptions as leaves, unread badges, collapse chevrons, and a
-/// selection that drives the item list.
-///
-/// Rows are `Button`s, not `List` selection, when they live inside the mail
-/// sidebar's `List(selection: $folder)`: one list carries one selection
-/// type, and the mail folders own it. The standalone `FeedSidebarList`
-/// below uses native selection.
-struct FeedSidebarRowsView<RowMenu: View>: View {
-    let rows: [FeedSidebarRow]
-    @Binding var selection: RssItemScope?
-    let toggleCollapse: (String) -> Void
-    let isCollapsed: (String) -> Bool
-    @ViewBuilder let contextMenu: (FeedSidebarRow) -> RowMenu
-
-    var body: some View {
-        ForEach(rows) { row in
-            Button {
-                selection = row.scope
-            } label: {
-                FeedSidebarRowLabel(row: row, isSelected: selection == row.scope,
-                                    isCollapsed: isCollapsed, toggleCollapse: toggleCollapse)
-            }
-            .buttonStyle(.plain)
-            .contextMenu { contextMenu(row) }
-            .listRowBackground(
-                selection == row.scope
-                    ? RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.18))
-                    : nil
-            )
-            .accessibilityIdentifier("feed.row.\(row.id)")
-        }
-    }
-}
+// The feed sidebar's pieces: the row label both sidebars draw, and the Feeds
+// tab's standalone sidebar. The list itself, which the mail sidebar's Feeds
+// section draws too, is `FeedSidebarContent`.
 
 /// One row's label: indentation, chevron (folders), icon, title, badge.
 struct FeedSidebarRowLabel: View {
@@ -198,46 +166,13 @@ struct FeedSidebarList: View {
     private var list: some View {
         List(selection: $selection) {
             if let model {
-                if let error = model.errorMessage {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(ColorTokens.dangerFg)
-                        .font(.footnote)
-                }
-                if model.hasLoaded, !model.hasSubscriptions {
-                    ContentUnavailableView {
-                        Label("No feeds yet", systemImage: "dot.radiowaves.up.forward")
-                    } description: {
-                        Text("Subscribe to a feed to start reading here.")
-                    } actions: {
-                        Button("Subscribe to a Feed…") { actions.subscribe() }
-                            .disabled(management == nil)
-                    }
-                    .listRowSeparator(.hidden)
-                } else {
-                    FeedSidebarRowLabel(
-                        row: FeedSidebarRows.allFeedsRow(
-                            unread: FeedSidebarRows.totalUnread(model.unreadCounts),
-                            total: FeedSidebarRows.grandTotal(model.totalCounts)
-                        ),
-                        isSelected: selection == .all,
-                        isCollapsed: { _ in true }, toggleCollapse: { _ in }
-                    )
-                    .tag(RssItemScope.all)
-                    .contextMenu {
-                        FeedSidebarContextMenu(scope: .all, row: nil, actions: actions, management: management)
-                    }
-                    ForEach(model.rows(collapsed: collapsed, filter: filter,
-                                       unreadOnly: listFilter.unreadOnly, keep: selection)) { row in
-                        FeedSidebarRowLabel(row: row, isSelected: selection == row.scope,
-                                            isCollapsed: { collapsed.contains($0) },
-                                            toggleCollapse: toggleCollapse)
-                            .tag(row.scope)
-                            .contextMenu {
-                                FeedSidebarContextMenu(scope: row.scope, row: row, actions: actions,
-                                                       management: management)
-                            }
-                    }
-                }
+                FeedSidebarContent(
+                    style: .listSelection, model: model, selection: $selection,
+                    rows: model.rows(collapsed: collapsed, filter: filter,
+                                     unreadOnly: listFilter.unreadOnly, keep: selection),
+                    isCollapsed: { collapsed.contains($0) }, toggleCollapse: toggleCollapse,
+                    actions: actions, management: management
+                )
             } else {
                 ProgressView("Loading feeds…")
             }

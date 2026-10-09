@@ -2,7 +2,7 @@ import SwiftUI
 import CabalmailKit
 
 // The bar above the feed item list: the All / Unread / Flagged pills, the
-// ordering menu and search field for a single feed, and the status lines. A
+// ordering menu, the search field for a single feed, and the status lines. A
 // sibling extension so the primary FeedItemListView body stays under
 // SwiftLint's `type_body_length` cap, like `+Footer`.
 extension FeedItemListView {
@@ -26,34 +26,33 @@ extension FeedItemListView {
                     }
                 }
                 Spacer()
-                if model.canSearch {
-                    Menu {
-                        // A `Picker` inside a `Menu` renders as a submenu on
-                        // macOS, which put all four orderings one level down
-                        // behind an "Order" row (#1508). Inline, they are the
-                        // menu's own rows, the way the Sort menu reads. An
-                        // inline picker still draws its title as a section
-                        // header, repeating the word on the button just
-                        // pressed, so the label is hidden (VoiceOver keeps it).
-                        // A pick is sticky for the feed (`selectOrdering`).
-                        Picker("Order", selection: Binding(
-                            get: { model.ordering },
-                            set: { model.selectOrdering($0) }
-                        )) {
-                            Text("Newest first").tag(RssOrderingMode.newestFirst)
-                            Text("Oldest first").tag(RssOrderingMode.oldestFirst)
-                            Text("Newest day, oldest first within").tag(RssOrderingMode.newestDayOldestWithin)
-                            Text("Oldest day, newest first within").tag(RssOrderingMode.oldestDayNewestWithin)
-                        }
-                        .pickerStyle(.inline)
-                        .labelsHidden()
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                            .accessibilityLabel("Order")
+                // Every scope keeps its own order (`selectOrdering`): a feed, a
+                // folder (its own merged list) and All Feeds.
+                Menu {
+                    // A `Picker` inside a `Menu` renders as a submenu on
+                    // macOS, which put all four orderings one level down
+                    // behind an "Order" row (#1508). Inline, they are the
+                    // menu's own rows, the way the Sort menu reads. An
+                    // inline picker still draws its title as a section
+                    // header, repeating the word on the button just
+                    // pressed, so the label is hidden (VoiceOver keeps it).
+                    Picker("Order", selection: Binding(
+                        get: { model.ordering },
+                        set: { model.selectOrdering($0) }
+                    )) {
+                        Text("Newest first").tag(RssOrderingMode.newestFirst)
+                        Text("Oldest first").tag(RssOrderingMode.oldestFirst)
+                        Text("Newest day, oldest first within").tag(RssOrderingMode.newestDayOldestWithin)
+                        Text("Oldest day, newest first within").tag(RssOrderingMode.oldestDayNewestWithin)
                     }
-                    .accessibilityIdentifier("feed.order")
-                    .onChange(of: model.ordering) { _, _ in Task { await model.reload() } }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .accessibilityLabel("Order")
                 }
+                .accessibilityIdentifier("feed.order")
+                .onChange(of: model.ordering) { _, _ in Task { await model.reload() } }
             }
             if model.canSearch {
                 TextField("Search this feed", text: $model.searchQuery)

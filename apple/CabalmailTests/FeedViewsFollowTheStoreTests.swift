@@ -140,6 +140,27 @@ final class FeedViewsFollowTheStoreTests: XCTestCase {
         try await waitUntilOnMainActor { model.items.first?.sortKey == "k0" }
     }
 
+    /// The same for a folder's own order, picked on another device.
+    func testAnOpenFolderListTakesUpAnOrderChangedElsewhere() async throws {
+        try await store.upsertItems([item("k0", day: 3)])
+        let folder = RssFolder(folderId: "d", name: "Tech")
+        try await store.upsertFolder(folder)
+        try await store.upsertSubscription(RssSubscription(subscriptionId: "s", feedId: "f", folderId: "d",
+                                                           defaultFilter: .all))
+        let model = try listModel(scope: .folder("d"), folder: folder)
+        follow { await model.observe() }
+        try await waitUntilOnMainActor { model.items.count == 3 }
+        XCTAssertEqual(model.ordering, .newestFirst)
+        XCTAssertEqual(model.items.first?.sortKey, "k2")
+
+        var changed = folder
+        changed.orderingMode = .oldestFirst
+        try await store.upsertFolder(changed)
+
+        try await waitUntilOnMainActor { model.ordering == .oldestFirst }
+        try await waitUntilOnMainActor { model.items.first?.sortKey == "k0" }
+    }
+
     func testAFolderListFollowsAFeedMovedIntoIt() async throws {
         try await store.upsertFolder(RssFolder(folderId: "d", name: "Tech"))
         try await store.upsertSubscription(RssSubscription(subscriptionId: "s", feedId: "f", folderId: "d",

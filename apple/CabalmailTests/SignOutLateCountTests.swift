@@ -110,8 +110,8 @@ final class SignOutLateCountTests: XCTestCase {
         await cache.recordStatus(FolderStatus(messages: 11, unseen: 3), for: "Archive", ifUnchangedSince: 0)
         harness.appState.mailStore.counts.savedFolderCounts.cache = cache
 
-        _ = list.applyStatusCounts(archive)
-        _ = list.applyStatusCounts(archive, mayPredateRemoval: true)
+        _ = list.window!.applyStatusCounts(archive)
+        _ = list.window!.applyStatusCounts(archive, mayPredateRemoval: true)
 
         XCTAssertEqual(list.allCount, 40)
         XCTAssertEqual(harness.appState.mailStore.counts.folderUnreadCounts, [:])
