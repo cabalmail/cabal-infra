@@ -336,3 +336,26 @@ extension MessageListViewModel {
         )
     }
 }
+
+// Temporary bridge for 2.2 C's receiver-only commit; a later commit replaces it with `MailSearchSession`.
+@MainActor
+struct SearchBridge {
+    let list: MessageListViewModel
+    var filters: MessageSearchFilters {
+        get { list.searchFilters }
+        nonmutating set { list.searchFilters = newValue }
+    }
+    var nextCursor: String? { list.searchNextCursor }
+    var submittedQuery: String { list.submittedQuery }
+    var folder: Folder? { list.searchFolder }
+    func loadMore() async { await list.loadMoreSearchResults() }
+}
+
+extension MessageListViewModel {
+    var search: SearchBridge { SearchBridge(list: self) }
+}
+
+@MainActor
+enum MailSearchSession {
+    static let pageSize = MessageListViewModel.searchPageSize
+}

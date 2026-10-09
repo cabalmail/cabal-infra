@@ -18,7 +18,8 @@ final class MessageListViewModel {
     /// Resolved anchor folder (a sentinel in `.search` scope). Folder-keyed
     /// call sites read this unchanged; the search paths are gated off before
     /// any of them issue an IMAP request against a `.search` sentinel.
-    let folder: Folder
+    /// IUO for 2.2 C's receiver-only commit; a later commit makes it optional.
+    let folder: Folder!
     let client: CabalmailClient
     let preferences: Preferences
     /// The session's shared mail state: the folder counts this list keeps
@@ -26,7 +27,8 @@ final class MessageListViewModel {
     let mailStore: MailSessionStore
     /// The folder window: its rows, their positions and every load that
     /// fills them. Views and tests reach window state through it.
-    let window: FolderWindowLoader
+    /// IUO for 2.2 C's receiver-only commit; a later commit makes it optional.
+    let window: FolderWindowLoader!
 
     var errorMessage: String?
 
