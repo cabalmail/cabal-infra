@@ -38,7 +38,18 @@ final class MessageListViewModel {
     /// them (`selectFilter`). Sticky per folder: a rebuilt view-model
     /// (folder switch, relaunch) opens on the pill the user last chose for
     /// this folder (`Preferences.mailFolderFilters`), All until then.
-    var filterTab: MessageFilter = .all
+    ///
+    /// The pill a folder reopens on follows the pill on screen: leaving
+    /// Unread or Flagged for All by any route -- the search banner's clear,
+    /// a text search in a pill's place, the filter sheet -- records All for
+    /// the folder, as tapping All does (#1826). Tapping a pill records the
+    /// pill itself (`selectFilter`).
+    var filterTab: MessageFilter = .all {
+        didSet {
+            guard oldValue != .all, filterTab == .all, let folder else { return }
+            preferences.setMailFolderFilter(.all, for: folder.path)
+        }
+    }
 
     /// True when the user has tapped Select; rows render checkboxes and
     /// the per-row tap selects rather than opening the detail pane.
