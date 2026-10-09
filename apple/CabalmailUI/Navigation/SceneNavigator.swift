@@ -39,7 +39,9 @@ import CabalmailKit
 /// Every transition does what the view handler it replaced did, cursor
 /// recording included. The search model is the window's too
 /// (`searchModel`), but whether the window is searching is the view's: a
-/// transition that reads it takes `isSearching`.
+/// transition that reads it takes `isSearching`. So is the folder list's
+/// selection (`mailSelection(for:)`), which a swap hands to the new tree's
+/// list when it is more than the open message.
 @Observable
 @MainActor
 final class SceneNavigator {
@@ -75,6 +77,14 @@ final class SceneNavigator {
 
     /// The window's search model (`searchModel(client:preferences:mailStore:)`).
     @ObservationIgnored private var search: MessageListViewModel?
+
+    /// The selection of the window's folder list, and that list's folder
+    /// (`mailSelection(for:)`).
+    @ObservationIgnored private var listSelection: (folderPath: String, model: SelectionModel<MessageRef>)?
+
+    /// Whether a layout swap is handing `listSelection` to the next folder
+    /// list.
+    @ObservationIgnored private var handsOffSelection = false
 
     /// Counts the feed banners this window has followed, so the wide split
     /// can end a search for one as it does for a feed pick (`navigateFeeds`).
@@ -207,6 +217,7 @@ final class SceneNavigator {
     /// the window's feed list; a window that never landed in feeds reopens
     /// the session's scope; with neither, the split shows mail.
     private func rehand(_ tree: UUID, isWide: Bool) async {
+        handOffSelection(isWide: isWide)
         selectedEnvelope = nil
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
         guard let coordinator = coordinator() else { return }
@@ -411,6 +422,8 @@ final class SceneNavigator {
     func setCompactColumn(_ column: NavigationSplitViewColumn, isSearching: Bool, from tree: UUID) {
         guard canWrite(from: tree), column != compactColumn else { return }
         compactColumn = column
+        // Back to the folder list: the message list is gone, with its selection.
+        if column == .sidebar { dropSelection() }
         if CompactColumnPolicy.dropsMessage(movingTo: column) {
             applyMessage(nil, isSearching: isSearching)
         }
@@ -455,6 +468,7 @@ final class SceneNavigator {
         }
         selectedFolder = folder
         selectedEnvelope = nil
+        dropSelection()
         route.mail = AppRoute.Mail(folderPath: folder?.path)
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: folder != nil)
         guard let path = folder?.path, records else { return }
@@ -648,5 +662,39 @@ extension SceneNavigator {
         )
         search = model
         return model
+    }
+}
+
+// The message list's selection, in the same file so it reaches the stored
+// selection.
+extension SceneNavigator {
+    /// The selection for a folder list mounting in this window: a new one,
+    /// as every list had when the selection lived on its view model, unless
+    /// a layout swap is handing over the one the window's list held for the
+    /// same folder. Then that one, so a multi-selection survives the swap. A
+    /// hand-off goes to one list; a list mounting after it, in the same tree
+    /// or once the folder changes, starts afresh as it always did.
+    func mailSelection(for folderPath: String) -> SelectionModel<MessageRef> {
+        defer { handsOffSelection = false }
+        if handsOffSelection, let held = listSelection, held.folderPath == folderPath {
+            return held.model
+        }
+        let fresh = SelectionModel<MessageRef>()
+        listSelection = (folderPath, fresh)
+        return fresh
+    }
+
+    /// A tree built by a layout swap is taking the window over: the window's
+    /// selection goes to the tree's list if it survives the swap
+    /// (`SelectionModel.handOff(toWide:)`).
+    private func handOffSelection(isWide: Bool) {
+        handsOffSelection = listSelection?.model.handOff(toWide: isWide) ?? false
+    }
+
+    /// The window's folder list is gone: another folder was picked, or the
+    /// compact layout backed out to the folder list. Its selection went with
+    /// it, as it did when the selection lived on the list's view model.
+    private func dropSelection() {
+        listSelection = nil
     }
 }

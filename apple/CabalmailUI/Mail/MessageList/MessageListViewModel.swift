@@ -51,22 +51,37 @@ final class MessageListViewModel {
         }
     }
 
+    /// The list's selection (`SelectionModel`). A folder list's belongs to
+    /// its window, which hands it to the list a layout swap builds
+    /// (`SceneNavigator.mailSelection(for:)`); the search surface keeps its
+    /// own. The properties below read and write it.
+    let selection: SelectionModel<MessageRef>
+
     /// True when the user has tapped Select; rows render checkboxes and
     /// the per-row tap selects rather than opening the detail pane.
-    var bulkMode: Bool = false
+    var bulkMode: Bool {
+        get { selection.bulkMode }
+        set { selection.bulkMode = newValue }
+    }
 
     /// The rows the user has selected: on wide layouts every selection
     /// (one row opens the reader), on touch layouts the Select mode's
     /// checkboxes. Keyed by `MessageRef`, so of two search rows that share a
     /// UID exactly the one picked is selected, and every action on the
-    /// selection reaches exactly the messages in it.
-    var selectedRefs: Set<MessageRef> = []
+    /// selection reaches exactly the messages in it. `_modify` hands the
+    /// selection's storage through, so an in-place edit (a toggle, a
+    /// subtraction) doesn't copy the set.
+    var selectedRefs: Set<MessageRef> {
+        get { selection.selected }
+        set { selection.selected = newValue }
+        _modify { yield &selection.selected }
+    }
 
     /// Anchor row for range selection: the fixed pivot a shift-click or
     /// shift-arrow extends from -- the last row plainly selected or
     /// command-clicked. Settable only through `setSelectionAnchor(_:)`, so
     /// it cannot drift out of step with `selectionRangeBase`.
-    private(set) var selectionAnchor: MessageRef?
+    var selectionAnchor: MessageRef? { selection.anchor }
 
     /// The selection a range operation extends *from*: whatever was selected
     /// at the moment `selectionAnchor` was pinned.
@@ -76,20 +91,22 @@ final class MessageListViewModel {
     /// survive (#1768). It is never written on its own -- a base left over
     /// from an earlier anchor would resurrect rows the user has since
     /// dropped -- which is what `setSelectionAnchor(_:)` enforces.
-    private(set) var selectionRangeBase: Set<MessageRef> = []
+    var selectionRangeBase: Set<MessageRef> { selection.rangeBase }
 
     /// Pin the pivot for range selection, recording the selection it starts
     /// from. The anchor and its base always move together.
     func setSelectionAnchor(_ ref: MessageRef?) {
-        selectionAnchor = ref
-        selectionRangeBase = selectedRefs
+        selection.setAnchor(ref)
     }
 
     /// The moving end of a keyboard range selection (the row a plain arrow
     /// last landed on, or a shift-arrow last extended to). Distinct from the
     /// anchor so shift-arrow grows/shrinks the range from the right end rather
     /// than collapsing it. Plain selection sets cursor == anchor.
-    var selectionCursor: MessageRef?
+    var selectionCursor: MessageRef? {
+        get { selection.cursor }
+        set { selection.cursor = newValue }
+    }
 
     /// The term in the search field (`MailSearchSession.query`). Read-write
     /// for the shell and `SearchView`'s binding.
@@ -151,8 +168,14 @@ final class MessageListViewModel {
     /// view to apply (`receive(_:)`, `MailEventSelectionPolicy`).
     let selectionReactions = ListSelectionReactions()
 
-    init(scope: MessageListScope, client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore) {
+    /// - Parameter selection: the selection to read and write; a new one
+    ///   when nil. A folder list passes its window's.
+    init(
+        scope: MessageListScope, client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore,
+        selection: SelectionModel<MessageRef>? = nil
+    ) {
         self.scope = scope
+        self.selection = selection ?? SelectionModel()
         self.client = client
         self.preferences = preferences
         self.mailStore = mailStore

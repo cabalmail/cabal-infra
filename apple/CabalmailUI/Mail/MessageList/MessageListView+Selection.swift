@@ -391,6 +391,12 @@ extension MessageListView {
                 selection = refs.count == 1 ? refs.first.flatMap(model.envelope(for:)) : nil
                 onSelectionCountChanged(refs.count)
             }
+            // A selection a layout swap handed this list was never a change
+            // here, so the reading pane's "N messages selected" hears its
+            // count as the list appears (`SceneNavigator.mailSelection(for:)`).
+            .onAppear {
+                if !model.selectedRefs.isEmpty { onSelectionCountChanged(model.selectedRefs.count) }
+            }
     }
 
     /// Single-selection list for compact iPhone: a tap opens the reader.

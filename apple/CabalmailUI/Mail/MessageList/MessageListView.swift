@@ -47,6 +47,11 @@ struct MessageListView: View {
     // used for `model` and `filtersPresented` further down.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
+    /// The window's navigation, which holds a folder list's selection so a
+    /// layout swap can hand it to the list the new layout builds
+    /// (`SceneNavigator.mailSelection(for:)`). Optional so a list hosted
+    /// outside a main window still builds, with a selection of its own.
+    @Environment(SceneNavigator.self) private var navigator: SceneNavigator?
     #if !os(macOS)
     // Wide vs. compact gates whether message rows are draggable. On a
     // compact iPhone the sidebar and the message list never share the
@@ -490,7 +495,8 @@ extension MessageListView {
                         scope: scope,
                         client: client,
                         preferences: preferences,
-                        mailStore: appState.mailStore
+                        mailStore: appState.mailStore,
+                        selection: folder.flatMap { navigator?.mailSelection(for: $0.path) }
                     )
                     await model?.loadInitial()
                     await model?.startWatching()
