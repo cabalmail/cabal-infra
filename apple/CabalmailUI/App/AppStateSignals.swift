@@ -133,9 +133,9 @@ extension AppState {
 // Which main window a command tick is for. The `request…` methods record
 // the target in `commandWindow` as they bump a tick; the observers, through
 // `onWindowCommand` (`Views/MainWindowCommandScope.swift`), ask `commandReaches`
-// before acting. A nil target reaches every window: that is what a
-// data-change refresh wants (Empty Trash, a push action), and it keeps any
-// caller that names no window working as it did before targeting existed.
+// before acting. A nil target reaches every window, which keeps any caller
+// that names no window working as it did before targeting existed. A
+// data-change reload is not a command (`MailSessionStore.listRefreshTick`).
 @MainActor
 extension AppState {
     /// Records `window` as the main window most recently in front.

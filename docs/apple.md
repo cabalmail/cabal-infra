@@ -1560,10 +1560,10 @@ falling back to the main window last in front while a compose window is
 key; an in-window button passes its own window. Observers use
 `.onWindowCommand(tick)` instead of `.onChange(of:)`, which drops a tick
 aimed at another window. A `request…` call that names no window reaches
-every window, which is what data-change refreshes (Empty Trash, push
-actions) want. Drag-and-drop moves are scoped tighter still: the drag
-payload names the message list it lifted from, and only that list
-performs the move a sidebar drop posts.
+every window. Data-change reloads (Mark All as Read, Empty Trash, push
+actions) are not commands: they bump the mail store's `listRefreshTick`,
+which every list observes (#1824). Drag-and-drop moves name the message
+list the drag lifted from, and only that list performs a sidebar drop.
 
 ### Platform polish
 

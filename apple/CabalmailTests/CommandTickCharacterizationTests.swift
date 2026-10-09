@@ -260,28 +260,28 @@ final class CommandTickCharacterizationTests: XCTestCase {
         }
     }
 
-    /// Pins current behaviour, which looks like a defect: an untargeted
-    /// refresh sent after an aimed command, before SwiftUI has delivered it,
-    /// re-aims that command at every window, so every window's reader answers
-    /// the one Reply (defect 11 back again: two replies, two toggles). The
-    /// untargeted senders run from async continuations on the main actor --
+    /// #1824's main path, fixed: a data-change reload sent after an aimed
+    /// command, before SwiftUI has delivered it, leaves that command aimed
+    /// where it was, so only window A's reader answers the one Reply. The
+    /// reload senders run from async continuations on the main actor --
     /// `FolderMarkAllRead.perform`, `FolderListViewModel.emptyTrash` and
     /// `PushRegistrar`'s notification actions after their server call -- so
     /// any of them can land between a menu command's bump and the next
-    /// update. `CommandHandoffCharacterizationTests` drives the first two
-    /// end to end.
-    /// Tracked in #1824.
-    func testAnUntargetedRefreshBeforeDeliveryReAimsAnEarlierAimedTickAtEveryWindow() {
+    /// update. They used to send an untargeted refresh, which re-aimed the
+    /// command at every window; they now bump the mail store's own counter.
+    /// `CommandHandoffCharacterizationTests` drives the first two end to end.
+    func testADataChangeReloadBeforeDeliveryLeavesAnEarlierAimedTickAlone() {
         let appState = AppState()
         appState.requestReply(in: windowA)
         XCTAssertFalse(appState.commandReaches(windowB))
 
-        appState.requestRefresh()
+        appState.mailStore.requestListRefresh()
 
         XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertTrue(appState.commandReaches(windowB), "B's reader would answer A's Reply too")
+        XCTAssertFalse(appState.commandReaches(windowB), "only A's reader answers A's Reply")
         XCTAssertEqual(appState.replyRequestTick, 1)
-        XCTAssertEqual(appState.refreshRequestTick, 1)
+        XCTAssertEqual(appState.refreshRequestTick, 0, "a reload is not a window command")
+        XCTAssertEqual(appState.mailStore.listRefreshTick, 1)
     }
 
     /// Pins current behaviour, which looks like a defect (latent; no call

@@ -15,7 +15,7 @@ final class FolderMarkAllReadTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 12, total: 80)
         let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), mailStore: appState.mailStore)
-        let ticks = appState.refreshRequestTick
+        let ticks = appState.mailStore.listRefreshTick
 
         await model.markAllRead(folderPath: "Projects")
 
@@ -25,7 +25,7 @@ final class FolderMarkAllReadTests: XCTestCase {
         XCTAssertEqual(
             appState.mailStore.counts.folderTotalCounts["Projects"], 80, "the total is not the server's to change here"
         )
-        XCTAssertEqual(appState.refreshRequestTick, ticks + 1, "the visible list re-renders read state")
+        XCTAssertEqual(appState.mailStore.listRefreshTick, ticks + 1, "the visible list re-renders read state")
         XCTAssertNil(model.errorMessage)
     }
 
@@ -48,13 +48,13 @@ final class FolderMarkAllReadTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "INBOX", unread: 5, total: 40)
         let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), mailStore: appState.mailStore)
-        let ticks = appState.refreshRequestTick
+        let ticks = appState.mailStore.listRefreshTick
 
         await model.markAllRead(folderPath: "INBOX")
 
         XCTAssertNotNil(model.errorMessage)
         XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["INBOX"], 5)
-        XCTAssertEqual(appState.refreshRequestTick, ticks, "nothing changed, so nothing to reload")
+        XCTAssertEqual(appState.mailStore.listRefreshTick, ticks, "nothing changed, so nothing to reload")
     }
 
     /// A folder marked from the sidebar while another is on screen keeps

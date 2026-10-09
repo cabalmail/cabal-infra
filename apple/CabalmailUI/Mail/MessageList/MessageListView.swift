@@ -539,21 +539,19 @@ extension MessageListView {
     /// requests.
     private var observersLayer: some View {
         lifecycleLayer
-        // macOS Commands menu (Mailbox → Refresh) and keyboard shortcuts
-        // route through `AppState` tick counters. Using the currently-
-        // displayed list as the refresh target matches every desktop mail
-        // client's convention. (`composeRequestTick` is consumed by
-        // `ComposeRequestRouter` on the signed-in root, not here — this
-        // view isn't in the visible hierarchy in every state a compose
-        // request can arrive from.)
+        // Mailbox → Refresh and the Mac toolbar's Refresh, aimed at this
+        // window, get hard-reload semantics (wipe in-memory state before the
+        // fetch), so the user has a reliable escape from any stale-state bug
+        // the merge path doesn't catch. So does a change made behind every
+        // list (Mark All as Read, Empty Trash, a notification's action),
+        // which the mail store announces to every mounted list rather than
+        // through the window commands (#1824). The folder's poller keeps
+        // handing the list an ordinary `refresh(prefetched:)`; it fires too
+        // often to be discarding cached envelopes on every tick.
         .onWindowCommand(appState.refreshRequestTick) {
-            // Manual refresh paths (Mailbox > Refresh menu item, the
-            // arrow.clockwise toolbar button) get hard-reload semantics
-            // — wipe in-memory state before refresh — so the user has a
-            // reliable escape from any stale-state bug the merge path
-            // doesn't catch. The folder's poller keeps handing the list an
-            // ordinary `refresh(prefetched:)`; it fires too often to be
-            // discarding cached envelopes on every tick.
+            Task { await model?.hardReload() }
+        }
+        .onChange(of: appState.mailStore.listRefreshTick) { _, _ in
             Task { await model?.hardReload() }
         }
         // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) acting on the
