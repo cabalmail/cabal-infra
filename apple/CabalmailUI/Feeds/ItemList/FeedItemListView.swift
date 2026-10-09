@@ -135,11 +135,11 @@ struct FeedItemListView: View {
         .onChange(of: appState.navCoordinator?.pendingFeedRestore) { _, restore in
             if restore != nil { applyLaunchRestoreWhenReady(replacingSelection: true) }
         }
-        // The Feeds menu's item chords (`+Commands`); the catalog commands
-        // on the same tick are the sidebar's and are ignored here.
-        .onWindowCommand(appState.feedCommandTick) {
-            guard let model, let command = appState.pendingFeedCommand else { return }
-            handleFeedCommand(command, model: model)
+        // The Feeds menu's item chords (`+Commands`), while this list is in
+        // front; the catalog commands are the sidebar's and are ignored here.
+        .answersCommands(FeedCommand.allCases.map(WindowCommand.feed)) { command in
+            guard let model, case .feed(let feed) = command else { return }
+            handleFeedCommand(feed, model: model)
         }
     }
 

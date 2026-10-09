@@ -88,9 +88,11 @@ struct MessageListView: View {
     /// The "Mark all messages in … as read?" confirmation (`+MarkAllRead`),
     /// staged by the toolbar's More menu and the Mailbox menu's ⌥⌘T.
     @State var markAllReadConfirmPresented = false
-    /// This window's identity, for aiming its own compose and refresh
-    /// requests at itself (`MainWindowCommandScope`).
+    /// This window's identity, for aiming its own compose requests and mail
+    /// events at itself (`MainWindowCommandScope`).
     @Environment(\.commandWindowID) var commandWindowID
+    /// This window's commands, which the toolbar's Refresh sends to.
+    @Environment(\.windowCommands) var windowCommands
     /// This list's identity, carried on the drags it starts so that only
     /// it performs the move a sidebar drop posts (`MessageMoveRequest`).
     @State var dragSourceID = UUID()
@@ -368,17 +370,11 @@ extension MessageListView {
                         .accessibilityLabel("New Message")
                 }
                 .keyboardShortcut("n", modifiers: .command)
-                // Force-reload button. macOS only — iOS / iPadOS / visionOS
-                // users reach the cheap merge-refresh via pull-to-refresh,
-                // which is the gesture those platforms expect. Routed
-                // through `requestRefresh()` so the toolbar button and the
-                // Mailbox > Refresh menu item share one code path — both
-                // land on `MessageListViewModel.hardReload()`, which wipes
-                // in-memory state before the server fetch so the user has a
-                // reliable escape from any stale-state bug the merge path
-                // doesn't catch.
+                // Force-reload button, macOS only (the touch platforms
+                // pull to refresh). Sent to this window as Mailbox > Refresh
+                // is, so both land on `MessageListViewModel.hardReload()`.
                 Button {
-                    appState.requestRefresh(in: commandWindowID)
+                    windowCommands?.send(.refresh)
                 } label: {
                     RefreshActivityIcon(isLoading: model?.isLoading == true)
                         .accessibilityLabel("Refresh")
@@ -534,7 +530,7 @@ extension MessageListView {
         }
     }
 
-    /// Observers: `AppState`'s menu / shortcut ticks, the selection
+    /// Observers: the window's menu commands (`WindowCommands`), the selection
     /// reactions the model queues from mail events, and drag-and-drop move
     /// requests.
     private var observersLayer: some View {
@@ -548,7 +544,7 @@ extension MessageListView {
         // through the window commands (#1824). The folder's poller keeps
         // handing the list an ordinary `refresh(prefetched:)`; it fires too
         // often to be discarding cached envelopes on every tick.
-        .onWindowCommand(appState.refreshRequestTick) {
+        .answersCommand(.refresh) {
             Task { await model?.hardReload() }
         }
         .onChange(of: appState.mailStore.listRefreshTick) { _, _ in

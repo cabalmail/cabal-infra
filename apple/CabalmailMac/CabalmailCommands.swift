@@ -7,9 +7,8 @@ import CabalmailUI
 /// Phase 7 polish: add a native menu bar that matches every other Mac
 /// mail client — File → New Message, Mailbox → Refresh, Message → Reply
 /// / Reply All / Forward / Mark / Flag / Move. Commands go to the main
-/// window in front (`WindowCommands`; the Mailbox items still through
-/// `AppState` ticks), so its views react without the menu bar needing a
-/// direct reference to a view model.
+/// window in front (`WindowCommands`), so its views react without the menu
+/// bar needing a direct reference to a view model.
 ///
 /// Why the Message actions live in the menu bar rather than on the
 /// detail view's toolbar Menu Buttons: a `.keyboardShortcut` attached to
@@ -24,12 +23,9 @@ import CabalmailUI
 struct CabalmailCommands: Commands {
     let appState: AppState
     @Environment(\.openWindow) private var openWindow
-    @FocusedValue(\.commandWindowID) private var focusedWindow
-    /// The main window in front; nil (Mailbox dims) with none in front.
+    /// The main window in front, which the Mailbox items act in; nil (they
+    /// dim) with a compose or Settings window in front, or none open.
     @FocusedValue(\.windowCommands) private var commands
-
-    /// The main window the Mailbox items act in (`MainWindowCommandScope`).
-    private var target: UUID? { appState.menuCommandTarget(focused: focusedWindow) }
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -50,7 +46,7 @@ struct CabalmailCommands: Commands {
             .keyboardShortcut("n", modifiers: .command)
         }
         MessageMenuCommands()
-        FeedsMenuCommands(appState: appState)
+        FeedsMenuCommands()
         CommandMenu("Mailbox") {
             // No keyboard shortcut. Cmd+R is the Reply chord in the
             // Message menu above (Cmd+Shift+R reaches Reply All);
@@ -60,11 +56,11 @@ struct CabalmailCommands: Commands {
             // button covers the discovery surface without overloading
             // a chord the user expects to mean Reply.
             //
-            // Both surfaces hit `requestRefresh()` -> `hardReload()`,
-            // not the cheap merge-refresh — the manual paths exist
-            // precisely so the user can escape stale in-memory state.
+            // Both surfaces send `.refresh` -> `hardReload()`, not the
+            // cheap merge-refresh — the manual paths exist precisely so
+            // the user can escape stale in-memory state.
             Button("Refresh") {
-                appState.requestRefresh(in: target)
+                commands?.send(.refresh)
             }
             // Unlike New Message, this one has nowhere to go with no mail
             // list in the window in front. Dim it rather than advertise a
@@ -77,7 +73,7 @@ struct CabalmailCommands: Commands {
             // enables whichever section is in front, never both. Confirmed
             // by the list before anything happens (`+MarkAllRead`).
             Button("Mark All as Read") {
-                appState.requestMarkFolderRead(in: target)
+                commands?.send(.markFolderRead)
             }
             .keyboardShortcut("t", modifiers: [.command, .option])
             .disabled(!(commands.map {
@@ -88,9 +84,9 @@ struct CabalmailCommands: Commands {
             // so they work whichever pane has focus. No chords: nothing
             // conventional is free (Cmd+Option+arrows are the outline
             // view's own), and the buttons are one click away.
-            Button("Expand All Folders") { appState.requestSidebarTree(.expandAllFolders, in: target) }
+            Button("Expand All Folders") { commands?.send(.sidebarTree(.expandAllFolders)) }
                 .disabled(commands == nil)
-            Button("Collapse All Folders") { appState.requestSidebarTree(.collapseAllFolders, in: target) }
+            Button("Collapse All Folders") { commands?.send(.sidebarTree(.collapseAllFolders)) }
                 .disabled(commands == nil)
         }
     }

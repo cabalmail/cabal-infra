@@ -3,61 +3,59 @@ import CabalmailKit
 @testable import CabalmailUI
 
 /// Defect 11 of the 2026-10 rearchitecture audit: menu commands and drag-
-/// moves reached every mounted list and reader in every main window. A
-/// command now names its window and a drag names its source list; these
-/// pin the rules the observers apply to those names.
+/// moves reached every mounted list and reader in every main window. A menu
+/// command now goes to the window in front's own `WindowCommands`, a compose
+/// request names its window, and a drag names its source list; these pin the
+/// rules the observers apply to those names.
 @MainActor
 final class CommandWindowTargetingTests: XCTestCase {
     private let windowA = UUID()
     private let windowB = UUID()
 
-    func testACommandAimedAtOneWindowReachesOnlyThatWindow() {
-        let appState = AppState()
-        appState.requestReply(in: windowA)
-        XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertFalse(appState.commandReaches(windowB), "a second window must not answer (two replies)")
+    private func makeWindow() -> WindowCommands {
+        WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: nil))
     }
 
-    func testEveryTickRecordsItsOwnTarget() {
-        // A later untargeted request (a menu Refresh with no main window
-        // recorded) must not inherit the previous command's window.
+    func testACommandSentToOneWindowReachesOnlyThatWindow() {
+        let commandsA = makeWindow()
+        let commandsB = makeWindow()
+        commandsA.send(.reply)
+        XCTAssertEqual(commandsA.count(of: .reply), 1)
+        XCTAssertEqual(commandsB.count(of: .reply), 0, "a second window must not answer (two replies)")
+    }
+
+    func testEveryCommandStaysWithTheWindowItWasSentTo() {
+        let commandsA = makeWindow()
+        let commandsB = makeWindow()
+        commandsA.send(.toggleSeen)
+        commandsB.send(.refresh)
+        commandsB.send(.feed(.refresh))
+        commandsA.send(.sidebarTree(.expandAllFolders))
+        XCTAssertEqual([commandsA.count(of: .toggleSeen), commandsA.count(of: .refresh)], [1, 0])
+        XCTAssertEqual(commandsA.count(of: .feed(.refresh)) + commandsB.count(of: .sidebarTree(.expandAllFolders)), 0)
         let appState = AppState()
-        appState.requestToggleSeen(in: windowA)
-        appState.requestRefresh()
-        XCTAssertTrue(appState.commandReaches(windowB))
-        appState.requestFeedCommand(.refresh, in: windowB)
-        XCTAssertFalse(appState.commandReaches(windowA))
-        appState.requestSidebarTree(.expandAllFolders, in: windowA)
-        XCTAssertFalse(appState.commandReaches(windowB))
         appState.requestCompose(seed: Draft(), in: windowB)
         XCTAssertFalse(appState.commandReaches(windowA))
     }
 
-    func testAnUntargetedCommandReachesEveryWindow() {
-        // A command that names no window reaches every window, as before.
+    func testAnUntargetedComposeReachesEveryWindow() {
         let appState = AppState()
-        appState.requestRefresh()
+        appState.requestCompose()
         XCTAssertTrue(appState.commandReaches(windowA))
         XCTAssertTrue(appState.commandReaches(windowB))
+        appState.requestCompose(in: windowA)
+        XCTAssertTrue(appState.commandReaches(nil), "a view outside a main window answers as before")
     }
 
-    func testAViewOutsideAMainWindowAnswersAsBefore() {
+    /// The main window last in front, which a mailto compose is aimed at:
+    /// closing another window keeps it.
+    func testTheMainWindowLastInFrontSurvivesAnotherWindowClosing() {
         let appState = AppState()
-        appState.requestReply(in: windowA)
-        XCTAssertTrue(appState.commandReaches(nil))
-    }
-
-    func testAMenuCommandFallsBackToTheMainWindowLastInFront() {
-        // While a compose window is key there is no focused main window.
-        let appState = AppState()
-        XCTAssertNil(appState.menuCommandTarget(focused: nil))
         appState.noteActiveMainWindow(windowA)
-        XCTAssertEqual(appState.menuCommandTarget(focused: nil), windowA)
-        XCTAssertEqual(appState.menuCommandTarget(focused: windowB), windowB, "the focused window wins")
         appState.forgetMainWindow(windowB)
-        XCTAssertEqual(appState.menuCommandTarget(focused: nil), windowA, "closing another window keeps it")
+        XCTAssertEqual(appState.lastActiveMainWindow, windowA, "closing another window keeps it")
         appState.forgetMainWindow(windowA)
-        XCTAssertNil(appState.menuCommandTarget(focused: nil))
+        XCTAssertNil(appState.lastActiveMainWindow)
     }
 
     func testOnlyTheSourceListPerformsADragMove() throws {
