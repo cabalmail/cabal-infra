@@ -19,8 +19,8 @@ final class CommandWindowTargetingTests: XCTestCase {
     }
 
     func testEveryTickRecordsItsOwnTarget() {
-        // A later untargeted request (a push action's refresh) must not
-        // inherit the previous command's window.
+        // A later untargeted request (a menu Refresh with no main window
+        // recorded) must not inherit the previous command's window.
         let appState = AppState()
         appState.requestToggleSeen(in: windowA)
         appState.requestRefresh()
@@ -34,7 +34,7 @@ final class CommandWindowTargetingTests: XCTestCase {
     }
 
     func testAnUntargetedCommandReachesEveryWindow() {
-        // Empty Trash and push actions refresh whatever is showing anywhere.
+        // A command that names no window reaches every window, as before.
         let appState = AppState()
         appState.requestRefresh()
         XCTAssertTrue(appState.commandReaches(windowA))

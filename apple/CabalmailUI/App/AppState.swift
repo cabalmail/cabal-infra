@@ -222,9 +222,6 @@ public final class AppState {
     public init(sessionManager: SessionManager) {
         self.sessionManager = sessionManager
         mailStore = MailSessionStore(teardownGate: sessionManager.teardownGate)
-        // A data change behind the list (Mark All as Read, Empty Trash)
-        // reaches every window, as `requestRefresh()` with no window does.
-        mailStore.onListRefreshRequested = { [weak self] in self?.requestRefresh() }
         // The badge poller's count is bounded by the writes it may predate.
         sessionManager.pollers.boundInboxUnread = { [weak self] count, askedAt in
             self?.mailStore.polledInboxUnread(count, askedAt: askedAt) ?? count

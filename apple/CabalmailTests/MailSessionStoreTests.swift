@@ -106,10 +106,10 @@ final class MailSessionStoreTests: XCTestCase {
         XCTAssertNil(sidebar.errorMessage)
         XCTAssertEqual(owner.mailStore.counts.folderUnreadCounts["Projects"], 0)
         XCTAssertEqual(owner.mailStore.counts.folderTotalCounts[FolderTree.trashPath], 0)
-        XCTAssertEqual(owner.refreshRequestTick, 2, "both reach the owner's lists through the store's hook")
+        XCTAssertEqual(owner.mailStore.listRefreshTick, 2, "both reach the owner's lists through the store's hook")
         XCTAssertEqual(bystander.mailStore.counts.folderUnreadCounts["Projects"], 4)
         XCTAssertEqual(bystander.mailStore.counts.folderTotalCounts[FolderTree.trashPath], 10)
-        XCTAssertEqual(bystander.refreshRequestTick, 0)
+        XCTAssertEqual(bystander.mailStore.listRefreshTick, 0)
     }
 
     func testAMessageListWritesTheStoreItWasBuiltWith() async throws {
@@ -138,10 +138,10 @@ final class MailSessionStoreTests: XCTestCase {
             owner.mailStore.shields.confirmedRemovalRefs(folderPath: "Work"), [MessageRef(folder: "Work", uid: 2)]
         )
         XCTAssertEqual(owner.mailStore.counts.folderUnreadCounts["Work"], 0)
-        XCTAssertEqual(owner.refreshRequestTick, 1)
+        XCTAssertEqual(owner.mailStore.listRefreshTick, 1)
         XCTAssertEqual(bystander.mailStore.counts.folderUnreadCounts["Work"], 2)
         XCTAssertTrue(bystander.mailStore.shields.confirmedRemovalRefs(folderPath: "Work").isEmpty)
-        XCTAssertEqual(bystander.refreshRequestTick, 0)
+        XCTAssertEqual(bystander.mailStore.listRefreshTick, 0)
     }
 
     func testAReaderRelaysToTheStoreItWasWiredTo() async throws {

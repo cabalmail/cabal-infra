@@ -11,14 +11,13 @@ import CabalmailKit
 ///   attachments are pop-once (`ComposeRequestRouter` and `ComposeView`
 ///   depend on it), and a mailto compose aimed at the main window last in
 ///   front reaches only it, or every window when none is recorded.
-/// - The untargeted refresh senders: the sidebar's and the list's Mark All as
+/// - The data-change reloads: the sidebar's and the list's Mark All as
 ///   Read (cross-media plan decision 6, through `FolderMarkAllRead`) and
-///   Empty Trash bump `refreshRequestTick` aimed at no window, so every
-///   mounted list hard-reloads, even right after a command aimed at one.
-///   Because the target is one shared slot, that same bump also re-aims an
-///   earlier aimed tick SwiftUI has not delivered yet at every window; that
-///   defect is pinned on its own in
-///   `CommandTickCharacterizationTests.testAnUntargetedRefreshBeforeDeliveryReAimsAnEarlierAimedTickAtEveryWindow`.
+///   Empty Trash bump the mail store's `listRefreshTick` once, so every
+///   mounted list hard-reloads, and send no window command, so a command
+///   aimed at one window just before stays aimed there (#1824; pinned on
+///   its own in
+///   `CommandTickCharacterizationTests.testADataChangeReloadBeforeDeliveryLeavesAnEarlierAimedTickAlone`).
 ///   `FolderMarkAllReadTests` covers the mark-read side effects; these
 ///   tests add the window reach.
 @MainActor
@@ -121,31 +120,32 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         XCTAssertNil(appState.consumePendingComposeSeed(), "window B's router opens a blank draft")
     }
 
-    // MARK: - T4: untargeted refresh senders
+    // MARK: - T4: data-change reloads
 
-    func testSidebarMarkAllReadSendsARefreshThatReachesEveryWindow() async throws {
+    func testSidebarMarkAllReadReloadsEveryListAndLeavesAnAimedCommandAlone() async throws {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.success(4)])
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 4, total: 20)
         let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), mailStore: appState.mailStore)
         appState.requestReply(in: windowA)
-        let before = appState.refreshRequestTick
+        let before = appState.mailStore.listRefreshTick
 
         await model.markAllRead(folderPath: "Projects")
 
-        XCTAssertEqual(appState.refreshRequestTick, before + 1, "exactly one refresh")
+        XCTAssertEqual(appState.mailStore.listRefreshTick, before + 1, "exactly one reload")
+        XCTAssertEqual(appState.refreshRequestTick, 0, "no window command")
         XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertTrue(appState.commandReaches(windowB), "the refresh is aimed at no window, so B reloads too")
+        XCTAssertFalse(appState.commandReaches(windowB), "the reply stays aimed at A (#1824)")
         XCTAssertEqual(appState.replyRequestTick, 1, "the earlier command's tick is untouched")
         let calls = await imap.markFolderReadCalls
         XCTAssertEqual(calls, ["Projects"])
         XCTAssertNil(model.errorMessage)
     }
 
-    /// Mailbox > Mark All as Read (Option-Command-T) is aimed at one window,
-    /// but the confirmation's refresh is not: every window's list reloads.
-    func testAnAimedMarkFolderReadEndsInARefreshThatReachesEveryWindow() async throws {
+    /// Mailbox > Mark All as Read (Option-Command-T) is aimed at one window;
+    /// the confirmation's reload is no window command, so every list reloads.
+    func testAnAimedMarkFolderReadEndsInAReloadOfEveryList() async throws {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.success(2)])
         let appState = AppState()
@@ -158,12 +158,12 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         await model.markAllRead()
 
         XCTAssertEqual(appState.markFolderReadRequestTick, 1)
-        XCTAssertEqual(appState.refreshRequestTick, 1)
-        XCTAssertTrue(appState.commandReaches(windowB))
+        XCTAssertEqual(appState.mailStore.listRefreshTick, 1)
+        XCTAssertFalse(appState.commandReaches(windowB))
         XCTAssertNil(model.errorMessage)
     }
 
-    func testEmptyTrashZeroesTrashAndSendsARefreshThatReachesEveryWindow() async throws {
+    func testEmptyTrashZeroesTrashAndReloadsEveryList() async throws {
         let imap = FakeImapClient()
         await imap.scriptEmptyTrashResults([.success(())])
         let client = try TestFixtures.makeClient(imap: imap)
@@ -172,7 +172,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
         let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
         appState.requestReply(in: windowA)
-        let before = appState.refreshRequestTick
+        let before = appState.mailStore.listRefreshTick
 
         await model.emptyTrash()
 
@@ -182,12 +182,12 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["Trash"], 0)
         let snapshot = await client.envelopeCache.snapshot(for: "Trash")
         XCTAssertNil(snapshot, "the cached Trash rows are dropped")
-        XCTAssertEqual(appState.refreshRequestTick, before + 1, "exactly one refresh")
-        XCTAssertTrue(appState.commandReaches(windowB), "the refresh is aimed at no window")
+        XCTAssertEqual(appState.mailStore.listRefreshTick, before + 1, "exactly one reload")
+        XCTAssertFalse(appState.commandReaches(windowB), "the reply stays aimed at A (#1824)")
         XCTAssertNil(model.errorMessage)
     }
 
-    func testAFailedEmptyTrashLeavesTrashTheTickAndTheTargetAlone() async throws {
+    func testAFailedEmptyTrashLeavesTrashTheReloadAndTheTargetAlone() async throws {
         let imap = FakeImapClient()
         await imap.scriptEmptyTrashResults([.failure(CabalmailError.network("offline"))])
         let client = try TestFixtures.makeClient(imap: imap)
@@ -206,7 +206,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["Trash"], 10)
         let snapshot = await client.envelopeCache.snapshot(for: "Trash")
         XCTAssertEqual(snapshot?.envelopes.count, 2)
-        XCTAssertEqual(appState.refreshRequestTick, 0)
+        XCTAssertEqual(appState.mailStore.listRefreshTick, 0)
         XCTAssertFalse(appState.commandReaches(windowB), "the reply's target still stands")
     }
 
