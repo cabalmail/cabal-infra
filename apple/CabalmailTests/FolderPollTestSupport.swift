@@ -129,3 +129,81 @@ final class RecordingPollSubscriber: FolderPollSubscriber {
         released.append(ticket)
     }
 }
+
+/// A message-list test's world for the folder pollers: the refresh fixture's
+/// folder (Work) over one store, its pollers on a manual clock so no tick
+/// fires unless a test fires it, the idle stream scripted so the test
+/// drives every change, and the server one message ahead of the lists
+/// (6...1 against their 5...1). Lists opened through `twoListsOnWork()`
+/// share one client, as two windows on one folder do; teardown stops every
+/// list it made.
+@MainActor
+final class FolderPollListWorld {
+    let fixture = RefreshCharacterizationFixture()
+    let clock = ManualPollClock()
+    private var lists: [MessageListViewModel] = []
+
+    var imap: FakeImapClient { fixture.imap }
+    var pollers: FolderPollers { fixture.mailStore.folderPollers }
+
+    func setUp() async {
+        clock.install(on: pollers)
+        await imap.scriptIdle()
+        await fixture.scriptRefresh(messages: 6, page: fixture.newestFirst(6, through: 1))
+    }
+
+    func tearDown() async {
+        for list in lists { await list.stopWatching() }
+        lists = []
+        fixture.removeScratch()
+    }
+
+    /// A list on Work holding five rows, the folder's total at five.
+    func oneListOnWork() async throws -> MessageListViewModel {
+        let list = try await fixture.makeModel(loaded: fixture.newestFirst(5, through: 1), total: 5)
+        lists.append(list)
+        return list
+    }
+
+    /// `oneListOnWork()`, and the same folder opened again on its client and
+    /// store, holding the same: one folder in two windows.
+    func twoListsOnWork() async throws -> (MessageListViewModel, MessageListViewModel) {
+        let first = try await oneListOnWork()
+        let second = fixture.reopen(first)
+        second.envelopes = second.placedInFolder(fixture.rows(fixture.newestFirst(5, through: 1)))
+        second.window!.totalMessages = 5
+        lists.append(second)
+        return (first, second)
+    }
+
+    /// Work's poller through `list`'s client.
+    func poller(_ list: MessageListViewModel) throws -> FolderPoller {
+        try XCTUnwrap(pollers.poller(for: "Work", through: list.client))
+    }
+
+    func emit() async {
+        await imap.emitIdle(.exists(6), folder: fixture.folderPath)
+    }
+
+    /// Emits a change on Work with the next STATUS held, and returns once
+    /// that STATUS is parked.
+    func emitHoldingStatus(file: StaticString = #filePath, line: UInt = #line) async throws {
+        let imap = imap
+        let sent = await imap.statusCalls.count
+        await imap.holdNext(.status)
+        await emit()
+        try await awaitArrival(file: file, line: line) { await imap.statusCalls.count > sent }
+        await imap.awaitHeld(.status)
+    }
+
+    /// Returns once `idle(folder:)` has been called `count` times in all.
+    func awaitStreams(_ count: Int = 1, file: StaticString = #filePath, line: UInt = #line) async throws {
+        let imap = imap
+        try await awaitArrival(file: file, line: line) { await imap.idleFolders.count >= count }
+    }
+
+    func awaitTerminations(_ count: Int, file: StaticString = #filePath, line: UInt = #line) async throws {
+        let imap = imap
+        try await awaitArrival(file: file, line: line) { await imap.idleTerminations == count }
+    }
+}

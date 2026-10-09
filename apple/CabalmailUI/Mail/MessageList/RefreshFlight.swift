@@ -12,8 +12,8 @@ import Foundation
 ///
 /// Asks are numbered in order. A pass answers every ask made before its
 /// STATUS was asked, once it ends without being cancelled or superseded:
-/// every ask before it began, or, for a reset's pass, which is handed the
-/// STATUS its probe asked for, every ask before that probe.
+/// every ask before it began, or, for a pass handed a STATUS asked for
+/// earlier (a reset's probe, a folder poll), every ask before that STATUS.
 struct RefreshFlight {
     /// A pass in flight: its number, and the last ask it answers.
     struct Pass: Equatable {

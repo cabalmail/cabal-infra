@@ -47,8 +47,8 @@ extension MessageListViewModel {
         }
         // The depth an in-place refresh re-walks to. A fresh search starts
         // from one page and pages in from there (`MailSearchSession.loadMore`);
-        // a refresh of an active search (pull, the 60-second background
-        // pass) re-fetches as many rows as the user has already paged in,
+        // a refresh of an active search (pull, a poll of the folder)
+        // re-fetches as many rows as the user has already paged in,
         // so it can't silently truncate their scroll position back to one
         // page. Cost stays proportional to the depth the user opted into.
         let targetDepth = preserveDepth && isSearchActive
@@ -74,7 +74,7 @@ extension MessageListViewModel {
     /// first (a pill is a search, and its counts and the sidebar badge would
     /// otherwise stop moving until it is left, #1819), then the submitted
     /// search again at the depth already paged in. `prefetched` is a STATUS the caller already asked
-    /// for (`hardReload`), used rather than asked for again. The search
+    /// for (`hardReload`, the folder's poller), used rather than asked for again. The search
     /// surface has no folder to count.
     func refreshSearch(prefetched: PrefetchedStatus? = nil) async {
         await window?.refreshCounts(prefetched: prefetched)

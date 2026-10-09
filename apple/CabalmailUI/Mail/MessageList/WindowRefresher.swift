@@ -163,9 +163,9 @@ struct WindowRefresher {
             try await refreshWindow(reading, status: status, generation: generation, uidValidity: uidValidity)
             window.host?.errorMessage = nil
         } catch {
-            // A refresh whose task was cancelled (the 60-second poll's, the
-            // watcher's, when the list leaves the screen) has nothing to
-            // report; "cancelled" would stay on a list that is fine (#1816).
+            // A refresh whose task was cancelled (a folder poll's hand-off,
+            // when the list leaves the screen) has nothing to report;
+            // "cancelled" would stay on a list that is fine (#1816).
             guard !Task.isCancelled else { return }
             window.host?.errorMessage = error.localizedDescription
         }

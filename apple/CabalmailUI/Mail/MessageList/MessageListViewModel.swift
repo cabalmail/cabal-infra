@@ -112,18 +112,6 @@ final class MessageListViewModel {
         set { search.isActive = newValue }
     }
 
-    /// Foreground-only change watcher (`MailboxWatcher`, which polls folder
-    /// status). Nil when the view is offscreen; started on
-    /// `task`, stopped on `onDisappear`. Separated from the refresh path so
-    /// UIDVALIDITY changes, pagination, and flag toggles never fight the
-    /// watcher for the main actor.
-    private var watcher: MailboxWatcher?
-    private var watcherTask: Task<Void, Never>?
-    /// Coalescing timestamp — if `.changed` fires in bursts (e.g. server
-    /// delivers three messages in quick succession) we collapse them into
-    /// one refresh by gating on elapsed time.
-    private var lastRefreshFromWatcher: Date = .distantPast
-
     // A refresh dispatched just before a write lands returns the row's
     // pre-write server state; applying it verbatim would resurrect a row
     // just moved or revert a flag just toggled. Every write, this list's or
@@ -211,56 +199,29 @@ final class MessageListViewModel {
     /// animating out (`rowDisposalPhases`).
     var pendingRemovedRefs: Set<MessageRef> { window?.pendingRemovedRefs ?? mailStore.shields.pendingMoveRefs }
 
-    /// Start the watcher-driven auto-refresh loop. Called from the view's
-    /// `.task` after `loadInitial()` settles. The watcher runs on its own
-    /// actor and emits `.changed` whenever a folder-status poll shows an
-    /// arrival (`UIDNEXT` advanced) or a removal (the count dropped); we
-    /// collapse bursts to a single refresh by gating on elapsed time, since
-    /// one poll can report both.
+    /// Puts the list on its folder's poller (`MailSessionStore.folderPollers`),
+    /// which asks the folder's STATUS on each change its watcher reports and
+    /// every 60 seconds, once for every list showing the folder, and hands it
+    /// to each as its refresh (`FolderPollSubscriber`). Called from the view's
+    /// `.task` after `loadInitial()` settles, and again when the list comes
+    /// back on screen; a list already on the poller stays as it is.
     func startWatching() async {
         // The global search surface has no folder to watch.
-        guard let folder, watcher == nil else { return }
-        let client = self.client
-        let watcher = MailboxWatcher(
-            folder: folder.path,
-            streamFactory: { folder in
-                try await client.imapClient.idle(folder: folder)
-            }
-        )
-        self.watcher = watcher
-        let stream = await watcher.start()
-        watcherTask = Task { [weak self] in
-            for await event in stream {
-                guard !Task.isCancelled, let self else { break }
-                if case .changed = event {
-                    await self.handleWatcherChanged()
-                }
-            }
-        }
+        guard let folder else { return }
+        mailStore.folderPollers.subscribe(self, to: folder.path, through: client)
     }
 
-    /// Tear down the watcher. View hooks this into `.onDisappear` so the
-    /// status polling stops when the list isn't on screen — no API calls
-    /// for a mailbox the user isn't looking at. The window's own tasks stop
-    /// with it, before any suspension.
+    /// Takes the list off its folder's poller, from the view's `.onDisappear`
+    /// -- the last list off a folder stops its watcher and tick, so no API
+    /// calls go out for a mailbox the user isn't looking at -- and stops the
+    /// window's own tasks: the page loads, the scroll-settle load, the
+    /// debounced snapshot write and the bottom prefetch. Both happen before
+    /// any suspension, the poller first, so a settle load scheduled as its
+    /// ticket comes back is cancelled too. Safe on a list on no poller.
     func stopWatching() async {
-        watcherTask?.cancel()
-        watcherTask = nil
+        let stopping = folder.flatMap { mailStore.folderPollers.unsubscribe(self, from: $0.path, through: client) }
         window?.cancelTasks()
-        // Let go of the watcher before waiting for it to stop, so a list back
-        // on screen in the meantime starts a fresh one (`startWatching`).
-        let stopping = watcher
-        watcher = nil
-        await stopping?.stop()
-    }
-
-    private func handleWatcherChanged() async {
-        // Coalesce bursts: one status poll can report both an arrival and a
-        // removal, and one refresh covers both.
-        let now = Date()
-        guard now.timeIntervalSince(lastRefreshFromWatcher) > 1 else { return }
-        lastRefreshFromWatcher = now
-        await refresh()
+        await stopping?.awaitWatcherStop()
     }
 
     /// Brings the list up to date with the server: while a search is
@@ -270,10 +231,9 @@ final class MessageListViewModel {
     /// at once.
     func refresh(prefetched: PrefetchedStatus? = nil, startingOver: Bool = false) async {
         // Re-route while a search is showing — pull-to-refresh and the
-        // watcher / 60-second background refreshes shouldn't silently wipe
-        // active search results back to the folder view. Re-running the
-        // search keeps the result set fresh against any concurrent
-        // mailbox churn.
+        // folder poller's refreshes shouldn't silently wipe active search
+        // results back to the folder view. Re-running the search keeps the
+        // result set fresh against any concurrent mailbox churn.
         if isSearchActive {
             await refreshSearch(prefetched: prefetched)
             return
@@ -414,6 +374,41 @@ extension MessageListViewModel: FolderWindowHost {
     /// Select mode is on with rows picked: a re-read waits rather than
     /// reshuffle the rows under the selection being built.
     var isBuildingBulkSelection: Bool { bulkMode && !selectedRefs.isEmpty }
+}
+
+// MARK: - The folder's poller
+
+// The list's half of its folder's poller (`FolderPollers`): a STATUS the
+// poller asks once for every list on the folder reaches this one as its own
+// refresh's would -- the ask numbered and the loading held before it goes
+// out, the answer through the routed `refresh(prefetched:startingOver:)`
+// above, a failure shown as that refresh would show it.
+extension MessageListViewModel: FolderPollSubscriber {
+    func beginFolderPoll() -> FolderPollTicket? {
+        guard let window else { return nil }
+        // A refresh holds the window from before its STATUS
+        // (`WindowRefresher.refresh`); a search's takes its counts holding
+        // nothing until the search runs again (`refreshSearch`).
+        let holdsLoading = !isSearchActive
+        if holdsLoading { window.holdLoading() }
+        return FolderPollTicket(ask: window.refreshFlight.ask(), holdsLoading: holdsLoading)
+    }
+
+    func folderPollFailed(_ error: Error, ticket: FolderPollTicket) async {
+        if isSearchActive {
+            // As `refreshSearch` takes a STATUS that fails: the counts stay,
+            // and the search runs again.
+            await runSearch(resetFilterTab: false, preserveDepth: true, rerun: true)
+        } else if let window, !window.refreshFlight.hasAnswered(ticket.ask) {
+            // As a refresh's own failed STATUS shows (`refreshPass`), unless a
+            // pass of the list's own, asked after it, has answered for it.
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func releaseFolderPoll(_ ticket: FolderPollTicket) {
+        if ticket.holdsLoading { window?.releaseLoading() }
+    }
 }
 
 // MARK: - Mail events
