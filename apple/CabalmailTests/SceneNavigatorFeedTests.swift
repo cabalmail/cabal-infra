@@ -66,7 +66,7 @@ final class SceneNavigatorFeedTests: XCTestCase {
     ) -> SceneNavigator {
         SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: seed,
-            feedsLaunchTarget: { _ in (await launch()).map { .init(scope: $0) } }
+            feedsLaunchTarget: { _, _ in (await launch()).map { .init(scope: $0) } }
         )
     }
 

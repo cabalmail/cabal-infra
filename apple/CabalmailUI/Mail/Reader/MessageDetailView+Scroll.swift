@@ -111,16 +111,18 @@ extension MessageDetailView {
     }
 
     /// Relays the current in-message scroll position to the nav coordinator:
-    /// the server cursor and the local position cache. `offset` is set for
-    /// plain text, `anchor` for HTML; `atTop` clears both rather than storing
-    /// a trivial position. The coordinator debounces and only writes on
-    /// change, and ignores it unless the cursor is still on this message.
+    /// the local position cache, and the server cursor when this reader's
+    /// window records (`WindowRecorder`). `offset` is set for plain text,
+    /// `anchor` for HTML; `atTop` clears both rather than storing a trivial
+    /// position. The coordinator debounces and only writes on change, and
+    /// ignores it unless the cursor is still on this message.
     func reportMessageScroll(offset: Int?, anchor: String?, fraction: Double? = nil, atTop: Bool) {
-        appState.navCoordinator?.recordMessageScroll(
-            messageRef,
-            position: ReadingPosition(anchor: anchor, offset: offset, fraction: fraction),
-            atTop: atTop
-        )
+        let position = ReadingPosition(anchor: anchor, offset: offset, fraction: fraction)
+        if let navigator {
+            navigator.recordMessageScroll(messageRef, position: position, atTop: atTop)
+        } else {
+            appState.navCoordinator?.recordMessageScroll(messageRef, position: position, atTop: atTop)
+        }
     }
 
     /// Throttled plain-text scroll reporter: `onScrollGeometryChange` fires

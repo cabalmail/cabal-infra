@@ -61,7 +61,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
     ) async -> (navigator: SceneNavigator, compact: UUID) {
         let navigator = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .mail,
-            feedsLaunchTarget: { _ in (await lookup.lookup()).map { .init(scope: $0) } }
+            feedsLaunchTarget: { _, _ in (await lookup.lookup()).map { .init(scope: $0) } }
         )
         let compact = UUID()
         await navigator.mailTreeAppeared(compact, isWide: false)
@@ -164,7 +164,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let lookup = HeldLookup()
         let navigator = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in (await lookup.lookup()).map { .init(scope: $0) } }
+            feedsLaunchTarget: { _, _ in (await lookup.lookup()).map { .init(scope: $0) } }
         )
         let landing = Task { await navigator.mailTreeAppeared(UUID(), isWide: true) }
         try await lookup.waitUntilEntered()
@@ -272,7 +272,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let opened = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in .init(scope: .all) }
+            feedsLaunchTarget: { _, _ in .init(scope: .all) }
         )
         await opened.mailTreeAppeared(UUID(), isWide: true)
         XCTAssertEqual(opened.feeds.scope, .all)
@@ -283,7 +283,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let lookup = HeldLookup()
         let replaced = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in (await lookup.lookup()).map { .init(scope: $0) } }
+            feedsLaunchTarget: { _, _ in (await lookup.lookup()).map { .init(scope: $0) } }
         )
         let landing = Task { await replaced.mailTreeAppeared(UUID(), isWide: true) }
         try await lookup.waitUntilEntered()

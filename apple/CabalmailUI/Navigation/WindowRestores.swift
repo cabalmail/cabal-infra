@@ -14,10 +14,10 @@ import CabalmailKit
 ///
 /// Each slot is pop-once: the view it is aimed at takes it, and nothing else
 /// sees it after. A message restore matches its folder exactly; the reader's
-/// position matches its message too. The coordinator still primes the
-/// working cursor from the same cursor (`schedule(_:priming:)`), so the
-/// cursor's UIDVALIDITY and reading fraction stay with the message they came
-/// with (#1873).
+/// position matches its message too. While the window records
+/// (`WindowRecorder`), the coordinator also primes the working cursor from
+/// the same cursor (`schedule(_:priming:)`), so the cursor's UIDVALIDITY and
+/// reading fraction stay with the message they came with (#1873).
 @Observable
 @MainActor
 final class WindowRestores {
@@ -76,9 +76,11 @@ final class WindowRestores {
 
     /// Parks a restore of `cursor` for its folder's list, and primes
     /// `coordinator`'s working cursor from it, as one step: a landing, a
-    /// navigation, or a layout swap re-parking the open message.
-    func schedule(_ cursor: NavState, priming coordinator: NavStateCoordinator) {
-        coordinator.primeCursor(for: cursor)
+    /// navigation, or a layout swap re-parking the open message. A window
+    /// that does not record passes no coordinator (`WindowRecorder`), so it
+    /// parks without moving the cursor another window keeps.
+    func schedule(_ cursor: NavState, priming coordinator: NavStateCoordinator?) {
+        coordinator?.primeCursor(for: cursor)
         park(cursor)
     }
 

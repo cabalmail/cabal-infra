@@ -13,6 +13,12 @@ import CabalmailKit
 /// App-level `@Environment` tree hoisted in `CabalmailApp` / `CabalmailMacApp`.
 public struct ContentView: View {
     @Environment(AppState.self) private var appState
+    /// The window's identity, for the navigator it builds.
+    @Environment(\.commandWindowID) private var windowID
+    /// The window's route, kept with its scene so a window the system
+    /// restores comes back where it was (`StoredRoute`). Here, the one view a
+    /// window keeps mounted across a sign-out, which clears it.
+    @SceneStorage("route") private var storedRoute: Data?
 
     public init() {}
 
@@ -20,13 +26,14 @@ public struct ContentView: View {
         Group {
             switch appState.status {
             case .signedIn:
-                SignedInRootView(appState: appState)
+                SignedInRootView(appState: appState, windowID: windowID, storedRoute: $storedRoute)
             case .restoring:
                 RestoringSplash()
             default:
                 SignInView()
             }
         }
+        .onChange(of: appState.accountForgottenTick) { storedRoute = nil }
     }
 }
 
