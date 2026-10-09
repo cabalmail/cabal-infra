@@ -98,9 +98,9 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
         model.unseen = 2
         await fixture.scriptRefresh(messages: 9, page: [9], unseen: 5)
 
-        await model.window.setSort(subjectOrder)
+        await model.window!.setSort(subjectOrder)
 
-        XCTAssertEqual(model.window.sortCriterion, subjectOrder, "kept for the folder view")
+        XCTAssertEqual(model.window!.sortCriterion, subjectOrder, "kept for the folder view")
         XCTAssertEqual(model.envelopes.map(\.uid), [1, 3, 2], "the server's order")
         let statuses = await fixture.statusCalls()
         XCTAssertEqual(statuses, ["Work flagged=true"], "the probe")
@@ -127,17 +127,17 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
             fixture.searchResult(older),
         ])
         await model.selectFilter(.unread)
-        await model.loadMoreSearchResults()
+        await model.search.loadMore()
         XCTAssertEqual(model.envelopes.count, 100)
         await fixture.scriptRefresh(messages: 100, page: [100], unseen: 100)
 
-        await model.window.setSort(subjectOrder)
+        await model.window!.setSort(subjectOrder)
 
         XCTAssertEqual(model.envelopes.count, 100, "every row paged in stays")
         XCTAssertEqual(model.envelopes.map(\.uid), fixture.newestFirst(100, through: 1), "in the server's order")
-        XCTAssertEqual(model.window.sortCriterion, subjectOrder)
+        XCTAssertEqual(model.window!.sortCriterion, subjectOrder)
         XCTAssertNil(model.errorMessage)
-        XCTAssertNil(model.searchNextCursor)
+        XCTAssertNil(model.search.nextCursor)
         let statuses = await fixture.statusCalls()
         XCTAssertEqual(statuses, ["Work flagged=true"], "the probe")
         let searches = await fixture.imap.searchCalls
@@ -157,7 +157,7 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
         XCTAssertFalse(model.isSearchActive)
         XCTAssertEqual(model.filterTab, .all)
         XCTAssertEqual(model.envelopes.map(\.uid), [3, 2, 1])
-        XCTAssertEqual(model.window.totalMessages, 3)
+        XCTAssertEqual(model.window!.totalMessages, 3)
         XCTAssertEqual(model.unseen, 1)
         XCTAssertEqual(model.flagged, 1)
         XCTAssertNil(model.errorMessage)

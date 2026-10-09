@@ -43,7 +43,7 @@ final class RefreshCharacterizationFixture {
         let model = try TestFixtures.makeModel(
             imap: imap, envelopes: rows(loaded, flags: flags), folderPath: folderPath, mailStore: mailStore
         )
-        model.window.totalMessages = total
+        model.window!.totalMessages = total
         await track(model.client)
         return model
     }
@@ -52,7 +52,7 @@ final class RefreshCharacterizationFixture {
     /// over `model`'s client, preferences and mail store.
     func reopen(_ model: MessageListViewModel) -> MessageListViewModel {
         MessageListViewModel(
-            folder: model.folder, client: model.client, preferences: model.preferences, mailStore: mailStore
+            folder: model.folder!, client: model.client, preferences: model.preferences, mailStore: mailStore
         )
     }
 
@@ -191,27 +191,27 @@ final class RefreshCharacterizationFixture {
 
     /// Puts the window where `performLoadMore`'s front trim leaves it.
     func trimFront(_ model: MessageListViewModel, to start: UInt32) {
-        model.window.windowStart = start
-        model.window.hasTrimmedFront = true
+        model.window!.windowStart = start
+        model.window!.hasTrimmedFront = true
     }
 
     func windowStart(_ model: MessageListViewModel) -> UInt32 {
-        model.window.windowStart
+        model.window!.windowStart
     }
 
     func stagedBottomStart(_ model: MessageListViewModel) -> UInt32? {
-        model.window.bottomPrefetch?.start
+        model.window!.bottomPrefetch?.start
     }
 
     func awaitBottomPrefetch(_ model: MessageListViewModel) async {
-        await model.window.bottomPrefetchTask?.value
+        await model.window!.bottomPrefetchTask?.value
     }
 
     func awaitLoadMore(_ model: MessageListViewModel) async {
-        await model.window.loadMoreTask?.value
+        await model.window!.loadMoreTask?.value
     }
 
     func awaitLoadWindow(_ model: MessageListViewModel) async {
-        await model.window.loadWindowTask?.value
+        await model.window!.loadWindowTask?.value
     }
 }

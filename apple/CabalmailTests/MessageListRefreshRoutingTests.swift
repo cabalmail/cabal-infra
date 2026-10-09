@@ -86,7 +86,7 @@ final class MessageListRefreshRoutingTests: XCTestCase {
         XCTAssertEqual(statuses, ["Work flagged=true"], "the reload's own STATUS, used once")
         XCTAssertEqual(model.unseen, 5)
         XCTAssertEqual(model.flagged, 1)
-        XCTAssertEqual(model.window.totalMessages, 9)
+        XCTAssertEqual(model.window!.totalMessages, 9)
         XCTAssertEqual(model.envelopes.map(\.uid), [8, 6])
         XCTAssertEqual(model.filterTab, .unread)
     }
@@ -105,7 +105,7 @@ final class MessageListRefreshRoutingTests: XCTestCase {
         // and fails, as a cancelled request does.
         await fixture.imap.scriptSearchPages([fixture.searchResult(firstPage, cursor: "c1")])
         await model.selectFilter(.unread)
-        XCTAssertEqual(model.searchNextCursor, "c1")
+        XCTAssertEqual(model.search.nextCursor, "c1")
         await fixture.scriptRefresh(messages: 100, page: [100], unseen: 60)
         await fixture.imap.holdNextSearch()
 
@@ -117,11 +117,11 @@ final class MessageListRefreshRoutingTests: XCTestCase {
 
         XCTAssertNil(model.errorMessage)
         XCTAssertEqual(model.envelopes.count, Self.searchPage)
-        XCTAssertEqual(model.searchNextCursor, "c1", "the rows still page on")
+        XCTAssertEqual(model.search.nextCursor, "c1", "the rows still page on")
         XCTAssertFalse(model.isLoading)
     }
 
-    private static let searchPage = MessageListViewModel.searchPageSize
+    private static let searchPage = MailSearchSession.pageSize
 
     // MARK: - #1822: the sort menu during a search
 
@@ -159,7 +159,7 @@ final class MessageListRefreshRoutingTests: XCTestCase {
         await fixture.imap.scriptSearch(fixture.searchResult(fixture.rows([3, 1])))
         await fixture.imap.holdNext(.status)
 
-        let sort = Task { await model.window.setSort(subjectOrder) }
+        let sort = Task { await model.window!.setSort(subjectOrder) }
         await fixture.imap.awaitHeld(.status)
         await model.selectFilter(.unread)
         await fixture.imap.releaseHeld(.status)
@@ -167,7 +167,7 @@ final class MessageListRefreshRoutingTests: XCTestCase {
 
         XCTAssertTrue(model.isSearchActive)
         XCTAssertEqual(model.envelopes.map(\.uid), [3, 1])
-        XCTAssertEqual(model.window.sortCriterion, subjectOrder)
+        XCTAssertEqual(model.window!.sortCriterion, subjectOrder)
         XCTAssertEqual(model.unseen, 2, "the probe's counts")
         let searches = await fixture.imap.searchCalls
         let tops = await fixture.topPageCalls()
