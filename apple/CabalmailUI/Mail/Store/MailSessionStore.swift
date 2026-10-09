@@ -7,9 +7,11 @@ import CabalmailKit
 /// `counts`, the folder badges and the Inbox count behind the app badge;
 /// `shields`, the one record of writes in flight, which keeps a refresh from
 /// undoing a write made anywhere and a STATUS from counting it twice;
-/// `events`, the changes posted for every message list and reader; and
+/// `events`, the changes posted for every message list and reader;
 /// `mutations`, the one place the app's writes go through (a notification's
-/// actions aside, #1973), which uses the other three. The first three know
+/// actions aside, #1973), which uses the other three; and `folderPollers`,
+/// the change watching of the folders open in message lists, one watcher and
+/// tick per folder however many windows show it. The first three know
 /// nothing of each other.
 ///
 /// `AppState` owns one (`mailStore`) for its whole life and resets it in place
@@ -23,6 +25,10 @@ public final class MailSessionStore {
     let events = MailEvents()
     /// The app's writes to mail go through here (`MailMutationService`).
     let mutations: MailMutationService
+    /// The change watching of the folders open in message lists: one watcher
+    /// and tick per folder, whose STATUS every list on it takes
+    /// (`FolderPollers`).
+    let folderPollers: FolderPollers
 
     /// The session lifecycle's record of which clients' sessions have ended
     /// (`AppState.teardownGate`, which marks a client ended before sign-out
@@ -40,6 +46,7 @@ public final class MailSessionStore {
     /// any other gate would never see that sign-out ended a client.
     init(teardownGate: SessionTeardownGate) {
         self.teardownGate = teardownGate
+        folderPollers = FolderPollers(teardownGate: teardownGate)
         mutations = MailMutationService(counts: counts, shields: shields, events: events, teardownGate: teardownGate)
         mutations.onListRefreshRequested = { [weak self] in self?.requestListRefresh() }
     }
@@ -201,10 +208,13 @@ public final class MailSessionStore {
     }
 
     /// Sign-out: what the store knows about the account goes, so the next
-    /// account starts from none of it (#1825). The events have nothing to
-    /// forget: each was delivered when it was posted, and none is kept.
+    /// account starts from none of it (#1825), and every folder's poller
+    /// stops, so no STATUS of the ended session goes out or lands, and its
+    /// client is let go. The events have nothing to forget: each was
+    /// delivered when it was posted, and none is kept.
     func forgetAccount() {
         counts.reset()
         shields.reset()
+        folderPollers.stopAll()
     }
 }
