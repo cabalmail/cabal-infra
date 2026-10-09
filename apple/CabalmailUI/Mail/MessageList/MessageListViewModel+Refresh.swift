@@ -93,8 +93,9 @@ extension MessageListViewModel {
         window.holdLoading()
         defer { window.releaseLoading() }
         guard let probe = await window.resetForHardReload() else { return }
-        // The reset wiped the rows on screen, a pill's results among them, so
-        // the re-run below walks one page, as a fresh pill does.
+        // The reset wiped only the folder window's rows. A pill's results
+        // live in the search, so they go here, and the re-run below walks one
+        // page, as a fresh pill does.
         if search.showsResults { search.rows.removeAll() }
         await refresh(prefetched: probe, startingOver: true)
     }

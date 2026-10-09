@@ -102,7 +102,9 @@ extension MessageListViewModel {
         await applyFilter(filter)
     }
 
-    /// `selectFilter`'s effect on the list, without recording the choice.
+    /// `selectFilter`'s effect on the list, without recording the pill it
+    /// picks. Leaving Unread or Flagged for All is still recorded, by
+    /// `filterTab`'s `didSet`, as it is by every route there.
     func applyFilter(_ filter: MessageFilter) async {
         filterTab = filter
         guard filter != .all else {
