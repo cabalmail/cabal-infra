@@ -6,11 +6,11 @@ import CabalmailKit
 /// AppState split into per-window navigation and a per-account session, the
 /// mail store layer, and focused-window commands replacing the integer tick
 /// counters). It pins what `MessageListViewModel`'s folder refresh entry
-/// points do today -- the calls the 60-second poll, the IDLE watcher,
-/// pull-to-refresh, the Refresh command, the sort menu and the first load
-/// make -- so the refactor shows any change in behaviour explicitly. What
-/// they do while a search or a pill is showing is pinned in
-/// `MessageListSearchRefreshCharacterizationTests`.
+/// points do today -- the calls the folder's poller (its change watcher and
+/// 60-second tick), pull-to-refresh, the Refresh command, the sort menu and
+/// the first load make -- so the refactor shows any change in behaviour
+/// explicitly. What they do while a search or a pill is showing is pinned
+/// in `MessageListSearchRefreshCharacterizationTests`.
 ///
 /// Protects the background refresh's keep-the-rows catch (750dba7a, the
 /// behaviour #1796 brought hardReload, setSort and clearSearch in line
@@ -165,7 +165,7 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
 
     /// The reset's pass runs on the STATUS its probe asked for, so it answers
     /// only the refreshes asked for before that probe. One asked for while the
-    /// probe was out (the watcher, seeing UID 4 arrive) gets a pass of its
+    /// probe was out (a folder poll after UID 4 arrived) gets a pass of its
     /// own, which asks afresh, so the count it was asked for shows.
     func testARefreshAskedForWhileAResetsProbeIsOutGetsAFreshStatus() async throws {
         let model = try await fixture.makeModel(loaded: [3, 2, 1], total: 3)
@@ -209,10 +209,9 @@ final class MessageListRefreshCharacterizationTests: XCTestCase {
         XCTAssertEqual(model.envelopes.map(\.uid), [2, 1])
     }
 
-    /// The negative control for the pull test, and the path the view's
-    /// 60-second poll takes (it calls `refresh()` directly from its `.task`).
-    /// The watcher's refresh runs inside `watcherTask`, which `stopWatching()`
-    /// cancels when the list disappears, so it takes the same path. A refresh
+    /// The negative control for the pull test, and the path a folder poll's
+    /// refresh takes: the poller runs it in a task of the list's own, which
+    /// `stopWatching()` cancels when the list disappears. A refresh
     /// in flight when its task is cancelled (the list leaves the screen, for
     /// instance under a pushed reader) is dropped without painting
     /// "cancelled" over the list, which the view would keep in `@State` and

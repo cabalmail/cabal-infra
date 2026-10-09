@@ -125,8 +125,8 @@ struct WindowRefresher {
         let startedAt = prefetched?.askedAt ?? ContinuousClock.now
         var generation = window.alignment.generation
         do {
-            // flagged: true asks for the SEARCH FLAGGED count too -- this is the
-            // one status call that drives the filter-pill counts.
+            // flagged: true asks for the SEARCH FLAGGED count too, which feeds
+            // the Flagged pill's count.
             let status: FolderStatus
             if let prefetched {
                 status = prefetched.status

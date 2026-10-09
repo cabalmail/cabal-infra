@@ -98,9 +98,10 @@ public protocol ImapClient: Sendable {
     /// immediately-finished stream as a clean exit and backs off, which is
     /// the right behavior for those transports.
     ///
-    /// `MessageListViewModel` runs a `MailboxWatcher` over the resulting
+    /// The app's `FolderPoller` runs a `MailboxWatcher` over the resulting
     /// stream so a reported EXISTS / EXPUNGE / FETCH triggers an envelope
-    /// refresh. The watcher itself holds the reconnect / backoff policy.
+    /// refresh of every message list showing the folder. The watcher itself
+    /// holds the reconnect / backoff policy.
     func idle(folder: String) async throws -> AsyncThrowingStream<IdleEvent, Error>
 }
 

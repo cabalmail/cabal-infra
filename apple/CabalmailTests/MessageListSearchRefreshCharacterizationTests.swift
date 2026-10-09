@@ -6,7 +6,7 @@ import CabalmailKit
 /// the AppState split, the mail store layer and the focused-window commands).
 /// It pins what `MessageListViewModel`'s refresh entry points do while a
 /// search or a filter pill is showing, and on the way in and out of one --
-/// the search scope's poll, a pill's background refresh, a sort picked
+/// the search scope's refresh, a pill's background refresh, a sort picked
 /// mid-search, the search banner's clear button, and the sticky pill a
 /// folder opens on -- so the refactor shows any change in behaviour
 /// explicitly. The folder-mode half is `MessageListRefreshCharacterizationTests`.
@@ -34,8 +34,8 @@ final class MessageListSearchRefreshCharacterizationTests: XCTestCase {
 
     // MARK: - Background refresh
 
-    /// The VM half of "the poll is suppressed in search scope": with no search
-    /// showing there is no folder to STATUS, so neither entry point calls out.
+    /// The search surface joins no folder poller, and with no search showing
+    /// there is no folder to STATUS, so neither entry point calls out.
     func testSearchScopeWithNoSearchMakesNoWireCall() async throws {
         let model = try await fixture.makeSearchScopeModel()
 

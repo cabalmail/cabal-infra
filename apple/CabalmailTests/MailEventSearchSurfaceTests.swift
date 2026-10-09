@@ -5,7 +5,7 @@ import CabalmailKit
 // The search surface hears the mail store's events like any list, matched by
 // each row's own ref (#1877): archiving, deleting or moving a search result
 // from the reader left its row, because the list's observers took only the
-// signals that named its folder, and the search surface's folder is a
+// signals that named its folder, and the search surface's folder was a
 // sentinel. The selection reactions are applied as the list's view does
 // (`ListViewSelection`).
 @MainActor

@@ -125,10 +125,10 @@ final class MessageListSearchStandDownTests: XCTestCase {
 
     // MARK: - A refresh still out
 
-    /// A refresh's top page that lands under the matches would have been
-    /// folded into them, and, as the window then fits one top page, pruned
-    /// them as gone from the folder. The search doesn't lower `isLoading`
-    /// under the refresh either (#1820).
+    /// A refresh's top page that lands under the matches would write its
+    /// rows into the folder window the matches cover, and into the folder's
+    /// snapshot. The search doesn't lower `isLoading` under the refresh
+    /// either (#1820).
     func testARefreshsTopPageStillOutWhenAPillStartsLandsNowhere() async throws {
         let model = try await world.openedList()
         let before = await world.snapshotUIDs(model)

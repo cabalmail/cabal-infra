@@ -80,8 +80,8 @@ enum DraftReplacementPolicy {
     ///
     /// A save reports whether or not it retired anything. A first save
     /// retires nothing, but it is still news: the list the user is sitting
-    /// in does not have the new copy, and its watcher polls `folderStatus`
-    /// on a 30 s cycle rather than being told (#1083). An empty
+    /// in does not have the new copy, and its folder's watcher polls
+    /// `folderStatus` every 30 s rather than being told (#1083). An empty
     /// `retiredUIDs` prunes no rows and `resolve` reads it as `.ignore`, so
     /// the only thing the signal buys is the refresh — which is exactly the
     /// missing half.

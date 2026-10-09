@@ -3,7 +3,7 @@ import CabalmailKit
 @testable import CabalmailUI
 
 // "This folder only" on the global search surface (#1510). The surface's own
-// folder is a sentinel, so the toggle was hidden there — the only place the
+// folder was a sentinel, so the toggle was hidden there — the only place the
 // Filters sheet is presented — and single-folder search was unreachable. It
 // now narrows to the anchor the wide layout feeds in from the sidebar.
 @MainActor
@@ -69,7 +69,7 @@ final class SearchFolderScopeTests: XCTestCase {
         let model = try makeSearchModel(imap: imap)
         XCTAssertNil(model.search.folder, "the iPhone / visionOS search tab has nothing to narrow to")
 
-        // Even a stray flag can't send the sentinel's empty path.
+        // Even a stray flag can't send a folder: there is none to narrow to.
         model.searchQuery = "invoice"
         model.search.filters.thisFolderOnly = true
         await model.runSearch()

@@ -60,11 +60,12 @@ extension MessageListViewModel {
         window?.holdLoading()
         defer { window?.releaseLoading() }
         // A folder page or refresh still out was addressed to the rows this
-        // search replaces; landing later, it would mix folder rows into the
-        // results (#1870). They stand down now, and again as the results
-        // land (`searchWillShowResults`), for any that started meanwhile. A
-        // search that ends without taking the list over leaves the folder
-        // rows they were filling.
+        // search replaces; landing later, it would write folder rows into the
+        // window under the results, a refresh into the folder's snapshot as
+        // well (#1870). They stand down now, and again as the results land
+        // (`searchWillShowResults`), for any that started meanwhile. A search
+        // that ends without taking the list over leaves the folder rows they
+        // were filling.
         window?.standDownWindowLoads()
         defer { if !isSearchActive { window?.resumeWindowLoads() } }
         await search.run(trimmed, depth: targetDepth, rerun: rerun)

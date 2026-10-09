@@ -194,10 +194,10 @@ final class MessageListPagingGateCharacterizationTests: XCTestCase {
 
     /// Pins intended best-effort paging (750dba7a): a failed page shows no
     /// error and leaves the rows alone. Only a list blocked entirely shows
-    /// one, through `refresh()` (a failed STATUS or top page), which the
-    /// view's poll and the watcher keep running. Pinned so a refactor does
-    /// not start surfacing page errors by accident. An open design question,
-    /// not a defect: offline, rows past the window stay placeholders with no
+    /// one, through a refresh (a failed STATUS or top page), which the
+    /// folder's poller keeps running. Pinned so a refactor does not start
+    /// surfacing page errors by accident. An open design question, not a
+    /// defect: offline, rows past the window stay placeholders with no
     /// feedback until the next refresh. The next row to appear retries.
     func testAFailedPageIsSilentAndTheNextRowRetriesIt() async throws {
         let model = try await world.openedList()
