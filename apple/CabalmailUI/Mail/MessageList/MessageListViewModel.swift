@@ -5,10 +5,11 @@ import CabalmailKit
 /// Backs `MessageListView`: one folder's list, or the global search surface.
 /// It coordinates the parts that show the rows -- the folder window
 /// (`window`, a `FolderWindowLoader`: rows, positions, paging, refresh and
-/// the snapshot) and, while one runs, a search in its place -- and owns what
-/// spans them: the filter pills, the selection, the writes made from the
-/// list and the events it hears from other writers, and the routing of a
-/// refresh to whichever part is showing.
+/// the snapshot) and the search (`search`, a `MailSearchSession`: query,
+/// results and their paging), whose rows take the window's place once they
+/// land -- and owns what spans them: the filter pills, the selection, the
+/// writes made from the list and the events it hears from other writers,
+/// and the routing of a refresh to whichever part is showing.
 @Observable
 @MainActor
 final class MessageListViewModel {
@@ -29,6 +30,10 @@ final class MessageListViewModel {
     /// fills them. Views and tests reach window state through it.
     /// IUO for 2.2 C's receiver-only commit; a later commit makes it optional.
     let window: FolderWindowLoader!
+    /// The list's search: what is asked, what was sent, the results and
+    /// their paging. A folder list's pills are searches; on the search
+    /// surface every search is.
+    let search: MailSearchSession
 
     var errorMessage: String?
 
@@ -79,48 +84,26 @@ final class MessageListViewModel {
     /// than collapsing it. Plain selection sets cursor == anchor.
     var selectionCursor: MessageRef?
 
-    /// Free-text term submitted from the search field. Filters live in
-    /// `searchFilters`; the two are sent together when `runSearch()` runs.
-    var searchQuery: String = ""
+    /// The term in the search field (`MailSearchSession.query`). Read-write
+    /// for the shell and `SearchView`'s binding.
+    var searchQuery: String {
+        get { search.query }
+        set { search.query = newValue }
+    }
 
-    /// Structured filter form state — mirrors the React filter panel.
-    var searchFilters = MessageSearchFilters()
+    /// The folder the search surface's "This folder only" narrows to
+    /// (`MailSearchSession.anchor`).
+    var searchAnchor: Folder? {
+        get { search.anchor }
+        set { search.anchor = newValue }
+    }
 
-    /// The folder the global search surface's "This folder only" narrows to:
-    /// the wide layout's sidebar selection, fed in through
-    /// `setSearchAnchor(_:)`. Unused in folder scope, which narrows to
-    /// `folder`; see `searchFolder`.
-    var searchAnchor: Folder?
-
-    /// The trimmed term the most recent submitted search ran with. Distinct
-    /// from `searchQuery`, which tracks the field as the user types: search is
-    /// submit-driven, so the two diverge for every keystroke between typing
-    /// and Return, and that gap is what tells a pending query from an
-    /// exhausted one.
-    /// Written by `runSearch()` / `clearSearch()` only.
-    var submittedQuery: String = ""
-
-    /// `true` while search results are showing in `envelopes`.
-    var isSearchActive: Bool = false
-
-    /// Search-banner metadata. All zero when no search is active.
-    var searchTotalEstimate: Int = 0
-    var searchTruncated: Bool = false
-    var searchFoldersSearched: [String] = []
-
-    /// Opaque next-page cursor for the active search; nil = every match
-    /// loaded (or no search active). Cleared before every fresh search so
-    /// an in-flight load-more can detect it raced a reset and drop its
-    /// page. Written by the `+Search.swift` extension only.
-    var searchNextCursor: String?
-
-    /// A search load-more page is in flight — guards re-entry and drives
-    /// the list's tail spinner.
-    var isLoadingMoreSearch = false
-
-    /// Model-owned task for the search load-more fetch, so it outlives the
-    /// triggering row's `.task` cancellation (the `loadMoreTask` pattern).
-    var loadMoreSearchTask: Task<Void, Never>?
+    /// A search is the list's mode (`MailSearchSession.isActive`): its
+    /// banner shows, a refresh re-runs it, the folder window stands down.
+    var isSearchActive: Bool {
+        get { search.isActive }
+        set { search.isActive = newValue }
+    }
 
     /// Foreground-only change watcher (`MailboxWatcher`, which polls folder
     /// status). Nil when the view is offscreen; started on
@@ -180,24 +163,36 @@ final class MessageListViewModel {
         self.preferences = preferences
         self.mailStore = mailStore
         self.window = FolderWindowLoader(scope: scope, client: client, mailStore: mailStore)
+        self.search = MailSearchSession(client: client, listFolder: scope.isSearch ? nil : scope.folder)
         window.host = self
+        search.host = self
         // For the model's whole life, not the view's: a list under a pushed
         // reader has had `.onDisappear` and still has to hear its archive.
         mailStore.events.subscribe(self)
     }
 
-    /// The rows on screen: the folder window's, or a search's in their place
-    /// (both live in the window's array until the search moves out). The
-    /// `_modify` accessor hands the window's storage through, so an in-place
-    /// edit (a flag flip, a removal) doesn't copy the whole array.
+    /// The folder window while its rows are the ones on screen: not once a
+    /// search's results have taken the list over.
+    private var shownWindow: FolderWindowLoader? { search.showsResults ? nil : window }
+
+    /// The rows on screen: the folder window's, or the search's once its
+    /// results have landed. `_modify` hands the chosen store's storage
+    /// through, so an in-place edit (a flag flip, a removal) doesn't copy
+    /// the whole array.
     var envelopes: [Envelope] {
-        get { window.envelopes }
-        set { window.envelopes = newValue }
-        _modify { yield &window.envelopes }
+        get { shownWindow?.envelopes ?? search.rows }
+        set {
+            if let shown = shownWindow { shown.envelopes = newValue } else { search.rows = newValue }
+        }
+        _modify {
+            if let shown = shownWindow { yield &shown.envelopes } else { yield &search.rows }
+        }
     }
 
-    /// A refresh, a reset or a search is in flight (`FolderWindowLoader.isLoading`).
-    var isLoading: Bool { window.isLoading }
+    /// A refresh, a reset or a search is in flight: the folder window's
+    /// holds (a search over the folder takes one too) or the search's own
+    /// runs.
+    var isLoading: Bool { window.isLoading || search.isLoading }
 
     /// The removals in flight that touch this list: its folder's, from any
     /// writer, or on the search surface any. It includes, on the dispose

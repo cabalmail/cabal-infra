@@ -97,7 +97,7 @@ extension MessageListView {
                 // truncated. On the search surface it's always a text/structured
                 // search, so show it whenever a search is active.
                 if model.isSearchActive {
-                    if model.filterTab == .all || model.envelopes.count < model.searchTotalEstimate {
+                    if model.filterTab == .all || model.envelopes.count < model.search.totalEstimate {
                         searchMetadataBanner(model: model)
                     }
                     searchControlsBar(model: model)

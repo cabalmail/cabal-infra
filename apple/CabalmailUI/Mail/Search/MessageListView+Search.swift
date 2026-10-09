@@ -25,34 +25,35 @@ extension MessageListView {
     }
 
     private var filterButtonIcon: String {
-        guard let model, model.searchFilters.activeCount > 0 else {
+        guard let model, model.search.filters.activeCount > 0 else {
             return "line.3.horizontal.decrease.circle"
         }
         return "line.3.horizontal.decrease.circle.fill"
     }
 
     private var filterButtonAccessibilityLabel: String {
-        let active = model?.searchFilters.activeCount ?? 0
+        let active = model?.search.filters.activeCount ?? 0
         if active == 0 { return "Filters" }
         return "Filters, \(active) active"
     }
 
     /// Filter sheet — only constructs the inner view when the model is
     /// available so the sheet's `@State` snapshots a fully-formed
-    /// `searchFilters` value rather than the default-initialized one.
+    /// `MailSearchSession.filters` value rather than the default-initialized one.
     @ViewBuilder
     var filtersSheet: some View {
         if let model {
             @Bindable var bindable = model
+            @Bindable var search = model.search
             SearchFiltersSheet(
-                filters: $bindable.searchFilters,
-                currentFolderName: (model.searchFolder ?? folder).name,
+                filters: $search.filters,
+                currentFolderName: (model.search.folder ?? folder).name,
                 // The global search surface scopes to the sidebar's selected
                 // folder; where nothing feeds it one (iPhone / visionOS
                 // `SearchView`) there is no folder to offer (#1510).
-                allowFolderScope: model.searchFolder != nil,
+                allowFolderScope: model.search.folder != nil,
                 onApply: { snapshot in
-                    bindable.searchFilters = snapshot
+                    search.filters = snapshot
                     filtersPresented = false
                     // The sheet defines a full structured search ("All" mode),
                     // even when opened while a filter pill is active. Clear the
@@ -105,16 +106,16 @@ extension MessageListView {
     /// the two surfaces cannot disagree about where the search looked (#1419).
     func searchScope(_ model: MessageListViewModel) -> SearchScopeSummary {
         SearchScopeSummary(
-            foldersSearched: model.searchFoldersSearched,
-            thisFolderOnly: model.searchFilters.thisFolderOnly,
-            anchorFolderName: (model.searchFolder ?? folder).name
+            foldersSearched: model.search.foldersSearched,
+            thisFolderOnly: model.search.filters.thisFolderOnly,
+            anchorFolderName: (model.search.folder ?? folder).name
         )
     }
 
     private func searchMatchLabel(_ model: MessageListViewModel) -> String {
         let shown = model.envelopes.count
-        let total = model.searchTotalEstimate
-        if model.searchTruncated {
+        let total = model.search.totalEstimate
+        if model.search.truncated {
             return "Showing first \(shown) of \(total)+ matches — refine your query"
         }
         let noun = total == 1 ? "match" : "matches"

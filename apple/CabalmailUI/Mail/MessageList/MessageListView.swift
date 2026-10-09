@@ -265,7 +265,7 @@ struct MessageListView: View {
         // the cursor runs dry.
         .onChange(of: visible.isEmpty) { _, isEmpty in
             guard isEmpty, model.isSearchActive else { return }
-            model.requestMoreSearchResults()
+            model.search.requestMore()
         }
         // Search input lives on the search *surface*, not the folder list:
         // `.searchable` on the iPhone search tab (driving the iOS 26 tab-bar

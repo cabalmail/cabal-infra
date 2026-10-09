@@ -76,11 +76,11 @@ extension MessageListView {
                                         // row scrolling away can't cancel it.
                                         if rows.suffix(searchPrefetchMargin)
                                             .contains(where: { $0.id == row.id }) {
-                                            model.requestMoreSearchResults()
+                                            model.search.requestMore()
                                         }
                                     }
                             }
-                            if model.isLoadingMoreSearch {
+                            if model.search.isLoadingMore {
                                 ProgressView()
                                     .frame(maxWidth: .infinity)
                                     .padding()
