@@ -52,19 +52,11 @@ struct MessageListView: View {
     /// (`SceneNavigator.mailSelection(for:)`). Optional so a list hosted
     /// outside a main window still builds, with a selection of its own.
     @Environment(SceneNavigator.self) private var navigator: SceneNavigator?
-    #if !os(macOS)
-    // Wide vs. compact gates whether message rows are draggable. On a
-    // compact iPhone the sidebar and the message list never share the
-    // screen, so there's nowhere to drop a message, and a long-press drag
-    // would only fight each row's context menu. Non-private so the `+Rows`
-    // extension that builds the rows can read it. macOS has no size class
-    // and is always treated as wide (see `isWideLayout`).
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    #endif
-    // The window's layout shell. Decides where the folder switch is drawn:
-    // the split's column-scoped bar can't host it (`FolderSwitchPlacement`,
-    // #1626). The shell rather than the size class above, because this is a
-    // narrow split column and reports compact even on a regular-width iPad.
+    // The window's layout shell. Decides which selection path the list takes
+    // (`isWideLayout`) and where the folder switch is drawn: the split's
+    // column-scoped bar can't host it (`FolderSwitchPlacement`, #1626). The
+    // shell rather than the size class, because this is a narrow split
+    // column and reports compact even on a regular-width iPad (#1985).
     @Environment(\.shellLayout) var shellLayout
     // Drives the background-snapshot optimization: while the scene isn't
     // `.active`, `messageRow` (in `+Selection`) renders cheap placeholder

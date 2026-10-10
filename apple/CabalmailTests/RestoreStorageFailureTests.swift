@@ -14,7 +14,7 @@ import CabalmailKit
 ///
 /// A keychain that can't be read at all is a different case, pinned in
 /// `RestoreGuardCharacterizationTests`: the restore reads the tokens with
-/// `try?` first and stays signed out without building anything.
+/// `try?` first, builds nothing, and leaves the status as it was.
 @MainActor
 final class RestoreStorageFailureTests: XCTestCase {
     private var harness: SessionHarness!
