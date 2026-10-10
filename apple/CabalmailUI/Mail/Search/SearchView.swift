@@ -69,13 +69,18 @@ struct SearchView: View {
             // The window's, shared with its regular split's search so a
             // layout swap keeps the query and results (#1654). This tab
             // searches everywhere, so the anchor the split may have set is
-            // cleared here.
+            // cleared here — through `setSearchAnchor`, which also drops a
+            // "This folder only" the split's search was narrowed by, and
+            // re-runs it across folders. Cleared in place, the filter stayed
+            // on with no folder behind it and no toggle to turn it off. The
+            // model is shown first, so a re-run doesn't hold the tab on its
+            // spinner.
             if model == nil, let client = appState.client {
                 let window = navigator.searchModel(
                     client: client, preferences: preferences, mailStore: appState.mailStore
                 )
-                window.searchAnchor = nil
                 model = window
+                await window.setSearchAnchor(nil)
             }
         }
     }

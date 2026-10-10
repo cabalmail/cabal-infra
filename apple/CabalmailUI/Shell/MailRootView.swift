@@ -4,13 +4,12 @@ import CabalmailKit
 import UIKit
 #endif
 
-/// Root of the signed-in navigation.
-///
-/// Single `NavigationSplitView` serves every platform — iPhone compact
-/// collapses it to a stack push sequence automatically. The folder, the open
-/// message and the compact column live on the window's `SceneNavigator`,
-/// above the layout switch, so the three columns stay in sync and a layout
-/// swap that rebuilds this view keeps them.
+/// Root of the wide layouts' navigation: the Mac window and the iPad split
+/// (`ShellLayout.desktop` and `.split`). The tab layout's Mail tab is
+/// `CompactMailStack`. The folder, the open message and the compact column
+/// live on the window's `SceneNavigator`, above the layout switch, so the
+/// three columns stay in sync and a layout swap that rebuilds this view
+/// keeps them.
 ///
 /// `.id(...)` on the content and detail columns forces SwiftUI to rebuild
 /// the view (and its `@State` / `@Observable` view models) when selection
@@ -224,25 +223,21 @@ struct MailRootView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: splitVisibility, preferredCompactColumn: compactColumnSelection) {
             #if os(iOS)
-            if isWideSidebar {
-                // Regular-width iPad: the folder list lives in the floating
-                // panel (`folderPanelOverlay`), not in this column, which stays
-                // empty and permanently collapsed. Removing the system sidebar
-                // toggle keeps the content toolbar from offering to reveal the
-                // empty column — the custom button in `decoratedContentColumn`
-                // drives the panel instead. The zero column width matters:
-                // `splitVisibility`'s pinned `.doubleColumn` only holds until
-                // a rotation or window resize, when UIKit's split controller
-                // re-expands the sidebar on its own and the constant binding
-                // can't push back — tiling this column in as a blank leading
-                // pane. At width 0 the re-expanded column has no footprint,
-                // so the pane can never appear.
-                Color.clear
-                    .toolbar(removing: .sidebarToggle)
-                    .navigationSplitViewColumnWidth(0)
-            } else {
-                sidebar
-            }
+            // The iPad split: the folder list lives in the floating panel
+            // (`folderPanelOverlay`), not in this column, which stays empty
+            // and permanently collapsed. Removing the system sidebar toggle
+            // keeps the content toolbar from offering to reveal the empty
+            // column — the custom button in `decoratedContentColumn` drives
+            // the panel instead. The zero column width matters:
+            // `splitVisibility`'s pinned `.doubleColumn` only holds until a
+            // rotation or window resize, when UIKit's split controller
+            // re-expands the sidebar on its own and the constant binding
+            // can't push back — tiling this column in as a blank leading
+            // pane. At width 0 the re-expanded column has no footprint, so
+            // the pane can never appear.
+            Color.clear
+                .toolbar(removing: .sidebarToggle)
+                .navigationSplitViewColumnWidth(0)
             #else
             // macOS opens the sidebar at a readable width and remembers the
             // one the user drags to; every other platform passes through.
@@ -280,7 +275,7 @@ struct MailRootView: View {
         // screen instead of fully off the leading edge.
         #if os(iOS)
         .overlay(alignment: .leading) {
-            if isWideSidebar { folderPanelOverlay }
+            folderPanelOverlay
         }
         #endif
         // Keep the Message menu's commands validated against what they'd
@@ -296,12 +291,9 @@ struct MailRootView: View {
         .reportsFeedMenuAvailability(
             selectedCount: selectedFeedItem == nil ? 0 : 1,
             hasOpenItem: selectedFeedItem != nil,
-            hasScope: selectedFeedScope != nil && !isSearching,
-            hosts: isWideSidebar
+            hasScope: selectedFeedScope != nil && !isSearching
         )
-        .reportsActiveSection(
-            isWideSidebar ? (selectedFeedScope != nil && !isSearching ? .feeds : .mail) : nil
-        )
+        .reportsActiveSection(selectedFeedScope != nil && !isSearching ? .feeds : .mail)
         // Track the split view's overall width so the list column's max can be
         // clamped to leave the reading pane a floor (see `listColumnBounds`).
         .onGeometryChange(for: CGFloat.self) { proxy in
@@ -333,7 +325,7 @@ struct MailRootView: View {
             if scope != nil { feedListOpened(endingSearch: false) }
         }
         .onChange(of: navigator.feedNavigations) {
-            if isWideSidebar { feedListOpened(endingSearch: true) }
+            feedListOpened(endingSearch: true)
         }
         // Catch-all drop target behind the whole split view: a message
         // released anywhere that isn't a folder row (the message list, the
@@ -348,7 +340,7 @@ struct MailRootView: View {
             // The window's launch landing — or, for a tree a layout swap has
             // just built, the window's route (`SceneNavigator`). A wide tree
             // may land in the feed reader instead.
-            await navigator.mailTreeAppeared(tree, isWide: isWideSidebar)
+            await navigator.mailTreeAppeared(tree, isWide: true)
             // The window's, shared with its compact Search tab so a layout
             // swap keeps the query and results (#1654); this split anchors it
             // to the folder.
@@ -366,7 +358,7 @@ struct MailRootView: View {
         // an address copies it to the pasteboard.
         // `.inspector` is the native trailing sidebar on iOS/macOS. The SDK
         // marks it unavailable on visionOS, which never builds `MailRootView`
-        // (`SignedInRootView` routes it to `VisionSectionView`), so it is
+        // (`SignedInRootView` routes it to `OrnamentShell`), so it is
         // compiled out there rather than given a stand-in.
         #if !os(visionOS)
         .inspector(isPresented: addressInspectorBinding) {
@@ -439,7 +431,7 @@ extension MailRootView {
     private var sidebar: some View {
         // Global search lives in the message-list column on wide layouts
         // (iPad-regular / macOS; see `decoratedContentColumn`) and in the
-        // dedicated Search tab on compact iPhone (`CompactSectionTabs`'
+        // dedicated Search tab on compact iPhone (`TabShell`'s
         // `Tab(role: .search)`). The sidebar carries no search field of its
         // own — one above the folder list would be redundant with the Search
         // tab on compact.
@@ -451,8 +443,8 @@ extension MailRootView {
         // keep its own top-of-sidebar `.searchable` and toolbar buttons.
         MailSidebarColumn(
             selection: sidebarSelection,
-            filter: isWideSidebar ? $folderListFilter : nil,
-            feedSelection: isWideSidebar ? feedSidebarSelection : nil,
+            filter: $folderListFilter,
+            feedSelection: feedSidebarSelection,
             // The first load finishes the window's launch landing, or
             // swaps the fetched folder in for a stand-in
             // (`SceneNavigator.foldersLoaded`).
@@ -478,7 +470,7 @@ extension MailRootView {
         // VoiceOver and the back button) — see `brandMarkTitle` in
         // `SidebarBranding.swift`. Unconditional here, on every non-macOS
         // layout; the other compact tabs opt in through the environment.
-        .brandMarkTitle(size: isWideSidebar ? 102 : compactBrandMarkSize)
+        .brandMarkTitle(size: 102)
         #endif
     }
 

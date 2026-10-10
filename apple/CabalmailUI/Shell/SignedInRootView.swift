@@ -50,14 +50,12 @@ struct SignedInRootView: View {
     /// The window width the section layout was last laid out at; see
     /// `SectionLayoutPolicy.layout(isCompactWidth:isCompactHeight:measuredWidth:)`.
     @State private var measuredWidth: CGFloat?
-    // iPad only: the regular-width branch below reads the size class and
-    // presents the Settings sheet. visionOS uses its own tab bar
-    // (`VisionSectionView`) and macOS its Settings scene, so neither compiles
+    // iOS only: the shell choice reads both size classes there. visionOS and
+    // macOS have one shell each (`ShellLayout.resolve`), so neither compiles
     // this state — guarding it to `os(iOS)` keeps them warning-clean.
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @State private var settingsPresented = false
     #endif
 
     /// - Parameters:
@@ -120,8 +118,8 @@ struct SignedInRootView: View {
             .focusedSceneValue(\.windowCommands, windowCommands)
             .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
             .modifier(WindowPlaceKeeper(navigator: navigator, storedRoute: $storedRoute))
-            .onChange(of: shellLayout, initial: true) { _, layout in
-                navigator.layoutIsWide = layout.isWideSplit
+            .onChange(of: shellLayout, initial: true) { old, new in
+                navigator.layoutChanged(wasWide: old.isWideSplit, isWide: new.isWideSplit)
             }
             // A new sign-in gets a new navigator, as it gets a new
             // coordinator: nothing of the last account's place carries over.
@@ -158,36 +156,20 @@ struct SignedInRootView: View {
             #if os(iOS)
             MailRootView()
                 .environment(\.showsSettingsGear, true)
-                .sheet(isPresented: $settingsPresented) {
-                    SettingsSheet()
-                }
-                // The gear button and the ⌘, command both send this window's
-                // Settings command; routing through it (rather than a direct
-                // binding) keeps the trigger working whichever column has focus.
-                .answersCommand(.settings) {
-                    settingsPresented = true
-                }
+                .settingsSheetPresenter()
             #endif
         case .tabs:
             #if os(iOS)
             // The tab comes from the navigator, so a tree rebuilt mid-process
             // (a fold, an iPad window narrowing) opens on the tab it left.
-            CompactSectionTabs()
-                // The tab tree is compact width throughout, whatever the raw
-                // size class says in landscape on a Plus / Max: the Mail
-                // tab's split view must never expand into columns and
-                // collapse back, and the addresses inspector must never
-                // change presentation. See `SectionLayoutPolicy`.
-                .transformEnvironment(\.horizontalSizeClass) { sizeClass in
-                    sizeClass = .compact
-                }
+            TabShell()
             #endif
         case .ornament:
             #if os(visionOS)
-            // A floating leading tab bar (Mail / Folders / Addresses / Settings /
-            // Search) rather than the iPad single-sidebar split — see
-            // `VisionSectionView`.
-            VisionSectionView()
+            // A floating leading tab bar (Mail / Folders / Feeds / Addresses /
+            // Settings / Search) rather than the iPad single-sidebar split —
+            // see `OrnamentShell`.
+            OrnamentShell()
             #endif
         }
     }
