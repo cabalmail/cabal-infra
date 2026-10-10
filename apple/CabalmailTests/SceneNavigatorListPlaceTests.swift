@@ -50,7 +50,7 @@ final class SceneNavigatorListPlaceTests: XCTestCase {
     private func scrolledList(
         _ navigator: SceneNavigator, to index: Int, in folder: String = "INBOX"
     ) throws -> FolderListHold.Claim {
-        let claim = navigator.listHold.claim(folder)
+        let claim = navigator.listHold.claim(folder, isWide: false)
         XCTAssertTrue(navigator.listHold.record(try place(index, in: folder), under: claim))
         return claim
     }
@@ -64,7 +64,7 @@ final class SceneNavigatorListPlaceTests: XCTestCase {
         await navigator.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(navigator.restores.pendingListAnchor, try place(300))
-        let newList = navigator.listHold.claim("INBOX")
+        let newList = navigator.listHold.claim("INBOX", isWide: true)
         XCTAssertEqual(navigator.listHold.takeAnchor(under: newList, from: navigator.restores), try place(300))
         XCTAssertNil(navigator.restores.pendingListAnchor, "taken once")
     }
@@ -92,7 +92,7 @@ final class SceneNavigatorListPlaceTests: XCTestCase {
         let (navigator, _) = try await landed()
         let first = try scrolledList(navigator, to: 40)
 
-        let second = navigator.listHold.claim("INBOX")
+        let second = navigator.listHold.claim("INBOX", isWide: false)
 
         XCTAssertFalse(navigator.listHold.record(nil, under: first))
         XCTAssertEqual(navigator.listHold.takeAnchor(under: second, from: navigator.restores), try place(40))
@@ -107,7 +107,7 @@ final class SceneNavigatorListPlaceTests: XCTestCase {
         await navigator.mailTreeAppeared(UUID(), isWide: true)
         await navigator.mailTreeAppeared(UUID(), isWide: false)
 
-        let list = navigator.listHold.claim("INBOX")
+        let list = navigator.listHold.claim("INBOX", isWide: false)
         XCTAssertEqual(navigator.listHold.takeAnchor(under: list, from: navigator.restores), try place(300))
     }
 
@@ -146,7 +146,7 @@ final class SceneNavigatorListPlaceTests: XCTestCase {
         XCTAssertNil(navigator.restores.pendingListAnchor)
         XCTAssertNil(navigator.listHold.place, "the place was the other folder's")
         navigator.selectFolder(inbox)
-        let list = navigator.listHold.claim("INBOX")
+        let list = navigator.listHold.claim("INBOX", isWide: true)
         XCTAssertNil(navigator.listHold.takeAnchor(under: list, from: navigator.restores))
     }
 
@@ -173,7 +173,7 @@ final class SceneNavigatorListPlaceTests: XCTestCase {
 
         XCTAssertNil(navigator.restores.pendingListAnchor)
         XCTAssertFalse(navigator.listHold.holds(list))
-        let again = navigator.listHold.claim("INBOX")
+        let again = navigator.listHold.claim("INBOX", isWide: false)
         XCTAssertEqual(navigator.listHold.takeAnchor(under: again, from: navigator.restores), try place(300))
     }
 
@@ -206,7 +206,7 @@ final class SceneNavigatorListPlaceTests: XCTestCase {
         let (navigator, _) = try await landed()
         try scrolledList(navigator, to: 300)
 
-        let other = navigator.listHold.claim("Archive")
+        let other = navigator.listHold.claim("Archive", isWide: false)
 
         XCTAssertNil(navigator.listHold.takeAnchor(under: other, from: navigator.restores))
         XCTAssertEqual(navigator.listHold.place, try place(300), "left for its own folder")
@@ -214,7 +214,7 @@ final class SceneNavigatorListPlaceTests: XCTestCase {
 
     func testAListRecordsOnlyItsOwnFoldersPlace() async throws {
         let (navigator, _) = try await landed()
-        let list = navigator.listHold.claim("INBOX")
+        let list = navigator.listHold.claim("INBOX", isWide: false)
 
         XCTAssertFalse(navigator.listHold.record(try place(4, in: "Archive"), under: list))
         XCTAssertNil(navigator.listHold.place)

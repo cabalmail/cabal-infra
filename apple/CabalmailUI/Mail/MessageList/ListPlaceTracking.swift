@@ -262,7 +262,7 @@ final class ListPlaceTracker {
     private func takeClaim(_ model: MessageListViewModel, in navigator: SceneNavigator?) {
         guard let navigator, let folderPath = model.folder?.path else { return }
         self.navigator = navigator
-        claim = navigator.listHold.claim(folderPath)
+        claim = navigator.listHold.claim(folderPath, isWide: navigator.layoutIsWide)
     }
 
     /// Records the place with the window and with the resume session, which

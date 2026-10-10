@@ -199,7 +199,7 @@ final class ListPlaceTrackerLandingTests: XCTestCase {
 
     func testAFolderWithNoRowsDropsThePlace() async throws {
         let model = try await world.openedList(size: 0, stampsMessageIDs: true)
-        let earlier = navigator.listHold.claim(ListPagingWorld.folderPath)
+        let earlier = navigator.listHold.claim(ListPagingWorld.folderPath, isWide: false)
         navigator.listHold.record(try anchor(index: 400, uid: 600), under: earlier)
 
         appearAndLand(model)
@@ -214,7 +214,7 @@ final class ListPlaceTrackerLandingTests: XCTestCase {
     /// not wait for a later list, but neither scrolls nor touches the place.
     func testAListOnAPillTakesTheAnchorWithoutScrolling() async throws {
         let model = try await world.openedList(preloaded: 250, stampsMessageIDs: true)
-        let earlier = navigator.listHold.claim(ListPagingWorld.folderPath)
+        let earlier = navigator.listHold.claim(ListPagingWorld.folderPath, isWide: false)
         navigator.listHold.record(try anchor(index: 30, uid: 970), under: earlier)
         navigator.restores.parkListAnchor(try anchor(index: 100, uid: 900))
         model.filterTab = .unread
