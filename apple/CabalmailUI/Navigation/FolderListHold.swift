@@ -8,9 +8,9 @@ import CabalmailKit
 ///
 /// A list records the place, and takes an anchor parked for it, only under
 /// the claim it took when it mounted (`ListPlaceTracker`). A newer list's
-/// claim, a hand-off, a folder change and a back-out each void the claims
-/// before them, so a list from a tree a swap is tearing down can neither
-/// record nor take the anchor parked for its successor.
+/// claim, a change of layout, a hand-off, a folder change and a back-out
+/// each void the claims before them, so a list from a tree a swap is tearing
+/// down can neither record nor take the anchor parked for its successor.
 ///
 /// `SceneNavigator` owns one. Not `@Observable`: no view body reads it, as
 /// none read the selection when it lived on the navigator.
@@ -37,6 +37,9 @@ final class FolderListHold {
     /// Counts the claims taken and voided; the newest claim is the one held.
     private var generation = 0
 
+    /// The layout the newest claim's list is in.
+    private var claimIsWide = false
+
     // MARK: Selection
 
     /// The selection for a folder list mounting in this window: a new one,
@@ -56,6 +59,19 @@ final class FolderListHold {
     }
 
     // MARK: Swaps, folder changes and back-outs
+
+    /// The window's layout changed, away from the wide one or to it: a
+    /// folder list in the layout it left goes with its tree, so its claim is
+    /// void now. The new layout may build no mail tree for a while (a fold
+    /// with Settings open lands on the Settings tab), and until one hands
+    /// off, the old list's last reports, its scroll view collapsing to the
+    /// top among them, would otherwise move the place. The place itself
+    /// stays for the hand-off to park. A claim taken in the layout arrived
+    /// at is the new list's, whichever of the two the window heard of first,
+    /// and stays.
+    func leaveLayout(wide: Bool) {
+        if claimIsWide == wide { generation += 1 }
+    }
 
     /// A tree built by a layout swap is taking the window over: the window's
     /// selection goes to the tree's list if it survives the swap
@@ -92,10 +108,11 @@ final class FolderListHold {
 
     // MARK: The place
 
-    /// Taken by a folder list as it mounts. The newest claim is the only one
-    /// held.
-    func claim(_ folderPath: String) -> Claim {
+    /// Taken by a folder list as it mounts, in the layout the window is in
+    /// (`isWide`). The newest claim is the only one held.
+    func claim(_ folderPath: String, isWide: Bool) -> Claim {
         generation += 1
+        claimIsWide = isWide
         return Claim(folderPath: folderPath, generation: generation)
     }
 

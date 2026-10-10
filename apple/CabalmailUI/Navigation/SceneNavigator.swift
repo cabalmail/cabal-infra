@@ -431,7 +431,6 @@ final class SceneNavigator {
     func setCompactColumn(_ column: NavigationSplitViewColumn, isSearching: Bool, from tree: UUID) {
         guard canWrite(from: tree), column != compactColumn else { return }
         compactColumn = column
-        // Back to the folder list: the message list is gone, with its selection.
         if column == .sidebar { listHold.backOut(from: restores) }
         if CompactColumnPolicy.dropsMessage(movingTo: column) {
             applyMessage(nil, isSearching: isSearching)
@@ -713,6 +712,7 @@ extension SceneNavigator {
     /// The layout shell changed: the host's own old and new, since a tree's landing also writes `layoutIsWide`.
     func layoutChanged(wasWide: Bool, isWide: Bool) {
         layoutIsWide = isWide
+        if wasWide != isWide { listHold.leaveLayout(wide: wasWide) }
         let engaged = search.map { !$0.searchQuery.isEmpty || $0.isSearchActive } ?? false
         switch shellHandOff.layoutChanged(wasWide: wasWide, isWide: isWide, tab: compactTab, searchIsEngaged: engaged) {
         case .nothing: break

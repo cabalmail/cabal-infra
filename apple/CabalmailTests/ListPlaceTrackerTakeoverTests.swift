@@ -121,6 +121,26 @@ final class ListPlaceTrackerTakeoverTests: XCTestCase {
         XCTAssertEqual(place, try anchor(index: 30, uid: 970), "the new list still records")
     }
 
+    /// A fold with the split's Settings sheet open lands on the Settings
+    /// tab, and no mail tree follows to hand the list over. The split's
+    /// list is still being torn down: its scroll view collapsing to the top
+    /// records nothing, and the place waits for the Mail tab.
+    func testAListCollapsingAfterAFoldOntoSettingsRecordsNothing() async throws {
+        let model = try await world.openedList(preloaded: 250, stampsMessageIDs: true)
+        navigator.layoutIsWide = true
+        tracker.appeared(model, in: navigator)
+        tracker.land(model: model, in: navigator)
+        tracker.scrolled(toRow: 100, model: model)
+        XCTAssertEqual(place, try anchor(index: 100, uid: 900), "precondition")
+        navigator.openSettingsSheet()
+
+        navigator.layoutChanged(wasWide: true, isWide: false)
+        tracker.scrolled(toRow: 0, model: model)
+        tracker.loadsChanged(model: model)
+
+        XCTAssertEqual(place, try anchor(index: 100, uid: 900))
+    }
+
     /// The view's load outlives its task: a list whose view has gone, or
     /// that a reader covers, gets its landing from a cancelled task. It
     /// does not land then, and spends nothing; it lands when it is back.
