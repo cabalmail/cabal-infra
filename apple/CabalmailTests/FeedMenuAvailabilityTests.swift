@@ -121,9 +121,9 @@ final class FeedMenuAvailabilityTests: XCTestCase {
 
     // MARK: - What the surfaces report
 
-    func testAppStateStartsOnMailWithNoFeedTargets() {
-        let appState = AppState()
-        XCTAssertEqual(appState.activeSection, .mail)
-        XCTAssertEqual(appState.feedMenuAvailability, .none)
+    func testAWindowStartsOnMailWithNoFeedTargets() {
+        let window = WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: .mail))
+        XCTAssertEqual(window.activeSection, .mail)
+        XCTAssertEqual(window.feedMenu, FeedMenuAvailability.none)
     }
 }
