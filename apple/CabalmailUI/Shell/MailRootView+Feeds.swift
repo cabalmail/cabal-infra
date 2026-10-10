@@ -45,23 +45,17 @@ extension MailRootView {
         listSelectionCount = 0
     }
 
-    /// Content column: the feed item list while a feed scope is selected,
-    /// else the mail column (search results or the selected folder).
-    @ViewBuilder
-    var contentColumn: some View {
-        if let selectedFeedScope, !isSearching {
-            FeedItemListView(
-                scope: selectedFeedScope,
+    /// The feed list for the content column (`MailContentColumn`) while a
+    /// feed scope is selected. A pick from the list's scope-switch menu goes
+    /// through the same binding as a sidebar tap, so it clears the mail
+    /// selection and records the resume session the same way.
+    var feedListSelection: FeedListSelection? {
+        selectedFeedScope.map {
+            FeedListSelection(
+                scope: $0,
                 selection: feedItemSelection,
-                // A pick from the list's scope-switch menu goes through the
-                // same binding as a sidebar tap, so it clears the mail
-                // selection and records the resume session the same way.
-                onSwitchScope: { feedSidebarSelection.wrappedValue = $0 },
-                onScopeMenuWidthChanged: { listLeadingToolbarWidth = $0 }
+                onSwitchScope: { feedSidebarSelection.wrappedValue = $0 }
             )
-            .id(selectedFeedScope)
-        } else {
-            mailContentColumn
         }
     }
 
@@ -70,44 +64,36 @@ extension MailRootView {
     var detailColumn: some View {
         Group {
             if selectedFeedScope != nil, !isSearching {
-                feedDetailPane
-            } else if listSelectionCount >= 2 {
-                // Multi-selection: no single message to read, so mirror Mail's
-                // "N Messages Selected" pane. Bulk actions live in the action
-                // bar beneath the message list.
-                ContentUnavailableView(
-                    "\(listSelectionCount) Messages Selected",
-                    systemImage: "envelope.badge",
-                    description: Text("Use the action bar below the list to act on them together.")
-                )
-                #if os(macOS)
-                .toolbar { EmptyDetailToolbar() }
-                #endif
-            } else if let folder = detailFolder, let selectedEnvelope {
-                MessageDetailView(
-                    folder: folder,
-                    envelope: selectedEnvelope
-                )
-                .id("\(folder.path)#\(selectedEnvelope.uid)")
+                FeedReaderColumn(item: selectedFeedItem, placeholderChrome: feedPlaceholderChrome)
             } else {
-                ContentUnavailableView(
-                    "No message selected",
-                    systemImage: "envelope",
-                    description: Text("Pick a message from the list to read it.")
+                MailReaderColumn(
+                    selectionCount: listSelectionCount,
+                    envelope: selectedEnvelope,
+                    sidebarFolder: selectedFolder,
+                    placeholderChrome: mailPlaceholderChrome
                 )
-                #if os(macOS)
-                // Reserve the detail column's toolbar slots with disabled
-                // stand-ins so the message-list toolbar (compose, reload)
-                // stays anchored above the list pane. Without these,
-                // NavigationSplitView's unified toolbar packs the list
-                // items at the trailing edge — visually above the empty
-                // detail pane — until a message is picked and the real
-                // detail toolbar shoves them back into place.
-                .toolbar { EmptyDetailToolbar() }
-                #endif
             }
         }
     }
+
+    #if os(macOS)
+    // Reserve the detail column's toolbar slots with disabled stand-ins while
+    // it shows a placeholder, so the message-list toolbar (compose, reload)
+    // stays anchored above the list pane. Without these, NavigationSplitView's
+    // unified toolbar packs the list items at the trailing edge — visually
+    // above the empty detail pane — until a message is picked and the real
+    // detail toolbar shoves them back into place.
+    private var mailPlaceholderChrome: ReaderPlaceholderToolbar<EmptyDetailToolbar> {
+        ReaderPlaceholderToolbar(items: EmptyDetailToolbar())
+    }
+
+    private var feedPlaceholderChrome: ReaderPlaceholderToolbar<EmptyFeedDetailToolbar> {
+        ReaderPlaceholderToolbar(items: EmptyFeedDetailToolbar())
+    }
+    #else
+    private var mailPlaceholderChrome: EmptyModifier { EmptyModifier() }
+    private var feedPlaceholderChrome: EmptyModifier { EmptyModifier() }
+    #endif
 
     /// Slide the iPad-regular folder panel away after a pick, so the message
     /// list is fully interactive again. One routine, two callers: the sidebar
@@ -129,24 +115,5 @@ extension MailRootView {
     func endGlobalSearch() {
         searchModel?.searchQuery = ""
         searchFieldFocused = false
-    }
-
-    /// Detail column while a feed scope is selected: the reader, or the
-    /// "pick an item" prompt.
-    @ViewBuilder
-    var feedDetailPane: some View {
-        if let selectedFeedItem {
-            FeedItemDetailView(item: selectedFeedItem)
-                .id(selectedFeedItem.id)
-        } else {
-            ContentUnavailableView(
-                "No item selected",
-                systemImage: "doc.text",
-                description: Text("Pick an item from the list to read it.")
-            )
-            #if os(macOS)
-            .toolbar { EmptyFeedDetailToolbar() }
-            #endif
-        }
     }
 }
