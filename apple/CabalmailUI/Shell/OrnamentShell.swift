@@ -2,11 +2,12 @@
 import SwiftUI
 import CabalmailKit
 
-/// visionOS section navigation: a floating leading tab bar.
+/// The visionOS shell: a floating leading tab bar.
 ///
 /// On visionOS a `TabView` is presented as an ornament docked to the window's
-/// leading edge — the spatial idiom for top-level navigation. Each tab is a
-/// destination:
+/// leading edge — the spatial idiom for top-level navigation. The tabs are
+/// `CompactTab.tabs(for: .ornament)`, the tab layout's list with Folders
+/// added, and Search a plain tab rather than the phone's search role:
 ///
 /// - **Mail** — the message list + reader for the selected folder. There is no
 ///   folder sidebar here; the Folders tab is how the mailbox in view changes.
@@ -20,7 +21,7 @@ import CabalmailKit
 /// `MailRootView`: its folders lived in a show/hide `NavigationSplitView`
 /// sidebar whose reveal toggle visionOS never surfaced, leaving no discoverable
 /// way to reach the folder list.
-struct VisionSectionView: View {
+struct OrnamentShell: View {
     @Environment(AppState.self) private var appState
     @Environment(SceneNavigator.self) private var navigator
 
@@ -46,23 +47,18 @@ struct VisionSectionView: View {
 
     var body: some View {
         TabView(selection: selection) {
-            Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
-                VisionMailPane(tree: tree).environment(\.commandTab, .mail)
-            }
-            Tab("Folders", systemImage: "folder", value: CompactTab.folders) {
-                foldersTab.environment(\.commandTab, .folders)
-            }
-            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: CompactTab.feeds) {
-                FeedRootView().environment(\.commandTab, .feeds)
-            }
-            Tab("Addresses", systemImage: "at", value: CompactTab.addresses) {
-                AddressManagementTab().environment(\.commandTab, .addresses)
-            }
-            Tab("Settings", systemImage: "gear", value: CompactTab.settings) {
-                SettingsView().environment(\.commandTab, .settings)
-            }
-            Tab("Search", systemImage: "magnifyingglass", value: CompactTab.search) {
-                SearchView().environment(\.commandTab, .search)
+            ForEach(CompactTab.tabs(for: .ornament), id: \.self) { tab in
+                if tab.role(in: .ornament) == .search {
+                    Tab(value: tab, role: .search) {
+                        content(for: tab)
+                            .environment(\.commandTab, tab)
+                    }
+                } else {
+                    Tab(LocalizedStringKey(tab.title), systemImage: tab.systemImage, value: tab) {
+                        content(for: tab)
+                            .environment(\.commandTab, tab)
+                    }
+                }
             }
         }
         // Land at launch regardless of which tab is showing, so the message
@@ -76,6 +72,18 @@ struct VisionSectionView: View {
         // ⌘, opens Settings — its own tab here, rather than the iPad sheet.
         .answersCommand(.settings) {
             navigator.showTab(.settings)
+        }
+    }
+
+    @ViewBuilder
+    private func content(for tab: CompactTab) -> some View {
+        switch tab {
+        case .mail: VisionMailPane(tree: tree)
+        case .folders: foldersTab
+        case .feeds: FeedRootView()
+        case .addresses: AddressManagementTab()
+        case .settings: SettingsView()
+        case .search: SearchView()
         }
     }
 
@@ -139,6 +147,13 @@ private struct VisionMailPane: View {
         .onChange(of: selectedFolder?.path) {
             listSelectionCount = 0
         }
+        // Keep the Message menu's commands validated against what they'd
+        // actually act on (see `MessageMenuAvailability`), as the other
+        // shells' mail does (#1995).
+        .reportsMessageMenuAvailability(
+            selectedCount: listSelectionCount,
+            hasOpenMessage: selectedEnvelope != nil
+        )
     }
 
     @ViewBuilder

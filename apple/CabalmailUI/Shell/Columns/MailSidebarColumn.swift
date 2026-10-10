@@ -15,12 +15,25 @@ struct MailSidebarColumn<Header: View>: View {
     var filter: Binding<String>?
     /// The wide shells' Feeds section selection; nil hides the section.
     var feedSelection: Binding<RssItemScope?>?
+    /// The Cabalmail mark in place of the list's "Folders" title, at this
+    /// size (`brandMarkTitle` in `SidebarBranding.swift`; the list's
+    /// `.navigationTitle` string stays for VoiceOver and the back button).
+    /// Nil leaves the title alone, as the Mac's sidebar, which shows none.
+    var titleMarkSize: CGFloat?
     /// The first folder load, which finishes the window's launch landing
     /// (`SceneNavigator.foldersLoaded`).
     let onFoldersLoaded: ([Folder]) -> Void
     @ViewBuilder let header: () -> Header
 
     var body: some View {
+        if let titleMarkSize {
+            column.brandMarkTitle(size: titleMarkSize)
+        } else {
+            column
+        }
+    }
+
+    private var column: some View {
         VStack(spacing: 0) {
             header()
             FolderListView(
