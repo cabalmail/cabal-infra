@@ -1,7 +1,6 @@
 import SwiftUI
 import CabalmailKit
 
-#if !os(macOS)
 /// True when a view is hosted inside `SettingsSheet` (the regular-width iOS
 /// modal), so it should offer a Done button to dismiss. False everywhere
 /// else - the macOS Settings scene and the compact-width section tabs both
@@ -68,4 +67,3 @@ struct SettingsSheet: View {
             .environment(\.inSettingsSheet, true)
     }
 }
-#endif
