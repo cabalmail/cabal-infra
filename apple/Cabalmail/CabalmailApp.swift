@@ -52,9 +52,6 @@ struct CabalmailApp: App {
                 // iPadOS instead of dropping to the home screen (no-op on
                 // other platforms; see MainSceneActivation.swift).
                 .recordsMainSceneSession()
-                // Gives this window the identity its compose requests and mail
-                // events are aimed at (MainWindowCommandScope).
-                .mainWindowCommandScope(appState)
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
@@ -71,6 +68,11 @@ struct CabalmailApp: App {
                         Task { await appState.refreshWatchSession() }
                     }
                 )
+                // Gives this window the identity its compose requests and mail
+                // events are aimed at, and that a link the system aims at it
+                // opens in (MainWindowCommandScope). Last, so everything
+                // above, the launch chain included, has it.
+                .mainWindowCommandScope(appState)
         }
         // Same Message menu the macOS menu bar shows. On iPadOS the
         // commands surface through the hardware-keyboard menu (hold

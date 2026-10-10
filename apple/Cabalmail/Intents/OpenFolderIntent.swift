@@ -2,9 +2,9 @@
 import AppIntents
 import CabalmailKit
 
-/// "Open Junk in Cabalmail." Foregrounds the app and drives the same
-/// `navigateRequest` machinery as a notification tap; a cold launch parks
-/// the request in `IntentBridge` until the session is wired.
+/// "Open Junk in Cabalmail." Foregrounds the app and opens the folder in
+/// the window last used, as a notification tap opens its message
+/// (`DeepLinkRouter`); a cold launch parks it for the first window.
 struct OpenFolderIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Folder"
     static let description = IntentDescription(

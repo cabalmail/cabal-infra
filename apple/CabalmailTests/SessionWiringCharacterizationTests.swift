@@ -141,24 +141,33 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         XCTAssertFalse(feedPoll.isCancelled)
     }
 
-    /// A Spotlight tap parked before any session is replayed by
-    /// `wireSession` into the new session's cursor. No envelope is cached
-    /// for it, so the request carries no Message-ID.
+    /// A Spotlight tap parked before any session waits through the wiring
+    /// for the new session's first window, which opens it with the session's
+    /// cursor. No envelope is cached for it, so the cursor carries no
+    /// Message-ID.
     func testASpotlightTapParkedBeforeSignInIsRoutedIntoTheNewSession() async throws {
         let ref = SpotlightMessageRef(folder: "Archive/2026", uid: 4242)
         harness.appState.routeSpotlightRef(ref)
-        XCTAssertEqual(harness.appState.pendingSpotlightRef, ref, "precondition: parked")
+        XCTAssertEqual(harness.appState.deepLinks.parked, .spotlight(ref), "precondition: parked")
 
         await SignOutSuiteSteps.signIn(harness)
 
-        XCTAssertNil(harness.appState.pendingSpotlightRef)
+        XCTAssertEqual(harness.appState.deepLinks.parked, .spotlight(ref), "waiting for a window")
         let coordinator = try XCTUnwrap(harness.appState.navCoordinator)
-        try await waitUntilOnMainActor { coordinator.navigateRequest != nil }
-        let request = try XCTUnwrap(coordinator.navigateRequest)
+        let request = await coordinator.cursor(for: .spotlight(ref))
         XCTAssertEqual(request.folder, "Archive/2026")
         XCTAssertEqual(request.uid, 4242)
         XCTAssertNil(request.messageID)
         XCTAssertEqual(request.clientID, "session-harness")
+        let appState = harness.appState
+        let window = SceneNavigator(
+            coordinator: { appState.navCoordinator }, hasClient: { true }, seed: .mail, deepLinks: appState.deepLinks
+        )
+        await window.mailTreeAppeared(UUID(), isWide: false)
+        XCTAssertNil(appState.deepLinks.parked)
+        XCTAssertEqual(window.selectedFolder?.path, "Archive/2026")
+        XCTAssertEqual(window.restores.pendingRestore?.uid, 4242)
+        XCTAssertNil(window.restores.pendingRestore?.messageID)
     }
 
     /// With the app's `Preferences` handed in, wiring activates them for the

@@ -24,14 +24,9 @@ final class IntentBridge {
     /// The process's session manager, handed in by `CabalmailApp.init`.
     private var sessions: SessionManager?
 
-    /// Set by `sessionDidStart`; navigation targets (`navCoordinator`) hang
-    /// off it. Weak — the bridge outlives any session.
+    /// Set by `sessionDidStart`; the Inbox status intent reads it. Weak —
+    /// the bridge outlives any session.
     private(set) weak var appState: AppState?
-
-    /// A folder-open request that arrived before sign-in / restore completed
-    /// (an OpenFolderIntent cold launch); routed once the session is wired,
-    /// mirroring `PushRegistrar.pendingOpen`.
-    private var pendingFolderPath: String?
 
     /// Called once, before any scene and so before any intent can run.
     func attach(_ sessions: SessionManager) {
@@ -40,27 +35,17 @@ final class IntentBridge {
 
     func sessionDidStart(appState: AppState) {
         self.appState = appState
-        if let path = pendingFolderPath {
-            pendingFolderPath = nil
-            requestOpenFolder(path)
-        }
     }
 
     func sessionWillEnd() {
         appState = nil
-        pendingFolderPath = nil
     }
 
-    /// Routes the UI to a folder through the same `navigateRequest`
-    /// machinery as a notification tap; a window's first landing drains a
-    /// request parked before it (`SceneNavigator`), so the cold-launch case
-    /// works too.
+    /// Opens a folder in the window last used (`DeepLinkRouter`); Siri does
+    /// not say which. On a cold launch it parks for the first window to
+    /// open, and a sign-out first drops it.
     func requestOpenFolder(_ path: String) {
-        guard let coordinator = appState?.navCoordinator else {
-            pendingFolderPath = path
-            return
-        }
-        coordinator.navigateRequest = NavState(folder: path, clientID: coordinator.clientID)
+        DeepLinkRouter.shared.open(.folder(path))
     }
 
     /// The client an intent works through, borrowed from the session manager.

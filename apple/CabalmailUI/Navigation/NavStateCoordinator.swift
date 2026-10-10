@@ -26,12 +26,6 @@ import CabalmailKit
 @Observable
 @MainActor
 public final class NavStateCoordinator {
-    /// A cursor to open, from push, Spotlight or App Intents, which don't
-    /// know which window should answer. Each main window's `SceneNavigator`
-    /// observes it and the first to see it takes it; a window landing for the
-    /// first time drains one parked before it existed.
-    public var navigateRequest: NavState?
-
     /// True once the launch-time cursor fetch has run. `MailRootView` uses it
     /// to tell the cold-launch path from a later foreground (both may offer
     /// the cross-device toast, through different entry points).

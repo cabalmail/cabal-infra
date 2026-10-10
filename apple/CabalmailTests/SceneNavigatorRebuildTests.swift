@@ -29,8 +29,13 @@ final class SceneNavigatorRebuildTests: XCTestCase {
         return NavStateCoordinator(client: client, clientID: "this-install", store: store)
     }
 
-    private func makeNavigator(_ coordinator: NavStateCoordinator, hasClient: Bool = true) -> SceneNavigator {
-        SceneNavigator(coordinator: { coordinator }, hasClient: { hasClient }, seed: store.loadSession()?.section)
+    private func makeNavigator(
+        _ coordinator: NavStateCoordinator, hasClient: Bool = true, deepLinks: DeepLinkRouter = DeepLinkRouter()
+    ) -> SceneNavigator {
+        SceneNavigator(
+            coordinator: { coordinator }, hasClient: { hasClient }, seed: store.loadSession()?.section,
+            deepLinks: deepLinks
+        )
     }
 
     private let inbox = Folder(path: "INBOX", attributes: ["\\HasNoChildren"], isSubscribed: true)
@@ -84,8 +89,9 @@ final class SceneNavigatorRebuildTests: XCTestCase {
     func testARebuiltTreeAfterANavigateLandingIgnoresTheStaleSnapshot() async throws {
         store.saveSession(ResumeSession(section: .mail, folder: "Lists", uid: 3))
         let coordinator = try makeCoordinator()
-        coordinator.navigateRequest = NavState(folder: "Archive", uid: 7, clientID: "push")
-        let navigator = makeNavigator(coordinator)
+        let router = DeepLinkRouter()
+        router.open(.message(NavState(folder: "Archive", uid: 7, clientID: "push")))
+        let navigator = makeNavigator(coordinator, deepLinks: router)
         await navigator.mailTreeAppeared(UUID(), isWide: false)
         navigator.foldersLoaded([inbox, archive])
         navigator.selectFolder(nil)

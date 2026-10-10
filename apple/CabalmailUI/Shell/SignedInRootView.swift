@@ -116,7 +116,13 @@ struct SignedInRootView: View {
             // folder, and modal state; see ComposeRequestRouter.
             .composeRequestRouter()
             .focusedSceneValue(\.windowCommands, windowCommands)
-            .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
+            // The window's navigator takes the deep links aimed at it, and a
+            // link parked before it existed (`DeepLinkRouter`).
+            .onChange(of: commandWindowID, initial: true) { _, id in
+                navigator.windowID = id
+                appState.deepLinks.register(navigator)
+            }
+            .onDisappear { appState.deepLinks.unregister(navigator) }
             .modifier(WindowPlaceKeeper(navigator: navigator, storedRoute: $storedRoute))
             .onChange(of: shellLayout, initial: true) { old, new in
                 navigator.layoutChanged(wasWide: old.isWideSplit, isWide: new.isWideSplit)
@@ -126,11 +132,7 @@ struct SignedInRootView: View {
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
                 navigator = SceneNavigator(appState: appState, windowID: commandWindowID)
                 windowCommands = WindowCommands(navigator: navigator)
-            }
-            // Push, Spotlight and Siri write one app-wide request; the first
-            // window to see it takes it.
-            .onChange(of: appState.navCoordinator?.navigateRequest) {
-                navigator.takeNavigateRequest()
+                appState.deepLinks.register(navigator)
             }
     }
 

@@ -93,11 +93,10 @@ public final class AppState {
     /// window clears the route its scene stores (`StoredRoute`).
     private(set) var accountForgottenTick = 0
 
-    /// A Spotlight result tapped before sign-in / restore completed; routed
-    /// once the session is wired, mirroring `PushRegistrar.pendingOpen`.
-    /// `@ObservationIgnored` because no view renders it — it's a one-shot
-    /// handoff consumed by `routePendingSpotlightOpen()` (SpotlightRouting).
-    @ObservationIgnored var pendingSpotlightRef: SpotlightMessageRef?
+    /// Where a notification, a Spotlight result or Siri's Open Folder opens:
+    /// one main window (`DeepLinkRouter`). The app entries' state takes the
+    /// app's router; `AppState()` makes its own.
+    @ObservationIgnored let deepLinks: DeepLinkRouter
 
     /// Latest drag-and-drop move. A folder row's drop handler posts this with
     /// the destination path; the active `MessageListView` observes it via
@@ -150,19 +149,22 @@ public final class AppState {
     let bimiCache = BimiUrlCache()
 
     public convenience init() {
-        self.init(sessionManager: SessionManager())
+        self.init(sessionManager: SessionManager(), deepLinks: DeepLinkRouter())
     }
 
     /// The app entries' init: `sessionManager` is the one they also hand to
-    /// `PushRegistrar` and `IntentBridge`.
-    public init(sessionManager: SessionManager) {
+    /// `PushRegistrar` and `IntentBridge`, and `deepLinks` the router those
+    /// open links through.
+    public init(sessionManager: SessionManager, deepLinks: DeepLinkRouter = .shared) {
         self.sessionManager = sessionManager
+        self.deepLinks = deepLinks
         mailStore = MailSessionStore(teardownGate: sessionManager.teardownGate)
         // The badge poller's count is bounded by the writes it may predate.
         sessionManager.pollers.boundInboxUnread = { [weak self] count, askedAt in
             self?.mailStore.polledInboxUnread(count, askedAt: askedAt) ?? count
         }
         sessionManager.owner = sessionOwnerHooks()
+        deepLinks.appState = self
     }
 }
 
@@ -216,8 +218,7 @@ extension AppState {
                 self?.mailStore.counts.savedFolderCounts.cache = client.folderStateCache
             },
             requestContactsAccess: { [weak self] in self?.requestContactsAccessIfNeeded() },
-            routeParkedOpens: { [weak self] in self?.routePendingSpotlightOpen() },
-            accountChanged: { [weak self] in self?.pendingSpotlightRef = nil },
+            accountChanged: { [weak self] in self?.deepLinks.discardParked() },
             inboxUnreadChanged: { [weak self] in self?.mailStore.counts.setInboxUnread($0) },
             forgetAccount: { [weak self] in self?.forgetAccountState() },
             clientDropped: { [weak self] in self?.endClientSession() }
@@ -231,7 +232,7 @@ extension AppState {
     private func forgetAccountState() {
         accountForgottenTick += 1
         mailStore.forgetAccount()
-        pendingSpotlightRef = nil
+        deepLinks.discardParked()
         AttachmentFolders.removeAll()
     }
 

@@ -30,8 +30,13 @@ final class SceneNavigatorLandingTests: XCTestCase {
         return NavStateCoordinator(client: client, clientID: "this-install", store: store)
     }
 
-    private func makeNavigator(_ coordinator: NavStateCoordinator, hasClient: Bool = true) -> SceneNavigator {
-        SceneNavigator(coordinator: { coordinator }, hasClient: { hasClient }, seed: store.loadSession()?.section)
+    private func makeNavigator(
+        _ coordinator: NavStateCoordinator, hasClient: Bool = true, deepLinks: DeepLinkRouter = DeepLinkRouter()
+    ) -> SceneNavigator {
+        SceneNavigator(
+            coordinator: { coordinator }, hasClient: { hasClient }, seed: store.loadSession()?.section,
+            deepLinks: deepLinks
+        )
     }
 
     private let inbox = Folder(path: "INBOX", attributes: ["\\HasNoChildren"], isSubscribed: true)
@@ -82,18 +87,19 @@ final class SceneNavigatorLandingTests: XCTestCase {
         XCTAssertNil(navigator.selectedFolder)
     }
 
-    /// A navigate request parked before the window existed (a cold launch
-    /// from a tapped notification) is the landing, and the session's is not
-    /// run on top of it.
-    func testAParkedNavigateRequestIsTheLanding() async throws {
+    /// A deep link parked before the window existed (a cold launch from a
+    /// tapped notification) is the landing, and the session's is not run on
+    /// top of it.
+    func testAParkedDeepLinkIsTheLanding() async throws {
         store.saveSession(ResumeSession(section: .mail, folder: "Lists"))
         let coordinator = try makeCoordinator()
-        coordinator.navigateRequest = NavState(folder: "Archive", uid: 7, clientID: "push")
-        let navigator = makeNavigator(coordinator)
+        let router = DeepLinkRouter()
+        router.open(.message(NavState(folder: "Archive", uid: 7, clientID: "push")))
+        let navigator = makeNavigator(coordinator, deepLinks: router)
 
         await navigator.mailTreeAppeared(UUID(), isWide: false)
 
-        XCTAssertNil(coordinator.navigateRequest, "the window took the request")
+        XCTAssertNil(router.parked, "the window took the link")
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
         XCTAssertEqual(navigator.restores.pendingRestore?.uid, 7)
         XCTAssertTrue(navigator.didLand)

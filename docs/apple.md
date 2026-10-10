@@ -1021,7 +1021,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | --- | --- |
 | `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the commands and menus, compose hand-off, drag and drop, contacts, BIMI and `mailStore`; its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
 | `Session/` | The session lifecycle, in `SessionManager`: sign-in and its second factor, restoring the last session, signing out and its ordering (`SessionTeardownGate`), the session's client, cursor, preferences sync and expiry observer, the Inbox badge and feed pollers (`SessionPollers`), and lending the client to the push and App Intents paths (`borrowClient()`, one client per account). `SessionEnvironment` and `SessionHooks` are its seams to the outside; `SessionOwnerHooks` are what a session does to `AppState`'s state. Also the sign-in screen and its error wording |
-| `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included), its `StoredRoute` (the route its scene storage keeps, for the account it was stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, reading positions and the cross-device cursor) and Spotlight routing |
+| `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included), its `StoredRoute` (the route its scene storage keeps, for the account it was stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, reading positions and the cross-device cursor); `DeepLinkRouter` (a notification, a Spotlight result or Siri's Open Folder opens in one main window: the system's target, else the window last used) with the `WindowRegistry` it finds windows in, and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
 | `Shell/` | How a window is laid out: the sign-in / signed-in router, the iPhone tab bar, the iPad and Mac split view (`MailRootView`), the Vision Pro tabs, the layout and column policies, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
 | `Shell/Columns/` | Column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
@@ -1034,7 +1034,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
-| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (router, slot registry, scene) |
+| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (router, slot registry, scene), and on iPad each main window's scene session, so closing a composer returns to a main window and a notification finds the window it was shown over |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
@@ -1564,6 +1564,15 @@ Only the compose hand-off still rides an `AppState` tick, aimed through
 Trash, push actions) are not commands: they bump the mail store's
 `listRefreshTick`, which every list observes (#1824). A drag names the
 list it lifted from, and only that list performs a sidebar drop.
+
+A link from outside a window uses the same identity. A tapped
+notification, a Spotlight result and Siri's Open Folder each go to
+exactly one main window through `DeepLinkRouter`: the window the system
+aimed at when it says (on iPad, the window a notification is shown over,
+or the one that received the Spotlight result), else the window last in
+front, else the window opened last. With no main window yet, as on a cold
+launch, the link parks for the first window to open; a sign-out or another
+account's sign-in drops it.
 
 ### Platform polish
 
