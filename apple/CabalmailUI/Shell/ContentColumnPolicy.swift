@@ -4,8 +4,8 @@ import SwiftUI
 /// has to do to the search state for that pick to be visible.
 ///
 /// The column has always preferred global search results to any folder while
-/// the search field is engaged, written as an inline `if` in
-/// `MailRootView.contentColumn`. Nothing kept the two pieces of state that
+/// the search field is engaged, once written as an inline `if` in the
+/// content column (now `MailContentColumn`). Nothing kept the two pieces of state that
 /// feed it in step, so #1217: picking a folder from the sidebar during a
 /// search set `selectedFolder` and slid the panel away, the sidebar drew the
 /// row as `Selected`, and the column carried on showing the search results
@@ -31,7 +31,7 @@ enum ContentColumnPolicy {
         case empty
     }
 
-    /// The precedence `contentColumn` renders, stated once.
+    /// The precedence `MailContentColumn` renders, stated once.
     static func mode(isSearching: Bool, selectedFolderPath: String?) -> Mode {
         if isSearching { return .search }
         guard let selectedFolderPath else { return .empty }
