@@ -80,21 +80,13 @@ public final class AppState {
     /// directly; it's a one-shot handoff, and consuming it during view
     /// setup must not invalidate anyone's body.
     @ObservationIgnored var pendingComposeAttachments: [UUID: [Attachment]] = [:]
-    /// Reply / reply-all / forward intent counters bumped from the macOS
-    /// menu bar so the shortcut fires regardless of which scene holds
-    /// AppKit first-responder focus. The currently-presented
-    /// `MessageDetailView` observes them and runs `beginCompose(_:)` with
-    /// the matching mode; when no detail view is on screen the bump is a
-    /// no-op, which matches the user expectation that Reply without a
-    /// selected message does nothing.
+    /// Retired Message-menu intents: the menu now sends Reply, Reply All,
+    /// Forward, Mark, Flag and Move to the window in front
+    /// (`WindowCommands`), and nothing observes these six. They go with the
+    /// rest of the command ticks once every menu has moved.
     var replyRequestTick = 0
     var replyAllRequestTick = 0
     var forwardRequestTick = 0
-    /// Selection-scoped message-action intents bumped from the shared
-    /// Message menu (`MessageMenuCommands`: macOS menu bar, iPadOS
-    /// hardware-keyboard menu). The on-screen `MessageListView` observes
-    /// them and applies the action to its current selection; with nothing
-    /// selected the bump is a no-op, matching the Reply convention above.
     var toggleSeenRequestTick = 0
     var toggleFlaggedRequestTick = 0
     var moveSelectionRequestTick = 0
@@ -102,28 +94,6 @@ public final class AppState {
     /// `MessageListView` observes it and stages its confirmation; nothing
     /// answers on the search surface, which is why the menu dims there.
     var markFolderReadRequestTick = 0
-    /// Which section is in front of the user — the mail list or the feed
-    /// reader — so the Message/Mailbox and Feeds menus, which share chords
-    /// (⌘T, ⌘⇧8, ⌥⌘T), are never both enabled. Reported by the layout that
-    /// knows: `MailRootView` on the wide layouts (feed scope selected or
-    /// not), the section tabs on compact and visionOS. See
-    /// `SharedChordPolicy`.
-    public var activeSection: ResumeSession.Section = .mail
-    /// What the Feeds menu's item commands have to act on, reported by the
-    /// surface that owns the feed scope and item selection
-    /// (`reportsFeedMenuAvailability`); the feed twin of
-    /// `messageMenuAvailability`.
-    var feedMenuAvailability: FeedMenuAvailability = .none
-    /// What those commands (and the reply family) currently have to act on,
-    /// reported by the mail surface via `reportsMessageMenuAvailability`. The
-    /// menu dims a command that would be a no-op instead of advertising it.
-    var messageMenuAvailability: MessageMenuAvailability = .none
-    /// What the macOS `Mailbox` menu can act on, reported by the mail surfaces
-    /// themselves. Separate from `messageMenuAvailability` because it answers a
-    /// different question — "is a list on screen at all", not "what is
-    /// selected" — and Refresh is dead in a state where the whole selection
-    /// question is moot (#1162).
-    public var mailboxMenuAvailability: MailboxMenuAvailability = .none
     /// Intent to open the iOS / iPadOS / visionOS settings sheet (General /
     /// Addresses / Folders). Bumped by the sidebar gear button and the ⌘,
     /// app command; `SignedInRootView` observes it and presents the sheet.

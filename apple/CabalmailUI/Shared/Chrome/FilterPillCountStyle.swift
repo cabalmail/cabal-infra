@@ -13,14 +13,8 @@ import SwiftUI
 enum FilterPillCountStyle {
 
     /// Whether this platform draws app windows over passthrough rather than
-    /// over an opaque surface.
-    static let overPassthroughGlass: Bool = {
-        #if os(visionOS)
-        return true
-        #else
-        return false
-        #endif
-    }()
+    /// over an opaque surface (`HostPlatform.drawsOverPassthrough`).
+    static let overPassthroughGlass = HostPlatform.current.drawsOverPassthrough
 
     /// How prominently the count is drawn.
     enum Emphasis: Equatable {

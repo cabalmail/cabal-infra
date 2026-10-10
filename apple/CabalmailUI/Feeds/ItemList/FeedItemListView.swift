@@ -27,11 +27,9 @@ struct FeedItemListView: View {
     /// The window's navigator, whose parked feed item this list selects; nil
     /// outside a main window.
     @Environment(SceneNavigator.self) private var navigator: SceneNavigator?
-    #if !os(macOS)
-    /// Whether this is the wide layout, which decides where the scope switch
-    /// is drawn (`scopeSwitchHost`).
-    @Environment(\.showsSettingsGear) var showsSettingsGear
-    #endif
+    /// The window's layout shell, which decides where the scope switch is
+    /// drawn (`scopeSwitchHost`).
+    @Environment(\.shellLayout) var shellLayout
     @State var model: FeedItemListViewModel?
     /// Gates for the launch restore — see `applyLaunchRestoreWhenReady`.
     @State private var hasAppeared = false

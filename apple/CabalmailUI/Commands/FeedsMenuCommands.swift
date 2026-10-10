@@ -4,31 +4,30 @@ import SwiftUI
 /// it up from the same declaration). Commands dispatch through
 /// `AppState.requestFeedCommand`, and the mounted feed sidebar answers the
 /// catalog ones through `FeedManagementSheets` while the mounted item list
-/// answers the item ones, the same tick pattern the Mailbox and Message
-/// menus use. Dimmed while signed out: nothing is there to answer.
+/// answers the item ones. Dimmed with no signed-in main window in front.
 ///
 /// The item commands carry the Message menu's own chords (⌘T, ⌘⇧8) and the
 /// Mailbox menu's ⌥⌘T, so a user who learned them on mail has them on feeds.
 /// Two menus on one chord are only safe if exactly one is enabled at a time:
 /// `SharedChordPolicy` gives the chord to the section in front.
 ///
-/// Each command is aimed at the focused main window (`MainWindowCommandScope`),
-/// so a second window's sidebar and list leave it alone.
+/// Each command is aimed at the focused main window, so a second window's
+/// sidebar and list leave it alone.
 public struct FeedsMenuCommands: Commands {
     let appState: AppState
     @FocusedValue(\.commandWindowID) private var focusedWindow
+    /// The main window in front, whose surfaces say what the items act on.
+    @FocusedValue(\.windowCommands) private var commands
 
     public init(appState: AppState) {
         self.appState = appState
     }
 
     public var body: some Commands {
-        let itemsLive = SharedChordPolicy.feedItemsLive(
-            appState.feedMenuAvailability, activeSection: appState.activeSection
-        )
-        let markAllLive = SharedChordPolicy.feedMarkAllReadLive(
-            appState.feedMenuAvailability, activeSection: appState.activeSection
-        )
+        let feeds = commands?.feedMenu ?? .none
+        let section = commands?.activeSection ?? .mail
+        let itemsLive = SharedChordPolicy.feedItemsLive(feeds, activeSection: section)
+        let markAllLive = SharedChordPolicy.feedMarkAllReadLive(feeds, activeSection: section)
         CommandMenu("Feeds") {
             Button("Subscribe to Feed…") { appState.requestFeedCommand(.subscribe, in: target) }
                 .keyboardShortcut("n", modifiers: [.command, .option])
@@ -68,6 +67,6 @@ public struct FeedsMenuCommands: Commands {
         }
     }
 
-    private var available: Bool { appState.status == .signedIn }
+    private var available: Bool { commands != nil }
     private var target: UUID? { appState.menuCommandTarget(focused: focusedWindow) }
 }

@@ -41,11 +41,8 @@ extension MessageListView {
                 .onWindowCommand(appState.markFolderReadRequestTick) {
                     markAllReadConfirmPresented = true
                 }
-                // Tells the Mailbox menu which folder ⌥⌘T would act on; the
-                // disappear is path-guarded because the list is re-keyed per
-                // folder and the new list appears before the old one goes.
-                .onAppear { appState.mailboxMenuAvailability.folderListAppeared(folder.path) }
-                .onDisappear { appState.mailboxMenuAvailability.folderListDisappeared(folder.path) }
+                // Tells the Mailbox menu which folder ⌥⌘T would act on.
+                .reportsMailboxFolder(folder.path)
         } else {
             content
         }
