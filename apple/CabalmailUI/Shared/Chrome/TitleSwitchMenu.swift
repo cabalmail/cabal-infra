@@ -37,7 +37,6 @@ struct TitleSwitchMenuRows<Option: Hashable>: View {
     }
 }
 
-#if !os(macOS)
 /// A list column's title-switch menu drawn as a header row inside the
 /// column, above the list, for the layouts whose column-scoped bar has no
 /// width to spare for a title menu (`FolderSwitchPlacement`, #1626): the
@@ -75,7 +74,6 @@ struct TitleSwitchHeaderMenu<Items: View>: View {
         .padding(.vertical, 4)
     }
 }
-#endif
 
 #if os(macOS)
 extension View {

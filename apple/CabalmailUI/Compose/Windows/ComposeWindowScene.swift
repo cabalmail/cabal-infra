@@ -75,13 +75,10 @@ enum ComposeSurfacePolicy {
         return sheetIsUp ? .refuse : .sheet
     }
 
-    /// The host platform, as a value rather than a `#if`, so the rule above
-    /// can be exercised for both answers on whichever platform the tests run.
-    #if os(macOS) || os(visionOS)
-    static let platformAlwaysWindows = true
-    #else
-    static let platformAlwaysWindows = false
-    #endif
+    /// The host platform's answer (`HostPlatform.alwaysWindows`), as a value
+    /// so the rule above can be exercised for both answers on whichever
+    /// platform the tests run.
+    static let platformAlwaysWindows = HostPlatform.current.alwaysWindows
 }
 
 /// Compose scene group. Both `CabalmailApp` (iOS / iPadOS / visionOS)

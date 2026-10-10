@@ -42,4 +42,21 @@ public enum HostPlatform {
     var drawsOverPassthrough: Bool {
         self == .visionOS
     }
+
+    /// Whether Settings opens with its category list and a category side by
+    /// side: the Mac's Settings window and the visionOS Settings tab. iOS
+    /// opens on the list alone, on the phone's tab and in the iPad's sheet,
+    /// so a category chosen in advance there would skip the list
+    /// (`SettingsView.initialSelection`).
+    var settingsOpensBothColumns: Bool {
+        self == .macOS || self == .visionOS
+    }
+
+    /// Whether a new message always opens in a window of its own: the Mac
+    /// and visionOS, which never present the compose sheet. iOS decides by
+    /// whether its scene can open another window
+    /// (`ComposeSurfacePolicy.opensInWindow`).
+    var alwaysWindows: Bool {
+        self == .macOS || self == .visionOS
+    }
 }
