@@ -32,11 +32,12 @@ final class SceneNavigatorStoredRouteTests: XCTestCase {
 
     private func makeNavigator(
         _ coordinator: NavStateCoordinator, stored: AppRoute?, hasClient: Bool = true,
+        deepLinks: DeepLinkRouter = DeepLinkRouter(),
         feeds: @escaping @MainActor (AppRoute.Feeds) -> NavStateCoordinator.FeedLaunchTarget? = { _ in nil }
     ) -> SceneNavigator {
         SceneNavigator(
             coordinator: { coordinator }, hasClient: { hasClient }, seed: store.loadSession()?.section,
-            storedRoute: stored, feedsLaunchTarget: { _, stored in feeds(stored) }
+            storedRoute: stored, deepLinks: deepLinks, feedsLaunchTarget: { _, stored in feeds(stored) }
         )
     }
 
@@ -94,8 +95,9 @@ final class SceneNavigatorStoredRouteTests: XCTestCase {
 
     func testAParkedDeepLinkBeatsTheStoredRoute() async throws {
         let coordinator = try makeCoordinator()
-        coordinator.navigateRequest = NavState(folder: "Lists", uid: 3, clientID: "push")
-        let navigator = makeNavigator(coordinator, stored: mailRoute("Archive", uid: 7))
+        let router = DeepLinkRouter()
+        router.open(.message(NavState(folder: "Lists", uid: 3, clientID: "push")))
+        let navigator = makeNavigator(coordinator, stored: mailRoute("Archive", uid: 7), deepLinks: router)
 
         await navigator.mailTreeAppeared(UUID(), isWide: false)
 

@@ -26,27 +26,45 @@ import UIKit
 ///
 /// The main scene has no stable, documented marker among
 /// `UIApplication.shared.openSessions` (SwiftUI owns the session
-/// configuration), so the main window records its own session here via
-/// `recordsMainSceneSession()` and the closing compose window reads it
-/// back.
+/// configuration), so each main window records its own session here, under
+/// its window identity, via `recordsMainSceneSession()`. A closing compose
+/// window reads back the window it came from, and a tapped notification the
+/// window its scene belongs to.
 @MainActor
 enum MainMailScene {
-    /// The main mail window's scene session, recorded by
-    /// `recordsMainSceneSession()`. Weak: a discarded scene must not be
-    /// kept alive by this bookkeeping.
-    static weak var session: UISceneSession?
+    /// Each main window's scene session, by window. Weak: a discarded scene
+    /// must not be kept alive by this bookkeeping.
+    private static var sessions = WindowRegistry<UISceneSession>()
 
-    /// Brings the main mail scene to the foreground. With no recorded
-    /// session — a mailto: cold launch straight into compose, or a compose
-    /// window that outlived the mail scene it was opened from — it asks for
-    /// a new application-role scene instead, which SwiftUI serves from the
-    /// first `WindowGroup`, the mail window. The compose window then has
-    /// somewhere to land: `dismissWindow()` cannot dismiss an app's last
-    /// scene on iOS, so without this a lone compose window shrugged off
-    /// Cancel and Send alike (#1688).
-    static func activate() {
+    /// Records `session` as `window`'s.
+    static func register(_ session: UISceneSession, for window: UUID) {
+        sessions.register(session, for: window)
+    }
+
+    /// Forgets `window`, while it still holds `session`.
+    static func remove(_ window: UUID, holding session: UISceneSession?) {
+        sessions.remove(window, holding: session)
+    }
+
+    /// The main window whose scene is `session`: where a notification the
+    /// system showed over that scene opens. Nil for a compose scene, or a
+    /// main window that has not recorded itself yet.
+    static func window(for session: UISceneSession?) -> UUID? {
+        sessions.window(holding: session)
+    }
+
+    /// Brings a main mail scene to the foreground: `window`'s, else
+    /// `fallback`'s, else the one recorded last. With no recorded session —
+    /// a mailto: cold launch straight into compose, or a compose window that
+    /// outlived the mail scene it was opened from — it asks for a new
+    /// application-role scene instead, which SwiftUI serves from the first
+    /// `WindowGroup`, the mail window. The compose window then has somewhere
+    /// to land: `dismissWindow()` cannot dismiss an app's last scene on iOS,
+    /// so without this a lone compose window shrugged off Cancel and Send
+    /// alike (#1688).
+    static func activate(_ window: UUID? = nil, fallback: UUID? = nil) {
         let request: UISceneSessionActivationRequest
-        if let session {
+        if let session = sessions.value(for: window) ?? sessions.value(for: fallback) ?? sessions.latest {
             request = UISceneSessionActivationRequest(session: session)
         } else {
             request = UISceneSessionActivationRequest(role: .windowApplication)
@@ -56,26 +74,58 @@ enum MainMailScene {
 }
 
 /// Empty `UIViewRepresentable` whose only job is to reach the hosting
-/// `UIWindowScene` so the main window can record its scene session —
-/// the same window-hook trick `ComposeWindowCloseInterceptor` uses on
-/// macOS.
+/// `UIWindowScene` so the main window can record its scene session under
+/// its window identity — the same window-hook trick
+/// `ComposeWindowCloseInterceptor` uses on macOS.
 private struct MainSceneSessionRecorder: UIViewRepresentable {
+    let window: UUID?
+
+    @MainActor
+    final class Coordinator {
+        var window: UUID?
+        weak var session: UISceneSession?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> UIView {
         let view = UIView(frame: .zero)
+        let coordinator = context.coordinator
+        coordinator.window = window
         // The window isn't attached during makeUIView; defer to the next
         // runloop tick so UIKit has finished wiring the scene host.
         DispatchQueue.main.async { [weak view] in
-            if let session = view?.window?.windowScene?.session {
-                MainMailScene.session = session
-            }
+            Self.record(view?.window?.windowScene?.session, in: coordinator)
         }
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        if let session = uiView.window?.windowScene?.session {
-            MainMailScene.session = session
+        context.coordinator.window = window
+        Self.record(uiView.window?.windowScene?.session, in: context.coordinator)
+    }
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        if let window = coordinator.window {
+            MainMailScene.remove(window, holding: coordinator.session)
         }
+    }
+
+    private static func record(_ session: UISceneSession?, in coordinator: Coordinator) {
+        if let session, let window = coordinator.window {
+            coordinator.session = session
+            MainMailScene.register(session, for: window)
+        }
+    }
+}
+
+/// Hands the recorder the window identity `mainWindowCommandScope` gives
+/// this window.
+private struct MainSceneSessionRecording: View {
+    @Environment(\.commandWindowID) private var window
+
+    var body: some View {
+        MainSceneSessionRecorder(window: window)
     }
 }
 
@@ -84,7 +134,7 @@ extension View {
     /// closing compose window can re-activate it. Apply on the main
     /// window's root content.
     public func recordsMainSceneSession() -> some View {
-        background(MainSceneSessionRecorder())
+        background(MainSceneSessionRecording())
     }
 }
 #else

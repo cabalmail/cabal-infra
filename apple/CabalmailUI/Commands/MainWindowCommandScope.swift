@@ -70,8 +70,10 @@ private struct WindowCommandObserver<Tick: Equatable>: ViewModifier {
 
 extension View {
     /// Installs the window identity on a main window's root. Apply once per
-    /// main `WindowGroup`, outside the `.environment(appState)` it reads
-    /// nothing from (the state is passed in for that reason).
+    /// main `WindowGroup`, as its outermost modifier: it reads nothing from
+    /// the `.environment(appState)` inside it (the state is passed in for
+    /// that reason), and the launch chain inside it routes a Spotlight result
+    /// to this window by the identity.
     public func mainWindowCommandScope(_ appState: AppState) -> some View {
         modifier(MainWindowCommandScope(appState: appState))
     }

@@ -166,11 +166,11 @@ private struct ComposeWindowContent: View {
                     if let slot { appState.composeSlots.release(slot) }
                     // iPadOS shows the home screen when the frontmost
                     // scene is dismissed with no sibling activated; bring
-                    // the main mail scene forward first so closing compose
-                    // lands back on the split view (see
+                    // the main window last used forward first so closing
+                    // compose lands back on the split view (see
                     // MainSceneActivation.swift).
                     #if os(iOS)
-                    MainMailScene.activate()
+                    MainMailScene.activate(fallback: appState.lastActiveMainWindow)
                     #endif
                     dismissWindow()
                 }

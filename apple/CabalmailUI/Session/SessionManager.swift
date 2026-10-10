@@ -379,10 +379,10 @@ extension SessionManager {
             sessionEnvironment.hooks.sessionDidStart(appState, newClient)
         }
         // Refresh the on-device Spotlight index for this session (each
-        // subscribed folder's top page), and route a Spotlight tap that
-        // arrived before the session was wired (cold launch from search).
+        // subscribed folder's top page). A Spotlight tap that arrived before
+        // the session was wired waits in `DeepLinkRouter` for the first
+        // window to open.
         Task { await newClient.refreshSpotlightIndex() }
-        owner.routeParkedOpens()
         // Feed reader (RSS plan, phase 5): the first pass pulls the catalog
         // and every subscription's new items so the Feeds section is current
         // before the user opens it; then every fifteen minutes.

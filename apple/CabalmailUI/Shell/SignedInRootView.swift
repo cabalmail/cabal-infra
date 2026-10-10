@@ -118,7 +118,13 @@ struct SignedInRootView: View {
             // because this view is in the visible hierarchy in every tab,
             // folder, and modal state; see ComposeRequestRouter.
             .composeRequestRouter()
-            .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
+            // The window's navigator takes the deep links aimed at it, and a
+            // link parked before it existed (`DeepLinkRouter`).
+            .onChange(of: commandWindowID, initial: true) { _, id in
+                navigator.windowID = id
+                appState.deepLinks.register(navigator)
+            }
+            .onDisappear { appState.deepLinks.unregister(navigator) }
             .modifier(WindowPlaceKeeper(navigator: navigator, storedRoute: $storedRoute))
             #if os(iOS)
             .onChange(of: layoutChoice, initial: true) { _, layout in
@@ -131,11 +137,7 @@ struct SignedInRootView: View {
             // coordinator: nothing of the last account's place carries over.
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
                 navigator = SceneNavigator(appState: appState, windowID: commandWindowID)
-            }
-            // Push, Spotlight and Siri write one app-wide request; the first
-            // window to see it takes it.
-            .onChange(of: appState.navCoordinator?.navigateRequest) {
-                navigator.takeNavigateRequest()
+                appState.deepLinks.register(navigator)
             }
     }
 

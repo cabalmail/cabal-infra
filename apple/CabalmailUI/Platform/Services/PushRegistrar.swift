@@ -162,7 +162,7 @@ struct PushNotificationCenter {
 /// and the actions borrow that manager's client.
 @MainActor
 public final class PushRegistrar {
-    public static let shared = PushRegistrar()
+    public static let shared = PushRegistrar(deepLinks: .shared)
 
     /// The two values `/push_register` derives the APNs topic from. The
     /// Lambda validates the pair (`com.cabalmail.Cabalmail` -> `ios`,
@@ -191,8 +191,8 @@ public final class PushRegistrar {
         }
     }
 
-    /// Set by `sessionDidStart`; navigation targets (`navCoordinator`)
-    /// hang off it. Weak — the registrar outlives any session.
+    /// Set by `sessionDidStart`; the account and the list refresh read it.
+    /// Weak — the registrar outlives any session.
     private(set) weak var appState: AppState?
 
     /// The process's session manager, handed in by the app entry
@@ -211,17 +211,15 @@ public final class PushRegistrar {
     /// session starts.
     private var pendingToken: String?
 
-    /// A tapped notification that arrived before sign-in / restore
-    /// completed; routed once the session is wired, unless the session is
-    /// another account's (`forgetOtherAccount`) or ends first.
-    private var pendingOpen: PushMessageRef?
-
     /// The notification center, the defaults the registrar's keys and
     /// `PushSettings` live in, and the NSE's shared containers: the real ones
     /// everywhere but the app-layer tests.
     private let notificationCenter: PushNotificationCenter
     private let defaults: UserDefaults
     private let enrichmentStore: PushEnrichmentStore
+    /// Where a tapped notification opens (`DeepLinkRouter`); a tap before a
+    /// window can take it parks there.
+    private let deepLinks: DeepLinkRouter
 
     /// UserDefaults key for the token most recently accepted by
     /// `/push_register` — i.e. what sign-out must deregister.
@@ -234,11 +232,13 @@ public final class PushRegistrar {
     init(
         notificationCenter: PushNotificationCenter = .live,
         defaults: UserDefaults = .standard,
-        enrichmentStore: PushEnrichmentStore = PushEnrichmentStore()
+        enrichmentStore: PushEnrichmentStore = PushEnrichmentStore(),
+        deepLinks: DeepLinkRouter = DeepLinkRouter()
     ) {
         self.notificationCenter = notificationCenter
         self.defaults = defaults
         self.enrichmentStore = enrichmentStore
+        self.deepLinks = deepLinks
     }
 
     /// Called once from the app entry's init, before any scene exists and so
@@ -285,25 +285,21 @@ public final class PushRegistrar {
             pendingToken = nil
             deviceTokenDidChange(token)
         }
-        if let open = pendingOpen {
-            pendingOpen = nil
-            route(open)
-        }
     }
 
     /// A notification names its message only by folder and UID, which mean
     /// something only in the account it was delivered for (#1872). When a
     /// session starts for another account than the last one, what the last
-    /// one left goes before anything is replayed: a tap parked while no
-    /// session was wired, and the notifications still delivered, whose
-    /// actions would otherwise run against this account. The same account
-    /// keeps both. With no account remembered (the first session since this
+    /// one left goes before a window can open it: a tap parked while no
+    /// session was wired (`DeepLinkRouter`), and the notifications still
+    /// delivered, whose actions would otherwise run against this account.
+    /// The same account keeps both. With no account remembered (the first session since this
     /// was added), nothing is dropped. A control domain holds no `@`, so
     /// `account` names one pair.
     private func forgetOtherAccount(_ account: String) {
         defer { defaults.set(account, forKey: Self.lastAccountKey) }
         guard let last = defaults.string(forKey: Self.lastAccountKey), last != account else { return }
-        pendingOpen = nil
+        deepLinks.discardParked()
         notificationCenter.removeAllDeliveredNotifications()
     }
 
@@ -360,7 +356,7 @@ public final class PushRegistrar {
         // The session's notifications, and a tap parked for it, name messages
         // only by folder and UID: whoever signs in next must not act on them
         // (#1872).
-        pendingOpen = nil
+        deepLinks.discardParked()
         notificationCenter.removeAllDeliveredNotifications()
         defer {
             sessionClient = nil
@@ -444,7 +440,10 @@ extension PushRegistrar {
     /// background task (a real UIKit one on iOS, a no-op shim on macOS)
     /// and returns only once the operation resolves, so `AppDelegate` can
     /// end the system's action budget truthfully.
-    func handleNotificationAction(identifier: String, ref: PushMessageRef?) async {
+    ///
+    /// - Parameter window: the main window the system showed the
+    ///   notification over, when it said (iPad); a tap opens there.
+    func handleNotificationAction(identifier: String, ref: PushMessageRef?, in window: UUID? = nil) async {
         switch identifier {
         case "MARK_READ":
             guard let message = ref?.messageRef else { return }
@@ -475,28 +474,24 @@ extension PushRegistrar {
             }
         case "OPEN", UNNotificationDefaultActionIdentifier:
             guard let ref else { return }
-            route(ref)
+            route(ref, in: window)
         default:
             break
         }
     }
 
-    /// Routes the app to the pushed message. While signed in this drives
-    /// the same `navigateRequest` machinery as the cross-device resume
-    /// toast; before the session is wired (cold launch from a tap) the ref
-    /// parks here and `sessionDidStart` re-routes it — a window's first
-    /// landing drains a request parked before it (`SceneNavigator`).
-    private func route(_ ref: PushMessageRef) {
-        guard let coordinator = appState?.navCoordinator else {
-            pendingOpen = ref
-            return
-        }
-        coordinator.navigateRequest = NavState(
+    /// Opens the pushed message in one window (`DeepLinkRouter`): the one
+    /// the system showed the notification over, else the one last used.
+    /// Before a window can take it (a cold launch from a tap) it parks
+    /// there for the first window to open, unless the session is another
+    /// account's (`forgetOtherAccount`) or ends first.
+    private func route(_ ref: PushMessageRef, in window: UUID?) {
+        deepLinks.open(.message(NavState(
             folder: ref.folder,
             messageID: ref.messageID,
             uid: ref.uid,
-            clientID: coordinator.clientID
-        )
+            clientID: appState?.navCoordinator?.clientID ?? InstallIdentity.clientID(defaults: defaults)
+        )), in: window)
     }
 }
 

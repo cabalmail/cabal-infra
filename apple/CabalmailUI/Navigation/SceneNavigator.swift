@@ -18,7 +18,7 @@ import CabalmailKit
 /// **Trees.** Each `MailRootView` instance is a tree with an identity of its
 /// own (`mailTreeAppeared`), and so is visionOS's tab view, which has no
 /// layout swap and so only ever one. The first tree in a window lands — on a
-/// parked navigate request, else the window's stored route (`StoredRoute`),
+/// parked deep link (`DeepLinkRouter`), else the window's stored route (`StoredRoute`),
 /// else the launch snapshot of the resume session. A tree built later by a
 /// layout swap renders the window's route instead: the folder stays, and an
 /// open message is re-parked in the window's own `WindowRestores`, so the new
@@ -102,7 +102,7 @@ final class SceneNavigator {
     private(set) var loadedFolders: [Folder] = []
 
     /// Whether this window has landed: on the session's folder, provisionally,
-    /// in the feed reader, or on a navigate request. Never reset — a cleared
+    /// in the feed reader, or on a deep link. Never reset — a cleared
     /// selection later must not pull the user back to the landing.
     private(set) var didLand = false
 
@@ -125,6 +125,8 @@ final class SceneNavigator {
 
     private let coordinator: @MainActor () -> NavStateCoordinator?
     private let hasClient: @MainActor () -> Bool
+    /// The router deep links reach this window through (`open(_:)`).
+    private let deepLinks: DeepLinkRouter
     private let feedsLaunchTarget: @MainActor (NavStateCoordinator, AppRoute.Feeds) async
         -> NavStateCoordinator.FeedLaunchTarget?
 
@@ -142,6 +144,8 @@ final class SceneNavigator {
     ///     and what its first landings reopen.
     ///   - lastUsedWindow: the window the user last used, which alone records
     ///     (`WindowRecorder`).
+    ///   - deepLinks: the router this window takes deep links from; the
+    ///     app's (`AppState.deepLinks`), or a test's own.
     ///   - feedsLaunchTarget: the feed scope and item a landing in feeds
     ///     reopens, given the window's stored feeds; the coordinator's
     ///     local-store lookup, replaceable in tests.
@@ -151,11 +155,13 @@ final class SceneNavigator {
         seed: ResumeSession.Section? = ResumeSessionStore.storedSection(),
         storedRoute: AppRoute? = nil,
         lastUsedWindow: @escaping @MainActor () -> UUID? = { nil },
+        deepLinks: DeepLinkRouter = DeepLinkRouter(),
         feedsLaunchTarget: @escaping @MainActor (NavStateCoordinator, AppRoute.Feeds) async
             -> NavStateCoordinator.FeedLaunchTarget? = { await $0.consumeFeedsLaunchTarget(stored: $1) }
     ) {
         self.coordinator = coordinator
         self.hasClient = hasClient
+        self.deepLinks = deepLinks
         self.feedsLaunchTarget = feedsLaunchTarget
         recorder = WindowRecorder(coordinator: coordinator, lastUsedWindow: lastUsedWindow)
         let section = storedRoute?.section ?? seed ?? .mail
@@ -260,10 +266,9 @@ final class SceneNavigator {
 
     // MARK: Landing
 
-    /// The launch landing (`docs/1.x/resume-session-plan.md`). A navigate
-    /// request parked before this window existed — a cold launch from a
-    /// tapped notification routes as soon as the session is wired, before
-    /// the first render — is the landing, and pre-empts the session's.
+    /// The launch landing (`docs/1.x/resume-session-plan.md`). A deep link
+    /// parked before this window existed (a cold launch from a tapped
+    /// notification) is the landing, and pre-empts the session's.
     /// Otherwise the window's stored route (`StoredRoute`) comes before the
     /// session: a route or session that ended in the feed reader reopens its
     /// scope on the wide layout, which hosts feeds in the same split;
@@ -275,9 +280,7 @@ final class SceneNavigator {
     /// flash the unsubscribed-folder banner before the real state arrives.
     private func landIfNeeded(_ tree: UUID, isWide: Bool) async {
         guard let coordinator = coordinator() else { return }
-        if let request = coordinator.navigateRequest {
-            navigate(to: request)
-        }
+        if let link = deepLinks.takeParked() { await open(link, coordinator, ifStill: deepLinks.generation) }
         guard !didLand, selectedFolder == nil else { return }
         if isWide, splitShowsFeeds {
             // The Feeds tab landed before the window widened: the window has
@@ -380,11 +383,11 @@ final class SceneNavigator {
     /// result, Siri, the resume banner: parks its message for this window's
     /// list and moves to its folder and the Mail tab. A new folder re-mounts
     /// the list, which takes the restore; a mounted list sees the new
-    /// `pendingRestore`. Supersedes a request parked for a first landing. A
+    /// `pendingRestore`. Supersedes a link parked for a first landing. A
     /// window opened after it lands where the user went (#1966).
     func navigate(to cursor: NavState) {
         guard let coordinator = coordinator() else { return }
-        coordinator.navigateRequest = nil
+        deepLinks.discardParked()
         coordinator.didConsumeLaunchSession = true
         restores.schedule(cursor, priming: recorder.recording)
         if selectedFolder?.path != cursor.folder {
@@ -394,14 +397,6 @@ final class SceneNavigator {
         // The compact tab bar opens on Mail, noting the section as a tab
         // switch does; the wide layout's folder record moves the session.
         if layoutIsWide { compactTab = .mail } else { showTab(.mail) }
-    }
-
-    /// `navigateRequest` changed: the first window to see a request takes it.
-    /// It stays one app-wide slot, written by push, Spotlight and App Intents,
-    /// which do not know which window should answer.
-    func takeNavigateRequest() {
-        guard let request = coordinator()?.navigateRequest else { return }
-        navigate(to: request)
     }
 
     /// A sidebar pick, or the list's folder-switch menu. A pick of the folder
@@ -648,6 +643,28 @@ extension SceneNavigator {
                 }
             }
         }
+    }
+}
+
+// Deep links (`DeepLinkRouter`), in the same file so they reach the session's
+// coordinator.
+extension SceneNavigator {
+    /// A deep link the router delivered to this window. A notification's or
+    /// Siri's opens at once; a Spotlight result once its Message-ID is
+    /// looked up. With no session to open it in, it goes back to the router.
+    func open(_ link: DeepLink) {
+        guard let coordinator = coordinator() else { return deepLinks.giveBack(link) }
+        if let cursor = coordinator.immediateCursor(for: link) { return navigate(to: cursor) }
+        let generation = deepLinks.generation
+        Task { await open(link, coordinator, ifStill: generation) }
+    }
+
+    /// Opens `link` once its cursor is known, unless a later link or a
+    /// navigation has come since `generation` (`DeepLinkRouter.generation`).
+    private func open(_ link: DeepLink, _ coordinator: NavStateCoordinator, ifStill generation: Int) async {
+        let cursor = await coordinator.cursor(for: link)
+        guard deepLinks.generation == generation else { return }
+        navigate(to: cursor)
     }
 }
 

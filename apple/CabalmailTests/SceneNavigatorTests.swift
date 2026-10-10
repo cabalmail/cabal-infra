@@ -29,8 +29,12 @@ final class SceneNavigatorTests: XCTestCase {
         return NavStateCoordinator(client: client, clientID: "this-install", store: store)
     }
 
-    private func makeNavigator(_ coordinator: NavStateCoordinator) -> SceneNavigator {
-        SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: store.loadSession()?.section)
+    private func makeNavigator(
+        _ coordinator: NavStateCoordinator, deepLinks: DeepLinkRouter = DeepLinkRouter()
+    ) -> SceneNavigator {
+        SceneNavigator(
+            coordinator: { coordinator }, hasClient: { true }, seed: store.loadSession()?.section, deepLinks: deepLinks
+        )
     }
 
     private let inbox = Folder(path: "INBOX", isSubscribed: true)
@@ -63,37 +67,41 @@ final class SceneNavigatorTests: XCTestCase {
         XCTAssertEqual(mail.route.section, .mail)
     }
 
-    // MARK: Navigate requests
+    // MARK: Deep links
 
-    /// The request slot is app-wide; with two windows, the first to see a
-    /// request takes it and the other stays where it is.
-    func testTheFirstWindowToSeeARequestTakesIt() throws {
+    /// A link the router aims at one of two windows opens in that window;
+    /// the other stays where it is.
+    func testARouterTargetingOneWindowLeavesTheOtherAlone() throws {
         let coordinator = try makeCoordinator()
-        let first = makeNavigator(coordinator)
-        let second = makeNavigator(coordinator)
-        coordinator.navigateRequest = NavState(folder: "Archive", uid: 7, clientID: "push")
+        let router = DeepLinkRouter()
+        let first = makeNavigator(coordinator, deepLinks: router)
+        let second = makeNavigator(coordinator, deepLinks: router)
+        first.windowID = UUID()
+        second.windowID = UUID()
+        router.register(first)
+        router.register(second)
 
-        first.takeNavigateRequest()
-        second.takeNavigateRequest()
+        router.open(.message(NavState(folder: "Archive", uid: 7, clientID: "push")), in: first.windowID)
 
-        XCTAssertNil(coordinator.navigateRequest)
+        XCTAssertNil(router.parked)
         XCTAssertEqual(first.selectedFolder?.path, "Archive")
         XCTAssertNil(second.selectedFolder)
         XCTAssertEqual(first.restores.pendingRestore?.uid, 7)
         XCTAssertNil(second.restores.pendingRestore, "only the window that took it parks it")
     }
 
-    /// Tapping Resume supersedes a request still parked for the window's
-    /// first landing, as writing over the request slot used to.
-    func testANavigationSupersedesAParkedRequest() async throws {
+    /// Tapping Resume supersedes a link still parked for the window's first
+    /// landing.
+    func testANavigationSupersedesAParkedLink() async throws {
         let coordinator = try makeCoordinator()
-        let navigator = makeNavigator(coordinator)
-        coordinator.navigateRequest = NavState(folder: "Lists", uid: 3, clientID: "push")
+        let router = DeepLinkRouter()
+        let navigator = makeNavigator(coordinator, deepLinks: router)
+        router.open(.message(NavState(folder: "Lists", uid: 3, clientID: "push")))
 
         navigator.navigate(to: NavState(folder: "Archive", uid: 7, clientID: "other-install"))
         await navigator.mailTreeAppeared(UUID(), isWide: false)
 
-        XCTAssertNil(coordinator.navigateRequest)
+        XCTAssertNil(router.parked)
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
         XCTAssertEqual(navigator.restores.pendingRestore?.uid, 7)
     }

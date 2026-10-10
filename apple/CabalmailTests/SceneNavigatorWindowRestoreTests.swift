@@ -31,8 +31,12 @@ final class SceneNavigatorWindowRestoreTests: XCTestCase {
         return NavStateCoordinator(client: client, clientID: "this-install", store: store)
     }
 
-    private func makeNavigator(_ coordinator: NavStateCoordinator) -> SceneNavigator {
-        SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: store.loadSession()?.section)
+    private func makeNavigator(
+        _ coordinator: NavStateCoordinator, deepLinks: DeepLinkRouter = DeepLinkRouter()
+    ) -> SceneNavigator {
+        SceneNavigator(
+            coordinator: { coordinator }, hasClient: { true }, seed: store.loadSession()?.section, deepLinks: deepLinks
+        )
     }
 
     private let inbox = Folder(path: "INBOX", isSubscribed: true)
@@ -117,13 +121,14 @@ final class SceneNavigatorWindowRestoreTests: XCTestCase {
     func testAWindowOpenedAfterANavigationLandsWhereTheUserWent() async throws {
         store.saveSession(ResumeSession(section: .mail, folder: "Lists", uid: 42, messageID: "<42@example.com>"))
         let coordinator = try makeCoordinator()
-        coordinator.navigateRequest = NavState(folder: "Archive", uid: 7, clientID: "push")
-        let first = makeNavigator(coordinator)
+        let router = DeepLinkRouter()
+        router.open(.message(NavState(folder: "Archive", uid: 7, clientID: "push")))
+        let first = makeNavigator(coordinator, deepLinks: router)
         await first.mailTreeAppeared(UUID(), isWide: true)
         XCTAssertEqual(first.selectedFolder?.path, "Archive", "precondition: the tap was the landing")
         XCTAssertTrue(coordinator.didConsumeLaunchSession)
 
-        let second = makeNavigator(coordinator)
+        let second = makeNavigator(coordinator, deepLinks: router)
         await second.mailTreeAppeared(UUID(), isWide: true)
 
         XCTAssertEqual(second.selectedFolder?.path, "Archive")

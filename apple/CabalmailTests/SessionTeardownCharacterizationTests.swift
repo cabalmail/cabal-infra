@@ -27,7 +27,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     func testASpotlightTapBeforeASessionParksTheRef() {
         let state = AppState()
         state.routeSpotlightRef(parked)
-        XCTAssertEqual(state.pendingSpotlightRef, parked)
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(parked))
     }
 
     /// One slot: the latest tap wins.
@@ -35,29 +35,36 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         let state = AppState()
         state.routeSpotlightRef(parked)
         state.routeSpotlightRef(later)
-        XCTAssertEqual(state.pendingSpotlightRef, later)
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(later))
     }
 
     func testASpotlightActivityBeforeASessionParksItsRef() {
         let state = AppState()
         state.handleSpotlightActivity(Self.activity(identifier: parked.stringValue))
-        XCTAssertEqual(state.pendingSpotlightRef, parked)
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(parked))
     }
 
     func testAnActivityThatIsNotOursParksNothing() {
         let state = AppState()
         state.handleSpotlightActivity(Self.activity(identifier: "com.example.other|4242"))
         state.handleSpotlightActivity(NSUserActivity(activityType: CSSearchableItemActionType))
-        XCTAssertNil(state.pendingSpotlightRef)
+        XCTAssertNil(state.deepLinks.parked)
     }
 
-    /// The replay `wireSession` runs clears the slot and routes again, and
-    /// with no session that parks the ref straight back.
-    func testReplayingWithNoSessionParksTheRefAgain() {
+    /// Nothing replays a parked ref at session start any more: it waits in
+    /// the router for a window. A window with no session to open it in
+    /// hands it straight back, so it stays parked.
+    func testAWindowWithNoSessionLeavesTheRefParked() {
         let state = AppState()
         state.routeSpotlightRef(parked)
-        state.routePendingSpotlightOpen()
-        XCTAssertEqual(state.pendingSpotlightRef, parked)
+        let window = SceneNavigator(
+            coordinator: { nil }, hasClient: { false }, seed: .mail, deepLinks: state.deepLinks
+        )
+        window.windowID = UUID()
+
+        state.deepLinks.register(window)
+
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(parked))
     }
 
     /// The slot is not tied to an account, so a sign-out drops what it holds
@@ -72,7 +79,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
 
         await state.signOut()
 
-        XCTAssertNil(state.pendingSpotlightRef)
+        XCTAssertNil(state.deepLinks.parked)
     }
 
     /// An expiry ends the wait through the same teardown.
@@ -80,11 +87,11 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         let state = AppState()
         state.sessionManager.status = .signedIn
         state.routeSpotlightRef(parked)
-        XCTAssertEqual(state.pendingSpotlightRef, parked, "precondition: no session is wired")
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(parked), "precondition: no session is wired")
 
         await state.sessionManager.handleSessionExpiry()
 
-        XCTAssertNil(state.pendingSpotlightRef)
+        XCTAssertNil(state.deepLinks.parked)
         XCTAssertEqual(state.signedOutReason, .sessionExpired)
     }
 

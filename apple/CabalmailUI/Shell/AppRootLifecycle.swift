@@ -11,6 +11,9 @@ import CabalmailKit
 /// Declares no scene, and leaves the theme to each entry's own
 /// `.themedAppearance`: a scene is its own appearance root (#1460).
 struct AppRootLifecycle: ViewModifier {
+    /// The main window this chain hangs on (`mainWindowCommandScope`, which
+    /// each entry applies outside it), so a Spotlight result opens here.
+    @Environment(\.commandWindowID) private var windowID
     let appState: AppState
     let preferences: Preferences
     /// The entry's scene phase, which is the app's: active while any of its
@@ -75,11 +78,11 @@ struct AppRootLifecycle: ViewModifier {
                 }
             }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
-                // A tapped Spotlight result, parked on AppState until the
-                // session is wired when it arrives with a cold launch (see
+                // A tapped Spotlight result opens in this window, or parks
+                // for it until the session is wired on a cold launch (see
                 // SpotlightRouting.swift). macOS never delivers it here; its
-                // path is the app delegate's, through `SpotlightRouter`.
-                appState.handleSpotlightActivity(activity)
+                // path is the app delegate's.
+                appState.handleSpotlightActivity(activity, in: windowID)
             }
     }
 }

@@ -142,7 +142,8 @@ extension SceneNavigator {
             hasClient: { [weak appState] in appState?.client != nil },
             seed: storedRoute?.section ?? ResumeSessionStore.storedSection(),
             storedRoute: storedRoute,
-            lastUsedWindow: { [weak appState] in appState?.lastActiveMainWindow }
+            lastUsedWindow: { [weak appState] in appState?.lastActiveMainWindow },
+            deepLinks: appState.deepLinks
         )
         self.windowID = windowID
     }
