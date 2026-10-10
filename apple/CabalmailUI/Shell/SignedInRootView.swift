@@ -40,6 +40,9 @@ struct SignedInRootView: View {
     /// swap between the tab tree and the split rebuilds only the layout and
     /// the window keeps its folder, message and tab (`SceneNavigator`).
     @State private var navigator: SceneNavigator
+    /// The window's stored route (`ContentView`), which the navigator starts
+    /// on and `WindowPlaceKeeper` keeps current.
+    @Binding private var storedRoute: Data?
     /// This window's menu commands (`WindowCommands`), published to the menus.
     @State private var windowCommands: WindowCommands
     @State private var isOffline = false
@@ -57,11 +60,20 @@ struct SignedInRootView: View {
     @State private var settingsPresented = false
     #endif
 
-    /// - Parameter appState: read once, to seed the navigator from the
-    ///   session's coordinator (a `@State` initial value can't reach the
-    ///   environment). SwiftUI keeps the first navigator for the view's life.
-    init(appState: AppState) {
-        let navigator = SceneNavigator(appState: appState)
+    /// - Parameters:
+    ///   - appState: read once, to seed the navigator from the session's
+    ///     coordinator (a `@State` initial value can't reach the
+    ///     environment). SwiftUI keeps the first navigator for the view's life.
+    ///   - windowID: the window's identity, so its first landing knows
+    ///     whether it records.
+    ///   - storedRoute: the window's scene-stored route; one stored for
+    ///     another account is ignored.
+    init(appState: AppState, windowID: UUID?, storedRoute: Binding<Data?>) {
+        _storedRoute = storedRoute
+        let navigator = SceneNavigator(
+            appState: appState, windowID: windowID,
+            storedRoute: StoredRoute.route(in: storedRoute.wrappedValue, for: appState.routeAccount)
+        )
         _navigator = State(initialValue: navigator)
         _windowCommands = State(initialValue: WindowCommands(navigator: navigator))
     }
@@ -107,13 +119,14 @@ struct SignedInRootView: View {
             .composeRequestRouter()
             .focusedSceneValue(\.windowCommands, windowCommands)
             .onChange(of: commandWindowID, initial: true) { _, id in navigator.windowID = id }
+            .modifier(WindowPlaceKeeper(navigator: navigator, storedRoute: $storedRoute))
             .onChange(of: shellLayout, initial: true) { _, layout in
                 navigator.layoutIsWide = layout.isWideSplit
             }
             // A new sign-in gets a new navigator, as it gets a new
             // coordinator: nothing of the last account's place carries over.
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
-                navigator = SceneNavigator(appState: appState)
+                navigator = SceneNavigator(appState: appState, windowID: commandWindowID)
                 windowCommands = WindowCommands(navigator: navigator)
             }
             // Push, Spotlight and Siri write one app-wide request; the first

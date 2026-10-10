@@ -212,7 +212,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in .init(scope: .all) }
+            feedsLaunchTarget: { _, _ in .init(scope: .all) }
         )
 
         await navigator.mailTreeAppeared(UUID(), isWide: false)

@@ -18,16 +18,17 @@ import CabalmailKit
 /// **Trees.** Each `MailRootView` instance is a tree with an identity of its
 /// own (`mailTreeAppeared`), and so is visionOS's tab view, which has no
 /// layout swap and so only ever one. The first tree in a window lands — on a
-/// parked navigate request, else the launch snapshot of the resume session. A
-/// tree built later by a layout swap renders the window's route instead: the
-/// folder stays, and an open message is re-parked in the window's own
-/// `WindowRestores`, so the new list selects it once it has appeared and
-/// loaded. (A route with no folder lands on the live session, as a rebuilt
-/// tree always did.) Until a tree has taken over it sees no folder and no
-/// message, exactly as a fresh tree did before, so its list mounts only after
-/// the restore is parked and a compact stack is never handed a list and a
-/// reader in one update (#1664). Once a new tree has appeared, writes from
-/// the tree a swap is tearing down are dropped.
+/// parked navigate request, else the window's stored route (`StoredRoute`),
+/// else the launch snapshot of the resume session. A tree built later by a
+/// layout swap renders the window's route instead: the folder stays, and an
+/// open message is re-parked in the window's own `WindowRestores`, so the new
+/// list selects it once it has appeared and loaded. (A route with no folder
+/// lands on the live session, as a rebuilt tree always did.) Until a tree has
+/// taken over it sees no folder and no message, exactly as a fresh tree did
+/// before, so its list mounts only after the restore is parked and a compact
+/// stack is never handed a list and a reader in one update (#1664). Once a
+/// new tree has appeared, writes from the tree a swap is tearing down are
+/// dropped.
 ///
 /// **Feeds** follow the same pattern with trees of their own: `FeedRootView`
 /// (the Feeds tab on the compact layout and visionOS) and the wide
@@ -37,7 +38,8 @@ import CabalmailKit
 /// leaves the compact Feeds tab's place where it was.
 ///
 /// Every transition does what the view handler it replaced did, cursor
-/// recording included. The search model is the window's too
+/// recording included, but only the window last used records
+/// (`WindowRecorder`). The search model is the window's too
 /// (`searchModel`), but whether the window is searching is the view's: a
 /// transition that reads it takes `isSearching`. So is the folder list's
 /// selection (`mailSelection(for:)`), which a swap hands to the new tree's
@@ -45,10 +47,9 @@ import CabalmailKit
 @Observable
 @MainActor
 final class SceneNavigator {
-    /// The window this navigator belongs to: `MainWindowCommandScope`'s
-    /// `commandWindowID`, the identity command targeting already uses. Set
-    /// by the host from the environment; nil until then.
-    var windowID: UUID?
+    /// What this window writes to the resume session and the cursor, and
+    /// whether it may (`WindowRecorder`); it holds the window's `windowID`.
+    let recorder: WindowRecorder
 
     /// Whether the window shows the regular split rather than the compact
     /// tab tree. Set by the host as the layout changes, and by each tree as
@@ -81,13 +82,8 @@ final class SceneNavigator {
     /// The window's search model (`searchModel(client:preferences:mailStore:)`).
     @ObservationIgnored private var search: MessageListViewModel?
 
-    /// The selection of the window's folder list, and that list's folder
-    /// (`mailSelection(for:)`).
-    @ObservationIgnored private var listSelection: (folderPath: String, model: SelectionModel<MessageRef>)?
-
-    /// Whether a layout swap is handing `listSelection` to the next folder
-    /// list.
-    @ObservationIgnored private var handsOffSelection = false
+    /// The window's folder list's selection (`FolderListHold`).
+    private let listHold = FolderListHold()
 
     /// Counts the feed banners this window has followed, so the wide split
     /// can end a search for one as it does for a feed pick (`navigateFeeds`).
@@ -121,7 +117,7 @@ final class SceneNavigator {
     /// launch, used to record nothing; recording there would move the
     /// session out of Feeds and drop its open message. Once built, it
     /// recorded whatever tab was up, so this never goes back to false.
-    private var hasShownMail: Bool
+    private(set) var hasShownMail: Bool
 
     /// The tree that owns the window's folder, message and column
     /// (`TreeGate`).
@@ -129,7 +125,8 @@ final class SceneNavigator {
 
     private let coordinator: @MainActor () -> NavStateCoordinator?
     private let hasClient: @MainActor () -> Bool
-    private let feedsLaunchTarget: @MainActor (NavStateCoordinator) async -> NavStateCoordinator.FeedLaunchTarget?
+    private let feedsLaunchTarget: @MainActor (NavStateCoordinator, AppRoute.Feeds) async
+        -> NavStateCoordinator.FeedLaunchTarget?
 
     /// - Parameters:
     ///   - coordinator: the session's `NavStateCoordinator`, read live
@@ -140,29 +137,31 @@ final class SceneNavigator {
     ///     was. Read from the stored session rather than the coordinator, so
     ///     building a navigator observes nothing (the host's initializer
     ///     runs inside its parent's body).
+    ///   - storedRoute: the window's own route from its scene storage. It is
+    ///     the route the window starts on, so the first frame has its tab,
+    ///     and what its first landings reopen.
+    ///   - lastUsedWindow: the window the user last used, which alone records
+    ///     (`WindowRecorder`).
     ///   - feedsLaunchTarget: the feed scope and item a landing in feeds
-    ///     reopens; the coordinator's local-store lookup, replaceable in tests.
+    ///     reopens, given the window's stored feeds; the coordinator's
+    ///     local-store lookup, replaceable in tests.
     init(
         coordinator: @escaping @MainActor () -> NavStateCoordinator?,
         hasClient: @escaping @MainActor () -> Bool,
         seed: ResumeSession.Section? = ResumeSessionStore.storedSection(),
-        feedsLaunchTarget: @escaping @MainActor (NavStateCoordinator) async
-            -> NavStateCoordinator.FeedLaunchTarget? = { await $0.consumeFeedsLaunchTarget() }
+        storedRoute: AppRoute? = nil,
+        lastUsedWindow: @escaping @MainActor () -> UUID? = { nil },
+        feedsLaunchTarget: @escaping @MainActor (NavStateCoordinator, AppRoute.Feeds) async
+            -> NavStateCoordinator.FeedLaunchTarget? = { await $0.consumeFeedsLaunchTarget(stored: $1) }
     ) {
         self.coordinator = coordinator
         self.hasClient = hasClient
         self.feedsLaunchTarget = feedsLaunchTarget
-        let section = seed ?? .mail
-        route = AppRoute(section: section)
+        recorder = WindowRecorder(coordinator: coordinator, lastUsedWindow: lastUsedWindow)
+        let section = storedRoute?.section ?? seed ?? .mail
+        route = storedRoute ?? AppRoute(section: section)
         compactTab = CompactTab.initial(for: section)
         hasShownMail = section == .mail
-    }
-
-    convenience init(appState: AppState) {
-        self.init(
-            coordinator: { [weak appState] in appState?.navCoordinator },
-            hasClient: { [weak appState] in appState?.client != nil }
-        )
     }
 
     // MARK: Trees
@@ -212,14 +211,16 @@ final class SceneNavigator {
     /// A rebuilt tree renders the route: the folder stays, an open message is
     /// parked for the new list to select after its initial load — before the
     /// tree sees the folder, so the list mounts with the restore waiting —
-    /// and the compact column starts on that folder's list. Where the route
-    /// has no mail folder (the user backed out to the folder list, or the
-    /// wide layout cleared it for a feed), the tree lands on the live session,
-    /// as every rebuilt tree used to. A wide tree in the feeds section shows
+    /// and the compact column starts on that folder's list. Where the window
+    /// has no mail folder open, the tree lands on the folder its stored route
+    /// names when the window never opened it, else, where the user backed
+    /// out to the folder list or the wide layout cleared it for a feed, on
+    /// the live session, as every rebuilt tree used to. A wide tree in the feeds section shows
     /// the window's feed list; a window that never landed in feeds reopens
-    /// the session's scope; with neither, the split shows mail.
+    /// its stored scope, else the session's; with neither, the split shows
+    /// mail.
     private func rehand(_ tree: UUID, isWide: Bool) async {
-        handOffSelection(isWide: isWide)
+        listHold.handOff(isWide: isWide)
         selectedEnvelope = nil
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
         guard let coordinator = coordinator() else { return }
@@ -234,18 +235,19 @@ final class SceneNavigator {
             // No list to show, so the split shows mail: the section moves,
             // as the landing's folder record used to move it.
             moveSection(to: .mail)
-            coordinator.noteSection(.mail)
+            recorder.section(.mail)
         }
         if selectedFolder == nil {
-            // Where the user is now, not where the process started (#1555).
+            // Where the user is now, not where the process started (#1555),
+            // unless the window's own stored folder was never opened.
             coordinator.didConsumeLaunchSession = true
-            if hasClient() { landOnSessionFolder(coordinator) }
+            if hasClient() { landOnSessionFolder(coordinator, stored: route.mail) }
         } else if let message = route.mail.message, !restores.hasPendingRestore(in: message.folder) {
             // Unless a restore for the folder is already waiting: a
             // navigation or a landing the list has not applied yet, newer
             // than the open message and carrying any reading position with
             // it, which a bare re-park would replace.
-            restores.schedule(coordinator.restoreCursor(for: message), priming: coordinator)
+            restores.schedule(coordinator.restoreCursor(for: message), priming: recorder.recording)
         }
     }
 
@@ -262,10 +264,11 @@ final class SceneNavigator {
     /// request parked before this window existed — a cold launch from a
     /// tapped notification routes as soon as the session is wired, before
     /// the first render — is the landing, and pre-empts the session's.
-    /// Otherwise a session that ended in the feed reader reopens its scope on
-    /// the wide layout, which hosts feeds in the same split; anything else
-    /// lands provisionally on the session's folder (INBOX when there is none)
-    /// right away, before `/list_folders` returns, so the message list and
+    /// Otherwise the window's stored route (`StoredRoute`) comes before the
+    /// session: a route or session that ended in the feed reader reopens its
+    /// scope on the wide layout, which hosts feeds in the same split;
+    /// anything else lands provisionally on that folder (INBOX when there is
+    /// none) right away, before `/list_folders` returns, so the message list and
     /// its envelope cache start loading, with the open message scheduled for
     /// the list to reselect. The folder list's first load swaps the fetched
     /// folder in (`foldersLoaded`). Seeded as subscribed so the list doesn't
@@ -285,22 +288,22 @@ final class SceneNavigator {
         }
         guard hasClient() else { return }
         didLand = true
-        if isWide, coordinator.launchSection == .feeds, !feeds.didLand, await landsInFeeds(tree, coordinator) {
+        if isWide, route.section == .feeds, !feeds.didLand, await landsInFeeds(tree, coordinator) {
             return
         }
-        landOnSessionFolder(coordinator)
+        landOnSessionFolder(coordinator, stored: route.mail)
     }
 
-    /// The provisional mail landing: the session's folder (the launch
-    /// snapshot for a window's first landing, the live session after it),
-    /// its open message scheduled for the list, and the folder list's first
-    /// load to reconcile it.
-    private func landOnSessionFolder(_ coordinator: NavStateCoordinator) {
-        let target = coordinator.mailLaunchTarget()
+    /// The provisional mail landing: the window's stored folder (`stored`)
+    /// or the session's (the launch snapshot for a window's first landing,
+    /// the live session after it), its open message scheduled for the list,
+    /// and the folder list's first load to reconcile it.
+    private func landOnSessionFolder(_ coordinator: NavStateCoordinator, stored: AppRoute.Mail = AppRoute.Mail()) {
+        let target = coordinator.mailLaunchTarget(stored: stored)
         awaitingLaunchReconcile = true
-        coordinator.armProvisionalLanding()
+        recorder.recording?.armProvisionalLanding()
         if let restore = target.messageRestore {
-            restores.schedule(restore, priming: coordinator)
+            restores.schedule(restore, priming: recorder.recording)
         }
         setFolder(Folder(path: target.folderPath, isSubscribed: true), records: hasShownMail)
     }
@@ -350,13 +353,15 @@ final class SceneNavigator {
             }
         } else if let coordinator {
             // The client wasn't wired when the tree appeared, so there was no
-            // provisional landing: land now.
-            let target = coordinator.mailLaunchTarget()
-            coordinator.armProvisionalLanding()
-            if let restore = target.messageRestore {
-                restores.schedule(restore, priming: coordinator)
+            // provisional landing: land now. A folder that is gone falls back
+            // to INBOX without its message.
+            let target = coordinator.mailLaunchTarget(stored: route.mail)
+            recorder.recording?.armProvisionalLanding()
+            let landing = folders.first { $0.path == target.folderPath }
+            if let restore = target.messageRestore, landing != nil {
+                restores.schedule(restore, priming: recorder.recording)
             }
-            setFolder(folders.first(where: { $0.path == target.folderPath }) ?? inbox)
+            setFolder(landing ?? inbox)
         } else {
             setFolder(inbox)
         }
@@ -381,7 +386,7 @@ final class SceneNavigator {
         guard let coordinator = coordinator() else { return }
         coordinator.navigateRequest = nil
         coordinator.didConsumeLaunchSession = true
-        restores.schedule(cursor, priming: coordinator)
+        restores.schedule(cursor, priming: recorder.recording)
         if selectedFolder?.path != cursor.folder {
             setFolder(resolvedFolder(path: cursor.folder))
         }
@@ -425,7 +430,7 @@ final class SceneNavigator {
         guard canWrite(from: tree), column != compactColumn else { return }
         compactColumn = column
         // Back to the folder list: the message list is gone, with its selection.
-        if column == .sidebar { dropSelection() }
+        if column == .sidebar { listHold.drop() }
         if CompactColumnPolicy.dropsMessage(movingTo: column) {
             applyMessage(nil, isSearching: isSearching)
         }
@@ -441,7 +446,7 @@ final class SceneNavigator {
         guard let section = tab.resumeSection else { return }
         if section == .mail { hasShownMail = true }
         route.section = section
-        coordinator()?.noteSection(section)
+        recorder.section(section)
     }
 
     // MARK: Transitions
@@ -470,14 +475,14 @@ final class SceneNavigator {
         }
         selectedFolder = folder
         selectedEnvelope = nil
-        dropSelection()
+        listHold.drop()
         route.mail = AppRoute.Mail(folderPath: folder?.path)
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: folder != nil)
         guard let path = folder?.path, records else { return }
         moveSection(to: .mail)
         // Folder is the cursor's highest-priority field; the coordinator
         // debounces and de-dupes the write.
-        coordinator()?.recordFolder(path)
+        recorder.folder(path)
         // visionOS's Folders tab picks the folder for its Mail tab, so a new
         // folder chosen there shows its messages.
         if compactTab == .folders { showTab(.mail) }
@@ -492,7 +497,7 @@ final class SceneNavigator {
         guard !isSearching, let folderPath = selectedFolder?.path else { return }
         guard let envelope else {
             route.mail.message = nil
-            coordinator()?.recordNoMessage(folderPath: folderPath)
+            recorder.noMessage(folderPath: folderPath)
             return
         }
         // Anchored to the sidebar's folder: a row from another folder is not
@@ -500,7 +505,7 @@ final class SceneNavigator {
         let ref = envelope.ref(defaultFolder: folderPath)
         guard ref.folder == folderPath else { return }
         route.mail.message = ref
-        coordinator()?.recordMessage(ref)
+        recorder.message(ref)
     }
 
     /// A landing moved the window to `section`. The wide layout has no tab
@@ -538,7 +543,7 @@ extension SceneNavigator {
     func feedTreeAppeared(_ tree: UUID) async {
         feedTreeArrived(tree, showsReader: true)
         guard !feeds.didLand, feeds.scope == nil, let coordinator = coordinator() else { return }
-        let target = await feedsLaunchTarget(coordinator)
+        let target = await feedsLaunchTarget(coordinator, route.feeds)
         // A tree a swap replaced during the lookup lands nothing; one that
         // took over meanwhile may have landed already.
         guard feeds.isAppearing(tree), !feeds.didLand else { return }
@@ -599,7 +604,7 @@ extension SceneNavigator {
     /// replaced it during the lookup and the tree that takes over lands
     /// instead. False sends it on to mail.
     private func landsInFeeds(_ tree: UUID, _ coordinator: NavStateCoordinator) async -> Bool {
-        let target = await feedsLaunchTarget(coordinator)
+        let target = await feedsLaunchTarget(coordinator, route.feeds)
         guard isCurrent(tree, isWide: true) else { return true }
         feeds.markLanded()
         guard let target else { return false }
@@ -627,7 +632,7 @@ extension SceneNavigator {
             switch record {
             case .scope(let scope):
                 route.feeds = AppRoute.Feeds(scope: scope)
-                coordinator()?.recordFeedScope(scope)
+                recorder.feedScope(scope)
                 // An item parked for another list is stale now: the list
                 // would otherwise open it the next time it comes back.
                 if let parked = restores.pendingFeedRestore?.scope, parked != scope {
@@ -635,7 +640,7 @@ extension SceneNavigator {
                 }
             case .item(let item):
                 route.feeds.item = item.map(AppRoute.Item.init)
-                coordinator()?.recordFeedItem(item)
+                recorder.feedItem(item)
                 // Picked before the list applied the item parked for it:
                 // the pick wins, and a later hand-off parks the pick.
                 if item != nil, let scope = feeds.scope {
@@ -665,36 +670,11 @@ extension SceneNavigator {
     }
 }
 
-// The message list's selection, in the same file so it reaches the stored
-// selection.
+// The message list's selection, which the window's `FolderListHold` keeps.
 extension SceneNavigator {
-    /// The selection for a folder list mounting in this window: a new one,
-    /// as every list had when the selection lived on its view model, unless
-    /// a layout swap is handing over the one the window's list held for the
-    /// same folder. Then that one, so a multi-selection survives the swap. A
-    /// hand-off goes to one list; a list mounting after it, in the same tree
-    /// or once the folder changes, starts afresh as it always did.
+    /// The selection for a folder list mounting in this window
+    /// (`FolderListHold.mailSelection(for:)`).
     func mailSelection(for folderPath: String) -> SelectionModel<MessageRef> {
-        defer { handsOffSelection = false }
-        if handsOffSelection, let held = listSelection, held.folderPath == folderPath {
-            return held.model
-        }
-        let fresh = SelectionModel<MessageRef>()
-        listSelection = (folderPath, fresh)
-        return fresh
-    }
-
-    /// A tree built by a layout swap is taking the window over: the window's
-    /// selection goes to the tree's list if it survives the swap
-    /// (`SelectionModel.handOff(toWide:)`).
-    private func handOffSelection(isWide: Bool) {
-        handsOffSelection = listSelection?.model.handOff(toWide: isWide) ?? false
-    }
-
-    /// The window's folder list is gone: another folder was picked, or the
-    /// compact layout backed out to the folder list. Its selection went with
-    /// it, as it did when the selection lived on the list's view model.
-    private func dropSelection() {
-        listSelection = nil
+        listHold.mailSelection(for: folderPath)
     }
 }

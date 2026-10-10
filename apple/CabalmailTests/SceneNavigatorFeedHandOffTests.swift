@@ -42,7 +42,7 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         let scope = scope
         let navigator = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in .init(scope: scope) }
+            feedsLaunchTarget: { _, _ in .init(scope: scope) }
         )
         let tab = UUID()
         await navigator.feedTreeAppeared(tab)
@@ -142,7 +142,7 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         let scope = scope
         let navigator = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in .init(scope: scope) }
+            feedsLaunchTarget: { _, _ in .init(scope: scope) }
         )
         let wide = UUID()
         await navigator.mailTreeAppeared(wide, isWide: true)

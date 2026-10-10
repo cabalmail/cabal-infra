@@ -9,7 +9,9 @@ import CabalmailKit
 ///   the device): the section (mail or feeds), list scope, open item, and —
 ///   in `ReadingPositionCache` — where the reader was in each item's body. A
 ///   cold launch restores it silently; reopening a half-read item lands at
-///   the same place. Persisted through `ResumeSessionStore`.
+///   the same place. Persisted through `ResumeSessionStore`. With several
+///   windows, only the one the user last used moves it (`WindowRecorder`);
+///   each window also keeps its own route (`StoredRoute`).
 /// - **The server cursor** (`NavState`, `/set_nav_state`): the cross-device
 ///   signal. Recorded debounced as the user moves through mail; read on
 ///   launch and foreground, and offered as a "pick up where you left off"
@@ -333,6 +335,16 @@ extension NavStateCoordinator {
         recordMessageScroll(
             folderPath: ref.folder, uid: ref.uid, messageID: ref.messageId,
             position: position, atTop: atTop
+        )
+    }
+
+    /// The reading position of the message `ref` names, without the cursor:
+    /// a reader in a window that does not record (`WindowRecorder`) still
+    /// keeps where the user was in the message.
+    func savePosition(for ref: MessageRef, position: ReadingPosition, atTop: Bool) {
+        savePosition(
+            key: ReadingPositionKey.mail(ref), anchor: position.anchor, offset: position.offset,
+            fraction: position.fraction, atTop: atTop
         )
     }
 }

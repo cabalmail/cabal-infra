@@ -157,7 +157,7 @@ final class SceneNavigatorWindowRestoreTests: XCTestCase {
         let launchItem = launchItem
         let compact = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in .init(scope: .subscription("s"), item: launchItem) }
+            feedsLaunchTarget: { _, _ in .init(scope: .subscription("s"), item: launchItem) }
         )
         await compact.feedTreeAppeared(UUID())
         XCTAssertEqual(
@@ -167,7 +167,7 @@ final class SceneNavigatorWindowRestoreTests: XCTestCase {
 
         let wide = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in .init(scope: .subscription("s"), item: launchItem) }
+            feedsLaunchTarget: { _, _ in .init(scope: .subscription("s"), item: launchItem) }
         )
         await wide.mailTreeAppeared(UUID(), isWide: true)
         XCTAssertTrue(wide.splitShowsFeeds)

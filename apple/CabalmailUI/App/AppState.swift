@@ -82,8 +82,16 @@ public final class AppState {
     /// by the observers when the tick fires (`AppStateSignals.swift`).
     @ObservationIgnored var commandWindow: UUID?
     /// The main window most recently in front, for commands issued while a
-    /// compose or Settings window is key.
-    @ObservationIgnored public var lastActiveMainWindow: UUID?
+    /// compose or Settings window is key. Observed by each main window too:
+    /// the window it names records the place the app resumes from, and
+    /// records its own place when it becomes the one named
+    /// (`WindowRecorder`).
+    public var lastActiveMainWindow: UUID?
+
+    /// Bumped each time this process forgets an account (a Sign Out, an
+    /// expiry, a sign-out during the launch restore), so every mounted main
+    /// window clears the route its scene stores (`StoredRoute`).
+    private(set) var accountForgottenTick = 0
 
     /// A Spotlight result tapped before sign-in / restore completed; routed
     /// once the session is wired, mirroring `PushRegistrar.pendingOpen`.
@@ -221,6 +229,7 @@ extension AppState {
     /// is reset in place (`MailSessionStore.forgetAccount()`); what it keeps
     /// across sessions, and why, is said there.
     private func forgetAccountState() {
+        accountForgottenTick += 1
         mailStore.forgetAccount()
         pendingSpotlightRef = nil
         AttachmentFolders.removeAll()
