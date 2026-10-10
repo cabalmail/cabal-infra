@@ -1526,44 +1526,44 @@ MetricKit at all, so the collector is a no-op on that platform behind
 ### Menu commands go to the window in front
 
 Menu commands need to reach the view that owns the action, but
-`.commands { }` is declared at the scene level, with no view to hand.
-Each main window has one `WindowCommands`
-(`Commands/WindowCommands.swift`), held by `SignedInRootView` beside its
-`SceneNavigator`, put in the environment and published with
-`focusedSceneValue`. A menu reads the front main window's object with
-`@FocusedValue(\.windowCommands)`; with a compose or Settings window in
-front, or none open, it reads nil and the Message, Mailbox and Feeds
-menus dim. New Message stays live: it opens the compose scene itself
-(#1162).
+`.commands { }` is declared at the scene level. Each main window has one
+`WindowCommands` (`Commands/WindowCommands.swift`), held by
+`SignedInRootView` beside its `SceneNavigator`, put in the environment
+and published with `focusedSceneValue`. A menu reads the front main
+window's object with `@FocusedValue(\.windowCommands)`; with a compose
+or Settings window in front, or none open, it reads nil and the Message,
+Mailbox and Feeds menus and iPadOS ⌘, dim. New Message stays live: it
+opens the compose scene itself (#1162).
 
-A menu sends a `WindowCommand`, which bumps that command's own count;
-the surfaces that answer it watch the count with `.answersCommand(_:)`.
-Surfaces report what the menus can act on
+A menu, or a window's own button (the Mac toolbar's Refresh, the iPad
+Settings gear), sends a `WindowCommand`, which bumps its own count; a
+feed or tree command names its action in its case. Surfaces answer with
+`.answersCommand(_:)`. They report what menus can act on
 (`reportsMessageMenuAvailability`, `reportsFeedMenuAvailability`) keyed
 by the surface they sit in, and the menus read the surface in front: the
 window on the wide layouts, the tab in front on the tab layouts, which
-keep every tab they have shown mounted (`FrontSurfacePolicy`).
-`SharedChordPolicy` gives ⌘T, ⌘⇧8 and ⌥⌘T, which the Message and Feeds
-menus share, to the section in front.
+keep every tab they have shown mounted (`FrontSurfacePolicy`). The feed
+catalog and sidebar trees, one handler a window, answer from a tab
+behind (`whileBehind`). `SharedChordPolicy` gives each chord the Feeds
+menu shares with the Message or Mailbox menu (⌘T, ⌘⇧8, ⌥⌘T) to the
+section in front.
 
 The shared Message menu (`MessageMenuCommands`) carries Reply ⌘R, Reply
 All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T, Flag/Unflag ⌘⇧8 and Move
 to Folder ⌘M, which deliberately shadows Window → Minimize (custom menus
 match first). Dispose (⌘⌫) is NOT a menu item: menu equivalents fire
-app-wide, so it would fire in the compose window and steal
-delete-to-line-start mid-draft. A hidden window-scoped button carries it
-(`DisposeChordButton`): the reader's for one open message, the list's
-for a multi-selection, only while that surface is in front and owns the
-chord. Esc and ⌘A stay focus-scoped on the list, so the search field
-keeps them.
+app-wide, so it would steal delete-to-line-start in a draft. A hidden
+window-scoped button carries it (`DisposeChordButton`): the reader's for
+one open message, the list's for a multi-selection, only while that
+surface is in front and owns the chord. Esc and ⌘A stay focus-scoped on
+the list, so the search field keeps them.
 
-The Mailbox and Feeds commands, ⌘, and the compose hand-off still ride
-`AppState` ticks aimed through `MainWindowCommandScope`'s window
-identity, observed with `.onWindowCommand(tick)`. Data-change reloads
-(Mark All as Read, Empty Trash, push actions) are not commands: they
-bump the mail store's `listRefreshTick`, which every list observes
-(#1824). A drag names the list it lifted from, and only that list
-performs a sidebar drop.
+Only the compose hand-off still rides an `AppState` tick, aimed through
+`MainWindowCommandScope`'s window identity and observed with
+`.onWindowCommand(tick)`. Data-change reloads (Mark All as Read, Empty
+Trash, push actions) are not commands: they bump the mail store's
+`listRefreshTick`, which every list observes (#1824). A drag names the
+list it lifted from, and only that list performs a sidebar drop.
 
 A link from outside a window uses the same identity. A tapped
 notification, a Spotlight result and Siri's Open Folder each go to

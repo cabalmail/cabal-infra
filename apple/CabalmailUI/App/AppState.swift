@@ -46,14 +46,11 @@ public final class AppState {
     /// matches the React admin's `AppMessageContext`.
     var toast: Toast?
 
-    /// Monotonic intent counters read by `MessageListView` /
-    /// `MessageDetailView` via `.onChange`. macOS Commands menu actions
-    /// (and Phase-7 keyboard shortcuts) bump these; consumers react to the
-    /// value change and ignore the number itself. Using a plain `Int`
-    /// instead of a PassthroughSubject keeps the surface `@Observable`-
-    /// friendly without pulling in Combine.
+    /// Monotonic compose-request counter read by `ComposeRequestRouter` via
+    /// `.onWindowCommand`; consumers react to the value change and ignore the
+    /// number itself. The menu commands go to the window in front instead
+    /// (`WindowCommands`).
     var composeRequestTick = 0
-    var refreshRequestTick = 0
     /// Seed paired with the next compose-request tick. The mailto:
     /// URL handler stashes a pre-filled draft here before bumping
     /// `composeRequestTick`; the receiver (`ComposeRequestRouter` on
@@ -80,37 +77,6 @@ public final class AppState {
     /// directly; it's a one-shot handoff, and consuming it during view
     /// setup must not invalidate anyone's body.
     @ObservationIgnored var pendingComposeAttachments: [UUID: [Attachment]] = [:]
-    /// Retired Message-menu intents: the menu now sends Reply, Reply All,
-    /// Forward, Mark, Flag and Move to the window in front
-    /// (`WindowCommands`), and nothing observes these six. They go with the
-    /// rest of the command ticks once every menu has moved.
-    var replyRequestTick = 0
-    var replyAllRequestTick = 0
-    var forwardRequestTick = 0
-    var toggleSeenRequestTick = 0
-    var toggleFlaggedRequestTick = 0
-    var moveSelectionRequestTick = 0
-    /// Mailbox ▸ Mark All as Read (⌥⌘T). The on-screen folder-scoped
-    /// `MessageListView` observes it and stages its confirmation; nothing
-    /// answers on the search surface, which is why the menu dims there.
-    var markFolderReadRequestTick = 0
-    /// Intent to open the iOS / iPadOS / visionOS settings sheet (General /
-    /// Addresses / Folders). Bumped by the sidebar gear button and the ⌘,
-    /// app command; `SignedInRootView` observes it and presents the sheet.
-    /// macOS ignores it - settings there is the dedicated ⌘, scene.
-    var settingsRequestTick = 0
-    /// Feeds menu intents (RSS plan, phase 5c): the menu names the command
-    /// and bumps the tick; the mounted feed sidebar answers through
-    /// `FeedManagementSheets`. See `requestFeedCommand` in `AppState+Feeds`.
-    var feedCommandTick = 0
-    /// Expand all / Collapse all for the sidebar trees, from the Mailbox and
-    /// Feeds menus. The mounted sidebar that owns the named tree applies it
-    /// (`FolderListView` for mail and, on the wide layouts, feeds;
-    /// `FeedSidebarList` for the compact Feeds tab). See
-    /// `requestSidebarTree(_:)`.
-    var sidebarTreeCommandTick = 0
-    var pendingSidebarTreeCommand: SidebarTreeCommand?
-    var pendingFeedCommand: FeedCommand?
     /// The main window the latest command tick is aimed at; nil reaches
     /// every window. Set with each tick by the `request…` methods and read
     /// by the observers when the tick fires (`AppStateSignals.swift`).
@@ -156,14 +122,6 @@ public final class AppState {
     // `window` names the main window the command is for; nil reaches every
     // window (see `AppStateSignals.swift`).
     func requestCompose(in window: UUID? = nil) { commandWindow = window; composeRequestTick += 1 }
-    public func requestRefresh(in window: UUID? = nil) { commandWindow = window; refreshRequestTick += 1 }
-    func requestReply(in window: UUID? = nil) { commandWindow = window; replyRequestTick += 1 }
-    func requestReplyAll(in window: UUID? = nil) { commandWindow = window; replyAllRequestTick += 1 }
-    func requestForward(in window: UUID? = nil) { commandWindow = window; forwardRequestTick += 1 }
-    public func requestSettings(in window: UUID? = nil) { commandWindow = window; settingsRequestTick += 1 }
-    // The selection-scoped request bumpers live in the "Message-menu
-    // selection intents" extension in `AppStateSignals.swift` (SwiftLint
-    // type-body budget).
 
     /// Publishes a toast and auto-clears it after `duration`. The task lives
     /// outside structured concurrency because the caller's scope (usually a

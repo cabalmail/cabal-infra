@@ -24,12 +24,6 @@ extension EnvironmentValues {
     @Entry var commandWindowID: UUID?
 }
 
-extension FocusedValues {
-    /// The focused main window, read by the menu commands to aim a tick.
-    /// Nil while a compose or Settings window is key.
-    @Entry public var commandWindowID: UUID?
-}
-
 /// Gives one main window its identity and reports when it comes to the
 /// front, so a command issued while a compose window is key still reaches
 /// the main window the user was last in rather than every one of them.
@@ -41,7 +35,6 @@ private struct MainWindowCommandScope: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.commandWindowID, windowID)
-            .focusedSceneValue(\.commandWindowID, windowID)
             .onAppear {
                 if appearsActive { appState.noteActiveMainWindow(windowID) }
             }
