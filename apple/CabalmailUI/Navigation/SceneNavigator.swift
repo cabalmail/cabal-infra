@@ -82,8 +82,7 @@ final class SceneNavigator {
     /// The window's search model (`searchModel(client:preferences:mailStore:)`).
     @ObservationIgnored private var search: MessageListViewModel?
 
-    /// The window's hold on its folder list: the selection a swap hands to
-    /// the next list, and the list's place (`FolderListHold`).
+    /// The window's folder list: its selection and place (`FolderListHold`).
     let listHold = FolderListHold()
 
     /// Counts the feed banners this window has followed, so the wide split
@@ -692,11 +691,9 @@ extension SceneNavigator {
     }
 }
 
-// The message list's selection, which the window's `FolderListHold` keeps
-// with the list's place.
+// The message list's selection, kept with the list's place.
 extension SceneNavigator {
-    /// The selection for a folder list mounting in this window
-    /// (`FolderListHold.mailSelection(for:)`).
+    /// The selection for a folder list mounting here (`FolderListHold`).
     func mailSelection(for folderPath: String) -> SelectionModel<MessageRef> {
         listHold.mailSelection(for: folderPath)
     }
