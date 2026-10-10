@@ -57,9 +57,7 @@ struct SearchFiltersSheet: View {
         NavigationStack {
             content
                 .navigationTitle("Filters")
-                #if !os(macOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
+                .inlineNavigationTitle()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel", action: onCancel)
@@ -207,20 +205,14 @@ struct SearchFiltersSheet: View {
         TextField("From", text: $draft.from, prompt: Text("sender@example.com"))
             .textContentType(.emailAddress)
             .autocorrectionDisabled()
-            #if !os(macOS)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.emailAddress)
-            #endif
+            .textEntry(.email)
     }
 
     private var toField: some View {
         TextField("To", text: $draft.to, prompt: Text("recipient@example.com"))
             .textContentType(.emailAddress)
             .autocorrectionDisabled()
-            #if !os(macOS)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.emailAddress)
-            #endif
+            .textEntry(.email)
     }
 
     private var subjectField: some View {

@@ -80,9 +80,7 @@ struct ComposeView: View {
         NavigationStack {
             composeContent
             .navigationTitle(model.navigationTitle)
-            #if os(iOS) || os(visionOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .inlineNavigationTitle()
             .toolbar { toolbarContent }
             .task {
                 // Pick up the attachments the forward action sent with its

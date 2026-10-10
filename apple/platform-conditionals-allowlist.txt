@@ -1,0 +1,67 @@
+# Platform conditionals still outside Shell/ and Platform/ in apple/CabalmailUI/.
+#
+# One row per file: its path under apple/CabalmailUI/, then how many platform
+# `#if`s it holds. scripts/check-platform-conditionals.py fails a file that is
+# not listed and a count above its row, so this list only shrinks: the PR that
+# removes a conditional lowers or removes the row. A row left above its file's
+# count is reported but does not fail. Code that moves to another file takes
+# its count with it; the total must not rise.
+# Regenerate the rows with `python3 scripts/check-platform-conditionals.py --seed`.
+# The rule, and where a new platform difference goes instead, is in
+# docs/apple.md, "Platform conditionals".
+
+Addresses/AddressListView.swift 2
+Addresses/NewAddressSheet.swift 4
+Compose/ComposeMacHeader.swift 1
+Compose/ComposeView+Subviews.swift 2
+Compose/ComposeView.swift 17
+Compose/Editor/ComposerBody.swift 2
+Compose/Recipients/ContactPickerSheet.swift 1
+Compose/Recipients/ContactsPickerAffordance.swift 1
+Compose/Windows/ComposeRequestRouter.swift 2
+Compose/Windows/ComposeWindowScene.swift 2
+Feeds/ItemList/FeedItemListView+ScopeSwitch.swift 2
+Feeds/ItemList/FeedItemListView.swift 1
+Feeds/Management/FeedFolderSheet.swift 1
+Feeds/Management/FeedSubscriptionSettingsSheet.swift 1
+Feeds/Management/SubscribeFeedSheet.swift 1
+Feeds/Reader/EmptyFeedDetailToolbar.swift 1
+Feeds/Reader/FeedItemDetailView.swift 2
+Feeds/Reader/FeedReaderToolbar.swift 2
+Feeds/Sidebar/FeedSidebarSection.swift 1
+Mail/AvatarView.swift 2
+Mail/Folders/NewFolderSheet.swift 2
+Mail/MessageList/MessageListView+Bulk.swift 1
+Mail/MessageList/MessageListView+FolderSwitch.swift 2
+Mail/MessageList/MessageListView+ModifierClick.swift 1
+Mail/MessageList/MessageListView+Rows.swift 2
+Mail/MessageList/MessageListView+Selection.swift 2
+Mail/MessageList/MessageListView.swift 1
+Mail/MessageList/SwipeActionRow.swift 4
+Mail/MessageList/TrackpadSwipe.swift 2
+Mail/MoveToFolderSheet.swift 1
+Mail/Reader/AttachmentStrip.swift 6
+Mail/Reader/EmptyDetailToolbar.swift 1
+Mail/Reader/MessageDetailView+AddressMenu.swift 2
+Mail/Reader/MessageDetailView+DisposeOptions.swift 2
+Mail/Reader/MessageDetailView+FlagOptions.swift 1
+Mail/Reader/MessageDetailView+MacToolbar.swift 1
+Mail/Reader/MessageDetailView+Toolbar.swift 8
+Mail/Reader/MessageDetailView.swift 10
+Mail/Reader/MessageSourceSheet.swift 3
+Mail/Search/SearchFiltersSheet.swift 2
+Mail/Search/SearchView.swift 1
+Rules/RulesView.swift 2
+Session/SessionEnvironment.swift 6
+Session/SignInView.swift 6
+Settings/NotificationSettingsSection.swift 9
+Settings/SettingsView.swift 3
+Shared/BodyRendering/LinkMenu.swift 2
+Shared/BodyRendering/PlainTextBodyView.swift 1
+Shared/BodyRendering/PrivateLinkHandoff.swift 2
+Shared/BodyRendering/ReaderBottomGlass.swift 1
+Shared/Chrome/MacSheetForm.swift 1
+Shared/Chrome/SidebarBranding.swift 2
+Shared/Chrome/SidebarTreeRowLabel.swift 1
+Shared/Chrome/TitleSwitchMenu.swift 1
+Shared/Chrome/ToolbarVisibility.swift 2

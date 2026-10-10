@@ -19,9 +19,7 @@ struct FeedFolderSheet: View {
         NavigationStack {
             content
                 .navigationTitle(isEditing ? "Edit Folder" : "New Feed Folder")
-                #if os(iOS) || os(visionOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
+                .inlineNavigationTitle()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }
@@ -64,9 +62,7 @@ struct FeedFolderSheet: View {
         TextField("Name", text: $form.name, prompt: Text("e.g. News"))
             .labelsHidden()
             .autocorrectionDisabled()
-            #if os(iOS) || os(visionOS)
-            .textInputAutocapitalization(.never)
-            #endif
+            .textEntry(.verbatim)
             .onSubmit { if form.canSave { Task { await submit() } } }
             .accessibilityIdentifier("feed.folder.name")
     }

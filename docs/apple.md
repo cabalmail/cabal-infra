@@ -705,7 +705,7 @@ TestFlight upload and skips the notarization steps.
 
 | Job | Runs when | What it does |
 |---|---|---|
-| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) across macOS / iOS / visionOS destinations |
+| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint and the platform-conditionals check, then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) across macOS / iOS / visionOS destinations |
 | `app-build` | Same | Unsigned `xcodebuild build` for `Cabalmail` (iOS) and `CabalmailMac` (macOS) |
 | `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
@@ -954,8 +954,9 @@ The roadmap treats macOS as a first-class platform, so the macOS target
 is native rather than Mac Catalyst. `CabalmailMac/` is a separate app
 target with its own `@main`, menu commands, windows, settings, asset
 catalog and entitlements. Everything it shares with the iOS app comes
-from the `CabalmailUI` module (below), whose views and view models branch
-with `#if os(macOS)` where the platforms diverge.
+from the `CabalmailUI` module (below). Where the platforms diverge there,
+the difference lives in a layout shell or a platform adapter (see
+"Platform conditionals").
 
 ### Shared app layer: the `CabalmailUI` module
 
@@ -1042,15 +1043,63 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout, a list's selection (`SelectionModel`: the rows picked, Select mode, and the anchor and cursor a range selection works from) |
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
-| `Platform/` | Small per-OS adapters: host platform, confirmation-dialog roles, the pasteboard |
+| `Platform/` | Small per-OS adapters: host platform and its capabilities, confirmation-dialog roles, the pasteboard, and the one-line modifiers a feature view calls in place of a platform conditional (navigation-bar title and Edit button, text entry, list and form styles) |
 | `Platform/Services/` | Push (the app delegate and `PushRegistrar`) and the watch hand-off |
 
 A file belongs in `Shared/` only if it knows nothing about any one
 feature, or if several features use it without carrying one feature's
-logic; otherwise it stays with its feature. Platform conditionals
-(`#if os`) are still spread through the feature folders; new
-layout-level branches belong in `Shell/` and new OS adapters in
-`Platform/`.
+logic; otherwise it stays with its feature.
+
+#### Platform conditionals
+
+A view that differs by platform does not write `#if os(...)`. The
+difference goes in one of two places:
+
+- **A layout difference** (columns or tabs, where a control sits, what
+  a bar holds) is decided once, as a `ShellLayout`, and drawn by a
+  layout shell in `Shell/`. A shared view reads `\.shellLayout` from the
+  environment, or a `HostPlatform` capability when the question is about
+  the host rather than the window (`columnScopedToolbar`,
+  `drawsOverPassthrough`, `settingsOpensBothColumns`,
+  `alwaysWindows`).
+- **An API one platform lacks** goes behind an adapter in `Platform/`:
+  one call the feature view makes on every platform, with the
+  conditional inside it. `inlineNavigationTitle()`, `textEntry(_:)`,
+  `editButtonToolbar()` and `EditButtonToolbarItem`, and the list and
+  form style helpers are adapters of this kind. A file that wraps a
+  UIKit or AppKit view (`UIViewRepresentable`, `NSViewRepresentable` and
+  their view-controller forms) is an adapter too, wherever it lives.
+
+`scripts/check-platform-conditionals.py` holds the line in CI, beside
+SwiftLint (`lint.yml`'s swift job and `apple.yml`). In every file under
+`apple/CabalmailUI/` outside `Shell/` and `Platform/`, the wrapper files
+aside, it counts the lines that start with `#if` and test `os(...)` or
+`canImport` of UIKit, AppKit or EventKitUI. The files that still hold
+such conditionals are listed, with their counts, in
+`apple/platform-conditionals-allowlist.txt`. A file that is not listed
+fails, and so does a count above its row, so the list only shrinks. The
+change that removes a conditional lowers or removes the row in the same
+PR (`--seed` prints the rows the tree needs). A row left above its
+file's count does not fail, since two PRs that each lower one row merge
+cleanly, but the check reports it, as a warning on the PR, because it is
+room the next conditional could hide in: take it out when you see it.
+
+Never add a row or raise a count to get a new conditional through. The
+one case that moves a count is moving the code: a renamed file takes
+its row with it, and code extracted into a new file takes its
+conditionals' share of the old row, so the total the check prints
+(`N files, M blocks`) does not rise.
+
+The check reads one line at a time, so two things are left to review: an
+`#elseif os(...)` arm added to an existing block, and a new conditional
+in a file that is exempt because it wraps a UIKit or AppKit view.
+
+The script is standard-library Python and runs anywhere
+(`scripts/build-apple.sh lint` runs it after SwiftLint):
+
+```sh
+python3 scripts/check-platform-conditionals.py
+```
 
 ### Extension-shared values: the `CabalmailShared` module
 

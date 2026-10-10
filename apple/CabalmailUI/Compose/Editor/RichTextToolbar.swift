@@ -104,10 +104,7 @@ struct RichTextToolbar: View {
         }
         .alert("Add link", isPresented: $showLinkPrompt) {
             TextField("https://example.com", text: $linkUrl)
-                #if os(iOS) || os(visionOS)
-                .textInputAutocapitalization(.never)
-                .keyboardType(.URL)
-                #endif
+                .textEntry(.url)
                 .autocorrectionDisabled()
             Button("Cancel", role: .cancel) {}
             Button("Add") {

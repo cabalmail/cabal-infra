@@ -243,9 +243,7 @@ struct NotificationFolderPickerView: View {
     var body: some View {
         content
             .navigationTitle("Notification Folders")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .inlineNavigationTitle()
             .task { await load() }
     }
 
@@ -271,9 +269,7 @@ struct NotificationFolderPickerView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                #if os(iOS)
-                .listStyle(.plain)
-                #endif
+                .plainListStyleOffMac()
             }
         )
     }

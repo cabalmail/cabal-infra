@@ -44,13 +44,9 @@ struct AcknowledgementsView: View {
                 }
             }
         }
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
+        .groupedFormStyleOnMac()
         .navigationTitle("Acknowledgements")
-        #if os(iOS) || os(visionOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
     }
 
     /// Falls back to a clear message rather than an empty pane when the
