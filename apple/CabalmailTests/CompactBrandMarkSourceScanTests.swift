@@ -33,10 +33,10 @@ final class CompactBrandMarkSourceScanTests: XCTestCase {
     ]
 
     func testTheCompactTabBarTurnsTheMarkOn() throws {
-        let body = try Self.source("CabalmailUI/Shell/CompactSectionTabs.swift")
+        let body = try Self.source("CabalmailUI/Shell/TabShell.swift")
         XCTAssertTrue(
             body.contains(".environment(\\.showsCompactBrandMark, true)"),
-            "CompactSectionTabs' TabView sets showsCompactBrandMark for its tabs"
+            "TabShell's TabView sets showsCompactBrandMark for its tabs"
         )
     }
 
