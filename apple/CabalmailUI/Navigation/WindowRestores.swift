@@ -3,8 +3,9 @@ import Observation
 import CabalmailKit
 
 /// One main window's parked restores: the message its folder list selects
-/// once it has appeared and loaded, the reading position the reader opens
-/// that message at, and the feed item its feed list selects.
+/// once it has appeared and loaded, the row that list opens scrolled to,
+/// the reading position the reader opens that message at, and the feed item
+/// its feed list selects.
 ///
 /// Each window's `SceneNavigator` owns one, and the views read it through
 /// the navigator in the environment. Before, the three slots were one per
@@ -67,6 +68,13 @@ final class WindowRestores {
     /// Consumed by the scope's `FeedItemListView` through
     /// `consumeFeedItemRestore(for:)`.
     var pendingFeedRestore: PendingFeedRestore?
+
+    /// The row the folder's next list opens scrolled to (`ListAnchor`): where
+    /// the window's list was when a layout swap replaced it. Taken once, by
+    /// the list for exactly its folder (`FolderListHold.takeAnchor`); a
+    /// folder change, a back-out or a navigation drops it. Nothing observes
+    /// it: the list asks when it lands.
+    @ObservationIgnored private(set) var pendingListAnchor: ListAnchor?
 
     /// Counts every park, so a mounted list sees a new restore even for the
     /// same message.
@@ -153,6 +161,26 @@ final class WindowRestores {
     /// The parked scroll restore, if it targets the message `ref` names.
     func consumeScrollRestore(for ref: MessageRef) -> PendingScrollRestore? {
         consumeScrollRestore(folderPath: ref.folder, uid: ref.uid, messageID: ref.messageId)
+    }
+
+    // MARK: The list's place
+
+    func parkListAnchor(_ anchor: ListAnchor) {
+        pendingListAnchor = anchor
+    }
+
+    /// Drops the parked anchor, unless it is for `folderPath`: the folder a
+    /// landing is moving to keeps the anchor parked for it.
+    func dropListAnchor(keeping folderPath: String? = nil) {
+        if let folderPath, pendingListAnchor?.folderPath == folderPath { return }
+        pendingListAnchor = nil
+    }
+
+    /// Returns and clears the parked anchor if it is for `folderPath`.
+    func consumeListAnchor(for folderPath: String) -> ListAnchor? {
+        guard let anchor = pendingListAnchor, anchor.folderPath == folderPath else { return nil }
+        pendingListAnchor = nil
+        return anchor
     }
 
     // MARK: Feeds

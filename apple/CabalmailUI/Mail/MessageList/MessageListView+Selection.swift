@@ -85,6 +85,8 @@ extension MessageListView {
                         }
                     }
                 }
+                // Where the list is scrolled, for its window to keep (`ListPlaceTracking`).
+                .tracksListPlace(listPlace, model: model, rowHeight: rowHeight, proxy: proxy)
                 // 27 and later: scopes swipe-action coordination to this scroll
                 // view, so at most one row's actions are revealed at a time and
                 // a tap on blank space or a vertical scroll retracts them
