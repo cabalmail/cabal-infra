@@ -3,21 +3,24 @@ import CabalmailKit
 @testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8 of the 2026-10 rearchitecture
-/// proposal: what rides beside the command ticks after its defect 11,
-/// window-scoped menu commands (#1783), so workstream 3.1's focused-window
-/// commands can match it one for one.
+/// proposal: what rides beside the window commands after its defect 11,
+/// window-scoped menu commands (#1783). Ported by workstream 3.3 from the
+/// compose tick and its one parked seed to `ComposeCoordinator`: every row
+/// is the check it was, except the two #1824 defects it pinned, which are
+/// fixed and pinned as fixed.
 ///
-/// - The compose handoff on `AppState`: the parked seed and the forwarded
-///   attachments are pop-once (`ComposeRequestRouter` and `ComposeView`
-///   depend on it), and a mailto compose aimed at the main window last in
-///   front reaches only it, or every window when none is recorded.
+/// - The compose handoff (`AppState.compose`): a waiting seed and a
+///   forward's attachments are taken once (`ComposeRequestRouter` and
+///   `ComposeView` depend on it), a second seed waits behind the first, and
+///   a mailto compose reaches only the main window last in front, or one
+///   window when none is recorded.
 /// - The data-change reloads: the sidebar's and the list's Mark All as
 ///   Read (cross-media plan decision 6, through `FolderMarkAllRead`) and
 ///   Empty Trash bump the mail store's `listRefreshTick` once, so every
-///   mounted list hard-reloads, and send no window command, so a command
-///   aimed at one window just before stays aimed there (#1824; pinned on
-///   its own in
-///   `CommandTickCharacterizationTests.testADataChangeReloadBeforeDeliveryLeavesAnEarlierAimedTickAlone`).
+///   mounted list hard-reloads, and touch no compose request, so one
+///   waiting for a window just before still waits for that window (#1824;
+///   pinned on its own in
+///   `CommandTickCharacterizationTests.testADataChangeReloadLeavesAWaitingComposeWithItsWindow`).
 ///   `FolderMarkAllReadTests` covers the mark-read side effects; these
 ///   tests add the window reach.
 @MainActor
@@ -27,97 +30,112 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
 
     // MARK: - T3: compose seed and attachment handoff
 
-    func testThePendingComposeSeedPopsExactlyOnce() {
+    func testAWaitingComposeSeedIsShownExactlyOnce() {
         let appState = AppState()
         let seed = Draft(to: ["someone@cabalmail.example"], subject: "mailto")
-        appState.requestCompose(seed: seed, in: windowA)
+        appState.compose.open(seed: seed, from: windowA)
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [seed], "no surface yet: it waits")
 
-        XCTAssertEqual(appState.consumePendingComposeSeed(), seed)
-        XCTAssertNil(appState.pendingComposeSeed)
-        XCTAssertNil(appState.consumePendingComposeSeed(), "a second router falls back to a new draft")
-        XCTAssertEqual(appState.composeRequestTick, 1, "consuming the seed does not touch the tick")
+        let first = RecordingComposeSurface(window: windowA).register(with: appState.compose)
+        let second = RecordingComposeSurface(window: windowA).register(with: appState.compose)
+
+        XCTAssertEqual(first.shown, [seed])
+        XCTAssertEqual(second.shown, [], "a second surface is shown nothing")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [])
     }
 
-    /// Pins current behaviour, which looks like a defect: a second seeded
-    /// request before the router pops the first (two mailto links in quick
+    /// Fixed in #1824; this test pinned the defect until then: a second
+    /// seeded request before the first was shown (two mailto links in quick
     /// succession, or one arriving while an iPhone compose sheet is up)
-    /// replaces the parked seed, so the first message is never composed.
-    /// Tracked in #1824.
-    func testASecondSeedBeforeThePopReplacesTheFirst() {
+    /// replaced the waiting seed, so the first message was never composed.
+    /// Now both wait, and open in order as the sheet closes.
+    func testASecondSeedWaitsBehindTheFirst() {
         let appState = AppState()
+        let sheet = RecordingComposeSurface(window: windowA, isSheet: true).register(with: appState.compose)
+        let typing = Draft(subject: "being typed")
         let first = Draft(subject: "first")
         let second = Draft(subject: "second")
-        appState.requestCompose(seed: first, in: windowA)
-        appState.requestCompose(seed: second, in: windowA)
+        appState.compose.open(seed: typing, from: windowA)
+        appState.compose.open(seed: first, from: windowA)
+        appState.compose.open(seed: second, from: windowA)
+        XCTAssertEqual(sheet.shown, [typing], "the sheet is up")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [first, second])
 
-        XCTAssertEqual(appState.composeRequestTick, 2)
-        XCTAssertEqual(appState.consumePendingComposeSeed(), second)
-        XCTAssertNil(appState.consumePendingComposeSeed(), "the first seed is gone")
+        sheet.free(in: appState.compose)
+        XCTAssertEqual(sheet.shown, [typing, first])
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [second])
+
+        sheet.free(in: appState.compose)
+        XCTAssertEqual(sheet.shown, [typing, first, second], "neither is lost")
     }
 
-    func testForwardedAttachmentsPopExactlyOncePerDraft() {
+    func testForwardedAttachmentsAreTakenExactlyOncePerDraft() {
         let appState = AppState()
-        let forwarded = UUID()
-        let other = UUID()
+        let forwarded = Draft(subject: "Fwd: report")
+        let other = Draft(subject: "Fwd: photo")
         let report = Attachment(filename: "report.pdf", mimeType: "application/pdf", data: Data([1, 2, 3]))
         let photo = Attachment(filename: "photo.jpg", mimeType: "image/jpeg", data: Data([4]))
-        appState.stashComposeAttachments([report], for: forwarded)
-        appState.stashComposeAttachments([photo], for: other)
+        appState.compose.open(seed: forwarded, attachments: [report], from: windowA)
+        appState.compose.open(seed: other, attachments: [photo], from: windowA)
 
-        XCTAssertEqual(appState.consumeComposeAttachments(for: forwarded), [report])
-        XCTAssertEqual(appState.consumeComposeAttachments(for: forwarded), [], "a restored scene composes without")
-        XCTAssertEqual(appState.consumeComposeAttachments(for: other), [photo], "each draft keeps its own")
-        XCTAssertEqual(appState.consumeComposeAttachments(for: UUID()), [], "an unknown draft gets nothing")
-        XCTAssertEqual(appState.composeRequestTick, 0, "the stash is not a compose request")
+        XCTAssertEqual(appState.compose.takeAttachments(for: forwarded.id), [report])
+        XCTAssertEqual(appState.compose.takeAttachments(for: forwarded.id), [], "a restored scene composes without")
+        XCTAssertEqual(appState.compose.takeAttachments(for: other.id), [photo], "each draft keeps its own")
+        XCTAssertEqual(appState.compose.takeAttachments(for: UUID()), [], "an unknown draft gets nothing")
+        XCTAssertEqual(
+            appState.compose.seedsWaiting(for: nil), [forwarded, other], "taking them shows no composer"
+        )
     }
 
-    func testRestashingADraftReplacesItsAttachments() {
+    func testOpeningADraftAgainReplacesItsAttachments() {
         let appState = AppState()
-        let draft = UUID()
+        let draft = Draft(subject: "Fwd")
         let old = Attachment(filename: "old.txt", mimeType: "text/plain", data: Data([1]))
         let new = Attachment(filename: "new.txt", mimeType: "text/plain", data: Data([2]))
-        appState.stashComposeAttachments([old], for: draft)
-        appState.stashComposeAttachments([new], for: draft)
+        appState.compose.open(seed: draft, attachments: [old], from: windowA)
+        appState.compose.open(seed: draft, attachments: [new], from: windowA)
 
-        XCTAssertEqual(appState.consumeComposeAttachments(for: draft), [new])
+        XCTAssertEqual(appState.compose.takeAttachments(for: draft.id), [new])
     }
 
-    /// The mailto handlers (`CabalmailApp`, `CabalmailMacApp`) pass
-    /// `appState.lastActiveMainWindow` as the compose's window. Only
-    /// `AppState`'s half is pinned here: the test restates that argument
-    /// rather than running the handlers, which are view code, so a handler
+    /// The mailto handler (`AppRootLifecycle`) passes
+    /// `appState.lastActiveMainWindow` as the compose's window. Only the
+    /// coordinator's half is pinned here: the test restates that argument
+    /// rather than running the handler, which is view code, so a handler
     /// that changed its target would not fail it.
     func testAMailtoComposeReachesOnlyTheMainWindowLastInFront() {
         let appState = AppState()
+        let surfaceA = RecordingComposeSurface(window: windowA).register(with: appState.compose)
+        let surfaceB = RecordingComposeSurface(window: windowB).register(with: appState.compose)
         appState.noteActiveMainWindow(windowA)
-        appState.requestCompose(seed: Draft(subject: "mailto"), in: appState.lastActiveMainWindow)
+        let seed = Draft(subject: "mailto")
 
-        XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertFalse(appState.commandReaches(windowB))
+        appState.compose.open(seed: seed, from: appState.lastActiveMainWindow)
+
+        XCTAssertEqual(surfaceA.shown, [seed])
+        XCTAssertEqual(surfaceB.shown, [])
     }
 
-    /// Pins current behaviour, which looks like a defect: with no main window
-    /// recorded (none has come to the front yet, or the last one closed) a
-    /// mailto compose aims at no window, so every window's router answers.
-    /// The first takes the seed and the others pop nil and open blank drafts
-    /// (`ComposeRequestRouter`'s `consumePendingComposeSeed() ?? newDraft()`):
-    /// today's latent multi-window double compose. As above, the handlers'
-    /// argument is restated, not run.
-    /// Tracked in #1824.
-    func testAMailtoComposeWithNoWindowRecordedReachesEveryWindow() {
+    /// Fixed in #1824; this test pinned the defect until then: with no main
+    /// window recorded (none has come to the front yet, or the last one
+    /// closed) a mailto compose aimed at no window, so every window's router
+    /// answered. The first took the seed and the others opened blank
+    /// drafts. Now one window opens it, the one opened last, and no other
+    /// is asked. As above, the handler's argument is restated, not run.
+    func testAMailtoComposeWithNoWindowRecordedOpensInOneWindow() {
         let appState = AppState()
+        let surfaceA = RecordingComposeSurface(window: windowA).register(with: appState.compose)
+        let surfaceB = RecordingComposeSurface(window: windowB).register(with: appState.compose)
         appState.noteActiveMainWindow(windowA)
         appState.forgetMainWindow(windowA)
         XCTAssertNil(appState.lastActiveMainWindow)
-
         let seed = Draft(subject: "mailto")
-        appState.requestCompose(seed: seed, in: appState.lastActiveMainWindow)
 
-        XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertTrue(appState.commandReaches(windowB))
-        // What two routers answering the one tick each get.
-        XCTAssertEqual(appState.consumePendingComposeSeed(), seed, "window A's router")
-        XCTAssertNil(appState.consumePendingComposeSeed(), "window B's router opens a blank draft")
+        appState.compose.open(seed: seed, from: appState.lastActiveMainWindow)
+
+        XCTAssertEqual(surfaceB.shown, [seed], "the window opened last")
+        XCTAssertEqual(surfaceA.shown, [], "no second composer, blank or otherwise")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [])
     }
 
     // MARK: - T4: data-change reloads
@@ -128,15 +146,13 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 4, total: 20)
         let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), mailStore: appState.mailStore)
-        appState.requestCompose(in: windowA)
+        let compose = composeWaiting(for: windowA, in: appState)
         let before = appState.mailStore.listRefreshTick
 
         await model.markAllRead(folderPath: "Projects")
 
         XCTAssertEqual(appState.mailStore.listRefreshTick, before + 1, "exactly one reload")
-        XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertFalse(appState.commandReaches(windowB), "the compose stays aimed at A (#1824)")
-        XCTAssertEqual(appState.composeRequestTick, 1, "the earlier request's tick is untouched")
+        assertStillWaiting(compose, for: windowA, in: appState, "the compose stays aimed at A (#1824)")
         let calls = await imap.markFolderReadCalls
         XCTAssertEqual(calls, ["Projects"])
         XCTAssertNil(model.errorMessage)
@@ -171,7 +187,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
         let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
-        appState.requestCompose(in: windowA)
+        let compose = composeWaiting(for: windowA, in: appState)
         let before = appState.mailStore.listRefreshTick
 
         await model.emptyTrash()
@@ -183,7 +199,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let snapshot = await client.envelopeCache.snapshot(for: "Trash")
         XCTAssertNil(snapshot, "the cached Trash rows are dropped")
         XCTAssertEqual(appState.mailStore.listRefreshTick, before + 1, "exactly one reload")
-        XCTAssertFalse(appState.commandReaches(windowB), "the compose stays aimed at A (#1824)")
+        assertStillWaiting(compose, for: windowA, in: appState, "the compose stays aimed at A (#1824)")
         XCTAssertNil(model.errorMessage)
     }
 
@@ -195,7 +211,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
         let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
-        appState.requestCompose(in: windowA)
+        let compose = composeWaiting(for: windowA, in: appState)
 
         await model.emptyTrash()
 
@@ -207,7 +223,25 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let snapshot = await client.envelopeCache.snapshot(for: "Trash")
         XCTAssertEqual(snapshot?.envelopes.count, 2)
         XCTAssertEqual(appState.mailStore.listRefreshTick, 0)
-        XCTAssertFalse(appState.commandReaches(windowB), "the compose's target still stands")
+        assertStillWaiting(compose, for: windowA, in: appState, "the compose's target still stands")
+    }
+
+    /// A compose request waiting for `window`, whose compose sheet is up:
+    /// the request a data-change reload must leave where it is.
+    private func composeWaiting(for window: UUID, in appState: AppState) -> Draft {
+        RecordingComposeSurface(window: window, isSheet: true).register(with: appState.compose).isBusy = true
+        let seed = Draft(subject: "waiting")
+        appState.compose.open(seed: seed, from: window)
+        return seed
+    }
+
+    private func assertStillWaiting(
+        _ seed: Draft, for window: UUID, in appState: AppState, _ message: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertEqual(appState.compose.seedsWaiting(for: window), [seed], message, file: file, line: line)
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowB), [], message, file: file, line: line)
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [], message, file: file, line: line)
     }
 
     private func trashSnapshot() -> EnvelopeCache.Snapshot {
