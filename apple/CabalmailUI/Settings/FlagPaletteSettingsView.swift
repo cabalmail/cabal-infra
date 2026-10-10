@@ -38,9 +38,7 @@ struct FlagPaletteSettingsView: View {
                     .sectionFooter()
             }
         }
-        #if os(iOS) || os(visionOS)
-        .toolbar { EditButton() }
-        #endif
+        .editButtonToolbar()
     }
 
     private var footerText: String {
@@ -148,11 +146,8 @@ private struct FlagPaletteEntryEditor: View {
             }
         }
         .navigationTitle(entry.label)
-        #if os(macOS)
-        .formStyle(.grouped)
-        #else
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .groupedFormStyleOnMac()
+        .inlineNavigationTitle()
     }
 
     private func colorGrid(selected: String) -> some View {

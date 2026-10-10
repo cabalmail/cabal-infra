@@ -67,9 +67,7 @@ struct MessageSourceSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .navigationTitle("Message source")
-            #if os(iOS) || os(visionOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .inlineNavigationTitle()
             .toolbar { toolbarContent }
         }
         #if os(macOS)

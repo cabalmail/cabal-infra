@@ -23,9 +23,7 @@ struct DebugLogView: View {
             }
         }
         .navigationTitle("Debug Log")
-        #if os(iOS) || os(visionOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {

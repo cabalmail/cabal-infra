@@ -159,11 +159,8 @@ struct SettingsForm<Content: View>: View {
     var body: some View {
         Form { content }
             .navigationTitle(title)
-            #if os(macOS)
-            .formStyle(.grouped)
-            #else
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .groupedFormStyleOnMac()
+            .inlineNavigationTitle()
     }
 }
 
