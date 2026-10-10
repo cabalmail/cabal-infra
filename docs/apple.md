@@ -1564,9 +1564,11 @@ Reply and Forward, and a mailto: link, go to `AppState.compose`
 (`MainWindowCommandScope`'s window identity; for a link, the window last
 in front). That window's compose surface (`ComposeRequestRouter`) shows
 the seed, as a compose window or, on a single-window host, a sheet. A
-seed whose window cannot show it yet waits its turn: on a cold launch,
-while signed out, or behind an open sheet. No request reaches two
-windows. Data-change reloads (Mark All as Read, Empty Trash, push
+request that names no window, or one whose window has no compose surface
+(none is recorded as last in front, or it has closed), goes to the window
+opened last. A seed nothing can show yet waits its turn: behind its
+window's open sheet, or, on a cold launch and while signed out, for the
+first window that can. No request reaches two windows. Data-change reloads (Mark All as Read, Empty Trash, push
 actions) are not commands: they bump the mail store's `listRefreshTick`,
 which every list observes (#1824). A drag names the list it lifted from,
 and only that list performs a sidebar drop.

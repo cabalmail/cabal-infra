@@ -34,14 +34,14 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let appState = AppState()
         let seed = Draft(to: ["someone@cabalmail.example"], subject: "mailto")
         appState.compose.open(seed: seed, from: windowA)
-        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [seed], "no surface yet: it waits")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [seed], "no surface yet: it waits")
 
         let first = RecordingComposeSurface(window: windowA).register(with: appState.compose)
         let second = RecordingComposeSurface(window: windowA).register(with: appState.compose)
 
         XCTAssertEqual(first.shown, [seed])
         XCTAssertEqual(second.shown, [], "a second surface is shown nothing")
-        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [])
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [])
     }
 
     /// Fixed in #1824; this test pinned the defect until then: a second
@@ -83,7 +83,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         XCTAssertEqual(appState.compose.takeAttachments(for: other.id), [photo], "each draft keeps its own")
         XCTAssertEqual(appState.compose.takeAttachments(for: UUID()), [], "an unknown draft gets nothing")
         XCTAssertEqual(
-            appState.compose.seedsWaiting(for: windowA), [forwarded, other], "taking them shows no composer"
+            appState.compose.seedsWaiting(for: nil), [forwarded, other], "taking them shows no composer"
         )
     }
 
@@ -226,9 +226,10 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         assertStillWaiting(compose, for: windowA, in: appState, "the compose's target still stands")
     }
 
-    /// A compose request waiting for `window`, which has no surface to show
-    /// it: the request a data-change reload must leave where it is.
+    /// A compose request waiting for `window`, whose compose sheet is up:
+    /// the request a data-change reload must leave where it is.
     private func composeWaiting(for window: UUID, in appState: AppState) -> Draft {
+        RecordingComposeSurface(window: window, isSheet: true).register(with: appState.compose).isBusy = true
         let seed = Draft(subject: "waiting")
         appState.compose.open(seed: seed, from: window)
         return seed

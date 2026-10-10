@@ -4,10 +4,12 @@ import CabalmailKit
 
 /// Where a compose request goes (`ComposeCoordinator`): the compose surface
 /// of the one main window it names, or one window when it names none, and
-/// never two. A request no surface can show yet waits, in order, for its
-/// window: through a sign-out, behind an open sheet, or before any window
-/// exists. (`CommandHandoffCharacterizationTests` holds the rows ported from
-/// the compose tick, the two fixed #1824 defects among them.)
+/// never two. A request no surface can show yet waits, in order: behind its
+/// window's open sheet, or, before any window can show it and through a
+/// sign-out, for whichever surface comes. None waits for a window that
+/// cannot come back for it. (`CommandHandoffCharacterizationTests` holds the
+/// rows ported from the compose tick, the two fixed #1824 defects among
+/// them.)
 @MainActor
 final class ComposeCoordinatorTests: XCTestCase {
     private let windowA = UUID()
@@ -53,20 +55,33 @@ final class ComposeCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.seedsWaiting(for: nil), [])
     }
 
-    /// A mailto: while signed out, aimed at the window last used: another
-    /// window that is signed in does not open it, and the window it was for
-    /// does once it has signed in.
-    func testARequestForAWindowWithNoSurfaceWaitsForThatWindow() {
+    /// A request for a window that has no surface (the last-used window
+    /// closed, or its scene came back under a new identity) opens in a
+    /// window that has one, rather than wait for a window that may never
+    /// return.
+    func testARequestForAWindowWithNoSurfaceOpensInOneThatHasOne() {
         let surfaceB = surface(windowB)
         let seed = Draft(subject: "mailto")
 
         coordinator.open(seed: seed, from: windowA)
-        XCTAssertEqual(surfaceB.shown, [], "not in another window")
-        XCTAssertEqual(coordinator.seedsWaiting(for: windowA), [seed])
 
+        XCTAssertEqual(surfaceB.shown, [seed])
+        XCTAssertEqual(coordinator.seedsWaiting(for: windowA), [])
+    }
+
+    /// A mailto: while signed out, aimed at the window last used: no window
+    /// has a surface, so it waits for whichever signs in first, even if the
+    /// window it named is not the one.
+    func testARequestWhileNoWindowHasASurfaceOpensInTheFirstThatDoes() {
+        let seed = Draft(subject: "mailto")
+        coordinator.open(seed: seed, from: windowA)
+        XCTAssertEqual(coordinator.seedsWaiting(for: nil), [seed])
+
+        let surfaceB = surface(windowB)
         let surfaceA = surface(windowA)
-        XCTAssertEqual(surfaceA.shown, [seed])
-        XCTAssertEqual(surfaceB.shown, [])
+
+        XCTAssertEqual(surfaceB.shown, [seed])
+        XCTAssertEqual(surfaceA.shown, [])
     }
 
     // MARK: Waiting
@@ -84,10 +99,28 @@ final class ComposeCoordinatorTests: XCTestCase {
         sheet.unregister(from: coordinator)
         coordinator.presenterIsFree()
         XCTAssertEqual(sheet.shown, [typing], "a surface that has gone is shown nothing")
-        XCTAssertEqual(coordinator.seedsWaiting(for: windowA), [seed])
+        XCTAssertEqual(coordinator.seedsWaiting(for: nil), [seed], "kept, for whichever surface comes")
 
         let next = surface(windowA, isSheet: true)
         XCTAssertEqual(next.shown, [seed])
+    }
+
+    /// A window closes with a request waiting behind its sheet, and another
+    /// window is open: the request opens there now.
+    func testARequestWaitingForAWindowThatClosesOpensInAnother() {
+        let sheet = surface(windowA, isSheet: true)
+        let other = surface(windowB)
+        let typing = Draft(subject: "being typed")
+        let seed = Draft(subject: "mailto")
+        coordinator.open(seed: typing, from: windowA)
+        coordinator.open(seed: seed, from: windowA)
+        XCTAssertEqual(other.shown, [], "precondition: it waits for its own window")
+
+        sheet.unregister(from: coordinator)
+
+        XCTAssertEqual(other.shown, [seed])
+        XCTAssertEqual(coordinator.seedsWaiting(for: windowA), [])
+        XCTAssertEqual(coordinator.seedsWaiting(for: nil), [])
     }
 
     /// The sheet has closed but has not said so yet, and another request
@@ -164,43 +197,50 @@ final class ComposeCoordinatorTests: XCTestCase {
     func testARequestIsNotShownAheadOfAnOlderOneForItsWindow() {
         let older = Draft(subject: "older")
         let newer = Draft(subject: "newer")
-        coordinator.open(seed: older, from: windowA)
-        coordinator.open(seed: newer, from: windowA)
+        coordinator.open(seed: older, from: nil)
+        coordinator.open(seed: newer, from: nil)
         let late = RecordingComposeSurface(window: windowA)
         late.refusals = 1
 
         late.register(with: coordinator)
         XCTAssertEqual(late.shown, [], "the newer one waits behind the one refused")
+        XCTAssertEqual(coordinator.seedsWaiting(for: windowA), [older], "which is the window's own now")
 
         coordinator.presenterIsFree()
         XCTAssertEqual(late.shown, [older, newer])
     }
 
-    /// Another window's surface comes up while one is being offered a
-    /// request it cannot show: the requests waiting for the new surface
-    /// open, without waiting for something else to ask.
-    func testASurfaceThatRegistersDuringAnOfferGetsItsRequests() {
+    /// While one window is being offered a request it cannot show, two
+    /// other windows' sheets close: what waited for them opens, without
+    /// waiting for something else to ask.
+    func testRequestsFreedDuringAnOfferAreStillShown() {
         let windowC = UUID()
         let forA = Draft(subject: "for A")
         let forB = Draft(subject: "for B")
         let forC = Draft(subject: "for C")
+        let waitingA = RecordingComposeSurface(window: windowA, isSheet: true)
+        let waitingB = RecordingComposeSurface(window: windowB, isSheet: true)
+        waitingA.isBusy = true
+        waitingB.isBusy = true
+        waitingA.register(with: coordinator)
+        waitingB.register(with: coordinator)
         coordinator.open(seed: forA, from: windowA)
         coordinator.open(seed: forB, from: windowB)
-        let surfaceA = RecordingComposeSurface(window: windowA)
-        let surfaceB = RecordingComposeSurface(window: windowB)
         let busy = RecordingComposeSurface(window: windowC, isSheet: true)
         busy.isBusy = true
         busy.register(with: coordinator)
+        var didFree = false
         busy.whileOffered = { [coordinator] _ in
-            guard surfaceA.shown.isEmpty, let coordinator else { return }
-            surfaceA.register(with: coordinator)
-            surfaceB.register(with: coordinator)
+            guard !didFree, let coordinator else { return }
+            didFree = true
+            waitingA.free(in: coordinator)
+            waitingB.free(in: coordinator)
         }
 
         coordinator.open(seed: forC, from: windowC)
 
-        XCTAssertEqual(surfaceA.shown, [forA])
-        XCTAssertEqual(surfaceB.shown, [forB])
+        XCTAssertEqual(waitingA.shown, [forA])
+        XCTAssertEqual(waitingB.shown, [forB])
         XCTAssertEqual(busy.shown, [])
         XCTAssertEqual(coordinator.seedsWaiting(for: windowC), [forC])
     }

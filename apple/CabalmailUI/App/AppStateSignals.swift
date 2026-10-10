@@ -2,8 +2,8 @@ import Foundation
 import CabalmailKit
 
 // Helper value types `AppState` posts — the sign-in reason, the toast and
-// the drag-and-drop move request — plus its command bumpers and window
-// targeting. What the reader and composer change for the message lists is
+// the drag-and-drop move request — plus which main window was last in
+// front. What the reader and composer change for the message lists is
 // posted on `MailEvents` (`AppState.mailStore.events`).
 
 /// Why the app is showing the sign-in form when the user did not ask for it.

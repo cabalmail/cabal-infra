@@ -63,10 +63,11 @@ final class ComposeRequestRouterTests: XCTestCase {
         )
 
         window.showsSignedInRoot = false
-        try await host.settle()
+        let handedOn = try await host.eventually { outside.shown == [refused] }
+        XCTAssertTrue(handedOn, "the router's surface went with its view, and its request went to the one left")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowID), [])
         let later = Draft(subject: "after it went")
         appState.compose.open(seed: later, from: nil)
-        XCTAssertEqual(outside.shown, [later], "the router's surface went with its view")
-        XCTAssertEqual(appState.compose.seedsWaiting(for: windowID), [refused], "and its request still waits")
+        XCTAssertEqual(outside.shown, [refused, later])
     }
 }

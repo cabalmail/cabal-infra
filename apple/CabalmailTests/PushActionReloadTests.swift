@@ -46,6 +46,8 @@ final class PushActionReloadTests: XCTestCase {
         let ref = try XCTUnwrap(PushMessageRef(userInfo: ["msgRef": ["folder": "INBOX", "uid": 4271]]))
         let window = UUID()
         let compose = Draft(subject: "waiting")
+        // The window's compose sheet is up, so the compose waits for it.
+        RecordingComposeSurface(window: window, isSheet: true).register(with: appState.compose).isBusy = true
         appState.compose.open(seed: compose, from: window)
 
         await registrar.handleNotificationAction(identifier: "MARK_READ", ref: ref)

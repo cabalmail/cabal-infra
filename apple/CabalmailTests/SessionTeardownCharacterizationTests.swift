@@ -152,7 +152,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     }
 
     /// The drag-move tick, the window last in front and a compose waiting
-    /// for its window (the menu commands go with their window's signed-in
+    /// for a window to show it (the menu commands go with their window's signed-in
     /// view, workstream 3.1; compose left its tick in 3.3); a sign-out never
     /// resets any of them. The reader's mail events (a failed
     /// removal, a dispose) were delivered when posted, and a sign-out
@@ -173,7 +173,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
 
         XCTAssertEqual(Self.ticks(of: state), ticks)
         XCTAssertEqual(state.lastActiveMainWindow, window)
-        XCTAssertEqual(state.compose.seedsWaiting(for: window), [seed], "still waiting, for the same window")
+        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [seed], "still waiting for a window to show it")
         let expected: [MailEvent.Change] = [
             .restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false),
             .removed([MessageRef(folder: "INBOX", uid: 9)]),
