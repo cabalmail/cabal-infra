@@ -10,7 +10,7 @@ extension MailRootView {
     /// mutually exclusive with the mail folder there. The compact layout
     /// shows feeds in their own tab instead.
     var selectedFeedScope: RssItemScope? {
-        isWideSidebar && navigator.splitShowsFeeds ? navigator.feeds.scope(in: tree) : nil
+        navigator.splitShowsFeeds ? navigator.feeds.scope(in: tree) : nil
     }
 
     var selectedFeedItem: RssItem? {

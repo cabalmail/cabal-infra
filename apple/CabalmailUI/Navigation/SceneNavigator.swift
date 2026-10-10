@@ -96,6 +96,9 @@ final class SceneNavigator {
     /// no tab bar, it follows what the user does in the split (#1644).
     private(set) var compactTab: CompactTab
 
+    /// The window's Settings and search across a change of layout shell.
+    private(set) var shellHandOff = ShellHandOff()
+
     /// The sidebar's fetched folders, so a navigate request can select the
     /// real `Folder` the sidebar tags its row with rather than a stand-in
     /// (#1535).
@@ -692,5 +695,34 @@ extension SceneNavigator {
     /// The selection for a folder list mounting here (`FolderListHold`).
     func mailSelection(for folderPath: String) -> SelectionModel<MessageRef> {
         listHold.mailSelection(for: folderPath)
+    }
+}
+
+// Applies `ShellHandOff`'s decisions, which take the tab and the window's search.
+extension SceneNavigator {
+    /// Whether the split shows its Settings sheet.
+    var showsSettingsSheet: Bool { layoutIsWide && shellHandOff.settingsSheetOpen }
+
+    /// A Settings request in the split.
+    func openSettingsSheet() { shellHandOff.openSettingsSheet() }
+
+    /// The layout shell changed: the host's own old and new, since a tree's landing also writes `layoutIsWide`.
+    func layoutChanged(wasWide: Bool, isWide: Bool) {
+        layoutIsWide = isWide
+        let engaged = search.map { !$0.searchQuery.isEmpty || $0.isSearchActive } ?? false
+        switch shellHandOff.layoutChanged(wasWide: wasWide, isWide: isWide, tab: compactTab, searchIsEngaged: engaged) {
+        case .nothing: break
+        case .showTab(let tab): showTab(tab)
+        case .endLeftoverSearch:
+            // Now, not in a task: the split's landing takes the model next.
+            search?.filterTab = .all
+            search?.search.clear()
+        }
+    }
+
+    /// The split's Settings sheet was dismissed.
+    func settingsSheetDismissed() {
+        guard shellHandOff.sheetDismissed(isShowing: showsSettingsSheet, tab: compactTab) else { return }
+        compactTab = CompactTab.initial(for: route.section)
     }
 }
