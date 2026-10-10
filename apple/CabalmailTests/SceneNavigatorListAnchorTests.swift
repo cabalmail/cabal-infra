@@ -176,6 +176,24 @@ final class SceneNavigatorListAnchorTests: XCTestCase {
         XCTAssertNil(coordinator.mailLaunchTarget().listAnchor)
     }
 
+    /// The same when the link opens in a window that does not record (the
+    /// system aimed it at a window other than the one last used): the
+    /// launch is over, and no later landing is handed last run's place.
+    func testADeepLinkInAWindowThatDoesNotRecordDiscardsTheLaunchPlace() async throws {
+        try saveSession()
+        let coordinator = try makeCoordinator()
+        let router = DeepLinkRouter()
+        router.open(.message(NavState(folder: "INBOX", uid: 7, clientID: "push")))
+        let navigator = makeNavigator(coordinator, deepLinks: router)
+        lastUsed.window = UUID()
+
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
+
+        XCTAssertEqual(navigator.selectedFolder?.path, "INBOX")
+        XCTAssertEqual(coordinator.session.folder, "Archive", "precondition: this window did not record")
+        XCTAssertNil(coordinator.mailLaunchTarget().listAnchor)
+    }
+
     // MARK: A restored window's own place
 
     /// A window the system restored parks the place it stored with its
