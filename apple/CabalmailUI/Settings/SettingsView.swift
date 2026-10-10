@@ -21,7 +21,7 @@ import CabalmailKit
 /// the server so they follow the Cabalmail account to the user's other
 /// devices without any extra plumbing in these views.
 public struct SettingsView: View {
-    @State private var selection: SettingsCategory? = SettingsView.initialSelection
+    @State private var selection: SettingsCategory? = SettingsView.initialSelection(on: .current)
 
     public init() {}
 
@@ -55,9 +55,7 @@ public struct SettingsView: View {
     private var detail: some View {
         if let selection {
             SettingsCategoryDetail(category: selection)
-                #if !os(macOS)
                 .settingsSheetDoneButton()
-                #endif
         } else {
             Text("Select a category")
                 .foregroundStyle(.secondary)
@@ -67,13 +65,11 @@ public struct SettingsView: View {
     /// macOS and visionOS open wide enough for both columns, so they land on
     /// Account instead of an empty detail pane. iOS (the iPhone tab and the
     /// iPad sheet) collapses to the list; a preselected category there would
-    /// skip past the list straight onto a detail screen.
-    private static var initialSelection: SettingsCategory? {
-        #if os(iOS)
-        nil
-        #else
-        .account
-        #endif
+    /// skip past the list straight onto a detail screen. A host read rather
+    /// than the environment's layout: this seeds `@State`, before there is
+    /// an environment to read.
+    static func initialSelection(on host: HostPlatform) -> SettingsCategory? {
+        host.settingsOpensBothColumns ? .account : nil
     }
 }
 
