@@ -67,7 +67,7 @@ final class SceneNavigatorListAnchorTests: XCTestCase {
 
     /// A list mounted on `folder` that has scrolled to `index`.
     private func scroll(_ navigator: SceneNavigator, to index: Int?, in folder: String = "INBOX") throws {
-        let claim = navigator.listHold.claim(folder)
+        let claim = navigator.listHold.claim(folder, isWide: false)
         let anchor = try index.map { try place($0, in: folder) }
         navigator.listHold.record(anchor, under: claim)
         navigator.recorder.listPlace(anchor, in: folder)
@@ -82,7 +82,7 @@ final class SceneNavigatorListAnchorTests: XCTestCase {
         await navigator.mailTreeAppeared(UUID(), isWide: false)
 
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
-        let list = navigator.listHold.claim("Archive")
+        let list = navigator.listHold.claim("Archive", isWide: false)
         XCTAssertEqual(navigator.listHold.takeAnchor(under: list, from: navigator.restores), try place(300))
         XCTAssertNil(navigator.restores.pendingListAnchor, "taken once")
     }

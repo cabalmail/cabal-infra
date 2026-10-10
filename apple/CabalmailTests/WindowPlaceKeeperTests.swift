@@ -80,7 +80,7 @@ final class WindowPlaceKeeperTests: XCTestCase {
 
     /// The window's list scrolls to `index`.
     private func scrollList(to index: Int) throws {
-        let list = navigator.listHold.claim("INBOX")
+        let list = navigator.listHold.claim("INBOX", isWide: navigator.layoutIsWide)
         XCTAssertTrue(navigator.listHold.record(try place(index), under: list))
     }
 
