@@ -64,6 +64,9 @@ public final class AppState {
     /// (`WindowRecorder`).
     public var lastActiveMainWindow: UUID?
 
+    /// Whether a cross-device probe is out (`offerCrossDeviceCursor`).
+    @ObservationIgnored var isOfferingCrossDeviceCursor = false
+
     /// Bumped each time this process forgets an account (a Sign Out, an
     /// expiry, a sign-out during the launch restore), so every mounted main
     /// window clears the route its scene stores (`StoredRoute`).
