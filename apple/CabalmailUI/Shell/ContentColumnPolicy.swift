@@ -13,7 +13,7 @@ import SwiftUI
 /// you straight into it — but nothing on screen said so.
 ///
 /// A pure rule rather than an inline `if` so it can be tested directly:
-/// `MailRootView`'s `@State` isn't reachable from a unit test, this is (same
+/// a shell's `@State` isn't reachable from a unit test, this is (same
 /// reasoning as `CompactColumnPolicy`, one width class over).
 enum ContentColumnPolicy {
 

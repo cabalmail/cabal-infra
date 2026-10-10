@@ -19,7 +19,8 @@ struct MailSidebarColumn<Header: View>: View {
     /// size (`brandMarkTitle` in `SidebarBranding.swift`; the list's
     /// `.navigationTitle` string stays for VoiceOver and the back button).
     /// Nil leaves the title alone, as the Mac's sidebar, which shows none.
-    var titleMarkSize: CGFloat?
+    /// Every shell says which, so a sidebar can't lose its mark by omission.
+    let titleMarkSize: CGFloat?
     /// The first folder load, which finishes the window's launch landing
     /// (`SceneNavigator.foldersLoaded`).
     let onFoldersLoaded: ([Folder]) -> Void
