@@ -111,17 +111,14 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
         XCTAssertTrue(manager.fileExists(atPath: other.path))
     }
 
-    /// With a client as without one, the command ticks, their window target
-    /// and the parked compose seed are left alone.
+    /// With a client as without one, the compose tick, its window target and
+    /// the parked compose seed are left alone. (The menu commands went with
+    /// their window's signed-in view, which no unit test hosts.)
     func testSignOutWithAClientLeavesTheCommandTicksAlone() async {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         let window = UUID()
         let seed = Draft(subject: "parked by a mailto: link")
-        state.requestRefresh()
-        state.requestReply()
-        state.requestToggleSeen()
-        state.requestFeedCommand(.refresh)
         state.requestCompose(seed: seed, in: window)
         let ticks = Self.ticks(of: state)
         XCTAssertFalse(ticks.contains(0), "precondition: every tick was bumped")
@@ -131,7 +128,6 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
         XCTAssertEqual(Self.ticks(of: state), ticks)
         XCTAssertEqual(state.commandWindow, window)
         XCTAssertEqual(state.pendingComposeSeed, seed)
-        XCTAssertEqual(state.pendingFeedCommand, .refresh)
     }
 
     /// Sign-out leaves the app's `Preferences` scoped to the account that
@@ -154,7 +150,6 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
     }
 
     private static func ticks(of state: AppState) -> [Int] {
-        [state.composeRequestTick, state.refreshRequestTick, state.replyRequestTick,
-         state.toggleSeenRequestTick, state.feedCommandTick]
+        [state.composeRequestTick]
     }
 }

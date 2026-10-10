@@ -94,13 +94,12 @@ final class FolderSwitchPlacementTests: XCTestCase {
             "the folder list's own menu is the More menu's second home (#1626)"
         )
         // ⌥⌘T is the third route. Checked by behaviour rather than by the
-        // request method's declared text, which now names its target window
-        // (defect 11): the Mailbox menu's request bumps the tick the list's
-        // confirmation observes.
-        let appState = AppState()
-        let before = appState.markFolderReadRequestTick
-        appState.requestMarkFolderRead()
-        XCTAssertEqual(appState.markFolderReadRequestTick, before + 1, "⌥⌘T is the third route")
+        // menu's declared text: the Mailbox menu sends the window in front
+        // the command the list's confirmation answers (`WindowCommands`).
+        let window = WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: nil))
+        let before = window.count(of: .markFolderRead)
+        window.send(.markFolderRead)
+        XCTAssertEqual(window.count(of: .markFolderRead), before + 1, "⌥⌘T is the third route")
     }
 
     /// Floor: a mis-rooted read finds nothing and passes everything above.
