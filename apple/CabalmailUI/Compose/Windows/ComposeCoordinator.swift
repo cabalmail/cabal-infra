@@ -7,14 +7,16 @@ import CabalmailKit
 /// A request names the main window it came from: the window whose Reply or
 /// New Message was used, or for a mailto: link the window last used. That
 /// window's presenter (`ComposeRequestRouter`, registered while the window
-/// is signed in) takes the seed. A request that names no window goes to the
-/// window opened last, and with no presenter at all it waits for the first.
-/// A seed whose window cannot take it yet waits its turn, oldest first: the
-/// window is signed out, or its compose sheet is up (an iPhone, a closed
-/// Duo). So a mailto: on a cold launch, or while signed out, opens once a
+/// is signed in) takes the seed. A request that names no window, or one
+/// whose window has no presenter (it is signed out, or has gone), goes to
+/// the window opened last, and with no presenter at all it waits for the
+/// first. A seed its window cannot take yet, because its compose sheet is
+/// up (an iPhone, a closed Duo), waits its turn for that window, oldest
+/// first. So a mailto: on a cold launch, or while signed out, opens once a
 /// window can show it, and two links behind an open sheet both open, one
 /// after the other. A seed waiting when the session ends is kept for the
-/// next one.
+/// next one. No seed waits for a window that cannot come back for it: a
+/// seed keeps a window's name only while that window has a presenter.
 ///
 /// Before, a request parked one seed on `AppState` and bumped a tick that
 /// every window's router watched: a request that named no window opened a
@@ -46,7 +48,8 @@ public final class ComposeCoordinator {
     }
 
     /// A seed waiting for a presenter, and the window whose presenter it
-    /// waits for; nil for whichever registers first.
+    /// waits for, which has one; nil for whichever presenter is there, or
+    /// registers first.
     private struct Waiting {
         var window: UUID?
         let seed: Draft
@@ -78,12 +81,12 @@ public final class ComposeCoordinator {
     /// them.
     func open(seed: Draft, attachments: [Attachment] = [], from window: UUID?) {
         if !attachments.isEmpty { self.attachments[seed.id] = attachments }
-        waiting.append(Waiting(window: window, seed: seed))
+        waiting.append(Waiting(window: window.flatMap { hasPresenter(for: $0) ? $0 : nil }, seed: seed))
         deliver()
     }
 
     /// The seeds waiting for `window`'s presenter, oldest first; with nil,
-    /// those waiting for whichever presenter registers first.
+    /// those waiting for whichever presenter is there or registers first.
     func seedsWaiting(for window: UUID?) -> [Draft] {
         waiting.filter { $0.window == window }.map(\.seed)
     }
@@ -103,8 +106,17 @@ public final class ComposeCoordinator {
         deliver()
     }
 
+    /// A main window's compose surface has gone: its window signed out, or
+    /// closed. What waited behind its sheet waits for whichever surface is
+    /// there or comes next: the window's own when it signs back in, or
+    /// another's if the window does not come back.
     func unregister(_ presenter: Presenter) {
         presenters.removeAll { $0 === presenter }
+        guard let window = presenter.window, !hasPresenter(for: window) else { return }
+        for index in waiting.indices where waiting[index].window == window {
+            waiting[index].window = nil
+        }
+        deliver()
     }
 
     /// A presenter that refused a seed can take one now: its sheet closed.
@@ -141,6 +153,10 @@ public final class ComposeCoordinator {
     }
 
     // MARK: Delivery
+
+    private func hasPresenter(for window: UUID) -> Bool {
+        presenters.contains { $0.window == window }
+    }
 
     /// The presenter a seed waiting for `window` goes to: that window's,
     /// else, for a seed naming none, the one registered last.

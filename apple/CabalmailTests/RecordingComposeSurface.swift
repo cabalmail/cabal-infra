@@ -28,10 +28,12 @@ final class RecordingComposeSurface {
         self.isSheet = isSheet
     }
 
-    /// Registers the surface, as a signed-in main window's router does.
+    /// Registers the surface, as a signed-in main window's router does. The
+    /// coordinator keeps it alive from then on, through its presenter, as
+    /// SwiftUI keeps a mounted router's state, so a test need not hold it.
     @discardableResult
     func register(with coordinator: ComposeCoordinator) -> RecordingComposeSurface {
-        let presenter = ComposeCoordinator.Presenter(window: window) { [unowned self] seed in
+        let presenter = ComposeCoordinator.Presenter(window: window) { [self] seed in
             whileOffered?(seed)
             if refusals > 0 {
                 refusals -= 1

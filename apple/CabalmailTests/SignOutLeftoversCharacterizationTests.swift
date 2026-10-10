@@ -4,7 +4,7 @@ import CabalmailKit
 
 /// Workstream 0.8 characterization suite, with a wired session (sign-in
 /// through `SessionHarness`): what `AppState.signOut()` leaves in place (the
-/// form pre-fill, the command ticks, the preferences scope) and the
+/// form pre-fill, a waiting compose, the preferences scope) and the
 /// per-account state it now clears (#1825), alongside
 /// `SignOutCharacterizationTests`, which pins what it tears down.
 /// `SessionTeardownCharacterizationTests` pins the same for a sign-out with
@@ -111,10 +111,10 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
         XCTAssertTrue(manager.fileExists(atPath: other.path))
     }
 
-    /// With a client as without one, a compose waiting for its window is
-    /// left alone, for the same window. (The menu commands went with their
-    /// window's signed-in view, which no unit test hosts; the compose tick
-    /// and its window target, which this row also pinned, are gone.)
+    /// With a client as without one, a compose waiting for a window to show
+    /// it is left alone. (The menu commands went with their window's
+    /// signed-in view, which no unit test hosts; the compose tick and its
+    /// window target, which this row also pinned, are gone.)
     func testSignOutWithAClientLeavesTheWaitingComposeAlone() async {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
@@ -124,8 +124,7 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
 
         await state.signOut()
 
-        XCTAssertEqual(state.compose.seedsWaiting(for: window), [seed])
-        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [])
+        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [seed])
     }
 
     /// Sign-out leaves the app's `Preferences` scoped to the account that

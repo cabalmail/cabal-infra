@@ -9,8 +9,11 @@ import CabalmailKit
 /// the window's command object, so a command reaches its own window's
 /// surfaces, once, and no other's. Compose left the last tick and the shared
 /// target slot in workstream 3.3 (`ComposeCoordinator`): its rows are the
-/// checks they were, on what the coordinator shows and keeps waiting, and
-/// the drag-move tick beside them is as it was.
+/// checks they were, on what the coordinator shows and keeps waiting, except
+/// the three the tick's defects were pinned by (a compose aimed at no window
+/// reaching every window, the one shared target slot, and a view outside
+/// any main window answering every compose), which pin what replaced them.
+/// The drag-move tick beside them is as it was.
 @MainActor
 final class CommandTickCharacterizationTests: XCTestCase {
     private let windowA = UUID()
@@ -23,6 +26,12 @@ final class CommandTickCharacterizationTests: XCTestCase {
 
     private func makeWindow() -> WindowCommands {
         WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: nil))
+    }
+
+    /// `window`'s compose sheet is up, so a compose for it waits for it: the
+    /// request the rows below check stays where it was aimed.
+    private func sheetUp(in window: UUID, of appState: AppState) {
+        RecordingComposeSurface(window: window, isSheet: true).register(with: appState.compose).isBusy = true
     }
 
     // MARK: - T1: one count per command
@@ -46,14 +55,12 @@ final class CommandTickCharacterizationTests: XCTestCase {
             window.send(command)
             XCTAssertEqual(window.count(of: command), 2, "\(command): a repeat bumps again")
         }
-        // A compose request is no tick at all, and sends no window command.
+        // A compose request is no tick at all.
         let appState = AppState()
-        let window = makeWindow()
         appState.compose.open(seed: Draft(subject: "seeded"), from: windowA)
         appState.compose.open(seed: Draft(subject: "seeded"), from: windowA)
         XCTAssertTrue(ticks(appState).values.allSatisfy { $0 == 0 })
-        XCTAssertTrue(Self.everyWindowCommand.allSatisfy { window.count(of: $0) == 0 })
-        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA).count, 2, "a repeat is a second request")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil).count, 2, "a repeat is a second request")
     }
 
     /// No command posts a mail event or a drag request: the reader and the
@@ -68,8 +75,9 @@ final class CommandTickCharacterizationTests: XCTestCase {
         }
         let appState = AppState()
         let events = MailEventRecorder(appState.mailStore)
-        RecordingComposeSurface(window: windowA).register(with: appState.compose)
+        let surface = RecordingComposeSurface(window: windowA).register(with: appState.compose)
         appState.compose.open(seed: Draft(subject: "seeded"), from: windowA)
+        XCTAssertEqual(surface.shown.count, 1, "precondition: the compose was shown")
         XCTAssertNil(appState.pendingMoveRequest, "a compose request")
         XCTAssertEqual(events.events, [], "a compose request")
     }
@@ -84,8 +92,8 @@ final class CommandTickCharacterizationTests: XCTestCase {
         }
         // A compose request: the surface of the window it names, and no
         // other. A surface outside any main window (a preview, a test) is
-        // shown only a request that names no window; on the tick it answered
-        // every request, which no window in the app could rely on.
+        // not shown a request another window's surface takes; on the tick it
+        // answered every request, beside the window that was named.
         let appState = AppState()
         let seed = Draft(subject: "seeded")
         let outside = RecordingComposeSurface(window: nil).register(with: appState.compose)
@@ -119,18 +127,17 @@ final class CommandTickCharacterizationTests: XCTestCase {
 
     // MARK: - T1: what rides with a command
 
-    /// A compose for a window with no surface to show it (signed out, or
-    /// not yet mounted) waits for that window. (The zero-argument form this
-    /// row also pinned, which parked nothing and left a seed in place, had
-    /// no callers and went with the tick.)
-    func testAComposeWithNoSurfaceWaitsForItsWindow() {
+    /// A compose with no surface to show it (signed out, or no window
+    /// mounted yet) waits for one. (The zero-argument form this row also
+    /// pinned, which parked nothing and left a seed in place, had no callers
+    /// and went with the tick.)
+    func testAComposeWithNoSurfaceWaits() {
         let appState = AppState()
         let seed = Draft(to: ["someone@cabalmail.example"], subject: "From a mailto link")
 
         appState.compose.open(seed: seed, from: windowA)
 
-        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [seed])
-        XCTAssertEqual(appState.compose.seedsWaiting(for: windowB), [])
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [seed])
     }
 
     func testEveryFeedCommandIsItsOwnCommand() {
@@ -170,6 +177,7 @@ final class CommandTickCharacterizationTests: XCTestCase {
     func testALaterCommandNeverReplacesAnEarlierOnesAction() {
         let appState = AppState()
         let seed = Draft(subject: "parked")
+        sheetUp(in: windowA, of: appState)
         appState.compose.open(seed: seed, from: windowA)
         let window = makeWindow()
         window.send(.feed(.subscribe))
@@ -189,6 +197,7 @@ final class CommandTickCharacterizationTests: XCTestCase {
         let items = [MessageDragItem(uid: 7, sourceFolder: "INBOX")]
         let appState = AppState()
         let compose = Draft(subject: "waiting")
+        sheetUp(in: windowA, of: appState)
         appState.compose.open(seed: compose, from: windowA)
 
         appState.requestMove(items: items, to: "Archive", from: list)
@@ -214,9 +223,12 @@ final class CommandTickCharacterizationTests: XCTestCase {
     /// The target was one slot every compose request overwrote, read when
     /// an observer ran, so the last writer decided who an undelivered
     /// request reached. Each waiting request keeps its own window now: a
-    /// later one, aimed anywhere or nowhere, moves none before it.
+    /// later one, aimed anywhere or nowhere, moves none before it. (The one
+    /// aimed nowhere joins the window opened last, behind what waits there.)
     func testALaterComposeNeverRetargetsAnEarlierOne() {
         let state = AppState()
+        sheetUp(in: windowB, of: state)
+        sheetUp(in: windowA, of: state)
         let first = Draft(subject: "first")
         let second = Draft(subject: "second")
         let third = Draft(subject: "third")
@@ -225,8 +237,8 @@ final class CommandTickCharacterizationTests: XCTestCase {
         state.compose.open(seed: third, from: nil)
 
         XCTAssertEqual(state.compose.seedsWaiting(for: windowB), [first])
-        XCTAssertEqual(state.compose.seedsWaiting(for: windowA), [second])
-        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [third])
+        XCTAssertEqual(state.compose.seedsWaiting(for: windowA), [second, third])
+        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [])
     }
 
     /// #1824's main path, fixed: a data-change reload sent after an aimed
@@ -243,6 +255,7 @@ final class CommandTickCharacterizationTests: XCTestCase {
     func testADataChangeReloadLeavesAWaitingComposeWithItsWindow() {
         let appState = AppState()
         let seed = Draft(subject: "waiting")
+        sheetUp(in: windowA, of: appState)
         appState.compose.open(seed: seed, from: windowA)
 
         appState.mailStore.requestListRefresh()
@@ -275,6 +288,7 @@ final class CommandTickCharacterizationTests: XCTestCase {
     func testNotingOrForgettingAWindowLeavesAWaitingComposeWithItsWindow() {
         let appState = AppState()
         let seed = Draft(subject: "waiting")
+        sheetUp(in: windowA, of: appState)
         appState.compose.open(seed: seed, from: windowA)
 
         appState.noteActiveMainWindow(windowB)
@@ -283,7 +297,9 @@ final class CommandTickCharacterizationTests: XCTestCase {
 
         appState.forgetMainWindow(windowB)
         appState.forgetMainWindow(windowA)
-        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [seed], "a closed window keeps its request")
+        XCTAssertEqual(
+            appState.compose.seedsWaiting(for: windowA), [seed], "its request stays until its surface goes"
+        )
         XCTAssertEqual(appState.compose.seedsWaiting(for: windowB), [])
         XCTAssertNil(appState.lastActiveMainWindow)
     }
