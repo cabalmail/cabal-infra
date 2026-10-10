@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Width policy for the search field that rides the message-list column's
-/// toolbar on wide layouts (`MailRootView.toolbarSearchField`) — macOS and
+/// toolbar on wide layouts (`DesktopShell.toolbarSearchField`) — macOS and
 /// visionOS. iPadOS draws the field in the column instead, because its
 /// column-scoped navigation bar can't seat one at all
 /// (`GlobalSearchFieldPlacement`); the iOS arms below are what the toolbar
