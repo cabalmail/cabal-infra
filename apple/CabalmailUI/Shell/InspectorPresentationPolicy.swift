@@ -15,7 +15,7 @@ import Foundation
 /// The rule: a request to present is honoured only while the button has
 /// asked for it; a request to dismiss is always honoured, so a system
 /// dismissal (a drag, a size change) still clears the state. A pure rule
-/// rather than an inline `if` so it can be tested — `MailRootView`'s
+/// rather than an inline `if` so it can be tested — a shell's
 /// `@State` isn't reachable from a unit test, this is.
 enum InspectorPresentationPolicy {
     struct State: Equatable {

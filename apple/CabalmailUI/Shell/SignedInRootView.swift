@@ -1,37 +1,34 @@
 import SwiftUI
 import CabalmailKit
 
-/// Signed-in root.
+/// Signed-in root: the window picks one layout shell and switches on it.
 ///
-/// The section layout (Mail / Feeds / Addresses / Settings, plus a Search tab)
-/// branches on the horizontal *and* vertical size classes
-/// (`SectionLayoutPolicy`), never on device idiom or orientation:
+/// The shell is a `ShellLayout`, resolved from the platform and, on iOS, the
+/// horizontal *and* vertical size classes and the measured width
+/// (`SectionLayoutPolicy`), never from the device idiom or orientation:
 ///
-/// - Compact in either dimension — every iPhone in every orientation, iPhone
-///   Duo's outer display, iPad in narrow multitasking: a bottom `TabView`, one
-///   tab per section. This is the natural compact idiom and the inner
-///   `MailRootView` `NavigationSplitView` collapses to a stack here, so the
-///   two never compete for the left edge. There's no dedicated Folders tab
-///   — the Mail tab's sidebar `FolderListView` already browses and manages
-///   folders. Requiring a regular height too is what keeps a Plus / Max
-///   iPhone here in landscape, where its width alone reads as regular;
-///   branching on width alone rebuilt the whole tree on rotation, dropping
-///   the reader (see the policy's doc). The tab tree also pins the
-///   environment size class to compact, so the split view inside it never
-///   expands in landscape and collapses back (the cycle that left the reader
-///   unpushed and the addresses inspector stranded as a sheet over the tab
-///   bar).
-/// - Regular in both — an iPad, iPhone Duo's inner display: just
-///   `MailRootView` — a single show/hide sidebar owns the left edge, matching
-///   the macOS main window. Addresses / Folders / Settings move into a modal
-///   `SettingsSheet`, opened by the sidebar gear button or the ⌘, app command
-///   sent to the window as `WindowCommand.settings`.
-/// - visionOS: `VisionSectionView` — a floating leading tab bar (the visionOS
-///   `TabView` ornament), one tab per section. The iPad single-sidebar layout
-///   hid the folder list behind a reveal toggle visionOS never surfaced, so it
-///   gets the tab idiom instead (the folder list is its own tab there).
-/// - macOS renders `MailRootView` directly and reaches the three sections
-///   through its dedicated Settings scene (⌘,, `SettingsTabsView`).
+/// - `tabs` (`TabShell`) — compact in either dimension: every iPhone in
+///   every orientation, iPhone Duo's outer display, an iPad window in narrow
+///   multitasking. A bottom tab bar, one tab per section; the Mail tab's
+///   sidebar browses and manages folders, so there is no Folders tab.
+///   Requiring a regular height too is what keeps a Plus / Max iPhone here in
+///   landscape, where its width alone reads as regular; branching on width
+///   alone rebuilt the whole tree on rotation, dropping the reader (see the
+///   policy's doc). The shell also pins the environment size class to
+///   compact, so the Mail tab's split view never expands in landscape and
+///   collapses back.
+/// - `split` (`SplitShell`) — regular in both: an iPad, iPhone Duo's inner
+///   display. A list beside the reader, with the folder list in a floating
+///   panel, addresses in a trailing inspector and Settings in a sheet, opened
+///   by the panel's gear or the ⌘, command sent to the window as
+///   `WindowCommand.settings`.
+/// - `ornament` (`OrnamentShell`) — visionOS: a floating leading tab bar,
+///   one tab per section, with the folder list a tab of its own.
+/// - `desktop` (`DesktopShell`) — macOS: the three-column window, with the
+///   three sections' settings in the Settings scene (⌘,, `SettingsTabsView`).
+///
+/// The window's navigation (`SceneNavigator`) is held here, above the switch,
+/// so a swap between shells rebuilds only the layout.
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.scenePhase) private var scenePhase
@@ -153,12 +150,12 @@ struct SignedInRootView: View {
     private var sectionLayout: some View {
         switch shellLayout {
         case .desktop:
-            MailRootView()
+            #if os(macOS)
+            DesktopShell()
+            #endif
         case .split:
             #if os(iOS)
-            MailRootView()
-                .environment(\.showsSettingsGear, true)
-                .settingsSheetPresenter()
+            SplitShell()
             #endif
         case .tabs:
             #if os(iOS)
@@ -276,11 +273,10 @@ struct SignedInRootView: View {
 }
 
 #if !os(macOS)
-/// Addresses tab for the compact-iPhone bottom bar and the visionOS tab bar
-/// (`VisionSectionView`): the shared `AddressListView` in its own
-/// `NavigationStack`. The tab is a management surface — tap copies the
-/// address, and request/revoke/favorite/suspend live on the rows.
-/// Module-internal (not `private`) so `VisionSectionView` can reuse it.
+/// Addresses tab for the tab shells (`TabShell` and `OrnamentShell`): the
+/// shared `AddressListView` in its own `NavigationStack`. The tab is a
+/// management surface — tap copies the address, and
+/// request/revoke/favorite/suspend live on the rows.
 struct AddressManagementTab: View {
     var body: some View {
         NavigationStack {

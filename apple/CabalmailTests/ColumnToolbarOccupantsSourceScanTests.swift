@@ -17,7 +17,7 @@ import XCTest
 // the eviction in place: Settings lives on the floating folder panel now, and
 // the column's bar carries the folder toggle alone.
 final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
-    private static let path = "CabalmailUI/Shell/MailRootView.swift"
+    private static let path = "CabalmailUI/Shell/SplitShell.swift"
 
     /// The rule: nothing in the message-list column's toolbar block builds a
     /// gear. Re-adding one there re-creates the overflow this issue is about.
@@ -82,7 +82,7 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
     /// Floor: a mis-rooted read finds nothing and passes everything above.
     func testTheBlocksAreReadable() throws {
         XCTAssertTrue(
-            try Self.columnToolbarBlock().contains("showsSettingsGear"),
+            try Self.columnToolbarBlock().contains("ToolbarItem(placement: .topBarLeading) {"),
             "the column toolbar block did not load from \(Self.path)"
         )
         XCTAssertTrue(
@@ -106,10 +106,13 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
         return regex.numberOfMatches(in: body, range: NSRange(body.startIndex..., in: body))
     }
 
-    /// The `showsSettingsGear` toolbar block — the message-list column's own
-    /// bar on regular-width iPad — through the `#endif` that closes it.
+    /// The split's leading toolbar item — the message-list column's own bar
+    /// on regular-width iPad — through the end of the column's builder.
     private static func columnToolbarBlock() throws -> String {
-        try slice(from: "if showsSettingsGear {", to: "    /// Records the measured content-column width")
+        try slice(
+            from: "ToolbarItem(placement: .topBarLeading) {",
+            to: "    /// Records the measured content-column width"
+        )
     }
 
     /// `folderPanelOverlay`'s body, through the end of its extension.

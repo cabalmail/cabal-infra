@@ -21,25 +21,6 @@ extension EnvironmentValues {
     }
 }
 
-/// True when the regular-width single-rail layout is active, so the mailbox
-/// sidebar should show the Settings gear (the gear opens `SettingsSheet`;
-/// compact width reaches the same sections through its Settings tab instead).
-///
-/// Set by `SignedInRootView` on the regular-width branch and read by
-/// `FolderListView`. A plain environment flag rather than a `horizontalSizeClass`
-/// check because the sidebar is a narrow `NavigationSplitView` column and
-/// reports a compact size class even on a regular-width iPad.
-private struct ShowsSettingsGearKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension EnvironmentValues {
-    var showsSettingsGear: Bool {
-        get { self[ShowsSettingsGearKey.self] }
-        set { self[ShowsSettingsGearKey.self] = newValue }
-    }
-}
-
 /// Adds a Done button that dismisses the enclosing `SettingsSheet`, but only
 /// when the view is actually hosted in it. A no-op in the compact-width
 /// Settings tab (which has no sheet) - so the same `SettingsView` body serves
@@ -73,9 +54,9 @@ extension View {
 /// Address and folder management used to live here as extra tabs, but they now
 /// belong to the always-visible mailbox sidebar (`AddressListView` /
 /// `FolderListView` carry the full request/revoke and create/delete
-/// affordances). So this sheet is just General preferences, presented from
-/// `SignedInRootView` via `WindowCommand.settings` (sidebar gear button /
-/// ⌘, command) at regular width, where the section tab bar is gone.
+/// affordances). So this sheet is just General preferences, presented by the
+/// split (`SettingsSheetPresenter`) for `WindowCommand.settings` (the folder
+/// panel's gear button / ⌘, command), where the section tab bar is gone.
 ///
 /// `SettingsView` supplies its own navigation (a category split view that
 /// collapses to a drill-in list at the sheet's compact width) and offers a
