@@ -25,7 +25,7 @@ import CabalmailKit
 ///   `MailRootView` — a single show/hide sidebar owns the left edge, matching
 ///   the macOS main window. Addresses / Folders / Settings move into a modal
 ///   `SettingsSheet`, opened by the sidebar gear button or the ⌘, app command
-///   via `AppState.settingsRequestTick`.
+///   sent to the window as `WindowCommand.settings`.
 /// - visionOS: `VisionSectionView` — a floating leading tab bar (the visionOS
 ///   `TabView` ornament), one tab per section. The iPad single-sidebar layout
 ///   hid the folder list behind a reveal toggle visionOS never surfaced, so it
@@ -148,10 +148,10 @@ struct SignedInRootView: View {
                 .sheet(isPresented: $settingsPresented) {
                     SettingsSheet()
                 }
-                // The gear button and the ⌘, command both bump the tick;
-                // routing through it (rather than a direct binding) keeps the
-                // trigger working regardless of which column holds focus.
-                .onWindowCommand(appState.settingsRequestTick) {
+                // The gear button and the ⌘, command both send this window's
+                // Settings command; routing through it (rather than a direct
+                // binding) keeps the trigger working whichever column has focus.
+                .answersCommand(.settings) {
                     settingsPresented = true
                 }
             #endif

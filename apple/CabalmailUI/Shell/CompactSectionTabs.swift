@@ -28,9 +28,7 @@ enum CompactTab: Hashable {
 
 #if os(iOS)
 /// Compact-width section switcher: a plain bottom tab bar. No
-/// `.sidebarAdaptable` - at compact width there's no sidebar to adapt to,
-/// and the regular-width path never renders this, so the adaptive style's
-/// collision with the inner split view can't recur.
+/// `.sidebarAdaptable`: at compact width there's no sidebar to adapt to.
 ///
 /// The Addresses tab hosts the same `AddressListView` the Mail sidebar uses
 /// (wrapped in `AddressManagementTab` for its own `NavigationStack` +
@@ -100,6 +98,8 @@ struct CompactSectionTabs: View {
             }
         }
         .environment(\.showsCompactBrandMark, true)
+        // ⌘, opens Settings: its own tab here, as on visionOS.
+        .answersCommand(.settings) { navigator.showTab(.settings) }
     }
 }
 #endif

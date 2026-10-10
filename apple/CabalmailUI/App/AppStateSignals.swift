@@ -115,23 +115,11 @@ struct MessageMoveRequest: Equatable, Sendable {
     }
 }
 
-// MARK: - Message-menu selection intents
-
-// Bumpers for the selection-scoped tick counters declared on the main
-// type (stored properties can't live in an extension under @Observable).
-// Here rather than in `AppState.swift` so that file stays under SwiftLint's
-// `file_length` cap.
-extension AppState {
-    func requestToggleSeen(in window: UUID? = nil) { commandWindow = window; toggleSeenRequestTick += 1 }
-    func requestToggleFlagged(in window: UUID? = nil) { commandWindow = window; toggleFlaggedRequestTick += 1 }
-    public func requestMarkFolderRead(in window: UUID? = nil) { commandWindow = window; markFolderReadRequestTick += 1 }
-    func requestMoveSelection(in window: UUID? = nil) { commandWindow = window; moveSelectionRequestTick += 1 }
-}
-
 // MARK: - Command window targeting
 //
-// Which main window a command tick is for. The `request…` methods record
-// the target in `commandWindow` as they bump a tick; the observers, through
+// Which main window a compose request is for (the menus' own commands go to
+// the window in front, `WindowCommands`). `requestCompose` records the
+// target in `commandWindow` as it bumps the tick; the observer, through
 // `onWindowCommand` (`Views/MainWindowCommandScope.swift`), ask `commandReaches`
 // before acting. A nil target reaches every window, which keeps any caller
 // that names no window working as it did before targeting existed. A
@@ -147,13 +135,6 @@ extension AppState {
     /// compose window cannot be aimed at a window no longer there.
     func forgetMainWindow(_ window: UUID) {
         if lastActiveMainWindow == window { lastActiveMainWindow = nil }
-    }
-
-    /// The window a menu command is for: the focused main window, or the
-    /// one last in front when the key window is a compose or Settings
-    /// window.
-    public func menuCommandTarget(focused: UUID?) -> UUID? {
-        focused ?? lastActiveMainWindow
     }
 
     /// Whether the latest command tick is for the window `window`. A view

@@ -52,8 +52,8 @@ struct CabalmailApp: App {
                 // iPadOS instead of dropping to the home screen (no-op on
                 // other platforms; see MainSceneActivation.swift).
                 .recordsMainSceneSession()
-                // Gives this window the identity its menu commands are aimed
-                // at, so a second window ignores them (MainWindowCommandScope).
+                // Gives this window the identity its compose requests and mail
+                // events are aimed at (MainWindowCommandScope).
                 .mainWindowCommandScope(appState)
                 .environment(appState)
                 .environment(preferences)
@@ -78,12 +78,12 @@ struct CabalmailApp: App {
         // the Mac; iPhone carries them inertly.
         .commands {
             MessageMenuCommands()
-            FeedsMenuCommands(appState: appState)
+            FeedsMenuCommands()
             // Settings sheet shortcut. iOS has no Settings scene (macOS owns
             // Cmd+, through its `Settings {}` scene), so we claim the standard
-            // app-settings slot and route it to the same tick the sidebar gear
-            // bumps. Surfaces in the iPadOS hardware-keyboard menu.
-            SettingsMenuCommand(appState: appState)
+            // app-settings slot and send the window in front the command the
+            // sidebar gear sends. Surfaces in the iPadOS hardware-keyboard menu.
+            SettingsMenuCommand()
         }
         // iPadOS, visionOS, and an open iPhone Duo open compose as a real
         // scene; a single-window host ignores the group because
@@ -95,18 +95,18 @@ struct CabalmailApp: App {
     }
 }
 
-/// Settings sheet shortcut (⌘,) in the iPadOS hardware-keyboard menu, aimed
-/// at the focused main window so a second window does not open its own sheet.
+/// Settings shortcut (⌘,) in the iPadOS hardware-keyboard menu, sent to the
+/// main window in front only (a second window opens nothing); dims with none.
 private struct SettingsMenuCommand: Commands {
-    let appState: AppState
-    @FocusedValue(\.commandWindowID) private var focusedWindow
+    @FocusedValue(\.windowCommands) private var commands
 
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button("Settings...") {
-                appState.requestSettings(in: appState.menuCommandTarget(focused: focusedWindow))
+                commands?.send(.settings)
             }
             .keyboardShortcut(",", modifiers: .command)
+            .disabled(commands == nil)
         }
     }
 }
