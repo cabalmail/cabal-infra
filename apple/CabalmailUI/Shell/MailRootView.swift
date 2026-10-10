@@ -155,13 +155,6 @@ struct MailRootView: View {
         )
     }
 
-    /// Folder that drives `MessageDetailView`: the selected row's own, so a
-    /// cross-folder search result opens against its true mailbox; the
-    /// sidebar's otherwise (`MessageFolderPolicy`).
-    var detailFolder: Folder? {
-        MessageFolderPolicy.folder(for: selectedEnvelope, in: selectedFolder)
-    }
-
     /// Whether the content column should show search results rather than the
     /// selected folder: the search field is focused, holds a query, or a
     /// search is currently active.
@@ -226,55 +219,6 @@ struct MailRootView: View {
                 navigator.selectFolder(picked)
             }
         )
-    }
-
-    /// Content column: global search results while the search field is
-    /// engaged, otherwise the selected folder's message list (or an empty-state
-    /// prompt). Extracted so `body` can hang the Settings gear on its toolbar.
-    @ViewBuilder
-    var mailContentColumn: some View {
-        // The precedence itself lives in `ContentColumnPolicy` so the rule a
-        // folder pick has to satisfy (#1217) is stated in the same place as
-        // the rule it has to satisfy it against.
-        switch ContentColumnPolicy.mode(
-            isSearching: isSearching,
-            selectedFolderPath: selectedFolder?.path
-        ) {
-        case .search:
-            if let searchModel {
-                // Global search owns the content column while the search field
-                // is engaged. Stable `.id` so it isn't torn down per keystroke;
-                // the detail column still reads the selected message, against
-                // the result's true mailbox (`detailFolder`).
-                MessageListView(
-                    scope: .search,
-                    injectedSearchModel: searchModel,
-                    selection: envelopeSelection,
-                    onSelectionCountChanged: { listSelectionCount = $0 }
-                )
-                .id("search")
-            }
-        case .folder:
-            if let selectedFolder {
-                MessageListView(
-                    scope: .folder(selectedFolder),
-                    selection: envelopeSelection,
-                    onSelectionCountChanged: { listSelectionCount = $0 },
-                    // A pick from the list's folder-switch menu goes through
-                    // the same binding as a sidebar tap, so it ends a global
-                    // search and dismisses the iPad folder panel the same way.
-                    onSwitchFolder: { sidebarSelection.wrappedValue = $0 },
-                    onFolderMenuWidthChanged: { listLeadingToolbarWidth = $0 }
-                )
-                .id(selectedFolder.path)
-            }
-        case .empty:
-            ContentUnavailableView(
-                "Select a folder",
-                systemImage: "sidebar.left",
-                description: Text("Pick a folder from the sidebar to browse messages.")
-            )
-        }
     }
 
     var body: some View {
@@ -493,50 +437,41 @@ extension MailRootView {
 
     @ViewBuilder
     private var sidebar: some View {
-        VStack(spacing: 0) {
-            #if os(macOS)
-            // Brand mark at the top of the sidebar, below the traffic-light /
-            // toolbar row and above the search field. macOS never displaced a
-            // title here (the sidebar column never showed one); the mark is
-            // purely additive. iOS/iPadOS host theirs in the toolbar below.
-            HStack {
-                CabalmailMark(size: 90)
-                Spacer()
+        // Global search lives in the message-list column on wide layouts
+        // (iPad-regular / macOS; see `decoratedContentColumn`) and in the
+        // dedicated Search tab on compact iPhone (`CompactSectionTabs`'
+        // `Tab(role: .search)`). The sidebar carries no search field of its
+        // own — one above the folder list would be redundant with the Search
+        // tab on compact.
+        //
+        // Folders own the sidebar; addresses moved to the trailing inspector
+        // (see `.inspector` in `body`). The wide layout's per-context filter —
+        // and the New / Reload buttons that flank it — render inside the list
+        // view's own header (`SidebarListHeaderRow`). Compact lets the list
+        // keep its own top-of-sidebar `.searchable` and toolbar buttons.
+        MailSidebarColumn(
+            selection: sidebarSelection,
+            filter: isWideSidebar ? $folderListFilter : nil,
+            feedSelection: isWideSidebar ? feedSidebarSelection : nil,
+            // The first load finishes the window's launch landing, or
+            // swaps the fetched folder in for a stand-in
+            // (`SceneNavigator.foldersLoaded`).
+            onFoldersLoaded: { navigator.foldersLoaded($0) },
+            header: {
+                #if os(macOS)
+                // Brand mark at the top of the sidebar, below the traffic-light /
+                // toolbar row and above the search field. macOS never displaced a
+                // title here (the sidebar column never showed one); the mark is
+                // purely additive. iOS/iPadOS host theirs in the toolbar below.
+                HStack {
+                    CabalmailMark(size: 90)
+                    Spacer()
+                }
+                .padding(.leading, 16)
+                .padding(.top, 12)
+                #endif
             }
-            .padding(.leading, 16)
-            .padding(.top, 12)
-            #endif
-
-            // Global search lives in the detail column's toolbar on wide layouts
-            // (iPad-regular / macOS; see `detailColumn`) and in the dedicated
-            // Search tab on compact iPhone (`SignedInRootView`'s
-            // `Tab(role: .search)`). The sidebar carries no search field of its
-            // own — one above the folder list would be redundant with the Search
-            // tab on compact.
-
-            // Folders own the sidebar; addresses moved to the trailing inspector
-            // (see `.inspector` in `body`). The wide layout's per-context filter —
-            // and the New / Reload buttons that flank it — render inside the list
-            // view's own header (`SidebarListHeaderRow`). Compact lets the list
-            // keep its own top-of-sidebar `.searchable` and toolbar buttons.
-            FolderListView(
-                selection: sidebarSelection,
-                externalFilter: isWideSidebar ? $folderListFilter : nil,
-                feedSelection: isWideSidebar ? feedSidebarSelection : nil,
-                // The first load finishes the window's launch landing, or
-                // swaps the fetched folder in for a stand-in
-                // (`SceneNavigator.foldersLoaded`).
-                onFoldersLoaded: { navigator.foldersLoaded($0) }
-            )
-        }
-        // Sidebar branding (see `SidebarBranding.swift`): the wash paints this
-        // column only — the entire folder screen on compact iPhone, where
-        // this column IS the screen; the floating sidebar on iPad; the sidebar
-        // material on macOS. Hiding the list's scroll background (inherited by
-        // the folder `List` below) lets the wash show through the native
-        // material instead of being painted over by the system background.
-        .scrollContentBackground(.hidden)
-        .background { SidebarWash().ignoresSafeArea() }
+        )
         #if !os(macOS)
         // The Cabalmail mark stands in for the sidebar's "Folders" title
         // (`FolderListView`'s `.navigationTitle("Folders")` string stays for
@@ -679,15 +614,27 @@ extension MailRootView {
     /// by `resizableContentColumn` as a single view.
     @ViewBuilder
     fileprivate var decoratedContentColumn: some View {
-        VStack(spacing: 0) {
-            // On iPadOS the search field is drawn here rather than in the
-            // column's own navigation bar, which has no room for it
-            // (`GlobalSearchFieldPlacement`).
-            if searchFieldHost == .columnHeader {
-                columnHeaderSearchField
+        MailContentColumn(
+            feedList: feedListSelection,
+            search: searchModel,
+            isSearching: isSearching,
+            folder: selectedFolder,
+            selection: envelopeSelection,
+            onSelectionCountChanged: { listSelectionCount = $0 },
+            // A pick from the list's folder-switch menu goes through the
+            // same binding as a sidebar tap, so it ends a global search and
+            // dismisses the iPad folder panel the same way.
+            onSwitchFolder: { sidebarSelection.wrappedValue = $0 },
+            onLeadingToolbarWidthChanged: { listLeadingToolbarWidth = $0 },
+            header: {
+                // On iPadOS the search field is drawn here rather than in the
+                // column's own navigation bar, which has no room for it
+                // (`GlobalSearchFieldPlacement`).
+                if searchFieldHost == .columnHeader {
+                    columnHeaderSearchField
+                }
             }
-            contentColumn
-        }
+        )
         // The search field sizes itself against this column (see
         // `ToolbarSearchFieldWidth`); a toolbar item can't measure its own
         // pane, so the pane measures itself here.
