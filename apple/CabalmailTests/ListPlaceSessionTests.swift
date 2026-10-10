@@ -108,6 +108,21 @@ final class ListPlaceSessionTests: XCTestCase {
         XCTAssertNil(coordinator.session.listAnchor)
     }
 
+    /// A list a layout swap left behind is still being torn down: what its
+    /// scroll view reports on the way out reaches neither the window's
+    /// place nor the session's.
+    func testAListLeftBehindWritesNothingToTheSession() async throws {
+        let list = try await windowWithALandedList()
+        list.tracker.scrolled(toRow: 30, model: list.model)
+        list.navigator.listHold.handOff(
+            isWide: true, folderPath: ListPagingWorld.folderPath, parkingIn: list.navigator.restores
+        )
+
+        list.tracker.scrolled(toRow: 0, model: list.model)
+
+        XCTAssertEqual(coordinator.session.listAnchor, try anchor(index: 30, uid: 970))
+    }
+
     /// A list that does not land (a pill) leaves the session's place as it
     /// is, as it leaves its window's.
     func testAListOnAPillLeavesTheSessionsPlace() async throws {
