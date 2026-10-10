@@ -187,7 +187,9 @@ public final class SessionManager {
     ///
     /// Error handling mirrors the plan's cases:
     ///
-    /// - Missing inputs (first launch, or post-signout) → silent signed-out.
+    /// - Missing inputs (first launch, or post-signout) → the status stays
+    ///   as it is: the sign-in form a new session starts on, or an error
+    ///   that form still shows (#1992).
     /// - Valid tokens → signed-in.
     /// - Refresh-token expired / revoked → clear the keychain so the sign-in
     ///   form starts clean, but keep `lastUsername` / `controlDomain` so
@@ -207,27 +209,24 @@ public final class SessionManager {
     ///
     /// Idempotent: if a client is already wired or sign-in is in flight,
     /// this is a no-op, so `.task` can call it without worrying about
-    /// SwiftUI's lifecycle re-firing it.
+    /// SwiftUI's lifecycle re-firing it. The code form counts as a sign-in
+    /// in flight: a window that appears while it is up (#1992) neither wires
+    /// a stored session over its challenge nor sends it back to the
+    /// password step.
     func restoreIfPossible() async {
         await teardownGate.awaitTeardown()
         guard client == nil else { return }
         switch status {
-        case .signingIn, .restoring, .signedIn:
+        case .signingIn, .mfaCodeRequired, .restoring, .signedIn:
             return
         default:
             break
         }
         let domain = controlDomain
         let username = lastUsername
-        guard !domain.isEmpty, !username.isEmpty else {
-            status = .signedOut
-            return
-        }
+        guard !domain.isEmpty, !username.isEmpty else { return }
         let secureStore = sessionEnvironment.makeSecureStore()
-        guard (try? secureStore.get(SecureStoreKey.authTokens)) != nil else {
-            status = .signedOut
-            return
-        }
+        guard (try? secureStore.get(SecureStoreKey.authTokens)) != nil else { return }
 
         status = .restoring
         let generation = teardownGate.beginRestore()
