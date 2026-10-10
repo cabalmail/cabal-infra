@@ -226,14 +226,14 @@ struct MessageListView: View {
         }
     }
 
-    /// Routes to the app-wide compose receiver (`ComposeRequestRouter`
+    /// Routes to this window's compose surface (`ComposeRequestRouter`
     /// on `SignedInRootView`), which opens a compose window on the
     /// platforms that support one and hosts the compose sheet on
     /// iPhone. Presentation is deliberately NOT view-local: a sheet
     /// anchored here can't present when this view isn't visible, and
     /// two competing sheet hosts would block each other.
     private func presentCompose(seed: Draft) {
-        appState.requestCompose(seed: seed, in: commandWindowID)
+        appState.compose.open(seed: seed, from: commandWindowID)
     }
 
     @ViewBuilder

@@ -45,7 +45,10 @@ final class PushActionReloadTests: XCTestCase {
         XCTAssertEqual(appState.status, .signedIn, "precondition: signed in")
         let ref = try XCTUnwrap(PushMessageRef(userInfo: ["msgRef": ["folder": "INBOX", "uid": 4271]]))
         let window = UUID()
-        appState.requestCompose(in: window)
+        let compose = Draft(subject: "waiting")
+        // The window's compose sheet is up, so the compose waits for it.
+        RecordingComposeSurface(window: window, isSheet: true).register(with: appState.compose).isBusy = true
+        appState.compose.open(seed: compose, from: window)
 
         await registrar.handleNotificationAction(identifier: "MARK_READ", ref: ref)
         await registrar.handleNotificationAction(identifier: "ARCHIVE", ref: ref)
@@ -55,7 +58,7 @@ final class PushActionReloadTests: XCTestCase {
         XCTAssertEqual(flags.count, 1, "precondition: Mark as Read reached the server")
         XCTAssertEqual(moves.count, 1, "precondition: Archive reached the server")
         XCTAssertEqual(appState.mailStore.listRefreshTick, 2, "each action asks the lists to reload once")
-        XCTAssertTrue(appState.commandReaches(window))
-        XCTAssertFalse(appState.commandReaches(UUID()), "the compose stays aimed at its own window")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: window), [compose])
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [], "the compose stays aimed at its own window")
     }
 }

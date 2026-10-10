@@ -4,7 +4,7 @@ import CabalmailKit
 
 /// Workstream 0.8 characterization suite, with a wired session (sign-in
 /// through `SessionHarness`): what `AppState.signOut()` leaves in place (the
-/// form pre-fill, the command ticks, the preferences scope) and the
+/// form pre-fill, a waiting compose, the preferences scope) and the
 /// per-account state it now clears (#1825), alongside
 /// `SignOutCharacterizationTests`, which pins what it tears down.
 /// `SessionTeardownCharacterizationTests` pins the same for a sign-out with
@@ -111,23 +111,20 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
         XCTAssertTrue(manager.fileExists(atPath: other.path))
     }
 
-    /// With a client as without one, the compose tick, its window target and
-    /// the parked compose seed are left alone. (The menu commands went with
-    /// their window's signed-in view, which no unit test hosts.)
-    func testSignOutWithAClientLeavesTheCommandTicksAlone() async {
+    /// With a client as without one, a compose waiting for a window to show
+    /// it is left alone. (The menu commands went with their window's
+    /// signed-in view, which no unit test hosts; the compose tick and its
+    /// window target, which this row also pinned, are gone.)
+    func testSignOutWithAClientLeavesTheWaitingComposeAlone() async {
         await SignOutSuiteSteps.signIn(harness)
         let state = harness.appState
         let window = UUID()
         let seed = Draft(subject: "parked by a mailto: link")
-        state.requestCompose(seed: seed, in: window)
-        let ticks = Self.ticks(of: state)
-        XCTAssertFalse(ticks.contains(0), "precondition: every tick was bumped")
+        state.compose.open(seed: seed, from: window)
 
         await state.signOut()
 
-        XCTAssertEqual(Self.ticks(of: state), ticks)
-        XCTAssertEqual(state.commandWindow, window)
-        XCTAssertEqual(state.pendingComposeSeed, seed)
+        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [seed])
     }
 
     /// Sign-out leaves the app's `Preferences` scoped to the account that
@@ -147,9 +144,5 @@ final class SignOutLeftoversCharacterizationTests: XCTestCase {
         await harness.appState.signOut()
 
         XCTAssertEqual(preferences.accountScope, scope)
-    }
-
-    private static func ticks(of state: AppState) -> [Int] {
-        [state.composeRequestTick]
     }
 }

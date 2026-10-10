@@ -5,8 +5,8 @@ import CabalmailKit
 /// Defect 11 of the 2026-10 rearchitecture audit: menu commands and drag-
 /// moves reached every mounted list and reader in every main window. A menu
 /// command now goes to the window in front's own `WindowCommands`, a compose
-/// request names its window, and a drag names its source list; these pin the
-/// rules the observers apply to those names.
+/// request goes to the one window it names (`ComposeCoordinator`), and a
+/// drag names its source list; these pin those rules.
 @MainActor
 final class CommandWindowTargetingTests: XCTestCase {
     private let windowA = UUID()
@@ -34,17 +34,25 @@ final class CommandWindowTargetingTests: XCTestCase {
         XCTAssertEqual([commandsA.count(of: .toggleSeen), commandsA.count(of: .refresh)], [1, 0])
         XCTAssertEqual(commandsA.count(of: .feed(.refresh)) + commandsB.count(of: .sidebarTree(.expandAllFolders)), 0)
         let appState = AppState()
-        appState.requestCompose(seed: Draft(), in: windowB)
-        XCTAssertFalse(appState.commandReaches(windowA))
+        let surfaceA = RecordingComposeSurface(window: windowA).register(with: appState.compose)
+        let surfaceB = RecordingComposeSurface(window: windowB).register(with: appState.compose)
+        appState.compose.open(seed: Draft(), from: windowB)
+        XCTAssertEqual([surfaceA.shown.count, surfaceB.shown.count], [0, 1])
     }
 
-    func testAnUntargetedComposeReachesEveryWindow() {
+    /// Fixed in #1824 (the defect `CommandHandoffCharacterizationTests`'
+    /// mailto row pinned): an untargeted compose reached every window. It
+    /// opens in one, and a surface outside any main window is shown only a
+    /// compose that names no window.
+    func testAnUntargetedComposeReachesOneWindow() {
         let appState = AppState()
-        appState.requestCompose()
-        XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertTrue(appState.commandReaches(windowB))
-        appState.requestCompose(in: windowA)
-        XCTAssertTrue(appState.commandReaches(nil), "a view outside a main window answers as before")
+        let outside = RecordingComposeSurface(window: nil).register(with: appState.compose)
+        let surfaceA = RecordingComposeSurface(window: windowA).register(with: appState.compose)
+        let surfaceB = RecordingComposeSurface(window: windowB).register(with: appState.compose)
+        appState.compose.open(seed: Draft(), from: nil)
+        XCTAssertEqual([outside.shown.count, surfaceA.shown.count, surfaceB.shown.count], [0, 0, 1])
+        appState.compose.open(seed: Draft(), from: windowA)
+        XCTAssertEqual([outside.shown.count, surfaceA.shown.count, surfaceB.shown.count], [0, 1, 1])
     }
 
     /// The main window last in front, which a mailto compose is aimed at:
