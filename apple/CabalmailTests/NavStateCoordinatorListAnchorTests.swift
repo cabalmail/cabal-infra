@@ -88,13 +88,17 @@ final class NavStateCoordinatorListAnchorTests: XCTestCase {
         XCTAssertEqual(store.loadSession()?.listAnchor, try place(300), "the session's debounce wrote it")
     }
 
+    /// A list of another folder than the session's (a window in the
+    /// background, a list being torn down) leaves the session's place alone.
     func testAPlaceForAnotherFolderThanTheSessionsIsNotRecorded() throws {
         let coordinator = try makeCoordinator()
         coordinator.recordFolder("INBOX")
+        coordinator.recordListAnchor(try place(300), folderPath: "INBOX")
 
-        coordinator.recordListAnchor(try place(300, in: "Archive"), folderPath: "Archive")
+        coordinator.recordListAnchor(try place(40, in: "Archive"), folderPath: "Archive")
+        coordinator.recordListAnchor(nil, folderPath: "Archive")
 
-        XCTAssertNil(coordinator.session.listAnchor)
+        XCTAssertEqual(coordinator.session.listAnchor, try place(300))
     }
 
     func testBackAtTheTopClearsThePlace() throws {
@@ -158,6 +162,22 @@ final class NavStateCoordinatorListAnchorTests: XCTestCase {
         let target = coordinator.mailLaunchTarget()
 
         XCTAssertEqual(target.listAnchor, try place(300, in: "Archive"))
+    }
+
+    /// The session moved to another folder before the first mail landing
+    /// (the launch opened on Feeds, and another record moved it): the
+    /// landing is on that folder, and the launch's place is not for it.
+    func testALandingOnAnotherFolderGetsNoPlace() async throws {
+        saveSession(folder: "Archive", anchor: try place(300, in: "Archive"), section: .feeds)
+        let coordinator = try makeCoordinator()
+        _ = await coordinator.consumeFeedsLaunchTarget()
+        coordinator.recordMessage(MessageRef(folder: "INBOX", uid: 9, messageId: "<nine@example.com>"))
+
+        let target = coordinator.mailLaunchTarget()
+
+        XCTAssertEqual(target.folderPath, "INBOX")
+        XCTAssertNil(target.listAnchor)
+        XCTAssertNil(coordinator.mailLaunchTarget().listAnchor, "and it is spent")
     }
 
     /// A deep link took the launch (`SceneNavigator.navigate(to:)`): the
