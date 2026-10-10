@@ -70,7 +70,8 @@ final class WindowRestores {
     var pendingFeedRestore: PendingFeedRestore?
 
     /// The row the folder's next list opens scrolled to (`ListAnchor`): where
-    /// the window's list was when a layout swap replaced it. Taken once, by
+    /// the window's list was when a layout swap replaced it, or when the app
+    /// last went away. Taken once, by
     /// the list for exactly its folder (`FolderListHold.takeAnchor`); a
     /// folder change, a back-out or a navigation drops it. Nothing observes
     /// it: the list asks when it lands.
@@ -167,6 +168,14 @@ final class WindowRestores {
 
     func parkListAnchor(_ anchor: ListAnchor) {
         pendingListAnchor = anchor
+    }
+
+    /// Parks a mail landing's message and list place for its folder's list.
+    /// Before the window moves to the folder: the move keeps what is parked
+    /// for the folder it lands on, and drops what is parked for another.
+    func park(_ target: NavStateCoordinator.MailLaunchTarget, priming coordinator: NavStateCoordinator?) {
+        if let restore = target.messageRestore { schedule(restore, priming: coordinator) }
+        if let anchor = target.listAnchor { parkListAnchor(anchor) }
     }
 
     /// Drops the parked anchor, unless it is for `folderPath`: the folder a

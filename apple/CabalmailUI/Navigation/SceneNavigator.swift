@@ -308,9 +308,7 @@ final class SceneNavigator {
         let target = coordinator.mailLaunchTarget(stored: stored)
         awaitingLaunchReconcile = true
         recorder.recording?.armProvisionalLanding()
-        if let restore = target.messageRestore {
-            restores.schedule(restore, priming: recorder.recording)
-        }
+        restores.park(target, priming: recorder.recording)
         setFolder(Folder(path: target.folderPath, isSubscribed: true), records: hasShownMail)
     }
 
@@ -364,9 +362,7 @@ final class SceneNavigator {
             let target = coordinator.mailLaunchTarget(stored: route.mail)
             recorder.recording?.armProvisionalLanding()
             let landing = folders.first { $0.path == target.folderPath }
-            if let restore = target.messageRestore, landing != nil {
-                restores.schedule(restore, priming: recorder.recording)
-            }
+            if landing != nil { restores.park(target, priming: recorder.recording) }
             setFolder(landing ?? inbox)
         } else {
             setFolder(inbox)
@@ -391,7 +387,7 @@ final class SceneNavigator {
     func navigate(to cursor: NavState) {
         guard let coordinator = coordinator() else { return }
         deepLinks.discardParked()
-        coordinator.didConsumeLaunchSession = true
+        coordinator.endLaunchSnapshot()
         restores.dropListAnchor()
         restores.schedule(cursor, priming: recorder.recording)
         if selectedFolder?.path != cursor.folder {

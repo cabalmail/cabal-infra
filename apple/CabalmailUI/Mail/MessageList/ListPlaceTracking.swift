@@ -236,9 +236,11 @@ final class ListPlaceTracker {
         claim = navigator.listHold.claim(folderPath)
     }
 
+    /// Records the place with the window and, when it changed, with the
+    /// resume session, which keeps it only from the window last used.
     private func record(_ anchor: ListAnchor?) {
-        guard let claim else { return }
-        navigator?.listHold.record(anchor, under: claim)
+        guard let claim, let navigator, navigator.listHold.record(anchor, under: claim) else { return }
+        navigator.recorder.listPlace(anchor, in: claim.folderPath)
     }
 
     private func scroll(to row: Int) {

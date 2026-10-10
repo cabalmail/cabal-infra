@@ -25,6 +25,12 @@ public struct ResumeSession: Codable, Equatable, Sendable {
     public var feedScope: RssItemScope?
     public var feedItemFeedID: String?
     public var feedItemSortKey: String?
+    // The folder list's place: its top row, by identity and position. Set
+    // and cleared by the app layer, which builds its own value from them.
+    public var listAnchorFolder: String?
+    public var listAnchorMessageID: String?
+    public var listAnchorUID: UInt32?
+    public var listAnchorIndex: Int?
     public var savedAt: Date
 
     public init(

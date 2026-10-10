@@ -85,3 +85,20 @@ extension ListAnchor {
         return nil
     }
 }
+
+extension ResumeSession {
+    /// The list place this record keeps for its folder, in its four plain
+    /// fields. One left behind for another folder reads as none.
+    var listAnchor: ListAnchor? {
+        get {
+            guard let path = listAnchorFolder, path == folder, let index = listAnchorIndex else { return nil }
+            return ListAnchor(folderPath: path, messageID: listAnchorMessageID, uid: listAnchorUID, index: index)
+        }
+        set {
+            listAnchorFolder = newValue?.folderPath
+            listAnchorMessageID = newValue?.messageID
+            listAnchorUID = newValue?.uid
+            listAnchorIndex = newValue?.index
+        }
+    }
+}
