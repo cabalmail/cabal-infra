@@ -3,7 +3,7 @@ import CabalmailKit
 
 /// Root of the Feeds tab on iPhone (compact) and visionOS: its own
 /// three-column split that collapses to a stack on compact, mirroring
-/// `MailRootView`'s shape without its mail-specific plumbing. On macOS and
+/// the mail split's shape without its mail-specific plumbing. On macOS and
 /// regular iPad the feeds live in the mail sidebar instead (see
 /// `FolderListView`'s Feeds section), so this view is never mounted there.
 ///
