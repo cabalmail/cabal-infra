@@ -56,7 +56,6 @@ struct CabalmailMacApp: App {
                 .appRootLifecycle(
                     appState: appState,
                     preferences: preferences,
-                    scenePhase: scenePhase,
                     beforeRestore: {
                         // Warm the "Open in Private Window" availability
                         // cache so the first link menu of the session lays
@@ -80,6 +79,11 @@ struct CabalmailMacApp: App {
         .handlesExternalEvents(matching: [])
         .commands {
             CabalmailCommands(appState: appState)
+        }
+        // The app's own phase, once for the app however many windows are
+        // open: flush on the way out, reconcile and refresh on the way back.
+        .onChange(of: scenePhase) { _, phase in
+            appState.appScenePhaseChanged(to: phase)
         }
         // Standalone compose window scene — matches every other Mac
         // mail client. The Cabalmail iOS target installs the same

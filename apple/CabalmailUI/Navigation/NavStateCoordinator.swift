@@ -26,9 +26,9 @@ import CabalmailKit
 @Observable
 @MainActor
 public final class NavStateCoordinator {
-    /// True once the launch-time cursor fetch has run. `MailRootView` uses it
-    /// to tell the cold-launch path from a later foreground (both may offer
-    /// the cross-device toast, through different entry points).
+    /// True once the launch-time cursor fetch has run. `SignedInRootView`
+    /// uses it to tell the cold-launch path from a later foreground (both
+    /// may offer the cross-device toast, through different entry points).
     var hasLoadedInitial = false
 
     public let clientID: String
