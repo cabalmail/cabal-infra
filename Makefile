@@ -87,11 +87,12 @@ promote:
 # --- Apple client (local parity with apple.yml) ----------------------------
 # Thin wrappers over scripts/build-apple.sh so a local "does it build?" check
 # is as discoverable as `make scan`. The script mirrors the apple.yml CI
-# invocations (xcodegen generate, swiftlint --strict, xcodebuild per platform)
+# invocations (xcodegen generate, swiftlint --strict and the
+# platform-conditionals check, xcodebuild per platform)
 # and carries the Xcode-select / arch caveats - see its header. macOS + full
 # Xcode only; deliberately not folded into any aggregate target.
 #   make apple            # generate + lint + build macos/ios/visionos/watchos (all)
-#   make apple-lint       # swiftlint --strict only
+#   make apple-lint       # swiftlint --strict + the platform-conditionals check
 #   make apple-kit-test   # xcodebuild test for CabalmailKit
 #   make apple-test       # Kit + both app-layer test suites
 .PHONY: apple apple-lint apple-macos apple-ios apple-visionos apple-watchos apple-kit-test apple-app-test apple-ios-app-test apple-test

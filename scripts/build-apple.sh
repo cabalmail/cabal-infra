@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # Local build/lint/test helper for the Apple client. Mirrors the pull-request
-# jobs in .github/workflows/apple.yml - the swiftlint gate, kit-test's macOS
+# jobs in .github/workflows/apple.yml - the swiftlint gate and the
+# platform-conditionals check that follows it, kit-test's macOS
 # leg, app-test, ios-app-test, and every platform app-build builds - so a
 # local "does it build?" check matches CI instead of being hand-assembled each
 # time (and drifting). The signed upload jobs that run on pushes are not
@@ -13,7 +14,7 @@
 #
 # Usage (from the repo root):
 #   scripts/build-apple.sh              # generate + lint + build all platforms (default)
-#   scripts/build-apple.sh lint         # swiftlint --strict only
+#   scripts/build-apple.sh lint         # swiftlint --strict + the platform-conditionals check
 #   scripts/build-apple.sh macos|ios|visionos|watchos
 #   scripts/build-apple.sh kit-test     # xcodebuild test for CabalmailKit (macOS)
 #   scripts/build-apple.sh app-test     # app-layer tests, macOS-hosted (CabalmailMac scheme)
@@ -73,6 +74,8 @@ generate() {
 lint() {
   log "swiftlint --strict"
   swiftlint lint --strict --quiet
+  log "platform conditionals"
+  python3 ../scripts/check-platform-conditionals.py
 }
 
 build_scheme() {

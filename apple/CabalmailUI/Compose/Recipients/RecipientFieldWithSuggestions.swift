@@ -51,10 +51,7 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
             HStack(alignment: .top, spacing: 8) {
                 TextField(label, text: $text, axis: .vertical)
                     .autocorrectionDisabled()
-                    #if os(iOS) || os(visionOS)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.emailAddress)
-                    #endif
+                    .textEntry(.email)
                     .focused(focusBinding, equals: focusValue)
                     .accessibilityIdentifier(identifier)
                 Button {

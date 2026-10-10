@@ -60,12 +60,10 @@ struct FeedItemListView: View {
             }
             .navigationTitle(title)
         )
-        #if os(iOS) || os(visionOS)
         // Inline, as the message list's title is. On a wide iPad the switch
         // draws in the column instead (`scopeSwitchHost`), and a large
         // title's band would stay behind there, empty, above it.
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .toolbar {
             // New Message stays in the toolbar in feed scope, in the same
             // slot the mail list gives it, so switching between mail and
