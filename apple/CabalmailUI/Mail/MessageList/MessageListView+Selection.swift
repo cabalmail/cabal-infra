@@ -367,21 +367,10 @@ extension MessageListView {
     func wideList(model: MessageListViewModel, visible: [Envelope]) -> some View {
         virtualizedList(model: model, visible: visible)
             .background {
-                // Window-scoped Cmd+Delete on the selection. A hidden button
-                // (not a menu item) so the chord fires regardless of which pane
-                // has focus without going app-wide -- a menu equivalent would
-                // also trigger from the compose window and steal the text
-                // system's delete-to-line-start. Installed only while this list
-                // owns the chord (`DisposeChordHost`): a single selection is
-                // the reading pane's territory, and installing both equivalents
-                // in one window at once leaves AppKit to pick a winner -- which
-                // is why an always-on button silently did nothing.
-                if appState.messageMenuAvailability.disposeChordHost == .list {
-                    Button("") { disposeSelection(model: model) }
-                        .keyboardShortcut(.delete, modifiers: .command)
-                        .opacity(0)
-                        .accessibilityHidden(true)
-                }
+                // Window-scoped Cmd+Delete on the selection, installed only
+                // while this list owns the chord in its window: a single
+                // selection is the reading pane's (`DisposeChordHost`).
+                DisposeChordButton(host: .list) { disposeSelection(model: model) }
             }
             // Derive the reading-pane selection from the selection set: exactly
             // one selected -> show that message, the row the ref names (of two

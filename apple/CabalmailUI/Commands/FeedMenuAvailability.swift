@@ -6,10 +6,9 @@ import CabalmailKit
 /// enabled iff it has something to act on.
 ///
 /// The item commands (Mark as Read/Unread, Flag/Unflag) are answered by the
-/// mounted `FeedItemListView`, which acts on its selected row; the feed list
-/// is single-selection and the selected row is the open item, so the two
-/// fields agree today. They are kept apart anyway because the bulk-selection
-/// phase of the cross-media plan (Phase 3) splits them exactly as mail's are.
+/// mounted `FeedItemListView`, which acts on its selected row; the list is
+/// single-selection, so the two fields agree today, and are kept apart for a
+/// bulk selection to split them exactly as mail's are.
 struct FeedMenuAvailability: Equatable {
     /// Rows the feed list has selected.
     var selectedCount: Int
@@ -36,14 +35,11 @@ struct FeedMenuAvailability: Equatable {
 /// (mark all read).
 ///
 /// A menu key equivalent fires app-wide, so two enabled items on one chord
-/// would leave AppKit to pick a winner — the failure the dispose chord's
-/// single-host rule already guards against (`disposeChordHost`). The rule
-/// here is by section: the menu for the section in front of the user
-/// (`AppState.activeSection`) may be live, the other never is, whatever its
-/// own availability says. On the wide layouts the two availabilities are
+/// would leave AppKit to pick a winner (as `disposeChordHost` guards). So: the menu for the section in front of the user
+/// (`WindowCommands.activeSection`) may be live, the other never is, whatever
+/// its own availability says. On the wide layouts the two availabilities are
 /// already exclusive (picking a feed scope clears the mail selection and
-/// vice versa); the compact tabs are where both can be non-empty at once,
-/// since each tab keeps its selection while the other is in front.
+/// vice versa); on the tab layouts the menus read only the tab in front.
 public enum SharedChordPolicy {
     /// Message ▸ Mark as Read/Unread and Flag/Unflag.
     static func mailItemsLive(_ mail: MessageMenuAvailability, activeSection: ResumeSession.Section) -> Bool {
@@ -69,32 +65,35 @@ public enum SharedChordPolicy {
 }
 
 private struct FeedMenuAvailabilityReporter: ViewModifier {
-    @Environment(AppState.self) private var appState
-    /// Nil when this surface does not host the feed reader in its current
-    /// layout (a `MailRootView` inside the compact tabs): it then reports
-    /// nothing, so it cannot overwrite the Feeds tab's own report.
+    @Environment(\.windowCommands) private var commands
+    @Environment(\.commandTab) private var tab
+    @State private var reporter = UUID()
+    /// Nil while this surface hosts no feed reader (a compact `MailRootView`).
     let availability: FeedMenuAvailability?
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: availability, initial: true) { _, new in
-                if let new { appState.feedMenuAvailability = new }
+            .onAppear { if let availability { commands?.report(availability, in: tab, by: reporter) } }
+            .onChange(of: availability) { _, new in
+                if let new {
+                    commands?.report(new, in: tab, by: reporter)
+                } else {
+                    commands?.withdrawFeedReport(in: tab, by: reporter)
+                }
             }
-            .onDisappear {
-                if availability != nil { appState.feedMenuAvailability = .none }
-            }
+            .onDisappear { commands?.withdrawFeedReport(in: tab, by: reporter) }
     }
 }
 
 private struct ActiveSectionReporter: ViewModifier {
-    @Environment(AppState.self) private var appState
-    /// Nil for a layout that does not decide the section (a utility tab, a
-    /// `MailRootView` that hosts no feeds): it leaves the last answer alone.
+    @Environment(\.windowCommands) private var commands
+    /// Nil for a layout that does not decide the section (a `MailRootView`
+    /// that hosts no feeds): it leaves the last answer alone.
     let section: ResumeSession.Section?
 
     func body(content: Content) -> some View {
         content.onChange(of: section, initial: true) { _, new in
-            if let new { appState.activeSection = new }
+            if let new { commands?.reportedSection = new }
         }
     }
 }
@@ -117,8 +116,8 @@ extension View {
         ))
     }
 
-    /// Publishes which section is in front (`AppState.activeSection`), so the
-    /// menus that share a chord are never both enabled (`SharedChordPolicy`).
+    /// Publishes which section the wide split shows (`WindowCommands.activeSection`),
+    /// so the menus that share a chord are never both enabled (`SharedChordPolicy`).
     func reportsActiveSection(_ section: ResumeSession.Section?) -> some View {
         modifier(ActiveSectionReporter(section: section))
     }

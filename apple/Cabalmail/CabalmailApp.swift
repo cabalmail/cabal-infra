@@ -77,7 +77,7 @@ struct CabalmailApp: App {
         // Cmd) so Reply / Mark / Flag / Move get the same chords as
         // the Mac; iPhone carries them inertly.
         .commands {
-            MessageMenuCommands(appState: appState)
+            MessageMenuCommands()
             FeedsMenuCommands(appState: appState)
             // Settings sheet shortcut. iOS has no Settings scene (macOS owns
             // Cmd+, through its `Settings {}` scene), so we claim the standard

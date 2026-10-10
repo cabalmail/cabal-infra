@@ -48,4 +48,12 @@ enum FolderSwitchPlacement {
         guard isWideSidebar, columnScopedToolbar else { return .titleMenu }
         return .columnHeader
     }
+
+    /// The host on a window's layout shell: a header row in the split's
+    /// column-scoped bar, the title menu everywhere else. The list and its
+    /// feed twin ask this rather than their own size class, which reports
+    /// compact in a narrow split column even on a regular-width iPad.
+    static func host(in layout: ShellLayout, on platform: HostPlatform = .current) -> FolderSwitchHost {
+        host(isWideSidebar: layout.isWideSplit, columnScopedToolbar: platform.columnScopedToolbar)
+    }
 }
