@@ -29,7 +29,12 @@ enum ListPlaceGeometry {
 /// on screen with no error row above its rows, under the claim the list took
 /// from its window. A layout swap or a newer list voids that claim, so a
 /// list from a tree being torn down can neither record nor take the anchor
-/// parked for its successor.
+/// parked for its successor. When recording resumes (back on the All pill,
+/// the error row gone), the place is the row the list is on then.
+///
+/// The user's own scroll always wins: a list the user has scrolled before
+/// its landing, or while the landing waits or settles, is not moved, and the
+/// place is where they left it.
 @Observable
 @MainActor
 final class ListPlaceTracker {
@@ -54,6 +59,9 @@ final class ListPlaceTracker {
         let loaded: Int
         let isLoading: Bool
         let countKnown: Bool
+        /// Whether the list records, so a list back from a pill, a search,
+        /// another sort or an error row is seen coming back.
+        let records: Bool
 
         @MainActor
         init(_ model: MessageListViewModel) {
@@ -62,6 +70,7 @@ final class ListPlaceTracker {
             loaded = model.envelopes.count
             isLoading = model.isLoading
             countKnown = ListPlaceTracker.countKnown(model)
+            records = ListPlaceTracker.records(model)
         }
     }
 
@@ -83,6 +92,9 @@ final class ListPlaceTracker {
     @ObservationIgnored private var claim: FolderListHold.Claim?
     @ObservationIgnored private var didLand = false
     @ObservationIgnored private var isOnScreen = false
+    /// Whether the user scrolled the list before it landed: its cached rows
+    /// are on screen while the first refresh is still out.
+    @ObservationIgnored private var userScrolledFirst = false
     @ObservationIgnored private var pending: Pending?
     @ObservationIgnored private var requests = 0
     /// The row the last request asked for, until the list moves: a request
@@ -99,10 +111,12 @@ final class ListPlaceTracker {
 
     /// The list's scroll view came on screen: take the window's claim the
     /// first time, or again if a back-out voided it under a list that
-    /// stayed alive.
+    /// stayed alive. Only a list on screen takes a claim again; one a swap
+    /// or a folder change left behind never comes back on screen.
     func appeared(_ model: MessageListViewModel, in navigator: SceneNavigator?) {
         isOnScreen = true
-        takeClaimIfNeeded(model, in: navigator)
+        let holdsClaim = claim.map { navigator?.listHold.holds($0) ?? false } ?? false
+        if !holdsClaim { takeClaim(model, in: navigator) }
         if let requested { scroll(to: requested) }
     }
 
@@ -115,14 +129,25 @@ final class ListPlaceTracker {
     /// it is that folder's, and scrolls there. A list that does not land
     /// (a pill, a sort) still takes the parked anchor, and leaves the
     /// window's place as it is.
+    ///
+    /// The view calls this from its load task, whose load outlives the
+    /// task's cancellation, so a list whose view has gone or is covered gets
+    /// here too. It does not land then: a covered list lands when it comes
+    /// back. Nor does a list land under a claim something has voided, or
+    /// take a new one here unless it never had one (its scroll view not yet
+    /// on screen): a list left behind must not void its successor's claim.
     func land(model: MessageListViewModel, in navigator: SceneNavigator?) {
-        guard !didLand else { return }
+        guard !didLand, !Task.isCancelled else { return }
         didLand = true
-        takeClaimIfNeeded(model, in: navigator)
-        guard let claim, let navigator,
-              let anchor = navigator.listHold.takeAnchor(under: claim, from: navigator.restores),
-              Self.lands(model)
-        else { return }
+        if claim == nil { takeClaim(model, in: navigator) }
+        guard let claim, let navigator, navigator.listHold.holds(claim) else { return }
+        let anchor = navigator.listHold.takeAnchor(under: claim, from: navigator.restores)
+        guard Self.lands(model) else { return }
+        guard let anchor, !userScrolledFirst else {
+            // Nothing to land on, or the user is already scrolling the
+            // list: the place is where the list is.
+            return record(Self.anchor(atRow: top, of: model, folderPath: claim.folderPath))
+        }
         aim(at: anchor, model: model)
     }
 
@@ -136,6 +161,8 @@ final class ListPlaceTracker {
         guard let pending else {
             return record(Self.anchor(atRow: top, of: model, folderPath: claim.folderPath))
         }
+        // A landing that waits for the folder's count keeps its anchor: a
+        // layout pass is not the user.
         guard pending.guess != nil else { return }
         // A guess never overwrites: the parked identity stays until its row
         // arrives, and only the index follows the list.
@@ -144,18 +171,20 @@ final class ListPlaceTracker {
     }
 
     /// The user began to scroll the list. What it does next is theirs, not
-    /// a request's, and wins over a landing still settling.
+    /// a request's: it wins over a landing still to come or still settling,
+    /// and ends one that was waiting for the folder's count.
     func userScrolled() {
         requested = nil
-        pending?.listMoved = true
+        if !didLand { userScrolledFirst = true }
+        if pending?.guess == nil { pending = nil } else { pending?.listMoved = true }
     }
 
-    /// The loaded rows, the count or the loading changed: finishes a
-    /// landing that waited on them, and keeps the place's identity true to
-    /// the row now at its index.
+    /// The loaded rows, the count, the loading or whether the list records
+    /// changed: finishes a landing that waited on them, and keeps the place
+    /// true to the row now at the list's top.
     func loadsChanged(model: MessageListViewModel) {
         guard let claim, let navigator, navigator.listHold.holds(claim), Self.lands(model) else { return }
-        guard let pending else { return refreshIdentity(model, claim: claim) }
+        guard let pending else { return reconcile(model, claim: claim) }
         if let guess = pending.guess {
             settle(pending.anchor, guessedAt: guess, model: model)
         } else if Self.countKnown(model) || pending.anchor.index < model.slotCount {
@@ -215,23 +244,23 @@ final class ListPlaceTracker {
         }
     }
 
-    /// With nothing pending, the row at the place's index may have loaded
-    /// since it was recorded (a fast scroll onto placeholders), or may be
-    /// another message now (mail arrived above it): the place names the
-    /// message that is there.
-    private func refreshIdentity(_ model: MessageListViewModel, claim: FolderListHold.Claim) {
-        guard didLand, isOnScreen, Self.records(model),
-              let place = navigator?.listHold.place, place.folderPath == claim.folderPath,
-              let envelope = model.envelope(inSlot: place.index), !place.names(envelope)
-        else { return }
-        record(Self.anchor(atRow: place.index, of: model, folderPath: claim.folderPath))
+    /// With nothing pending, the place is the row at the list's top. That
+    /// row may have loaded since it was recorded (a fast scroll onto
+    /// placeholders), or be another message now (mail arrived above it), or
+    /// the list may have moved or reloaded while it did not record (a pill,
+    /// a search, another sort, an error row). A row not loaded yet tells
+    /// nothing new about a place already at its index.
+    private func reconcile(_ model: MessageListViewModel, claim: FolderListHold.Claim) {
+        guard didLand, isOnScreen, requested == nil, Self.records(model) else { return }
+        let place = navigator?.listHold.place.flatMap { $0.folderPath == claim.folderPath ? $0 : nil }
+        if (place?.index ?? 0) == top, model.envelope(inSlot: top) == nil { return }
+        record(Self.anchor(atRow: top, of: model, folderPath: claim.folderPath))
     }
 
     // MARK: Plumbing
 
-    private func takeClaimIfNeeded(_ model: MessageListViewModel, in navigator: SceneNavigator?) {
+    private func takeClaim(_ model: MessageListViewModel, in navigator: SceneNavigator?) {
         guard let navigator, let folderPath = model.folder?.path else { return }
-        if let claim, navigator.listHold.holds(claim) { return }
         self.navigator = navigator
         claim = navigator.listHold.claim(folderPath)
     }

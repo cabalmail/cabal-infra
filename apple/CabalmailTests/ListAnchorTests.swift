@@ -60,9 +60,12 @@ final class ListAnchorTests: XCTestCase {
         var loaded = rows(20)
         loaded[4] = TestFixtures.makeEnvelope(uid: 1, messageId: "<twin@example.com>")
         loaded[12] = TestFixtures.makeEnvelope(uid: 2, messageId: "<twin@example.com>")
-        XCTAssertEqual(try anchor(index: 11, uid: nil, messageID: "<twin@example.com>").row(in: loaded, windowStart: 0), 12)
-        XCTAssertEqual(try anchor(index: 5, uid: nil, messageID: "<twin@example.com>").row(in: loaded, windowStart: 0), 4)
-        XCTAssertEqual(try anchor(index: 8, uid: nil, messageID: "<twin@example.com>").row(in: loaded, windowStart: 0), 4)
+        func row(nearest index: Int) throws -> Int? {
+            try anchor(index: index, uid: nil, messageID: "<twin@example.com>").row(in: loaded, windowStart: 0)
+        }
+        XCTAssertEqual(try row(nearest: 11), 12)
+        XCTAssertEqual(try row(nearest: 5), 4)
+        XCTAssertEqual(try row(nearest: 8), 4, "a tie takes the lower")
     }
 
     func testWithoutAMessageIDMatchTheUIDFinds() throws {
