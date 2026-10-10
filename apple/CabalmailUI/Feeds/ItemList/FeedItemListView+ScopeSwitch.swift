@@ -57,17 +57,12 @@ extension FeedItemListView {
         #endif
     }
 
-    #if !os(macOS)
     /// Where the switch is drawn on this layout: the message list's rule
-    /// (`FolderSwitchPlacement`), read from the same `showsSettingsGear`
-    /// flag, since the feed list is the same narrow split column.
+    /// (`FolderSwitchPlacement`), read from the window's shell, since the
+    /// feed list is the same narrow split column.
     var scopeSwitchHost: FolderSwitchHost {
-        FolderSwitchPlacement.host(
-            isWideSidebar: showsSettingsGear,
-            columnScopedToolbar: GlobalSearchFieldPlacement.platformColumnScopedToolbar
-        )
+        FolderSwitchPlacement.host(in: shellLayout)
     }
-    #endif
 
     #if os(macOS)
     /// macOS: the scope name, bold like the toolbar title it stands in for,

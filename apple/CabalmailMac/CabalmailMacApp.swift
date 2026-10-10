@@ -64,9 +64,9 @@ struct CabalmailMacApp: App {
                         PrivateLinkHandoff.prime()
                     }
                 )
-                // Gives this window the identity its menu commands are aimed
-                // at, so a second window ignores them (MainWindowCommandScope).
-                // Last, so everything above, the launch chain included, has it.
+                // Gives this window the identity its compose requests and mail
+                // events are aimed at (MainWindowCommandScope). Last, so
+                // everything above, the launch chain included, has it.
                 .mainWindowCommandScope(appState)
         }
         // A WindowGroup's default reaction to an external event (an

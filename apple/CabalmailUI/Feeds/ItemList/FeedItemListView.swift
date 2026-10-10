@@ -27,11 +27,9 @@ struct FeedItemListView: View {
     /// The window's navigator, whose parked feed item this list selects; nil
     /// outside a main window.
     @Environment(SceneNavigator.self) private var navigator: SceneNavigator?
-    #if !os(macOS)
-    /// Whether this is the wide layout, which decides where the scope switch
-    /// is drawn (`scopeSwitchHost`).
-    @Environment(\.showsSettingsGear) var showsSettingsGear
-    #endif
+    /// The window's layout shell, which decides where the scope switch is
+    /// drawn (`scopeSwitchHost`).
+    @Environment(\.shellLayout) var shellLayout
     @State var model: FeedItemListViewModel?
     /// Gates for the launch restore — see `applyLaunchRestoreWhenReady`.
     @State private var hasAppeared = false
@@ -138,11 +136,11 @@ struct FeedItemListView: View {
         .onChange(of: navigator?.restores.pendingFeedRestore) { _, restore in
             if restore != nil { applyLaunchRestoreWhenReady(replacingSelection: true) }
         }
-        // The Feeds menu's item chords (`+Commands`); the catalog commands
-        // on the same tick are the sidebar's and are ignored here.
-        .onWindowCommand(appState.feedCommandTick) {
-            guard let model, let command = appState.pendingFeedCommand else { return }
-            handleFeedCommand(command, model: model)
+        // The Feeds menu's item chords (`+Commands`), while this list is in
+        // front; the catalog commands are the sidebar's and are ignored here.
+        .answersCommands(FeedCommand.allCases.map(WindowCommand.feed)) { command in
+            guard let model, case .feed(let feed) = command else { return }
+            handleFeedCommand(feed, model: model)
         }
     }
 

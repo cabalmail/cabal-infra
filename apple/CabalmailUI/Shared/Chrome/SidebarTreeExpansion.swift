@@ -31,11 +31,11 @@ enum SidebarTreeExpansion {
     }
 }
 
-/// A menu-bar request to expand or collapse one of the sidebar trees, routed
-/// through `AppState.requestSidebarTree(_:)` the way the Message and Feeds
-/// menus route theirs — so it works whichever pane has focus. The mounted
+/// A menu-bar request to expand or collapse one of the sidebar trees, sent
+/// to the window in front (`WindowCommand.sidebarTree(_:)`) the way the other
+/// menu commands are — so it works whichever pane has focus. The mounted
 /// sidebar that owns the named tree answers it; the other ignores it.
-public enum SidebarTreeCommand: Equatable {
+public enum SidebarTreeCommand: Hashable, CaseIterable, Sendable {
     case expandAllFolders
     case collapseAllFolders
     case expandAllFeedFolders

@@ -22,4 +22,24 @@ public enum HostPlatform {
         return .iOS
         #endif
     }
+
+    /// Whether a split view's columns each draw their own navigation bar at
+    /// column width — UIKit's split controller, on iPadOS — rather than
+    /// sharing one window-wide toolbar (macOS) or an ornament (visionOS). Such
+    /// a bar has a fixed occupant budget, and what overflows it is gone, so
+    /// the global search field and the title switches move into the column's
+    /// content there (`GlobalSearchFieldPlacement`, `FolderSwitchPlacement`).
+    /// visionOS answers false, which keeps a future wide layout there on the
+    /// shared-bar defaults.
+    var columnScopedToolbar: Bool {
+        self == .iOS
+    }
+
+    /// Whether app windows are composited over passthrough rather than over an
+    /// opaque surface. A partly transparent fill has nothing to sit against
+    /// there, so a `.secondary` detail disappears (`FilterPillCountStyle`,
+    /// #993).
+    var drawsOverPassthrough: Bool {
+        self == .visionOS
+    }
 }

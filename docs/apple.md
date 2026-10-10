@@ -1523,47 +1523,47 @@ right there (Settings → Debug Log → ShareLink). visionOS doesn't vend
 MetricKit at all, so the collector is a no-op on that platform behind
 `#if canImport(MetricKit) && !os(visionOS)`.
 
-### Commands dispatch through `AppState` tick counters
+### Menu commands go to the window in front
 
-Menu commands (File → New Message ⌘N, Mailbox → Refresh, the Message
-menu) need to reach whichever view currently owns the action — but
-`.commands { }` is defined at the scene level, so there's no direct
-reference to the focused view. `AppState` exposes monotonic intent
-counters (`composeRequestTick`, `refreshRequestTick`, the reply /
-forward ticks, and the selection-scoped `toggleSeenRequestTick` /
-`toggleFlaggedRequestTick` / `moveSelectionRequestTick`); the views
-watch them with `.onChange` and act on each bump. Avoids the
-`@FocusedValue` / responder-chain dance, and the same tick flow works
-on iPadOS (hardware-keyboard menu) and macOS (menu bar). The shared
-Message menu (`MessageMenuCommands`, installed by both app targets)
-carries Reply ⌘R, Reply All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T,
-Flag/Unflag ⌘⇧8, and Move to Folder ⌘M — the ⌘M item deliberately
-shadows Window → Minimize, since custom command menus are matched
-before the Window menu. Dispose (⌘⌫) is deliberately NOT a menu item:
-menu equivalents fire app-wide, so it would trigger from the compose
-window and steal the text system's delete-to-line-start chord
-mid-draft. It rides window-scoped key equivalents instead — the detail
-toolbar's dispose button covers a single open message (and advances to
-the next unread), and the message list installs an invisible ⌘⌫ button
-while a multi-selection exists — so the chord acts on the mail window
-only, but works there regardless of whether the list or the reading
-pane has focus (users can rarely tell which it is). Esc and ⌘A stay
-focus-scoped on the list: window-scoped versions would steal them from
-the search field.
+Menu commands need to reach the view that owns the action, but
+`.commands { }` is declared at the scene level. Each main window has one
+`WindowCommands` (`Commands/WindowCommands.swift`), held by
+`SignedInRootView` beside its `SceneNavigator`, put in the environment
+and published with `focusedSceneValue`. A menu reads the front main
+window's object with `@FocusedValue(\.windowCommands)`; with a compose
+or Settings window in front, or none open, it reads nil and the Message,
+Mailbox and Feeds menus and iPadOS ⌘, dim. New Message stays live: it
+opens the compose scene itself (#1162).
 
-Because `AppState` is one per process, every main window sees every
-tick. Each main window therefore carries an identity
-(`MainWindowCommandScope`: the `commandWindowID` environment value, also
-published with `focusedSceneValue`). A menu command reads the focused
-window with `@FocusedValue` and passes it to the `request…` method,
-falling back to the main window last in front while a compose window is
-key; an in-window button passes its own window. Observers use
-`.onWindowCommand(tick)` instead of `.onChange(of:)`, which drops a tick
-aimed at another window. A `request…` call that names no window reaches
-every window. Data-change reloads (Mark All as Read, Empty Trash, push
-actions) are not commands: they bump the mail store's `listRefreshTick`,
-which every list observes (#1824). Drag-and-drop moves name the message
-list the drag lifted from, and only that list performs a sidebar drop.
+A menu, or a window's own button (the Mac toolbar's Refresh, the iPad
+Settings gear), sends a `WindowCommand`, which bumps its own count; a
+feed or tree command names its action in its case. Surfaces answer with
+`.answersCommand(_:)`. They report what menus can act on
+(`reportsMessageMenuAvailability`, `reportsFeedMenuAvailability`) keyed
+by the surface they sit in, and the menus read the surface in front: the
+window on the wide layouts, the tab in front on the tab layouts, which
+keep every tab they have shown mounted (`FrontSurfacePolicy`). The feed
+catalog and sidebar trees, one handler a window, answer from a tab
+behind (`whileBehind`). `SharedChordPolicy` gives each chord the Feeds
+menu shares with the Message or Mailbox menu (⌘T, ⌘⇧8, ⌥⌘T) to the
+section in front.
+
+The shared Message menu (`MessageMenuCommands`) carries Reply ⌘R, Reply
+All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T, Flag/Unflag ⌘⇧8 and Move
+to Folder ⌘M, which deliberately shadows Window → Minimize (custom menus
+match first). Dispose (⌘⌫) is NOT a menu item: menu equivalents fire
+app-wide, so it would steal delete-to-line-start in a draft. A hidden
+window-scoped button carries it (`DisposeChordButton`): the reader's for
+one open message, the list's for a multi-selection, only while that
+surface is in front and owns the chord. Esc and ⌘A stay focus-scoped on
+the list, so the search field keeps them.
+
+Only the compose hand-off still rides an `AppState` tick, aimed through
+`MainWindowCommandScope`'s window identity and observed with
+`.onWindowCommand(tick)`. Data-change reloads (Mark All as Read, Empty
+Trash, push actions) are not commands: they bump the mail store's
+`listRefreshTick`, which every list observes (#1824). A drag names the
+list it lifted from, and only that list performs a sidebar drop.
 
 A link from outside a window uses the same identity. A tapped
 notification, a Spotlight result and Siri's Open Folder each go to

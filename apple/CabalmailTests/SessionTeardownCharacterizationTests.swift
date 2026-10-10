@@ -151,8 +151,8 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.toast, toast, "sign-out leaves the toast to its own timer")
     }
 
-    /// The command ticks, their window target and the one-shot handoffs. The
-    /// refactor replaces the ticks with focused-window commands; today a
+    /// The compose tick, its window target and the one-shot handoffs (the menu
+    /// commands go with their window's signed-in view, workstream 3.1); a
     /// sign-out never resets any of them. The reader's mail events (a failed
     /// removal, a dispose) were delivered when posted, and a sign-out
     /// neither posts another nor takes them back.
@@ -174,8 +174,6 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.commandWindow, window)
         XCTAssertEqual(state.lastActiveMainWindow, window)
         XCTAssertEqual(state.pendingComposeSeed, seed)
-        XCTAssertEqual(state.pendingFeedCommand, .refresh)
-        XCTAssertEqual(state.pendingSidebarTreeCommand, .expandAllFolders)
         let expected: [MailEvent.Change] = [
             .restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false),
             .removed([MessageRef(folder: "INBOX", uid: 9)]),
@@ -204,33 +202,16 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     // MARK: - Helpers
 
     private static func bumpEveryCommand(on state: AppState, seed: Draft, window: UUID) {
-        state.requestRefresh()
-        state.requestReply()
-        state.requestReplyAll()
-        state.requestForward()
-        state.requestToggleSeen()
-        state.requestToggleFlagged()
-        state.requestMoveSelection()
-        state.requestMarkFolderRead()
-        state.requestFeedCommand(.refresh)
-        state.requestSidebarTree(.expandAllFolders)
         state.requestMove(items: [MessageDragItem(uid: 9, sourceFolder: "INBOX")], to: "Archive", from: nil)
         state.mailStore.events.post(.restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false), from: nil)
         state.mailStore.events.post(.removed([MessageRef(folder: "INBOX", uid: 9)]), from: nil)
-        state.requestSettings()
         state.noteActiveMainWindow(window)
         // Last, so its window is the recorded target.
         state.requestCompose(seed: seed, in: window)
     }
 
     private static func ticks(of state: AppState) -> [Int] {
-        [
-            state.composeRequestTick, state.refreshRequestTick, state.replyRequestTick,
-            state.replyAllRequestTick, state.forwardRequestTick, state.toggleSeenRequestTick,
-            state.toggleFlaggedRequestTick, state.moveSelectionRequestTick, state.markFolderReadRequestTick,
-            state.settingsRequestTick, state.feedCommandTick, state.sidebarTreeCommandTick,
-            state.moveRequestTick,
-        ]
+        [state.composeRequestTick, state.moveRequestTick]
     }
 
     private static func activity(identifier: String) -> NSUserActivity {

@@ -185,6 +185,45 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(navigator.restores.pendingRestore?.uid, 9)
     }
 
+    /// A Spotlight result parked before the window existed is taken as the
+    /// window registers, which is before its first tree lands. Its lookup is
+    /// the landing: the session's does not run beside it.
+    func testAParkedSpotlightResultTakenAtRegistrationIsTheLanding() async throws {
+        store.saveSession(ResumeSession(section: .mail, folder: "Lists", uid: 42))
+        let router = DeepLinkRouter()
+        let coordinator = try makeCoordinator()
+        router.open(.spotlight(SpotlightMessageRef(folder: "Archive", uid: 9)))
+        let navigator = window(coordinator, router)
+        XCTAssertNil(router.parked, "precondition: taken at registration")
+
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
+
+        XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 9)
+        XCTAssertFalse(navigator.awaitingLaunchReconcile, "the session's landing did not run")
+    }
+
+    /// The same in a wide window that would land in the feed reader: the
+    /// feeds landing does not run over the result.
+    func testAParkedSpotlightResultIsNotOverwrittenByAFeedsLanding() async throws {
+        store.saveSession(ResumeSession(section: .feeds, folder: "Lists", feedScope: .all))
+        let router = DeepLinkRouter()
+        let coordinator = try makeCoordinator()
+        router.open(.spotlight(SpotlightMessageRef(folder: "Archive", uid: 9)))
+        let navigator = SceneNavigator(
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds, deepLinks: router,
+            feedsLaunchTarget: { _, _ in NavStateCoordinator.FeedLaunchTarget(scope: .all) }
+        )
+        navigator.windowID = UUID()
+        router.register(navigator)
+
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
+
+        XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
+        XCTAssertFalse(navigator.splitShowsFeeds)
+        XCTAssertEqual(navigator.route.section, .mail)
+    }
+
     // MARK: Registration
 
     func testAnUnregisteredWindowTakesNothing() throws {
@@ -214,65 +253,5 @@ final class DeepLinkRouterTests: XCTestCase {
 
         XCTAssertNil(old.selectedFolder)
         XCTAssertEqual(replacement.selectedFolder?.path, "Archive")
-    }
-
-    // MARK: Sessions
-
-    /// While a session ends a link parks rather than open in a window about
-    /// to close, and the sign-out then drops it.
-    func testWhileASessionEndsALinkParks() async throws {
-        let harness = try SessionHarness()
-        harness.seedLastSession()
-        try await harness.seedTokens()
-        let appState = harness.appState
-        let router = appState.deepLinks
-        let navigator = window(try makeCoordinator(), router)
-        harness.holdNextConfigurationLoad()
-        let restore = Task { await appState.restoreIfPossible() }
-        await harness.awaitConfigurationLoad()
-        let signOut = Task { await appState.signOut() }
-        try await waitUntilOnMainActor { appState.sessionManager.teardownGate.isTearingDown }
-
-        router.open(archiveSeven, in: navigator.windowID)
-
-        XCTAssertNil(navigator.selectedFolder, "not into a window while the session ends")
-        XCTAssertEqual(router.parked, archiveSeven)
-        harness.releaseConfigurationLoad()
-        await restore.value
-        await signOut.value
-        XCTAssertNil(router.parked, "the sign-out drops it")
-        await harness.tearDown()
-    }
-
-    /// The Mac opens a main window for a link that parks while a session is
-    /// wired (every main window closed); never during a launch, when the
-    /// first window is on its way, and never while a window can take it.
-    func testAMainWindowOpensOnlyForALinkParkedInAWiredSession() async throws {
-        let opened = Counter()
-        let unwired = AppState()
-        unwired.deepLinks.opensMainWindow = { opened.count += 1 }
-        unwired.deepLinks.open(archiveSeven)
-        XCTAssertEqual(opened.count, 0, "no session: the launch opens its own window")
-
-        let harness = try SessionHarness()
-        harness.seedLastSession()
-        try await harness.seedTokens()
-        await harness.appState.restoreIfPossible()
-        let router = harness.appState.deepLinks
-        router.opensMainWindow = { opened.count += 1 }
-        router.open(archiveSeven)
-        XCTAssertEqual(opened.count, 1)
-
-        let coordinator = try XCTUnwrap(harness.appState.navCoordinator)
-        let navigator = window(coordinator, router)
-        router.open(.folder("Junk"))
-        XCTAssertEqual(opened.count, 1, "a window took it")
-        XCTAssertEqual(navigator.selectedFolder?.path, "Junk")
-        await harness.tearDown()
-    }
-
-    @MainActor
-    private final class Counter {
-        var count = 0
     }
 }

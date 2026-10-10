@@ -25,9 +25,9 @@ import CoreGraphics
 /// The one thing the bottom band does hold is the compact-width tab bar, which
 /// is what these numbers now clear.
 enum StatusBannerPlacement {
-    /// Regular width (iPad, macOS, visionOS, and an iPhone Plus/Max in
-    /// landscape) — none of these draws a bottom tab bar in the overlay's
-    /// band, so the banner takes the plain gap above the safe area.
+    /// Regular width (the iPad split, macOS, visionOS) — none of these draws
+    /// a bottom tab bar in the overlay's band, so the banner takes the plain
+    /// gap above the safe area.
     static let defaultBottomInset: CGFloat = 6
 
     /// Compact width (iPhone portrait), where `CompactSectionTabs` draws the tab bar
@@ -44,5 +44,13 @@ enum StatusBannerPlacement {
 
     static func bottomInset(isRegularWidth: Bool) -> CGFloat {
         isRegularWidth ? defaultBottomInset : compactWidthBottomInset
+    }
+
+    /// The inset on a window's layout shell. Only the tabs draw a bar across
+    /// the bottom band — including an iPhone Plus / Max in landscape, whose
+    /// width is regular but whose shell is still the tabs. visionOS's tab bar
+    /// is a leading ornament, clear of the band.
+    static func bottomInset(in layout: ShellLayout) -> CGFloat {
+        bottomInset(isRegularWidth: layout != .tabs)
     }
 }

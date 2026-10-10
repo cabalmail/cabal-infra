@@ -74,7 +74,7 @@ extension View {
 /// belong to the always-visible mailbox sidebar (`AddressListView` /
 /// `FolderListView` carry the full request/revoke and create/delete
 /// affordances). So this sheet is just General preferences, presented from
-/// `SignedInRootView` via `AppState.settingsRequestTick` (sidebar gear button /
+/// `SignedInRootView` via `WindowCommand.settings` (sidebar gear button /
 /// ⌘, command) at regular width, where the section tab bar is gone.
 ///
 /// `SettingsView` supplies its own navigation (a category split view that

@@ -32,7 +32,8 @@ struct VisionSectionView: View {
     /// The visible tab, through the navigator: a Folders pick, the ⌘,
     /// command and a resume tap switch tabs there, and a switch notes the
     /// section on the resume session. Seeded from the stored session, so a
-    /// launch that ended in the feed reader opens on Feeds.
+    /// launch that ended in the feed reader opens on Feeds. Each tab's content
+    /// names its tab (`commandTab`), so only the tab in front answers the menus.
     private var selection: Binding<CompactTab> {
         Binding(get: { navigator.compactTab }, set: { navigator.showTab($0) })
     }
@@ -46,22 +47,22 @@ struct VisionSectionView: View {
     var body: some View {
         TabView(selection: selection) {
             Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
-                VisionMailPane(tree: tree)
+                VisionMailPane(tree: tree).environment(\.commandTab, .mail)
             }
             Tab("Folders", systemImage: "folder", value: CompactTab.folders) {
-                foldersTab
+                foldersTab.environment(\.commandTab, .folders)
             }
             Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: CompactTab.feeds) {
-                FeedRootView()
+                FeedRootView().environment(\.commandTab, .feeds)
             }
             Tab("Addresses", systemImage: "at", value: CompactTab.addresses) {
-                AddressManagementTab()
+                AddressManagementTab().environment(\.commandTab, .addresses)
             }
             Tab("Settings", systemImage: "gear", value: CompactTab.settings) {
-                SettingsView()
+                SettingsView().environment(\.commandTab, .settings)
             }
             Tab("Search", systemImage: "magnifyingglass", value: CompactTab.search) {
-                SearchView()
+                SearchView().environment(\.commandTab, .search)
             }
         }
         // Land at launch regardless of which tab is showing, so the message
@@ -73,12 +74,9 @@ struct VisionSectionView: View {
             await loadFoldersIfNeeded()
         }
         // ⌘, opens Settings — its own tab here, rather than the iPad sheet.
-        .onWindowCommand(appState.settingsRequestTick) {
+        .answersCommand(.settings) {
             navigator.showTab(.settings)
         }
-        // For the menus that share a chord across mail and feeds
-        // (`SharedChordPolicy`).
-        .reportsActiveSection(navigator.compactTab.resumeSection)
     }
 
     /// Folders tab: the shared `FolderListView` bound to the window's folder.

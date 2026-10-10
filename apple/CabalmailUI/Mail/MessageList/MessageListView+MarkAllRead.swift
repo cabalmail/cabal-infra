@@ -3,12 +3,12 @@ import CabalmailKit
 
 // Mark All as Read for the folder the list is showing (cross-media plan,
 // Phase 1): the toolbar's More menu entry, the Mailbox menu's ⌥⌘T arriving
-// as `markFolderReadRequestTick`, and the confirmation both go through. A
+// as `WindowCommand.markFolderRead`, and the confirmation both go through. A
 // sibling extension so the primary MessageListView body stays under
 // SwiftLint's `type_body_length` cap, like `+FolderSwitch`.
 //
 // The search surface has no folder to mark: it gets no menu entry, ignores
-// the tick, and reports no front folder, which is what dims the Mailbox item
+// the command, and reports no front folder, which is what dims the Mailbox item
 // there (`MailboxMenuAvailability.canMarkAllRead`).
 extension MessageListView {
     /// Hangs the confirmation, the chord consumer and the front-folder report
@@ -38,14 +38,11 @@ extension MessageListView {
                 } message: {
                     Text("Every unread message in the folder is marked read, in one step.")
                 }
-                .onWindowCommand(appState.markFolderReadRequestTick) {
+                .answersCommand(.markFolderRead) {
                     markAllReadConfirmPresented = true
                 }
-                // Tells the Mailbox menu which folder ⌥⌘T would act on; the
-                // disappear is path-guarded because the list is re-keyed per
-                // folder and the new list appears before the old one goes.
-                .onAppear { appState.mailboxMenuAvailability.folderListAppeared(folder.path) }
-                .onDisappear { appState.mailboxMenuAvailability.folderListDisappeared(folder.path) }
+                // Tells the Mailbox menu which folder ⌥⌘T would act on.
+                .reportsMailboxFolder(folder.path)
         } else {
             content
         }

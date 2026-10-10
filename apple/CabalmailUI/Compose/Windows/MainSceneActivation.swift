@@ -28,7 +28,7 @@ import UIKit
 /// `UIApplication.shared.openSessions` (SwiftUI owns the session
 /// configuration), so each main window records its own session here, under
 /// its window identity, via `recordsMainSceneSession()`. A closing compose
-/// window reads back the window it came from, and a tapped notification the
+/// window reads back the window last used, and a tapped notification the
 /// window its scene belongs to.
 @MainActor
 enum MainMailScene {

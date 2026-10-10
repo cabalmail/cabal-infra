@@ -32,6 +32,9 @@ public enum DeepLink: Equatable, Sendable {
 /// (`AppState`'s `accountChanged` hook, `PushRegistrar.forgetOtherAccount`),
 /// and the end of a session (`PushRegistrar.sessionWillEnd`). While a
 /// session ends, a link parks rather than open in a window about to close.
+/// One that arrives after the sign-out has dropped what was parked is the
+/// next session's, as one that arrives after the sign-out is: the same
+/// account's first window opens it, and another account's sign-in drops it.
 @MainActor
 public final class DeepLinkRouter {
     /// The app's router. `AppState()` makes its own, so tests stay apart;
@@ -102,8 +105,11 @@ public final class DeepLinkRouter {
         if parked == nil { parked = link }
     }
 
-    /// Takes the parked link, for a window's first landing.
+    /// Takes the parked link, for a window's first landing. None while a
+    /// session ends: a window of the ending session opens nothing, and the
+    /// link stays for the next session's first window.
     func takeParked() -> DeepLink? {
+        guard appState?.isEndingSession != true else { return nil }
         defer { parked = nil }
         return parked
     }

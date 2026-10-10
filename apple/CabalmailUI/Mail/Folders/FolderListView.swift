@@ -284,9 +284,8 @@ struct FolderListView: View {
         .onChange(of: allCountsWalkKey, initial: true) { _, _ in
             walkAllCountsIfNeeded()
         }
-        .onWindowCommand(appState.sidebarTreeCommandTick) {
-            guard let command = appState.pendingSidebarTreeCommand else { return }
-            applySidebarTreeCommand(command)
+        .answersCommands(SidebarTreeCommand.allCases.map(WindowCommand.sidebarTree), whileBehind: true) { command in
+            if case .sidebarTree(let tree) = command { applySidebarTreeCommand(tree) }
         }
         // Empty Trash and Mark All as Read, staged by the row context menus;
         // one modifier (`+Helpers`) so the body stays under the type-body cap.

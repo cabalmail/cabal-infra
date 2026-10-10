@@ -28,9 +28,7 @@ enum CompactTab: Hashable {
 
 #if os(iOS)
 /// Compact-width section switcher: a plain bottom tab bar. No
-/// `.sidebarAdaptable` - at compact width there's no sidebar to adapt to,
-/// and the regular-width path never renders this, so the adaptive style's
-/// collision with the inner split view can't recur.
+/// `.sidebarAdaptable`: at compact width there's no sidebar to adapt to.
 ///
 /// The Addresses tab hosts the same `AddressListView` the Mail sidebar uses
 /// (wrapped in `AddressManagementTab` for its own `NavigationStack` +
@@ -43,7 +41,8 @@ enum CompactTab: Hashable {
 /// Every tab wraps its content in `tabBarTrayShield()`: the floating bar
 /// only draws the capsules, so without it, touches in the tray's margins
 /// fall through to the rows visible behind the bar (see
-/// `TabBarTrayShield.swift`).
+/// `TabBarTrayShield.swift`). Each names its tab (`commandTab`): shown tabs
+/// stay mounted, and only the one in front answers the menus.
 ///
 /// Every tab's root screen heads itself with the Cabalmail mark in place
 /// of its text title, the way the Mail tab's folder list always has:
@@ -72,34 +71,35 @@ struct CompactSectionTabs: View {
             Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
                 MailRootView()
                     .tabBarTrayShield()
+                    .environment(\.commandTab, .mail)
             }
             Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: CompactTab.feeds) {
                 FeedRootView()
                     .tabBarTrayShield()
+                    .environment(\.commandTab, .feeds)
             }
             Tab("Addresses", systemImage: "at", value: CompactTab.addresses) {
                 AddressManagementTab()
                     .tabBarTrayShield()
+                    .environment(\.commandTab, .addresses)
             }
             Tab("Settings", systemImage: "gear", value: CompactTab.settings) {
                 SettingsView()
                     .tabBarTrayShield()
+                    .environment(\.commandTab, .settings)
             }
-            // The search role detaches to the bottom-right, next to the tab bar.
-            // On iOS 26 it adopts the morph (tab bar collapses to a dismiss
-            // button, the button expands into a focused field); on iOS 18–25
-            // it's a plain search tab. The morph itself comes from the
-            // `.searchable` inside `SearchView`.
+            // The search role detaches to the bottom-right, next to the tab bar,
+            // and on iOS 26 adopts the morph (the bar collapses to a dismiss
+            // button, this one expands into a field) from `SearchView`'s `.searchable`.
             Tab(value: CompactTab.search, role: .search) {
                 SearchView()
                     .tabBarTrayShield()
+                    .environment(\.commandTab, .search)
             }
         }
         .environment(\.showsCompactBrandMark, true)
-        // The same section, for the menus that share a chord across mail and
-        // feeds (`SharedChordPolicy`): each tab keeps its selection while the
-        // other is in front, so the section is what decides between them.
-        .reportsActiveSection(navigator.compactTab.resumeSection)
+        // ⌘, opens Settings: its own tab here, as on visionOS.
+        .answersCommand(.settings) { navigator.showTab(.settings) }
     }
 }
 #endif
