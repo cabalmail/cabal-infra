@@ -162,25 +162,12 @@ private struct VisionMailPane: View {
         }
     }
 
-    @ViewBuilder
     private var detailColumn: some View {
-        if listSelectionCount >= 2 {
-            ContentUnavailableView(
-                "\(listSelectionCount) Messages Selected",
-                systemImage: "envelope.badge",
-                description: Text("Use the action bar below the list to act on them together.")
-            )
-        } else if let selectedEnvelope,
-                  let folder = MessageFolderPolicy.folder(for: selectedEnvelope, in: selectedFolder) {
-            MessageDetailView(folder: folder, envelope: selectedEnvelope)
-                .id("\(folder.path)#\(selectedEnvelope.uid)")
-        } else {
-            ContentUnavailableView(
-                "No message selected",
-                systemImage: "envelope",
-                description: Text("Pick a message from the list to read it.")
-            )
-        }
+        MailReaderColumn(
+            selectionCount: listSelectionCount,
+            envelope: selectedEnvelope,
+            sidebarFolder: selectedFolder
+        )
     }
 }
 #endif
