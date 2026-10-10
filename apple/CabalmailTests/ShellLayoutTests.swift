@@ -103,6 +103,16 @@ final class ShellLayoutTests: XCTestCase {
         XCTAssertFalse(HostPlatform.watchOS.drawsOverPassthrough)
     }
 
+    /// The Mac and visionOS never present the compose sheet, so a new message
+    /// there is always a window; iOS asks its scene
+    /// (`ComposeSurfacePolicy.opensInWindow`).
+    func testOnlyTheMacAndVisionOSAlwaysComposeInAWindow() {
+        XCTAssertTrue(HostPlatform.macOS.alwaysWindows)
+        XCTAssertTrue(HostPlatform.visionOS.alwaysWindows)
+        XCTAssertFalse(HostPlatform.iOS.alwaysWindows)
+        XCTAssertFalse(HostPlatform.watchOS.alwaysWindows)
+    }
+
     // MARK: - What the layout readers make of it
 
     /// The split's column-scoped bar can't seat the folder or scope switch
