@@ -4,15 +4,12 @@ import XCTest
 // Regression coverage for issue #1162: with every macOS window closed — the
 // state the menu-bar residency exists to make ordinary — File ▸ New Message
 // and Mailbox ▸ Refresh both reported `enabled = true` and silently did
-// nothing, because each dispatches through an `AppState` tick whose only
-// consumer is a modifier mounted inside the main window.
+// nothing, because each answered inside a main window.
 //
-// The two commands get opposite answers, and that split is what these tests
-// pin. Refresh has nothing to reload with no list on screen, so it dims (the
-// rule `MessageMenuAvailability` already applies to the Message menu). New
-// Message does have somewhere to go — the compose `WindowGroup` mounts on its
-// own, which is why the menu-bar extra's item worked in that very state — so
-// it stays enabled and the command opens the window itself.
+// The two get opposite answers, and that split is what these tests pin.
+// Refresh has nothing to reload with no list on screen, so it dims. New
+// Message has somewhere to go — the compose `WindowGroup` mounts on its own —
+// so it stays enabled and the command opens the window itself.
 //
 // The routing half (the File command reaching `ComposeWindowCommand` rather
 // than the tick) has no unit seam: `OpenWindowAction` cannot be constructed
@@ -42,52 +39,55 @@ final class MailboxMenuAvailabilityTests: XCTestCase {
 
     // MARK: - What the mail surfaces report
 
+    private func makeWindow() -> WindowCommands {
+        WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: .mail))
+    }
+
     func testAMountedSurfaceMakesRefreshLive() {
-        let appState = AppState()
-        XCTAssertFalse(appState.mailboxMenuAvailability.canRefresh)
+        let window = makeWindow()
+        XCTAssertFalse(window.mailbox.canRefresh)
 
-        appState.mailboxMenuAvailability.surfaceAppeared()
+        window.mailbox.surfaceAppeared()
 
-        XCTAssertTrue(appState.mailboxMenuAvailability.canRefresh)
+        XCTAssertTrue(window.mailbox.canRefresh)
     }
 
     func testTheLastSurfaceClosingDimsRefresh() {
-        let appState = AppState()
-        appState.mailboxMenuAvailability.surfaceAppeared()
+        let window = makeWindow()
+        window.mailbox.surfaceAppeared()
 
-        appState.mailboxMenuAvailability.surfaceDisappeared()
+        window.mailbox.surfaceDisappeared()
 
-        XCTAssertFalse(appState.mailboxMenuAvailability.canRefresh)
+        XCTAssertFalse(window.mailbox.canRefresh)
     }
 
-    func testRefreshStaysLiveWhileASecondMailWindowIsOpen() {
-        // macOS can have several mail windows; closing one leaves the menu's
-        // target on screen in the others.
-        let appState = AppState()
-        appState.mailboxMenuAvailability.surfaceAppeared()
-        appState.mailboxMenuAvailability.surfaceAppeared()
+    func testRefreshStaysLiveWhileTheWindowsSecondSurfaceRemains() {
+        // A layout swap mounts the new mail surface before the old one goes;
+        // the old one leaving keeps the menu's target on screen.
+        let window = makeWindow()
+        window.mailbox.surfaceAppeared()
+        window.mailbox.surfaceAppeared()
 
-        appState.mailboxMenuAvailability.surfaceDisappeared()
+        window.mailbox.surfaceDisappeared()
 
-        XCTAssertTrue(appState.mailboxMenuAvailability.canRefresh)
+        XCTAssertTrue(window.mailbox.canRefresh)
     }
 
     func testAnUnpairedDisappearDoesNotWedgeTheMenuDim() {
         // SwiftUI can deliver a disappear this instance never saw an appear
         // for; a count that went negative would need two appears to recover.
-        let appState = AppState()
-        appState.mailboxMenuAvailability.surfaceDisappeared()
+        let window = makeWindow()
+        window.mailbox.surfaceDisappeared()
 
-        appState.mailboxMenuAvailability.surfaceAppeared()
+        window.mailbox.surfaceAppeared()
 
-        XCTAssertTrue(appState.mailboxMenuAvailability.canRefresh)
+        XCTAssertTrue(window.mailbox.canRefresh)
     }
 
     // MARK: - Mark All as Read (cross-media plan, Phase 1)
 
-    // ⌥⌘T reaches the folder-scoped message list through a tick, so with no
-    // folder list mounted — the search surface, or no window — it has no
-    // consumer and dims, the same answer Refresh gives.
+    // ⌥⌘T acts on the folder-scoped message list, so with none mounted (the
+    // search surface, or no window) it dims, the same answer Refresh gives.
 
     func testMarkAllReadDimsWithNoFolderListOnScreen() {
         var availability = MailboxMenuAvailability.none

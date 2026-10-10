@@ -4,31 +4,27 @@ import CabalmailKit
 /// Global, cross-folder search surface for compact iPhone and visionOS — the
 /// content of their search tab (`Tab(role: .search)` on iPhone).
 ///
-/// `.searchable` here is what drives the iOS 26 tab-bar morph (the tab bar
-/// collapses to a dismiss button and the search button expands into a focused
-/// field, like the Apple Store app); on iOS 18–25 it's an ordinary search tab.
+/// `.searchable` here drives the iOS 26 tab-bar morph (the bar collapses to a
+/// dismiss button and the search button expands into a focused field).
 /// The field binds a `.search`-scope `MessageListViewModel`, which renders
-/// results with the same row machinery as the folder list (swipe, multi-select,
-/// context menus, move) — `MessageListView` in `.search` scope. Tapping a result
-/// pushes the reader against that result's true source mailbox, so mark-read /
-/// archive / move land in the right folder.
+/// results with the folder list's row machinery (`MessageListView` in
+/// `.search` scope). Tapping a result pushes the reader against that result's
+/// true source mailbox, so mark-read / archive / move land in the right folder.
 ///
-/// iPad / macOS reach the same `.search`-scope list through the global search
-/// field `MailRootView` mounts on the message-list column instead (no bottom
-/// tab bar there; see `GlobalSearchFieldPlacement`), so this view serves
-/// compact iPhone and visionOS's Search tab only.
+/// iPad / macOS reach the same list through the global search field
+/// `MailRootView` mounts on the message-list column (`GlobalSearchFieldPlacement`).
 struct SearchView: View {
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     @Environment(SceneNavigator.self) private var navigator
 
-    /// The window's search model, which it shares with the regular split's
-    /// search (`SceneNavigator.searchModel`, #1654), held here rather than
-    /// by `MessageListView` so `.searchable` can bind its `searchQuery`;
-    /// injected into the list, which skips the folder lifecycle in `.search`
-    /// scope.
+    /// The window's search model, shared with the regular split's search
+    /// (`SceneNavigator.searchModel`, #1654), held here so `.searchable` can
+    /// bind its `searchQuery`; injected into the list.
     @State private var model: MessageListViewModel?
     @State private var selectedEnvelope: Envelope?
+    /// The list's selection count, for the Message menu (`wideList` reports it).
+    @State private var selectionCount = 0
 
     /// Drives the `.searchable` field so the tab arrives ready to type (#1425).
     @FocusState private var searchFieldFocused: Bool
@@ -66,6 +62,9 @@ struct SearchView: View {
             .compactBrandMarkTitle(accessibilityTitle: "Search")
             #endif
         }
+        // What the Message menu acts on while this tab is in front: the
+        // results' selection and the reader pushed over them.
+        .reportsMessageMenuAvailability(selectedCount: selectionCount, hasOpenMessage: selectedEnvelope != nil)
         .task {
             // The window's, shared with its regular split's search so a
             // layout swap keeps the query and results (#1654). This tab
@@ -88,7 +87,7 @@ struct SearchView: View {
             scope: .search,
             injectedSearchModel: model,
             selection: $selectedEnvelope,
-            onSelectionCountChanged: { _ in }
+            onSelectionCountChanged: { selectionCount = $0 }
         )
         .searchable(text: $model.searchQuery, prompt: "Search all mail")
         .searchFocused($searchFieldFocused)
