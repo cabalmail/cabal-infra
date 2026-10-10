@@ -98,6 +98,10 @@ struct MessageListView: View {
     /// (`ListSelectionReactions.tick`). Kept per view, since a model can be
     /// shown by two windows at once (the shared search model).
     @State var appliedSelectionReactions = 0
+    /// This list's part in keeping its window's list place
+    /// (`ListPlaceTracking`): what it records as it scrolls, and the place
+    /// it lands on once it has appeared and loaded.
+    @State var listPlace = ListPlaceTracker()
     /// List-row height. Rows are pinned to this so the virtualized list
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
@@ -605,6 +609,7 @@ extension MessageListView {
     /// two call sites idempotent.
     private func applyPendingRestoreWhenReady() {
         guard hasAppeared, initialLoadComplete, let model else { return }
+        listPlace.land(model: model, in: navigator)
         applyPendingRestore(model: model)
     }
 

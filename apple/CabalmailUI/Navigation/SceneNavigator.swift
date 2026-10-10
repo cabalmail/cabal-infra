@@ -82,8 +82,9 @@ final class SceneNavigator {
     /// The window's search model (`searchModel(client:preferences:mailStore:)`).
     @ObservationIgnored private var search: MessageListViewModel?
 
-    /// The window's folder list's selection (`FolderListHold`).
-    private let listHold = FolderListHold()
+    /// The window's hold on its folder list: the selection a swap hands to
+    /// the next list, and the list's place (`FolderListHold`).
+    let listHold = FolderListHold()
 
     /// Counts the feed banners this window has followed, so the wide split
     /// can end a search for one as it does for a feed pick (`navigateFeeds`).
@@ -226,7 +227,7 @@ final class SceneNavigator {
     /// its stored scope, else the session's; with neither, the split shows
     /// mail.
     private func rehand(_ tree: UUID, isWide: Bool) async {
-        listHold.handOff(isWide: isWide)
+        listHold.handOff(isWide: isWide, folderPath: selectedFolder?.path, parkingIn: restores)
         selectedEnvelope = nil
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
         guard let coordinator = coordinator() else { return }
@@ -382,13 +383,14 @@ final class SceneNavigator {
     /// Takes a cursor to this window — a tapped notification, a Spotlight
     /// result, Siri, the resume banner: parks its message for this window's
     /// list and moves to its folder and the Mail tab. A new folder re-mounts
-    /// the list, which takes the restore; a mounted list sees the new
-    /// `pendingRestore`. Supersedes a link parked for a first landing. A
-    /// window opened after it lands where the user went (#1966).
+    /// the list, which takes the restore; a mounted list sees the new one.
+    /// Supersedes a link parked for a first landing and a parked list place.
+    /// A window opened after it lands where the user went (#1966).
     func navigate(to cursor: NavState) {
         guard let coordinator = coordinator() else { return }
         deepLinks.discardParked()
         coordinator.didConsumeLaunchSession = true
+        restores.dropListAnchor()
         restores.schedule(cursor, priming: recorder.recording)
         if selectedFolder?.path != cursor.folder {
             setFolder(resolvedFolder(path: cursor.folder))
@@ -425,7 +427,7 @@ final class SceneNavigator {
         guard canWrite(from: tree), column != compactColumn else { return }
         compactColumn = column
         // Back to the folder list: the message list is gone, with its selection.
-        if column == .sidebar { listHold.drop() }
+        if column == .sidebar { listHold.backOut(from: restores) }
         if CompactColumnPolicy.dropsMessage(movingTo: column) {
             applyMessage(nil, isSearching: isSearching)
         }
@@ -470,7 +472,7 @@ final class SceneNavigator {
         }
         selectedFolder = folder
         selectedEnvelope = nil
-        listHold.drop()
+        listHold.drop(from: restores, landingOn: folder?.path)
         route.mail = AppRoute.Mail(folderPath: folder?.path)
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: folder != nil)
         guard let path = folder?.path, records else { return }
@@ -687,7 +689,8 @@ extension SceneNavigator {
     }
 }
 
-// The message list's selection, which the window's `FolderListHold` keeps.
+// The message list's selection, which the window's `FolderListHold` keeps
+// with the list's place.
 extension SceneNavigator {
     /// The selection for a folder list mounting in this window
     /// (`FolderListHold.mailSelection(for:)`).
