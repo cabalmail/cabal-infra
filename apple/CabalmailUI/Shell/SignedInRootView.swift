@@ -102,15 +102,19 @@ struct SignedInRootView: View {
             .task { await observeReachability() }
             .task(id: appState.client.map { ObjectIdentifier($0) }) { await failedSends.observe(appState.client) }
             // The cross-device "pick up where you left off" probe, at launch
-            // and on each return to the foreground. Here — the one view every
-            // layout keeps mounted — rather than in the mail view, so an
-            // iPhone that launches into the Feeds tab still offers another
-            // device's position, mail or feed (resume-session plan, Phase C).
-            .task { await offerCrossDeviceCursor(atLaunch: true) }
+            // and each time this window returns to the front. Here — the one
+            // view every layout keeps mounted — rather than in the mail view,
+            // so an iPhone that launches into the Feeds tab still offers
+            // another device's position, mail or feed (resume-session plan,
+            // Phase C). The window's own phase, not the app's: only a main
+            // window shows the offer, and the app can come forward through a
+            // compose window alone. `AppState` asks once for windows that
+            // come forward together.
+            .task { await appState.offerCrossDeviceCursor(atLaunch: true) }
             .onChange(of: scenePhase) { old, new in
                 guard new == .active, old != .active,
                       appState.navCoordinator?.hasLoadedInitial == true else { return }
-                Task { await offerCrossDeviceCursor(atLaunch: false) }
+                Task { await appState.offerCrossDeviceCursor(atLaunch: false) }
             }
             // This window's compose surface (its New Message, Reply and
             // Forward, and a mailto: link). Lives here — not on
@@ -136,16 +140,6 @@ struct SignedInRootView: View {
                 windowCommands = WindowCommands(navigator: navigator)
                 appState.deepLinks.register(navigator)
             }
-    }
-
-    private func offerCrossDeviceCursor(atLaunch: Bool) async {
-        guard let coordinator = appState.navCoordinator else { return }
-        let candidate = atLaunch
-            ? await coordinator.launchResumeCandidate()
-            : await coordinator.foreignCursorOnForeground()
-        guard let candidate else { return }
-        let title = await coordinator.resumeTitle(for: candidate)
-        appState.showToast(.resumeNavigation(folderName: title, cursor: candidate), duration: 10)
     }
 
     /// One arm per shell. `ShellLayout.resolve` gives each platform only its

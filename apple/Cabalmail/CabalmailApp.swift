@@ -55,19 +55,7 @@ struct CabalmailApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
-                .appRootLifecycle(
-                    appState: appState,
-                    preferences: preferences,
-                    scenePhase: scenePhase,
-                    onForeground: {
-                        // Re-offer the session to the watch on every return
-                        // to the foreground — see
-                        // AppState.refreshWatchSession() for why the
-                        // launch-time push alone strands a watch app
-                        // installed while this app was already running.
-                        Task { await appState.refreshWatchSession() }
-                    }
-                )
+                .appRootLifecycle(appState: appState, preferences: preferences)
                 // Gives this window the identity its compose requests and mail
                 // events are aimed at, and that a link the system aims at it
                 // opens in (MainWindowCommandScope). Last, so everything
@@ -86,6 +74,16 @@ struct CabalmailApp: App {
             // app-settings slot and send the window in front the command the
             // sidebar gear sends. Surfaces in the iPadOS hardware-keyboard menu.
             SettingsMenuCommand()
+        }
+        // The app's own phase, once for the app however many windows are
+        // open: flush on the way out, reconcile and refresh on the way back.
+        .onChange(of: scenePhase) { _, phase in
+            // Re-offer the session to the watch on every return to the
+            // foreground — see AppState.refreshWatchSession() for why the
+            // launch-time push alone strands a watch app installed while
+            // this app was already running.
+            if phase == .active { Task { await appState.refreshWatchSession() } }
+            appState.appScenePhaseChanged(to: phase)
         }
         // iPadOS, visionOS, and an open iPhone Duo open compose as a real
         // scene; a single-window host ignores the group because

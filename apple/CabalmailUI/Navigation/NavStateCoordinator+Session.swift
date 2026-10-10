@@ -210,7 +210,7 @@ extension NavStateCoordinator {
     }
 
     /// Writes the session record (and the position cache, if it changed) now.
-    /// The scene-phase handlers call this as the app leaves the foreground so
+    /// The app's scene-phase handler calls this as it leaves the foreground so
     /// a debounce in flight isn't lost to a termination.
     public func flushSession() {
         sessionSaveTask?.cancel()

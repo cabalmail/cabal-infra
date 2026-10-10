@@ -21,8 +21,9 @@ public enum FeedCommand: Hashable, CaseIterable, Sendable {
 // session.
 extension AppState {
     /// Foreground refresh for the feed reader: new items and the pending
-    /// mutation queue. Called from the scene-phase handlers alongside the
-    /// preferences reconcile; a no-op when signed out.
+    /// mutation queue. Called from the app's scene-phase handler
+    /// (`appScenePhaseChanged(to:)`) alongside the preferences reconcile; a
+    /// no-op when signed out.
     public func refreshFeedsOnForeground() async {
         await sessionManager.pollers.refreshFeeds()
     }
