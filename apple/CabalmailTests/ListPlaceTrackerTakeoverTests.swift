@@ -182,18 +182,21 @@ final class ListPlaceTrackerTakeoverTests: XCTestCase {
         XCTAssertEqual(place, try anchor(index: 60, uid: 940))
     }
 
-    /// The loads changing under a list that has not moved leave a place
-    /// whose row is not loaded as it is: nothing new is known about it.
-    func testAPlaceWhoseRowIsNotLoadedIsLeftAlone() async throws {
-        let model = try await world.openedList(stampsMessageIDs: true)
+    /// The folder's window jumps elsewhere (End) while the scroll view has
+    /// not moved yet, so the place's row is no longer loaded. Nothing new is
+    /// known about that row: the place keeps naming its message.
+    func testAPlaceWhoseRowIsNoLongerLoadedKeepsItsMessage() async throws {
+        let model = try await world.openedList(preloaded: 250, stampsMessageIDs: true)
         tracker.appeared(model, in: navigator)
         tracker.land(model: model, in: navigator)
-        tracker.scrolled(toRow: 400, model: model)
-        let recorded = place
-        XCTAssertEqual(recorded?.index, 400)
+        tracker.scrolled(toRow: 100, model: model)
+        XCTAssertEqual(place, try anchor(index: 100, uid: 900), "precondition")
 
+        model.window?.ensureLoaded(around: 900)
+        await world.settle(model)
+        XCTAssertNil(model.envelope(inSlot: 100), "precondition: the window no longer holds the row")
         tracker.loadsChanged(model: model)
 
-        XCTAssertEqual(place, recorded)
+        XCTAssertEqual(place, try anchor(index: 100, uid: 900))
     }
 }
