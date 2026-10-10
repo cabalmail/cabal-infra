@@ -5,7 +5,7 @@ import CabalmailKit
 /// are the feed sidebar's to answer (`FeedManagementSheets`); the item
 /// commands — the mail Message menu's chords, applied to a feed item — are
 /// the mounted `FeedItemListView`'s (`handleFeedCommand`).
-enum FeedCommand: Equatable {
+enum FeedCommand: Hashable {
     case subscribe, newFolder, importOpml, exportOpml, refresh
     /// ⌘T on the selected (open) item.
     case toggleRead

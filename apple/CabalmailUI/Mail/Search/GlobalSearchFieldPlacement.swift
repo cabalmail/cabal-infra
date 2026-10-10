@@ -45,19 +45,16 @@ enum GlobalSearchFieldPlacement {
         return columnScopedToolbar ? .columnHeader : .toolbar
     }
 
+    /// The host on a window's layout shell: the desktop's window-wide toolbar,
+    /// a header row in the split's list column, and nothing on the tab
+    /// layouts, which reach search through a tab of its own.
+    static func host(in layout: ShellLayout, on platform: HostPlatform = .current) -> GlobalSearchFieldHost {
+        host(isWideSidebar: layout.isWideSplit, columnScopedToolbar: platform.columnScopedToolbar)
+    }
+
     /// Whether the running platform gives the message-list column its own
-    /// column-width navigation bar. iPadOS does; macOS's toolbar spans the
-    /// window. On visionOS the answer is currently moot: neither reader takes
-    /// its wide branch there, since visionOS never builds `MailRootView`
-    /// (`VisionSectionView` gives search its own tab) and its message list
-    /// leaves `showsSettingsGear` false, so `FolderSwitchPlacement` picks the
-    /// title menu regardless. False keeps a future wide visionOS layout on
-    /// the shared-bar defaults.
+    /// column-width navigation bar (`HostPlatform.columnScopedToolbar`).
     static var platformColumnScopedToolbar: Bool {
-        #if os(iOS)
-        true
-        #else
-        false
-        #endif
+        HostPlatform.current.columnScopedToolbar
     }
 }
