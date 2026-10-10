@@ -516,7 +516,7 @@ extension MessageListView {
         .onDisappear {
             // Take the list off its folder's poller when it drops off-screen;
             // the last list off a folder stops its watcher and tick. The view
-            // is rebuilt (via `.id(folder.path)` in MailRootView) when the
+            // is rebuilt (via `.id(folder.path)` in `MailContentColumn`) when the
             // user picks another folder, so `startWatching` in the new
             // instance's `.task` puts the new list on the new folder's
             // poller; the same view coming back puts it back too.

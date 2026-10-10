@@ -59,7 +59,7 @@ enum SectionLayoutPolicy {
     enum Layout: Equatable {
         /// `TabShell`: the bottom tab bar.
         case compactTabs
-        /// `MailRootView` alone, with the settings gear and sheet.
+        /// `SplitShell`: the split, with the folder panel and the Settings sheet.
         case regularSplit
     }
 

@@ -12,7 +12,7 @@ import CabalmailKit
 /// true source mailbox, so mark-read / archive / move land in the right folder.
 ///
 /// iPad / macOS reach the same list through the global search field
-/// `MailRootView` mounts on the message-list column (`GlobalSearchFieldPlacement`).
+/// the wide shells mount on the message-list column (`GlobalSearchFieldPlacement`).
 struct SearchView: View {
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
