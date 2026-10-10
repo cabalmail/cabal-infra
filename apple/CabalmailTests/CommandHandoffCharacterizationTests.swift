@@ -128,23 +128,22 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 4, total: 20)
         let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), mailStore: appState.mailStore)
-        appState.requestReply(in: windowA)
+        appState.requestCompose(in: windowA)
         let before = appState.mailStore.listRefreshTick
 
         await model.markAllRead(folderPath: "Projects")
 
         XCTAssertEqual(appState.mailStore.listRefreshTick, before + 1, "exactly one reload")
-        XCTAssertEqual(appState.refreshRequestTick, 0, "no window command")
         XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertFalse(appState.commandReaches(windowB), "the reply stays aimed at A (#1824)")
-        XCTAssertEqual(appState.replyRequestTick, 1, "the earlier command's tick is untouched")
+        XCTAssertFalse(appState.commandReaches(windowB), "the compose stays aimed at A (#1824)")
+        XCTAssertEqual(appState.composeRequestTick, 1, "the earlier request's tick is untouched")
         let calls = await imap.markFolderReadCalls
         XCTAssertEqual(calls, ["Projects"])
         XCTAssertNil(model.errorMessage)
     }
 
-    /// Mailbox > Mark All as Read (Option-Command-T) is aimed at one window;
-    /// the confirmation's reload is no window command, so every list reloads.
+    /// Mailbox > Mark All as Read (Option-Command-T) goes to one window; its
+    /// confirmation's reload is no window command, so every list reloads.
     func testAnAimedMarkFolderReadEndsInAReloadOfEveryList() async throws {
         let imap = FakeImapClient()
         await imap.scriptMarkFolderReadResults([.success(2)])
@@ -152,14 +151,15 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let model = try TestFixtures.makeModel(
             imap: imap, envelopes: [], folderPath: "Sent", mailStore: appState.mailStore
         )
-        appState.requestMarkFolderRead(in: windowA)
-        XCTAssertFalse(appState.commandReaches(windowB))
+        let commandsA = WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: nil))
+        let commandsB = WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: nil))
+        commandsA.send(.markFolderRead)
 
         await model.markAllRead()
 
-        XCTAssertEqual(appState.markFolderReadRequestTick, 1)
+        XCTAssertEqual(commandsA.count(of: .markFolderRead), 1)
         XCTAssertEqual(appState.mailStore.listRefreshTick, 1)
-        XCTAssertFalse(appState.commandReaches(windowB))
+        XCTAssertEqual(commandsB.count(of: .markFolderRead), 0)
         XCTAssertNil(model.errorMessage)
     }
 
@@ -171,7 +171,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
         let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
-        appState.requestReply(in: windowA)
+        appState.requestCompose(in: windowA)
         let before = appState.mailStore.listRefreshTick
 
         await model.emptyTrash()
@@ -183,7 +183,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let snapshot = await client.envelopeCache.snapshot(for: "Trash")
         XCTAssertNil(snapshot, "the cached Trash rows are dropped")
         XCTAssertEqual(appState.mailStore.listRefreshTick, before + 1, "exactly one reload")
-        XCTAssertFalse(appState.commandReaches(windowB), "the reply stays aimed at A (#1824)")
+        XCTAssertFalse(appState.commandReaches(windowB), "the compose stays aimed at A (#1824)")
         XCTAssertNil(model.errorMessage)
     }
 
@@ -195,7 +195,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let appState = AppState()
         appState.mailStore.counts.setFolderCounts(folderPath: "Trash", unread: 3, total: 10)
         let model = FolderListViewModel(client: client, mailStore: appState.mailStore)
-        appState.requestReply(in: windowA)
+        appState.requestCompose(in: windowA)
 
         await model.emptyTrash()
 
@@ -207,7 +207,7 @@ final class CommandHandoffCharacterizationTests: XCTestCase {
         let snapshot = await client.envelopeCache.snapshot(for: "Trash")
         XCTAssertEqual(snapshot?.envelopes.count, 2)
         XCTAssertEqual(appState.mailStore.listRefreshTick, 0)
-        XCTAssertFalse(appState.commandReaches(windowB), "the reply's target still stands")
+        XCTAssertFalse(appState.commandReaches(windowB), "the compose's target still stands")
     }
 
     private func trashSnapshot() -> EnvelopeCache.Snapshot {

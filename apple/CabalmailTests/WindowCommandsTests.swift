@@ -15,38 +15,8 @@ final class WindowCommandsTests: XCTestCase {
         return WindowCommands(navigator: navigator)
     }
 
-    private static let everyCommand: [WindowCommand] =
-        [.reply, .replyAll, .forward, .toggleSeen, .toggleFlagged, .moveSelection, .refresh, .markFolderRead, .settings]
-        + CommandTickCharacterizationTests.everyFeedCommand.map(WindowCommand.feed)
-        + CommandTickCharacterizationTests.everySidebarTreeCommand.map(WindowCommand.sidebarTree)
-
-    // MARK: - Sending
-
-    func testEachCommandBumpsOnlyItsOwnCountByOne() {
-        for command in Self.everyCommand {
-            let window = makeWindow()
-            window.send(command)
-            window.send(command)
-            for other in Self.everyCommand {
-                XCTAssertEqual(window.count(of: other), other == command ? 2 : 0, "\(command) moved \(other)")
-            }
-        }
-    }
-
-    /// The cross-window half of #1824: a command sent to one window is that
-    /// window's alone, however close behind another window's it comes.
-    func testACommandSentToOneWindowReachesOnlyThatWindow() {
-        let windowA = makeWindow(wide: true)
-        let windowB = makeWindow(wide: true)
-
-        windowA.send(.reply)
-        windowB.send(.toggleSeen)
-
-        XCTAssertEqual(windowA.count(of: .reply), 1)
-        XCTAssertEqual(windowA.count(of: .toggleSeen), 0)
-        XCTAssertEqual(windowB.count(of: .toggleSeen), 1)
-        XCTAssertEqual(windowB.count(of: .reply), 0)
-    }
+    // Each command's own count, and two windows' objects, are pinned in
+    // `CommandTickCharacterizationTests` for every command.
 
     // MARK: - The surface in front
 
