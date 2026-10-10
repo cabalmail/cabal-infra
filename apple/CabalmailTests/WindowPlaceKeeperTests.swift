@@ -44,9 +44,15 @@ final class WindowPlaceKeeperTests: XCTestCase {
         await harness.appState.restoreIfPossible()
         XCTAssertEqual(harness.appState.status, .signedIn, "precondition")
         scene = Scene()
-        navigator = SceneNavigator(appState: harness.appState, windowID: UUID())
-        host = HostedViewHarness { [scene, navigator, harness] in
-            Host(scene: scene!, navigator: navigator!, appState: harness!.appState)
+        try await mount(SceneNavigator(appState: harness.appState, windowID: UUID()))
+    }
+
+    /// Hosts `window`'s keeper and lands the window.
+    private func mount(_ window: SceneNavigator) async throws {
+        host?.close()
+        navigator = window
+        host = HostedViewHarness { [scene, harness] in
+            Host(scene: scene!, navigator: window, appState: harness!.appState)
         }
         try await host.settle()
         await navigator.mailTreeAppeared(tree, isWide: false)
@@ -112,6 +118,39 @@ final class WindowPlaceKeeperTests: XCTestCase {
         let wrote = try await host.eventually { self.stored?.route.mail.message?.uid == 9 }
         XCTAssertTrue(wrote)
         XCTAssertEqual(stored?.listPlace, try place(300))
+    }
+
+    /// A restored window's place is only parked until its list lands. What
+    /// the window stores meanwhile (its landing's route, the scene leaving
+    /// the foreground during a slow first load) keeps that place.
+    func testARestoredWindowsPlaceIsKeptUntilItsListLands() async throws {
+        var route = AppRoute(section: .mail)
+        route.mail = AppRoute.Mail(folderPath: "INBOX")
+        let restored = StoredRoute(account: harness.appState.routeAccount, route: route, listAnchor: try place(300))
+        scene.stored = nil
+        try await mount(SceneNavigator(appState: harness.appState, windowID: UUID(), stored: restored))
+
+        let landed = try await host.eventually { self.stored?.route.mail.folderPath == "INBOX" }
+        XCTAssertTrue(landed)
+        XCTAssertEqual(stored?.listPlace, try place(300), "the landing's route kept it")
+
+        scene.phase = .inactive
+        try await host.settle()
+        XCTAssertEqual(stored?.listPlace, try place(300), "and so did leaving the foreground")
+    }
+
+    /// Which window was last used is stored with each, as it changes.
+    func testTheWindowLastUsedIsStoredAsItChanges() async throws {
+        _ = try await host.eventually { self.stored != nil }
+        let window = try XCTUnwrap(navigator.windowID)
+
+        harness.appState.noteActiveMainWindow(window)
+        let becameLastUsed = try await host.eventually { self.stored?.wasLastUsed == true }
+        XCTAssertTrue(becameLastUsed)
+
+        harness.appState.noteActiveMainWindow(UUID())
+        let gaveWay = try await host.eventually { self.stored?.wasLastUsed == false }
+        XCTAssertTrue(gaveWay)
     }
 
     /// Leaving the foreground with nothing new to store writes nothing.

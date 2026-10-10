@@ -184,6 +184,19 @@ final class NavStateCoordinatorListAnchorTests: XCTestCase {
         XCTAssertNil(coordinator.mailLaunchTarget().listAnchor, "and it is spent")
     }
 
+    /// The launch opened on Feeds and the user then picked the folder
+    /// themselves, which is no landing: the launch's place ends there, so a
+    /// window opened later is not handed last run's place.
+    func testAFolderShownWithoutALandingEndsTheLaunchPlace() async throws {
+        saveSession(folder: "Archive", anchor: try place(300, in: "Archive"), section: .feeds)
+        let coordinator = try makeCoordinator()
+        _ = await coordinator.consumeFeedsLaunchTarget()
+
+        coordinator.recordFolder("Archive")
+
+        XCTAssertNil(coordinator.mailLaunchTarget().listAnchor)
+    }
+
     /// A deep link took the launch (`SceneNavigator.navigate(to:)`): the
     /// place is not for where the user went.
     func testANavigationDiscardsTheLaunchPlace() throws {

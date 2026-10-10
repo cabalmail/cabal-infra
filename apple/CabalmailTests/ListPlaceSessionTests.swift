@@ -96,13 +96,31 @@ final class ListPlaceSessionTests: XCTestCase {
         XCTAssertEqual(coordinator.session.listAnchor, try anchor(index: 103, uid: 900))
     }
 
-    /// A list that has not moved writes nothing: a relaunch that changed
-    /// nothing leaves the session's place as the last run left it.
-    func testAListThatDoesNotMoveLeavesTheSessionsPlace() async throws {
+    /// A list that opens at the top with nothing to land on says so: the
+    /// session may still hold the last run's place for the folder (the
+    /// launch went to a deep link, or the window left the folder and came
+    /// back), and the next launch must not reopen there.
+    func testAListLandingAtTheTopClearsTheSessionsStalePlace() async throws {
         coordinator.recordListAnchor(try anchor(index: 60, uid: 940), folderPath: ListPagingWorld.folderPath)
 
-        let list = try await windowWithALandedList()
-        list.tracker.loadsChanged(model: list.model)
+        _ = try await windowWithALandedList()
+
+        XCTAssertNil(coordinator.session.listAnchor)
+    }
+
+    /// A list that does not land (a pill) leaves the session's place as it
+    /// is, as it leaves its window's.
+    func testAListOnAPillLeavesTheSessionsPlace() async throws {
+        coordinator.recordListAnchor(try anchor(index: 60, uid: 940), folderPath: ListPagingWorld.folderPath)
+        let coordinator = try XCTUnwrap(coordinator)
+        let navigator = SceneNavigator(coordinator: { coordinator }, hasClient: { true }, seed: .mail)
+        let model = try await world.openedList(preloaded: 250, stampsMessageIDs: true)
+        model.filterTab = .unread
+        let tracker = ListPlaceTracker()
+
+        tracker.appeared(model, in: navigator)
+        tracker.land(model: model, in: navigator)
+        tracker.scrolled(toRow: 3, model: model)
 
         XCTAssertEqual(coordinator.session.listAnchor, try anchor(index: 60, uid: 940))
     }

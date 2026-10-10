@@ -7,9 +7,10 @@ import CabalmailKit
 /// never on another account's place.
 ///
 /// The JSON holds the route by ID only (`AppRoute`): no tab, column, search
-/// or selection. Beside the route, not in it, goes where the window's folder
-/// list is scrolled (`listAnchor`), written when the route changes and when
-/// the scene leaves the foreground. Every main window clears its own at a sign-out
+/// or selection. Beside the route, not in it, go where the window's folder
+/// list is scrolled (`listAnchor`) and whether the window was the one last
+/// used, written when the route changes, when the scene leaves the
+/// foreground and when the window last used changes. Every main window clears its own at a sign-out
 /// (`AppState.accountForgottenTick`); a window the system kept but had not
 /// mounted then still holds one, which only the same account reads back.
 struct StoredRoute: Codable, Equatable {
@@ -25,11 +26,25 @@ struct StoredRoute: Codable, Equatable {
     /// Where the window's folder list was scrolled (`ListAnchor`); nil at
     /// the top, and in a route stored before this was kept.
     var listAnchor: ListAnchor?
+    /// Whether this was the window last used when it was stored: the one
+    /// whose list place the resume session was following.
+    var wasLastUsed: Bool?
 
-    /// The list place to reopen at: the stored one, when it is for the
-    /// route's folder.
+    /// The stored list place, when it is for the route's folder.
     var listPlace: ListAnchor? {
         listAnchor?.folderPath == route.mail.folderPath ? listAnchor : nil
+    }
+
+    /// The list place a restored window reopens at. The window last used
+    /// reopens at the session's place for its folder, which was recorded as
+    /// its list scrolled; the window's own is written only with its route
+    /// and as its scene leaves the foreground, and a Mac that quits straight
+    /// after a scroll does neither. Any other window reopens at its own.
+    func placeToReopen(session: ResumeSession?) -> ListAnchor? {
+        if wasLastUsed == true, let session, let folder = route.mail.folderPath, session.folder == folder {
+            return session.listAnchor
+        }
+        return listPlace
     }
 
     /// What `data` holds for `account`: nil when nothing is stored, when it
@@ -86,13 +101,17 @@ struct WindowPlaceKeeper: ViewModifier {
             }
             .onChange(of: appState.lastActiveMainWindow) { _, window in
                 if let window, window == navigator.windowID { navigator.becameLastUsed() }
+                // Which window was last used is stored with each.
+                store()
             }
     }
 
     private func store() {
         guard appState.status == .signedIn, !appState.isEndingSession else { return }
+        let isLastUsed = navigator.windowID.map { $0 == appState.lastActiveMainWindow } ?? false
         let place = StoredRoute(
-            account: appState.routeAccount, route: navigator.route, listAnchor: navigator.listHold.place
+            account: appState.routeAccount, route: navigator.route, listAnchor: navigator.listPlace,
+            wasLastUsed: isLastUsed
         )
         guard place != StoredRoute.stored(in: storedRoute, for: place.account) else { return }
         storedRoute = try? JSONEncoder().encode(place)

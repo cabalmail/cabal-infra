@@ -199,6 +199,70 @@ final class SceneNavigatorListAnchorTests: XCTestCase {
         await harness.tearDown()
     }
 
+    /// Through the window's making: a restored window that was last used
+    /// parks the session's place, not the older one stored with its route.
+    func testARestoredWindowThatWasLastUsedParksTheSessionsPlace() async throws {
+        let harness = try SessionHarness()
+        harness.seedLastSession()
+        try await harness.seedTokens()
+        var session = ResumeSession(section: .mail, folder: "Archive")
+        session.listAnchor = try place(300)
+        ResumeSessionStore(defaults: harness.defaults).saveSession(session)
+        await harness.appState.restoreIfPossible()
+        var route = AppRoute(section: .mail)
+        route.mail = AppRoute.Mail(folderPath: "Archive")
+        let stored = StoredRoute(
+            account: harness.appState.routeAccount, route: route, listAnchor: try place(120), wasLastUsed: true
+        )
+
+        let navigator = SceneNavigator(appState: harness.appState, windowID: UUID(), stored: stored)
+
+        XCTAssertEqual(navigator.restores.pendingListAnchor, try place(300))
+        await harness.tearDown()
+    }
+
+    /// The window that was last used reopens at the session's place for its
+    /// folder, which followed its list as it scrolled; its own stored place
+    /// is as old as its last route change (a Mac that quits straight after
+    /// a scroll writes nothing more). Any other window reopens at its own.
+    func testTheWindowLastUsedReopensAtTheSessionsPlace() throws {
+        let account = StoredRoute.Account(controlDomain: "cabalmail.example", username: "alice")
+        var route = AppRoute(section: .mail)
+        route.mail = AppRoute.Mail(folderPath: "Archive")
+        var session = ResumeSession(section: .mail, folder: "Archive")
+        session.listAnchor = try place(300)
+        let lastUsed = StoredRoute(account: account, route: route, listAnchor: try place(120), wasLastUsed: true)
+        let other = StoredRoute(account: account, route: route, listAnchor: try place(120), wasLastUsed: false)
+        let older = StoredRoute(account: account, route: route, listAnchor: try place(120))
+
+        XCTAssertEqual(lastUsed.placeToReopen(session: session), try place(300))
+        XCTAssertEqual(other.placeToReopen(session: session), try place(120))
+        XCTAssertEqual(older.placeToReopen(session: session), try place(120), "stored before this was kept")
+
+        session.listAnchor = nil
+        XCTAssertNil(lastUsed.placeToReopen(session: session), "it was at the top when the app went away")
+        session.folder = "INBOX"
+        XCTAssertEqual(lastUsed.placeToReopen(session: session), try place(120), "the session is on another folder")
+        XCTAssertEqual(lastUsed.placeToReopen(session: nil), try place(120))
+    }
+
+    /// A window that becomes the one last used before its list has landed
+    /// (it was restored, and its first load is still out) hands the session
+    /// the place still parked for that list, not none.
+    func testAWindowBecomingLastUsedBeforeItsListLandsKeepsItsParkedPlace() async throws {
+        try saveSession()
+        let coordinator = try makeCoordinator()
+        let navigator = makeNavigator(coordinator)
+        await navigator.mailTreeAppeared(UUID(), isWide: false)
+        XCTAssertEqual(navigator.restores.pendingListAnchor, try place(300), "precondition: no list has taken it")
+        lastUsed.window = navigator.windowID
+
+        navigator.becameLastUsed()
+
+        XCTAssertEqual(navigator.listPlace, try place(300))
+        XCTAssertEqual(coordinator.session.listAnchor, try place(300))
+    }
+
     /// A stored place is used only when it is for the stored route's folder.
     func testAStoredPlaceForAnotherFolderThanTheRoutesIsIgnored() throws {
         let account = StoredRoute.Account(controlDomain: "cabalmail.example", username: "alice")

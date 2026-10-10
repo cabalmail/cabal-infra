@@ -157,7 +157,8 @@ extension SceneNavigator {
             deepLinks: appState.deepLinks
         )
         self.windowID = windowID
-        if let anchor = stored?.listPlace { restores.parkListAnchor(anchor) }
+        let session = appState.navCoordinator?.launchSession
+        if let anchor = stored?.placeToReopen(session: session) { restores.parkListAnchor(anchor) }
     }
 
     /// The window this navigator belongs to (`WindowRecorder.windowID`).
@@ -171,9 +172,17 @@ extension SceneNavigator {
     func becameLastUsed() {
         recorder.handOver(
             section: route.section,
-            mail: hasShownMail && selectedFolder != nil ? route.mail : nil, listPlace: listHold.place,
+            mail: hasShownMail && selectedFolder != nil ? route.mail : nil, listPlace: listPlace,
             feedScope: feeds.scope, feedItem: feeds.item
         )
+    }
+
+    /// Where the window's folder list is scrolled, for its scene storage and
+    /// the session: the place its list recorded, else the one still parked
+    /// for a list that has not landed (a restored window whose Mail tab was
+    /// never opened, or one left before its first load finished).
+    var listPlace: ListAnchor? {
+        listHold.place ?? restores.pendingListAnchor
     }
 
     /// A mail reader in this window captured its scroll position.

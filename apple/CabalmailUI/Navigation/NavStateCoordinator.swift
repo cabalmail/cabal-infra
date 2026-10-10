@@ -168,8 +168,11 @@ public final class NavStateCoordinator {
         activeKind = .mail
         session.section = .mail
         // The list's place is its folder's: the same folder recorded again
-        // (the launch landing) keeps it.
+        // (the launch landing) keeps it. The launch's own place is for the
+        // first mail landing, which took it before recording its folder; a
+        // folder shown any other way ends it.
         if session.folder != folderPath { session.listAnchor = nil }
+        launchListAnchor = nil
         session.folder = folderPath
         session.clearMessage()
         scheduleSessionSave()
