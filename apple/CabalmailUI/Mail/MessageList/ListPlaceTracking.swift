@@ -265,9 +265,16 @@ final class ListPlaceTracker {
         claim = navigator.listHold.claim(folderPath, isWide: navigator.layoutIsWide)
     }
 
+    /// Records the place with the window and with the resume session, which
+    /// keeps it only from the window last used. The session hears it even
+    /// when the window's place did not change: a list that opens at the top
+    /// has none to change, and the session may still hold the last run's
+    /// (the launch went to a deep link, or the window left the folder and
+    /// came back).
     private func record(_ anchor: ListAnchor?) {
-        guard let claim else { return }
-        navigator?.listHold.record(anchor, under: claim)
+        guard let claim, let navigator, navigator.listHold.holds(claim) else { return }
+        navigator.listHold.record(anchor, under: claim)
+        navigator.recorder.listPlace(anchor, in: claim.folderPath)
     }
 
     private func scroll(to row: Int) {

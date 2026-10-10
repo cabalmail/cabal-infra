@@ -61,13 +61,13 @@ struct SignedInRootView: View {
     ///     environment). SwiftUI keeps the first navigator for the view's life.
     ///   - windowID: the window's identity, so its first landing knows
     ///     whether it records.
-    ///   - storedRoute: the window's scene-stored route; one stored for
-    ///     another account is ignored.
+    ///   - storedRoute: the window's scene-stored route and list place;
+    ///     what was stored for another account is ignored.
     init(appState: AppState, windowID: UUID?, storedRoute: Binding<Data?>) {
         _storedRoute = storedRoute
         let navigator = SceneNavigator(
             appState: appState, windowID: windowID,
-            storedRoute: StoredRoute.route(in: storedRoute.wrappedValue, for: appState.routeAccount)
+            stored: StoredRoute.stored(in: storedRoute.wrappedValue, for: appState.routeAccount)
         )
         _navigator = State(initialValue: navigator)
         _windowCommands = State(initialValue: WindowCommands(navigator: navigator))

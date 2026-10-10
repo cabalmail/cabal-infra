@@ -43,6 +43,34 @@ final class StoredRouteTests: XCTestCase {
         XCTAssertNil(StoredRoute.route(in: data, for: otherDomain))
     }
 
+    /// The window's list place rides beside the route, not in it.
+    func testTheListPlaceRoundTripsBesideTheRoute() throws {
+        let anchor = try XCTUnwrap(ListAnchor(folderPath: "Lists", messageID: "<row@x>", uid: 812, index: 300))
+        let data = try XCTUnwrap(StoredRoute.data(route, listAnchor: anchor, for: Self.alice))
+
+        let stored = try XCTUnwrap(StoredRoute.stored(in: data, for: Self.alice))
+
+        XCTAssertEqual(stored.route, route)
+        XCTAssertEqual(stored.listAnchor, anchor)
+        XCTAssertEqual(stored.listPlace, anchor, "it is for the route's folder")
+        XCTAssertNil(StoredRoute.stored(in: StoredRoute.data(route, for: Self.alice), for: Self.alice)?.listAnchor)
+    }
+
+    /// A route stored before the list place was kept still reads back, with
+    /// no place.
+    func testARouteStoredBeforeTheListPlaceWasKeptDecodes() throws {
+        let current = try XCTUnwrap(StoredRoute.data(route, for: Self.alice))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: current) as? [String: Any])
+        XCTAssertEqual(Set(object.keys), ["account", "route"], "no place, no key")
+        object.removeValue(forKey: "listAnchor")
+        let older = try JSONSerialization.data(withJSONObject: object)
+
+        let stored = try XCTUnwrap(StoredRoute.stored(in: older, for: Self.alice))
+
+        XCTAssertEqual(stored.route, route)
+        XCTAssertNil(stored.listAnchor)
+    }
+
     /// The open message is stored by the fields the resume session keeps,
     /// never a UIDVALIDITY, which only the list that knows its folder's may
     /// pair with a UID (#1873).

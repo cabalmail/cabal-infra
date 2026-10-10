@@ -64,6 +64,12 @@ final class WindowRecorder {
 
     func feedItem(_ item: RssItem?) { recording?.recordFeedItem(item) }
 
+    /// Where the window's folder list is scrolled (`ListAnchor`; nil at the
+    /// top), for the next launch.
+    func listPlace(_ anchor: ListAnchor?, in folderPath: String) {
+        recording?.recordListAnchor(anchor, folderPath: folderPath)
+    }
+
     // MARK: Reading positions
 
     /// A mail reader's scroll capture. The recording window moves the cursor
@@ -95,26 +101,30 @@ final class WindowRecorder {
     /// folder, no feed list, or mail a window has not shown) is left as the
     /// session has it, for the round trip the session keeps: a place a
     /// restored window holds only in its stored route has not been opened.
+    /// `listPlace` is where the window's folder list is scrolled, which
+    /// replaces the place the window last used left for the same folder.
     func handOver(
-        section: ResumeSession.Section, mail: AppRoute.Mail?, feedScope: RssItemScope?, feedItem: RssItem?
+        section: ResumeSession.Section, mail: AppRoute.Mail?, listPlace: ListAnchor?,
+        feedScope: RssItemScope?, feedItem: RssItem?
     ) {
         guard let coordinator = recording else { return }
         if section == .feeds {
-            recordMail(mail, on: coordinator)
+            recordMail(mail, listPlace: listPlace, on: coordinator)
             recordFeeds(feedScope, item: feedItem, on: coordinator)
         } else {
             recordFeeds(feedScope, item: feedItem, on: coordinator)
-            recordMail(mail, on: coordinator)
+            recordMail(mail, listPlace: listPlace, on: coordinator)
         }
         coordinator.noteSection(section)
     }
 
-    /// The mail half: the folder, the open message, and the message's saved
-    /// reading position on the cursor, as reopening a feed item carries its
-    /// own (`recordFeedItem`).
-    private func recordMail(_ mail: AppRoute.Mail?, on coordinator: NavStateCoordinator) {
+    /// The mail half: the folder and where its list is scrolled, the open
+    /// message, and the message's saved reading position on the cursor, as
+    /// reopening a feed item carries its own (`recordFeedItem`).
+    private func recordMail(_ mail: AppRoute.Mail?, listPlace: ListAnchor?, on coordinator: NavStateCoordinator) {
         guard let path = mail?.folderPath else { return }
         coordinator.recordFolder(path)
+        coordinator.recordListAnchor(listPlace?.folderPath == path ? listPlace : nil, folderPath: path)
         guard let ref = mail?.message else { return }
         coordinator.recordMessage(ref)
         if let position = coordinator.readingPosition(for: ref) {
@@ -134,18 +144,21 @@ final class WindowRecorder {
 extension SceneNavigator {
     /// - Parameters:
     ///   - windowID: the window's `commandWindowID`, when the host has it.
-    ///   - storedRoute: the window's route from its scene storage, already
-    ///     checked against the account (`StoredRoute`).
-    convenience init(appState: AppState, windowID: UUID? = nil, storedRoute: AppRoute? = nil) {
+    ///   - stored: the window's place from its scene storage, already
+    ///     checked against the account (`StoredRoute`): the route it starts
+    ///     on, and where its folder list was scrolled, parked for that list.
+    convenience init(appState: AppState, windowID: UUID? = nil, stored: StoredRoute? = nil) {
         self.init(
             coordinator: { [weak appState] in appState?.navCoordinator },
             hasClient: { [weak appState] in appState?.client != nil },
-            seed: storedRoute?.section ?? ResumeSessionStore.storedSection(),
-            storedRoute: storedRoute,
+            seed: stored?.route.section ?? ResumeSessionStore.storedSection(),
+            storedRoute: stored?.route,
             lastUsedWindow: { [weak appState] in appState?.lastActiveMainWindow },
             deepLinks: appState.deepLinks
         )
         self.windowID = windowID
+        let session = appState.navCoordinator?.launchSession
+        if let anchor = stored?.placeToReopen(session: session) { restores.parkListAnchor(anchor) }
     }
 
     /// The window this navigator belongs to (`WindowRecorder.windowID`).
@@ -159,9 +172,17 @@ extension SceneNavigator {
     func becameLastUsed() {
         recorder.handOver(
             section: route.section,
-            mail: hasShownMail && selectedFolder != nil ? route.mail : nil,
+            mail: hasShownMail && selectedFolder != nil ? route.mail : nil, listPlace: listPlace,
             feedScope: feeds.scope, feedItem: feeds.item
         )
+    }
+
+    /// Where the window's folder list is scrolled, for its scene storage and
+    /// the session: the place its list recorded, else the one still parked
+    /// for a list that has not landed (a restored window whose Mail tab was
+    /// never opened, or one left before its first load finished).
+    var listPlace: ListAnchor? {
+        listHold.place ?? restores.pendingListAnchor
     }
 
     /// A mail reader in this window captured its scroll position.

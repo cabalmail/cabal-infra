@@ -73,6 +73,9 @@ public final class NavStateCoordinator {
     /// lands on the *live* `session` — where the user is now — rather than
     /// re-landing on where the process started.
     var didConsumeLaunchSession = false
+    /// The list place the last run left (`ResumeSession.listAnchor`), for
+    /// the process's first mail landing to take (`mailLaunchTarget`).
+    var launchListAnchor: ListAnchor?
     /// Debounce for local session writes — short, since it's a local
     /// `UserDefaults` write, and `flushSession` covers the scene going away.
     let sessionSaveDebounce: Duration = .milliseconds(300)
@@ -105,6 +108,7 @@ public final class NavStateCoordinator {
         self.store = store
         let loaded = store.loadSession()
         self.launchSession = loaded
+        self.launchListAnchor = loaded?.listAnchor
         self.session = loaded ?? ResumeSession(section: .mail)
         self.positions = store.loadPositions()
         self.lastSeenUpdatedAt = store.offeredForeignUpdatedAt
@@ -163,6 +167,12 @@ public final class NavStateCoordinator {
         messageFraction = nil
         activeKind = .mail
         session.section = .mail
+        // The list's place is its folder's: the same folder recorded again
+        // (the launch landing) keeps it. The launch's own place is for the
+        // first mail landing, which took it before recording its folder; a
+        // folder shown any other way ends it.
+        if session.folder != folderPath { session.listAnchor = nil }
+        launchListAnchor = nil
         session.folder = folderPath
         session.clearMessage()
         scheduleSessionSave()

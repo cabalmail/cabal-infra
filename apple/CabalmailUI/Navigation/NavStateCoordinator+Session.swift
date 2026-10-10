@@ -11,9 +11,12 @@ extension NavStateCoordinator {
     /// window to park so its list selects it after its initial load. The
     /// folder is provisional — `MailRootView` swaps the fetched `Folder` in
     /// when the list arrives and falls back to INBOX if it no longer exists.
+    /// `listAnchor` is where the folder's list was scrolled when the app
+    /// last went away, for the window to park beside the message.
     struct MailLaunchTarget: Equatable {
         let folderPath: String
         let messageRestore: NavState?
+        var listAnchor: ListAnchor?
     }
 
     /// Where the feed reader should land: a scope, and the item that was open
@@ -43,9 +46,14 @@ extension NavStateCoordinator {
     /// The mail landing for a window: its own stored folder and message
     /// (`stored`) when it has a folder, else the session's (`restoreSource`).
     /// Either way the launch snapshot is spent, so a window opened later
-    /// lands on the live session.
+    /// lands on the live session. So is the launch's list place, which goes
+    /// to the process's first mail landing and to no other: with the
+    /// session's folder when that is the place's, and nowhere when the
+    /// landing is on another folder or on a window's own stored one, whose
+    /// place the window stored with it (`StoredRoute`).
     func mailLaunchTarget(stored: AppRoute.Mail = AppRoute.Mail()) -> MailLaunchTarget {
-        defer { didConsumeLaunchSession = true }
+        let launchAnchor = launchListAnchor
+        defer { endLaunchSnapshot() }
         if let folder = stored.folderPath, !folder.isEmpty {
             return MailLaunchTarget(folderPath: folder, messageRestore: stored.message.map(restoreCursor(for:)))
         }
@@ -56,7 +64,18 @@ extension NavStateCoordinator {
         if saved.hasMessage {
             restore = NavState(folder: folder, messageID: saved.messageID, uid: saved.uid, clientID: clientID)
         }
-        return MailLaunchTarget(folderPath: folder, messageRestore: restore)
+        return MailLaunchTarget(
+            folderPath: folder, messageRestore: restore,
+            listAnchor: launchAnchor?.folderPath == folder ? launchAnchor : nil
+        )
+    }
+
+    /// A landing or a navigation has taken the launch's place: a window
+    /// opened from here on lands on the live session (#1966), and the
+    /// launch's list place is no longer where the user is.
+    func endLaunchSnapshot() {
+        didConsumeLaunchSession = true
+        launchListAnchor = nil
     }
 
     /// The feed scope the feed reader should open when it mounts, or nil to
@@ -162,6 +181,16 @@ extension NavStateCoordinator {
         feedAnchor = capture.isAtTop ? nil : capture.anchor
         feedFraction = capture.isAtTop ? nil : capture.fraction
         scheduleSave()
+    }
+
+    /// The window's folder list moved (`ListAnchor`; nil at the top): kept
+    /// in the session for the next launch, only while the session is on
+    /// that folder. Local, with the save debounced like every session save;
+    /// never a server write, so `list_scroll` stays dead on Apple.
+    func recordListAnchor(_ anchor: ListAnchor?, folderPath: String) {
+        guard session.folder == folderPath, session.listAnchor != anchor else { return }
+        session.listAnchor = anchor
+        scheduleSessionSave()
     }
 
     // MARK: Reading positions
