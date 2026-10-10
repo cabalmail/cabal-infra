@@ -25,9 +25,7 @@ struct ContactPickerSheet: View {
         NavigationStack {
             content
                 .navigationTitle("Choose Contacts")
-                #if os(iOS) || os(visionOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
+                .inlineNavigationTitle()
                 .searchable(
                     text: $query,
                     placement: .automatic,
@@ -63,9 +61,7 @@ struct ContactPickerSheet: View {
                     .buttonStyle(.plain)
                 }
             }
-            #if os(macOS)
-            .listStyle(.inset)
-            #endif
+            .insetListStyleOnMac()
         }
     }
 

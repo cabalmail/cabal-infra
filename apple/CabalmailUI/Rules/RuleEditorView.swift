@@ -51,13 +51,9 @@ struct RuleEditorView: View {
             RuleDestinationSection(model: model, rule: rule, conversionNote: $conversionNote)
             RuleExtrasSection(rule: rule)
         }
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
+        .groupedFormStyleOnMac()
         .navigationTitle(model.rule(withID: ruleID)?.name ?? "Rule")
-        #if os(iOS) || os(visionOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
     }
 
     private var isDelete: Bool {
@@ -113,9 +109,7 @@ private struct RuleConditionsSection: View {
                     TextField("contains…", text: $condition.value)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
-                        #if os(iOS) || os(visionOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
+                        .textEntry(.verbatim)
                     Button(role: .destructive) {
                         rule.conditions.removeAll { $0.id == condition.id }
                     } label: {
@@ -330,9 +324,7 @@ private struct CopyFoldersPicker: View {
                 && selection.count >= RulesValidator.maxCopyFolders)
         }
         .navigationTitle("Copy to folders")
-        #if os(iOS) || os(visionOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
     }
 
     private func toggle(_ path: String) {

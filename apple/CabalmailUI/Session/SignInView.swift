@@ -82,10 +82,7 @@ struct SignInView: View {
                     }
                         .textContentType(.URL)
                         .autocorrectionDisabled()
-                        #if os(iOS) || os(visionOS)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        #endif
+                        .textEntry(.url)
                         .accessibilityIdentifier("signin.controlDomain")
                         .focused($focusedField, equals: .controlDomain)
                         .submitLabel(.next)
@@ -95,9 +92,7 @@ struct SignInView: View {
                     TextField("Username", text: $username)
                         .textContentType(.username)
                         .autocorrectionDisabled()
-                        #if os(iOS) || os(visionOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
+                        .textEntry(.verbatim)
                         .accessibilityIdentifier("signin.username")
                         .focused($focusedField, equals: .username)
                         .submitLabel(.next)
@@ -188,9 +183,7 @@ struct SignInView: View {
                 }
                     .textContentType(.oneTimeCode)
                     .autocorrectionDisabled()
-                    #if os(iOS) || os(visionOS)
-                    .keyboardType(.numberPad)
-                    #endif
+                    .textEntry(.digits)
                     .accessibilityIdentifier("mfa.code")
                     .focused($focusedField, equals: .mfaCode)
                     // The on-screen number pad has no Return key; this is

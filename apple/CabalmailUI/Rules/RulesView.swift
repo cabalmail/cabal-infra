@@ -23,9 +23,7 @@ struct RulesView: View {
             }
         }
         .navigationTitle("Mail rules")
-        #if os(iOS) || os(visionOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .task {
             // Building the model and loading it are separate questions: on
             // iPhone the pushed destination is built, torn down and rebuilt
@@ -66,9 +64,7 @@ private struct RulesListView: View {
             }
         )
         .toolbar {
-            #if os(iOS) || os(visionOS)
-            ToolbarItem(placement: .topBarTrailing) { EditButton() }
-            #endif
+            EditButtonToolbarItem()
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     model.add()

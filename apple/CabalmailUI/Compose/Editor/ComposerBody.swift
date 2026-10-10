@@ -102,9 +102,7 @@ struct ComposerBody: View {
                 // Same reason as the rich pane: a bare TextEditor lands as an
                 // unlabelled, unidentified text view (#1157).
                 .accessibilityIdentifier("compose.body.markdown")
-                #if os(iOS) || os(visionOS)
-                .textInputAutocapitalization(.sentences)
-                #endif
+                .textEntry(.sentences)
         }
     }
 }
