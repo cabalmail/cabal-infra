@@ -117,11 +117,11 @@ struct SessionHooks {
                 PushRegistrar.shared.sessionDidStart(appState: appState, client: client)
                 #endif
                 #if os(iOS)
-                // Hand the session to the App Intents bridge (replays a parked
-                // OpenFolderIntent from a cold launch) and re-donate the
-                // folder-parameterized App Shortcut phrases now that the folder
-                // list is reachable. Both live in the app target; see
-                // `AppIntentsSessionHooks`.
+                // Hand the session to the App Intents bridge, whose intents
+                // borrow its client, and re-donate the folder-parameterized
+                // App Shortcut phrases now that the folder list is reachable.
+                // Both live in the app target; see `AppIntentsSessionHooks`.
+                // An Open Folder from a cold launch waits in `DeepLinkRouter`.
                 AppIntentsSessionHooks.sessionDidStart(appState)
                 #endif
             },
@@ -165,9 +165,9 @@ struct SessionHooks {
 /// start; until then they do nothing.
 @MainActor
 public enum AppIntentsSessionHooks {
-    /// Hands the new session to the App Intents bridge, which replays a
-    /// parked OpenFolderIntent, and re-donates the folder-parameterized App
-    /// Shortcut phrases.
+    /// Hands the new session to the App Intents bridge, and re-donates the
+    /// folder-parameterized App Shortcut phrases. An Open Folder parked
+    /// before the session waits in `DeepLinkRouter` for a window.
     public static var sessionDidStart: (AppState) -> Void = { _ in }
     /// Detaches the App Intents bridge from the ending session.
     public static var sessionWillEnd: () -> Void = {}

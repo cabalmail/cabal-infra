@@ -103,6 +103,30 @@ final class PushAccountSwitchTests: XCTestCase {
         XCTAssertNil(harness.appState.deepLinks.parked)
     }
 
+    /// The registrar's own two drops, with a router the app state does not
+    /// share (in the app they share one, and `AppState` drops the link too):
+    /// its session's end, and a session for another account than the last.
+    func testTheRegistrarDropsAParkedTapByItsOwnRules() async throws {
+        let world = try SessionHarness()
+        extraHarnesses.append(world)
+        let own = DeepLinkRouter()
+        let registrar = PushRegistrar(
+            notificationCenter: center.center, defaults: defaults,
+            enrichmentStore: PushEnrichmentStore(secureStore: nil, defaults: defaults), deepLinks: own
+        )
+        drive(world, with: registrar)
+        await signIn(world, as: "alice")
+        await registrar.handleNotificationAction(identifier: "OPEN", ref: ref)
+        XCTAssertNotNil(own.parked, "precondition: no window of this router to take it")
+
+        await world.appState.signOut()
+        XCTAssertNil(own.parked, "the session's end")
+
+        await registrar.handleNotificationAction(identifier: "OPEN", ref: ref)
+        await signIn(world, as: "bob")
+        XCTAssertNil(own.parked, "another account's session")
+    }
+
     /// A cold launch from a tap: the restore wires the account the tap was
     /// delivered for, and the tap opens. With no account remembered yet,
     /// which is how every install meets this change, nothing is dropped.

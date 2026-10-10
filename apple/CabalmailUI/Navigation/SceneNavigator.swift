@@ -127,6 +127,8 @@ final class SceneNavigator {
     private let hasClient: @MainActor () -> Bool
     /// The router deep links reach this window through (`open(_:)`).
     private let deepLinks: DeepLinkRouter
+    /// A deep link's lookup in flight (`open(_:)`): the landing waits on it.
+    @ObservationIgnored private var opening: Task<Void, Never>?
     private let feedsLaunchTarget: @MainActor (NavStateCoordinator, AppRoute.Feeds) async
         -> NavStateCoordinator.FeedLaunchTarget?
 
@@ -267,8 +269,8 @@ final class SceneNavigator {
     // MARK: Landing
 
     /// The launch landing (`docs/1.x/resume-session-plan.md`). A deep link
-    /// parked before this window existed (a cold launch from a tapped
-    /// notification) is the landing, and pre-empts the session's.
+    /// parked before this window existed (a cold launch from a tap), or one
+    /// it is still looking up, is the landing, and pre-empts the session's.
     /// Otherwise the window's stored route (`StoredRoute`) comes before the
     /// session: a route or session that ended in the feed reader reopens its
     /// scope on the wide layout, which hosts feeds in the same split;
@@ -281,6 +283,7 @@ final class SceneNavigator {
     private func landIfNeeded(_ tree: UUID, isWide: Bool) async {
         guard let coordinator = coordinator() else { return }
         if let link = deepLinks.takeParked() { await open(link, coordinator, ifStill: deepLinks.generation) }
+        await opening?.value
         guard !didLand, selectedFolder == nil else { return }
         if isWide, splitShowsFeeds {
             // The Feeds tab landed before the window widened: the window has
@@ -656,7 +659,7 @@ extension SceneNavigator {
         guard let coordinator = coordinator() else { return deepLinks.giveBack(link) }
         if let cursor = coordinator.immediateCursor(for: link) { return navigate(to: cursor) }
         let generation = deepLinks.generation
-        Task { await open(link, coordinator, ifStill: generation) }
+        opening = Task { await open(link, coordinator, ifStill: generation) }
     }
 
     /// Opens `link` once its cursor is known, unless a later link or a
