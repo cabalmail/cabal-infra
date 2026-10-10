@@ -224,7 +224,7 @@ final class CommandTickCharacterizationTests: XCTestCase {
     /// an observer ran, so the last writer decided who an undelivered
     /// request reached. Each waiting request keeps its own window now: a
     /// later one, aimed anywhere or nowhere, moves none before it. (The one
-    /// aimed nowhere joins the window opened last, behind what waits there.)
+    /// aimed nowhere waits for whichever surface can show it first.)
     func testALaterComposeNeverRetargetsAnEarlierOne() {
         let state = AppState()
         sheetUp(in: windowB, of: state)
@@ -237,8 +237,8 @@ final class CommandTickCharacterizationTests: XCTestCase {
         state.compose.open(seed: third, from: nil)
 
         XCTAssertEqual(state.compose.seedsWaiting(for: windowB), [first])
-        XCTAssertEqual(state.compose.seedsWaiting(for: windowA), [second, third])
-        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [])
+        XCTAssertEqual(state.compose.seedsWaiting(for: windowA), [second])
+        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [third])
     }
 
     /// #1824's main path, fixed: a data-change reload sent after an aimed
