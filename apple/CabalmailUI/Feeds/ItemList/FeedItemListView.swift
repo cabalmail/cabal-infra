@@ -146,7 +146,7 @@ struct FeedItemListView: View {
 
     private var composeButton: some View {
         Button {
-            appState.requestCompose(seed: ReplyBuilder.newDraft(), in: commandWindowID)
+            appState.compose.open(seed: ReplyBuilder.newDraft(), from: commandWindowID)
         } label: {
             Image(systemName: "square.and.pencil")
                 .accessibilityLabel("New Message")
