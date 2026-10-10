@@ -284,20 +284,20 @@ final class CommandTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(appState.mailStore.listRefreshTick, 1)
     }
 
-    /// Pins current behaviour, which looks like a defect (latent; no call
-    /// site does this today): two aimed requests in one update leave the
-    /// first tick aimed at the second request's window, so window A's reader
-    /// drops its own Reply and window B's answers it.
-    /// Tracked in #1824.
-    func testTwoAimedRequestsInOneUpdateAimBothTicksAtTheSecondWindow() {
-        let appState = AppState()
-        appState.requestReply(in: windowA)
-        appState.requestToggleSeen(in: windowB)
+    /// #1824's second quirk, fixed: two commands sent in one update to two
+    /// windows each reach their own. On the shared target slot window A's
+    /// reader dropped its own Reply and B's answered it; the Message menu now
+    /// sends to the front window's own `WindowCommands`, one count a command.
+    func testTwoCommandsInOneUpdateEachReachTheirOwnWindow() {
+        let commandsA = WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: nil))
+        let commandsB = WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: nil))
+        commandsA.send(.reply)
+        commandsB.send(.toggleSeen)
 
-        XCTAssertFalse(appState.commandReaches(windowA), "A's own Reply would be dropped")
-        XCTAssertTrue(appState.commandReaches(windowB))
-        XCTAssertEqual(appState.replyRequestTick, 1)
-        XCTAssertEqual(appState.toggleSeenRequestTick, 1)
+        XCTAssertEqual(commandsA.count(of: .reply), 1, "A's own Reply reaches A")
+        XCTAssertEqual(commandsB.count(of: .reply), 0, "and not B")
+        XCTAssertEqual(commandsB.count(of: .toggleSeen), 1)
+        XCTAssertEqual(commandsA.count(of: .toggleSeen), 0)
     }
 
     /// The window registry (`lastActiveMainWindow`) and the target slot are

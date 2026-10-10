@@ -554,16 +554,16 @@ extension MessageListView {
         .onChange(of: appState.mailStore.listRefreshTick) { _, _ in
             Task { await model?.hardReload() }
         }
-        // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) acting on the
-        // current selection. Handlers live in `MessageListView+Actions.swift`;
-        // each no-ops when nothing is selected.
-        .onWindowCommand(appState.toggleSeenRequestTick) {
+        // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) on the current
+        // selection, while this list is in front of its window. Handlers live
+        // in `MessageListView+Actions.swift`; each no-ops with no selection.
+        .answersCommand(.toggleSeen) {
             if let model { toggleSeenOnSelection(model: model) }
         }
-        .onWindowCommand(appState.toggleFlaggedRequestTick) {
+        .answersCommand(.toggleFlagged) {
             if let model { toggleFlaggedOnSelection(model: model) }
         }
-        .onWindowCommand(appState.moveSelectionRequestTick) {
+        .answersCommand(.moveSelection) {
             if let model { moveSelection(model: model) }
         }
         // What the reader's and the composer's changes ask of this list's

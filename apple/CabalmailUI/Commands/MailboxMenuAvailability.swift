@@ -19,17 +19,15 @@ import SwiftUI
 ///   surface mounted there is no list to reload, so it dims — the same answer
 ///   the Message menu gives an empty selection.
 public struct MailboxMenuAvailability: Equatable, Sendable {
-    /// How many mail surfaces are mounted. `MailRootView` reports both edges:
-    /// that view hosts the `MessageListView` which is the sole consumer of
-    /// `refreshRequestTick`. A count rather than a flag because macOS can have
-    /// several mail windows open — the last one closing is what dims the menu,
-    /// not the first.
+    /// How many mail surfaces are mounted in the window. Each one that hosts a
+    /// `MessageListView` (`MailRootView`, the Search tab) reports both edges.
+    /// A count rather than a flag because a layout swap mounts the new surface
+    /// before the old one goes.
     private(set) var mountedMailSurfaces = 0
     /// The folder whose message list is on screen, reported by the
     /// folder-scoped `MessageListView` (never the search surface). What
-    /// Mailbox ▸ Mark All as Read acts on: the command reaches that list
-    /// through `markFolderReadRequestTick`, so with no folder list mounted it
-    /// has no consumer and dims, the same answer Refresh gives (#1162).
+    /// Mailbox ▸ Mark All as Read acts on: with no folder list mounted it has
+    /// nothing to answer it and dims, the same answer Refresh gives (#1162).
     private(set) var frontFolderPath: String?
 
     /// No window showing mail: the launch, signed-out and all-windows-closed

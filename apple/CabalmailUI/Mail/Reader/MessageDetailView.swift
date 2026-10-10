@@ -226,9 +226,9 @@ struct MessageDetailView: View {
             Text("This message will be permanently deleted. This can't be undone.")
         }
         .modifier(RevokeAddressConfirmation(pending: $pendingRevoke, perform: revoke))
-        .onWindowCommand(appState.replyRequestTick) { beginCompose(.reply) }
-        .onWindowCommand(appState.replyAllRequestTick) { beginCompose(.replyAll) }
-        .onWindowCommand(appState.forwardRequestTick) { beginCompose(.forward) }
+        .answersCommand(.reply) { beginCompose(.reply) }
+        .answersCommand(.replyAll) { beginCompose(.replyAll) }
+        .answersCommand(.forward) { beginCompose(.forward) }
         // Once a body is available, consume a pending scroll restore from the
         // nav cursor (a no-op on a normal open). Both branches guard against
         // re-consuming, so whichever body type lands first wins.
