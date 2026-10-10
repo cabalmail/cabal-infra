@@ -308,7 +308,7 @@ final class ListColumnWidthTests: XCTestCase {
     private let measuredSurvivingSlack: CGFloat = 11
 
     /// What the column is actually pinned to: the stored width clamped to the
-    /// range, exactly as `MailRootView.listColumnWidth` computes it.
+    /// range, exactly as `SplitShell.listColumnWidth` computes it.
     private func pinnedWidth(stored: CGFloat, inWindowOfWidth window: CGFloat) -> CGFloat {
         let bounds = ListColumnWidth.pinnedBounds(splitWidth: window)
         return min(max(stored, bounds.minimum), bounds.maximum)

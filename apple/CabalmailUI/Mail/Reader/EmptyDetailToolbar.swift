@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Disabled stand-ins for `MessageDetailView`'s eleven top-toolbar buttons,
 /// shown while the reading pane has no message (see the call sites in
-/// `MailRootView.detailColumn` for why the slots must be reserved at all).
+/// `DesktopShell`'s reader for why the slots must be reserved at all).
 ///
 /// Derived from `ReaderToolbarLayout.macToolbar` — the same order the real
 /// toolbar draws — so the reserved slots and the live toolbar can't drift

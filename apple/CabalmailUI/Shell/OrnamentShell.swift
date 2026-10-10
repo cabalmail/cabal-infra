@@ -18,7 +18,7 @@ import CabalmailKit
 /// - **Search** — cross-folder search.
 ///
 /// This replaces the earlier visionOS path, which reused the iPad
-/// `MailRootView`: its folders lived in a show/hide `NavigationSplitView`
+/// split: its folders lived in a show/hide `NavigationSplitView`
 /// sidebar whose reveal toggle visionOS never surfaced, leaving no discoverable
 /// way to reach the folder list.
 struct OrnamentShell: View {
