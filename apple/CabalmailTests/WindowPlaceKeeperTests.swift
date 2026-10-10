@@ -121,22 +121,31 @@ final class WindowPlaceKeeperTests: XCTestCase {
     }
 
     /// A restored window's place is only parked until its list lands. What
-    /// the window stores meanwhile (its landing's route, the scene leaving
-    /// the foreground during a slow first load) keeps that place.
+    /// the window stores meanwhile (the scene leaving the foreground during
+    /// a slow first load, a message opened before the list lands) keeps
+    /// that place, where storing the list's own, which is none yet, would
+    /// wipe it.
     func testARestoredWindowsPlaceIsKeptUntilItsListLands() async throws {
         var route = AppRoute(section: .mail)
         route.mail = AppRoute.Mail(folderPath: "INBOX")
         let restored = StoredRoute(account: harness.appState.routeAccount, route: route, listAnchor: try place(300))
-        scene.stored = nil
+        // As the system hands it back: a scene of its own, whose storage
+        // holds what the window is restored from.
+        scene = Scene()
+        scene.stored = try JSONEncoder().encode(restored)
         try await mount(SceneNavigator(appState: harness.appState, windowID: UUID(), stored: restored))
-
-        let landed = try await host.eventually { self.stored?.route.mail.folderPath == "INBOX" }
-        XCTAssertTrue(landed)
-        XCTAssertEqual(stored?.listPlace, try place(300), "the landing's route kept it")
+        XCTAssertEqual(navigator.selectedFolder?.path, "INBOX", "precondition: landed on its stored folder")
+        XCTAssertNil(navigator.listHold.place, "precondition: no list has landed")
 
         scene.phase = .inactive
         try await host.settle()
-        XCTAssertEqual(stored?.listPlace, try place(300), "and so did leaving the foreground")
+        XCTAssertEqual(stored?.listPlace, try place(300), "leaving the foreground kept it")
+
+        let message = TestFixtures.makeEnvelope(uid: 9, messageId: "<nine@example.com>")
+        navigator.selectMessage(message, isSearching: false, from: tree)
+        let wrote = try await host.eventually { self.stored?.route.mail.message?.uid == 9 }
+        XCTAssertTrue(wrote)
+        XCTAssertEqual(stored?.listPlace, try place(300), "and so did the route changing")
     }
 
     /// Which window was last used is stored with each, as it changes.
