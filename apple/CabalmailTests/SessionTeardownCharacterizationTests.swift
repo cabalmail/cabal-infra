@@ -151,9 +151,10 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.toast, toast, "sign-out leaves the toast to its own timer")
     }
 
-    /// The compose tick, its window target and the one-shot handoffs (the menu
-    /// commands go with their window's signed-in view, workstream 3.1); a
-    /// sign-out never resets any of them. The reader's mail events (a failed
+    /// The drag-move tick, the window last in front and a compose waiting
+    /// for its window (the menu commands go with their window's signed-in
+    /// view, workstream 3.1; compose left its tick in 3.3); a sign-out never
+    /// resets any of them. The reader's mail events (a failed
     /// removal, a dispose) were delivered when posted, and a sign-out
     /// neither posts another nor takes them back.
     func testSignOutWithNoClientLeavesTheCommandsAndHandoffsAlone() async {
@@ -171,9 +172,8 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         await state.signOut()
 
         XCTAssertEqual(Self.ticks(of: state), ticks)
-        XCTAssertEqual(state.commandWindow, window)
         XCTAssertEqual(state.lastActiveMainWindow, window)
-        XCTAssertEqual(state.pendingComposeSeed, seed)
+        XCTAssertEqual(state.compose.seedsWaiting(for: window), [seed], "still waiting, for the same window")
         let expected: [MailEvent.Change] = [
             .restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false),
             .removed([MessageRef(folder: "INBOX", uid: 9)]),
@@ -206,12 +206,11 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         state.mailStore.events.post(.restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false), from: nil)
         state.mailStore.events.post(.removed([MessageRef(folder: "INBOX", uid: 9)]), from: nil)
         state.noteActiveMainWindow(window)
-        // Last, so its window is the recorded target.
-        state.requestCompose(seed: seed, in: window)
+        state.compose.open(seed: seed, from: window)
     }
 
     private static func ticks(of state: AppState) -> [Int] {
-        [state.composeRequestTick, state.moveRequestTick]
+        [state.moveRequestTick]
     }
 
     private static func activity(identifier: String) -> NSUserActivity {

@@ -1019,7 +1019,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 
 | Folder | What lives there |
 | --- | --- |
-| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the commands and menus, compose hand-off, drag and drop, contacts, BIMI and `mailStore`; its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
+| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the compose coordinator and slot registry, drag and drop, contacts, BIMI and `mailStore`; its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
 | `Session/` | The session lifecycle, in `SessionManager`: sign-in and its second factor, restoring the last session, signing out and its ordering (`SessionTeardownGate`), the session's client, cursor, preferences sync and expiry observer, the Inbox badge and feed pollers (`SessionPollers`), and lending the client to the push and App Intents paths (`borrowClient()`, one client per account). `SessionEnvironment` and `SessionHooks` are its seams to the outside; `SessionOwnerHooks` are what a session does to `AppState`'s state. Also the sign-in screen and its error wording |
 | `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included), its `StoredRoute` (the route its scene storage keeps, for the account it was stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, reading positions and the cross-device cursor); `DeepLinkRouter` (a notification, a Spotlight result or Siri's Open Folder opens in one main window: the system's target, else the window last used) with the `WindowRegistry` it finds windows in, and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
@@ -1034,7 +1034,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
-| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (router, slot registry, scene), and on iPad each main window's scene session, so closing a composer returns to a main window and a notification finds the window it was shown over |
+| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene), and on iPad each main window's scene session, so closing a composer returns to the main window it came from and a notification finds the window it was shown over |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
@@ -1558,12 +1558,18 @@ one open message, the list's for a multi-selection, only while that
 surface is in front and owns the chord. Esc and ⌘A stay focus-scoped on
 the list, so the search field keeps them.
 
-Only the compose hand-off still rides an `AppState` tick, aimed through
-`MainWindowCommandScope`'s window identity and observed with
-`.onWindowCommand(tick)`. Data-change reloads (Mark All as Read, Empty
-Trash, push actions) are not commands: they bump the mail store's
-`listRefreshTick`, which every list observes (#1824). A drag names the
-list it lifted from, and only that list performs a sidebar drop.
+A compose request is not a menu command either. A window's New Message,
+Reply and Forward, and a mailto: link, go to `AppState.compose`
+(`ComposeCoordinator`) with the main window they are for
+(`MainWindowCommandScope`'s window identity; for a link, the window last
+in front). That window's compose surface (`ComposeRequestRouter`) shows
+the seed, as a compose window or, on a single-window host, a sheet. A
+seed whose window cannot show it yet waits its turn: on a cold launch,
+while signed out, or behind an open sheet. No request reaches two
+windows. Data-change reloads (Mark All as Read, Empty Trash, push
+actions) are not commands: they bump the mail store's `listRefreshTick`,
+which every list observes (#1824). A drag names the list it lifted from,
+and only that list performs a sidebar drop.
 
 A link from outside a window uses the same identity. A tapped
 notification, a Spotlight result and Siri's Open Folder each go to

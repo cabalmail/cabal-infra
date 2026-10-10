@@ -7,28 +7,18 @@ import CabalmailKit
 /// `AppState` ticks aimed through one shared target slot are now each main
 /// window's own (`WindowCommands`): every row below is the check it was, on
 /// the window's command object, so a command reaches its own window's
-/// surfaces, once, and no other's. Compose keeps its tick and the shared slot
-/// until workstream 3.3, so its rows are as they were, as is the drag-move
-/// tick beside them.
+/// surfaces, once, and no other's. Compose left the last tick and the shared
+/// target slot in workstream 3.3 (`ComposeCoordinator`): its rows are the
+/// checks they were, on what the coordinator shows and keeps waiting, and
+/// the drag-move tick beside them is as it was.
 @MainActor
 final class CommandTickCharacterizationTests: XCTestCase {
     private let windowA = UUID()
     private let windowB = UUID()
 
-    /// The ticks still on `AppState`: compose, and the drag move, which no
-    /// `request…(in:)` entry point bumps.
+    /// The tick still on `AppState`: the drag move, which no command bumps.
     private func ticks(_ state: AppState) -> [String: Int] {
-        ["compose": state.composeRequestTick, "move": state.moveRequestTick]
-    }
-
-    /// The compose entry points, the only ones left on the shared slot.
-    private var entryPoints: [CommandEntryPoint] {
-        [
-            CommandEntryPoint(name: "requestCompose(in:)", tick: "compose") { $0.requestCompose(in: $1) },
-            CommandEntryPoint(name: "requestCompose(seed:in:)", tick: "compose") {
-                $0.requestCompose(seed: Draft(subject: "seeded"), in: $1)
-            },
-        ]
+        ["move": state.moveRequestTick]
     }
 
     private func makeWindow() -> WindowCommands {
@@ -42,7 +32,6 @@ final class CommandTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(Set(Self.everyWindowCommand).count, 21, "each listed once")
         let window = makeWindow()
         XCTAssertTrue(Self.everyWindowCommand.allSatisfy { window.count(of: $0) == 0 }, "every count starts at zero")
-        XCTAssertEqual(Set(entryPoints.map(\.tick)), ["compose"], "compose keeps its AppState entry points")
         XCTAssertTrue(ticks(AppState()).values.allSatisfy { $0 == 0 })
     }
 
@@ -57,16 +46,14 @@ final class CommandTickCharacterizationTests: XCTestCase {
             window.send(command)
             XCTAssertEqual(window.count(of: command), 2, "\(command): a repeat bumps again")
         }
-        for entry in entryPoints {
-            let appState = AppState()
-            var expected = ticks(appState)
-            entry.request(appState, windowA)
-            expected[entry.tick, default: 0] += 1
-            XCTAssertEqual(ticks(appState), expected, "\(entry.name): its own tick +1, every other tick unchanged")
-            entry.request(appState, windowA)
-            expected[entry.tick, default: 0] += 1
-            XCTAssertEqual(ticks(appState), expected, "\(entry.name): a repeat bumps again")
-        }
+        // A compose request is no tick at all, and sends no window command.
+        let appState = AppState()
+        let window = makeWindow()
+        appState.compose.open(seed: Draft(subject: "seeded"), from: windowA)
+        appState.compose.open(seed: Draft(subject: "seeded"), from: windowA)
+        XCTAssertTrue(ticks(appState).values.allSatisfy { $0 == 0 })
+        XCTAssertTrue(Self.everyWindowCommand.allSatisfy { window.count(of: $0) == 0 })
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA).count, 2, "a repeat is a second request")
     }
 
     /// No command posts a mail event or a drag request: the reader and the
@@ -79,13 +66,12 @@ final class CommandTickCharacterizationTests: XCTestCase {
             XCTAssertNil(appState.pendingMoveRequest, "\(command)")
             XCTAssertEqual(events.events, [], "\(command)")
         }
-        for entry in entryPoints {
-            let appState = AppState()
-            let events = MailEventRecorder(appState.mailStore)
-            entry.request(appState, windowA)
-            XCTAssertNil(appState.pendingMoveRequest, entry.name)
-            XCTAssertEqual(events.events, [], entry.name)
-        }
+        let appState = AppState()
+        let events = MailEventRecorder(appState.mailStore)
+        RecordingComposeSurface(window: windowA).register(with: appState.compose)
+        appState.compose.open(seed: Draft(subject: "seeded"), from: windowA)
+        XCTAssertNil(appState.pendingMoveRequest, "a compose request")
+        XCTAssertEqual(events.events, [], "a compose request")
     }
 
     func testACommandSentToOneWindowReachesOnlyThatWindow() {
@@ -96,47 +82,55 @@ final class CommandTickCharacterizationTests: XCTestCase {
             XCTAssertEqual(windowA.count(of: command), 1, "\(command) reaches the window it was sent to")
             XCTAssertEqual(windowB.count(of: command), 0, "\(command) must not reach a second window")
         }
-        for entry in entryPoints {
-            let appState = AppState()
-            entry.request(appState, windowA)
-            XCTAssertTrue(appState.commandReaches(windowA), "\(entry.name) reaches the window it names")
-            XCTAssertFalse(appState.commandReaches(windowB), "\(entry.name) must not reach a second window")
-            XCTAssertTrue(appState.commandReaches(nil), "\(entry.name): a view outside a main window still answers")
-        }
+        // A compose request: the surface of the window it names, and no
+        // other. A surface outside any main window (a preview, a test) is
+        // shown only a request that names no window; on the tick it answered
+        // every request, which no window in the app could rely on.
+        let appState = AppState()
+        let seed = Draft(subject: "seeded")
+        let outside = RecordingComposeSurface(window: nil).register(with: appState.compose)
+        let surfaceA = RecordingComposeSurface(window: windowA).register(with: appState.compose)
+        let surfaceB = RecordingComposeSurface(window: windowB).register(with: appState.compose)
+        appState.compose.open(seed: seed, from: windowA)
+        XCTAssertEqual(surfaceA.shown, [seed], "a compose reaches the window it names")
+        XCTAssertEqual(surfaceB.shown, [], "a compose must not reach a second window")
+        XCTAssertEqual(outside.shown, [], "nor a surface outside any window")
     }
 
-    func testAComposeAimedAtNoWindowReachesEveryWindow() {
+    /// Fixed in #1824, with `CommandHandoffCharacterizationTests`' mailto
+    /// row: a compose aimed at no window reached every window's router, and
+    /// each opened a composer. It opens in one window now, the one opened
+    /// last, however an earlier request was aimed.
+    func testAComposeAimedAtNoWindowReachesOneWindow() {
         let windowC = UUID()
-        for entry in entryPoints {
-            let appState = AppState()
-            // Aimed elsewhere first, so a request that skipped the target
-            // write (a fresh slot is already nil) cannot pass.
-            appState.requestCompose(in: windowC)
-            XCTAssertFalse(appState.commandReaches(windowA), "precondition for \(entry.name)")
-
-            entry.request(appState, nil)
-            XCTAssertTrue(appState.commandReaches(windowA), entry.name)
-            XCTAssertTrue(appState.commandReaches(windowB), entry.name)
-            XCTAssertTrue(appState.commandReaches(windowC), entry.name)
+        let appState = AppState()
+        let surfaces = [windowA, windowB, windowC].map {
+            RecordingComposeSurface(window: $0).register(with: appState.compose)
         }
+        // Aimed elsewhere first, so a request that reused an earlier one's
+        // window cannot pass.
+        appState.compose.open(seed: Draft(subject: "earlier"), from: windowA)
+        let seed = Draft(subject: "no window")
+
+        appState.compose.open(seed: seed, from: nil)
+
+        XCTAssertEqual(surfaces.filter { $0.shown.contains(seed) }.map(\.window), [windowC])
     }
 
     // MARK: - T1: what rides with a command
 
-    func testTheSeededComposeParksItsSeedAndTheZeroArgumentFormLeavesOneInPlace() {
+    /// A compose for a window with no surface to show it (signed out, or
+    /// not yet mounted) waits for that window. (The zero-argument form this
+    /// row also pinned, which parked nothing and left a seed in place, had
+    /// no callers and went with the tick.)
+    func testAComposeWithNoSurfaceWaitsForItsWindow() {
         let appState = AppState()
-        appState.requestCompose(in: windowA)
-        XCTAssertNil(appState.pendingComposeSeed, "the zero-argument form parks nothing")
-
         let seed = Draft(to: ["someone@cabalmail.example"], subject: "From a mailto link")
-        appState.requestCompose(seed: seed, in: windowA)
-        XCTAssertEqual(appState.pendingComposeSeed, seed)
 
-        // Pins current behaviour: the zero-argument form does not clear a seed
-        // already parked, so its compose would open with that seed. It has no
-        // callers today (File > New Message goes to `ComposeWindowCommand`).
-        appState.requestCompose(in: windowB)
-        XCTAssertEqual(appState.pendingComposeSeed, seed)
+        appState.compose.open(seed: seed, from: windowA)
+
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [seed])
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowB), [])
     }
 
     func testEveryFeedCommandIsItsOwnCommand() {
@@ -172,11 +166,11 @@ final class CommandTickCharacterizationTests: XCTestCase {
     /// is no payload slot for a later command to overwrite before an earlier
     /// one is answered: what the shared `pendingFeedCommand` and
     /// `pendingSidebarTreeCommand` slots were pinned for, retired on purpose.
-    /// No window command touches the compose seed `AppState` still parks.
+    /// No window command touches a compose seed waiting for its window.
     func testALaterCommandNeverReplacesAnEarlierOnesAction() {
         let appState = AppState()
         let seed = Draft(subject: "parked")
-        appState.requestCompose(seed: seed, in: windowA)
+        appState.compose.open(seed: seed, from: windowA)
         let window = makeWindow()
         window.send(.feed(.subscribe))
         window.send(.sidebarTree(.collapseAllFolders))
@@ -187,14 +181,15 @@ final class CommandTickCharacterizationTests: XCTestCase {
 
         XCTAssertEqual(window.count(of: .feed(.subscribe)), 1, "a later, different command leaves it")
         XCTAssertEqual(window.count(of: .sidebarTree(.collapseAllFolders)), 1)
-        XCTAssertEqual(appState.pendingComposeSeed, seed, "no window command touches the parked seed")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [seed], "no window command touches the parked seed")
     }
 
     func testIdenticalDragMovesStillCompareUnequalAndLeaveTheWindowTargetAlone() throws {
         let list = UUID()
         let items = [MessageDragItem(uid: 7, sourceFolder: "INBOX")]
         let appState = AppState()
-        appState.requestCompose(in: windowA)
+        let compose = Draft(subject: "waiting")
+        appState.compose.open(seed: compose, from: windowA)
 
         appState.requestMove(items: items, to: "Archive", from: list)
         let first = try XCTUnwrap(appState.pendingMoveRequest)
@@ -210,47 +205,51 @@ final class CommandTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(second.sourceList, list)
         // A drag is scoped to its source list, not a window: the compose
         // request's target survives it.
-        XCTAssertFalse(appState.commandReaches(windowB))
-        XCTAssertEqual(appState.composeRequestTick, 1)
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [compose])
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowB), [])
     }
 
-    // MARK: - T2: one shared target slot, compose's alone now
+    // MARK: - T2: no shared target slot
 
-    /// The target is read when an observer runs, not stored with the tick
-    /// (`MainWindowCommandScope.swift`, `WindowCommandObserver`). Each compose
-    /// entry point overwrites the one slot, so the last writer decides who a
-    /// tick that has not been delivered yet reaches.
-    func testTheTargetIsOneSharedSlotAndTheLastWriterWins() {
-        for entry in entryPoints {
-            let state = AppState()
-            state.requestCompose(in: windowB)
-            entry.request(state, windowA)
-            XCTAssertFalse(state.commandReaches(windowB), "\(entry.name) replaces an earlier window target")
-            entry.request(state, nil)
-            XCTAssertTrue(state.commandReaches(windowB), "\(entry.name) with no window clears it")
-        }
+    /// The target was one slot every compose request overwrote, read when
+    /// an observer ran, so the last writer decided who an undelivered
+    /// request reached. Each waiting request keeps its own window now: a
+    /// later one, aimed anywhere or nowhere, moves none before it.
+    func testALaterComposeNeverRetargetsAnEarlierOne() {
+        let state = AppState()
+        let first = Draft(subject: "first")
+        let second = Draft(subject: "second")
+        let third = Draft(subject: "third")
+        state.compose.open(seed: first, from: windowB)
+        state.compose.open(seed: second, from: windowA)
+        state.compose.open(seed: third, from: nil)
+
+        XCTAssertEqual(state.compose.seedsWaiting(for: windowB), [first])
+        XCTAssertEqual(state.compose.seedsWaiting(for: windowA), [second])
+        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [third])
     }
 
     /// #1824's main path, fixed: a data-change reload sent after an aimed
     /// request, before SwiftUI has delivered it, leaves that request aimed
-    /// where it was (a compose, the one aimed tick left). The
-    /// reload senders run from async continuations on the main actor --
-    /// `FolderMarkAllRead.perform`, `FolderListViewModel.emptyTrash` and
-    /// `PushRegistrar`'s notification actions after their server call -- so
-    /// any of them can land between a menu command's bump and the next
-    /// update. They used to send an untargeted refresh, which re-aimed the
-    /// command at every window; they now bump the mail store's own counter.
+    /// where it was. The reload senders run from async continuations on the
+    /// main actor -- `FolderMarkAllRead.perform`,
+    /// `FolderListViewModel.emptyTrash` and `PushRegistrar`'s notification
+    /// actions after their server call -- so any of them can land between a
+    /// request and the next update. They used to send an untargeted
+    /// refresh, which re-aimed the request at every window; they now bump
+    /// the mail store's own counter, and a compose request is no longer on
+    /// a shared slot to be re-aimed.
     /// `CommandHandoffCharacterizationTests` drives the first two end to end.
-    func testADataChangeReloadBeforeDeliveryLeavesAnEarlierAimedTickAlone() {
+    func testADataChangeReloadLeavesAWaitingComposeWithItsWindow() {
         let appState = AppState()
-        appState.requestCompose(in: windowA)
-        XCTAssertFalse(appState.commandReaches(windowB))
+        let seed = Draft(subject: "waiting")
+        appState.compose.open(seed: seed, from: windowA)
 
         appState.mailStore.requestListRefresh()
 
-        XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertFalse(appState.commandReaches(windowB), "only A's router answers A's compose")
-        XCTAssertEqual(appState.composeRequestTick, 1)
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [seed], "only A's surface is shown A's compose")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowB), [])
+        XCTAssertEqual(appState.compose.seedsWaiting(for: nil), [])
         XCTAssertEqual(appState.mailStore.listRefreshTick, 1)
     }
 
@@ -270,21 +269,22 @@ final class CommandTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(commandsA.count(of: .toggleSeen), 0)
     }
 
-    /// The window registry (`lastActiveMainWindow`) and the target slot are
-    /// separate: bringing a window to the front or closing one does not
-    /// re-aim a tick already bumped.
-    func testNotingOrForgettingAWindowLeavesTheCommandTargetAlone() {
+    /// The window registry (`lastActiveMainWindow`) and a waiting compose's
+    /// window are separate: bringing a window to the front or closing one
+    /// does not re-aim a request already made.
+    func testNotingOrForgettingAWindowLeavesAWaitingComposeWithItsWindow() {
         let appState = AppState()
-        appState.requestCompose(in: windowA)
+        let seed = Draft(subject: "waiting")
+        appState.compose.open(seed: seed, from: windowA)
 
         appState.noteActiveMainWindow(windowB)
-        XCTAssertFalse(appState.commandReaches(windowB))
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowB), [])
         XCTAssertEqual(appState.lastActiveMainWindow, windowB)
 
         appState.forgetMainWindow(windowB)
         appState.forgetMainWindow(windowA)
-        XCTAssertTrue(appState.commandReaches(windowA), "a closed window keeps the target until the next request")
-        XCTAssertFalse(appState.commandReaches(windowB))
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowA), [seed], "a closed window keeps its request")
+        XCTAssertEqual(appState.compose.seedsWaiting(for: windowB), [])
         XCTAssertNil(appState.lastActiveMainWindow)
     }
 }
@@ -323,13 +323,4 @@ extension CommandTickCharacterizationTests {
         case .toggleRead, .toggleFlag, .markAllRead: command
         }
     }
-}
-
-/// One `AppState.request…` entry point: its name for failure messages, the
-/// tick it should bump (a key of `CommandTickCharacterizationTests.ticks`),
-/// and how to call it aimed at a window, or at none.
-private struct CommandEntryPoint {
-    let name: String
-    let tick: String
-    let request: @MainActor (AppState, UUID?) -> Void
 }

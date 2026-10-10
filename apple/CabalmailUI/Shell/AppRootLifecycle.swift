@@ -69,12 +69,12 @@ struct AppRootLifecycle: ViewModifier {
             }
             .onOpenURL { url in
                 // mailto: links, from other apps once Cabalmail is the
-                // default mail app, and on a cold launch before any view is
-                // wired to observe `composeRequestTick`: the seed parks on
-                // `AppState.pendingComposeSeed` until `ComposeRequestRouter`
-                // drains it.
+                // default mail app. The composer opens in the main window
+                // last used; on a cold launch, or while signed out, the
+                // seed waits with `ComposeCoordinator` for the first window
+                // that can show it.
                 if let mailto = MailtoURL(url) {
-                    appState.requestCompose(seed: mailto.draft(), in: appState.lastActiveMainWindow)
+                    appState.compose.open(seed: mailto.draft(), from: appState.lastActiveMainWindow)
                 }
             }
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
