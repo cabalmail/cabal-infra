@@ -51,7 +51,7 @@ Mail/Reader/MessageDetailView.swift 10
 Mail/Reader/MessageSourceSheet.swift 3
 Mail/Search/SearchFiltersSheet.swift 2
 Mail/Search/SearchView.swift 1
-Rules/RulesView.swift 2
+Rules/RulesView.swift 1
 Session/SessionEnvironment.swift 6
 Session/SignInView.swift 6
 Settings/NotificationSettingsSection.swift 9

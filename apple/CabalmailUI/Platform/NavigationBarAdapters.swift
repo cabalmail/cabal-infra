@@ -27,17 +27,3 @@ extension View {
         #endif
     }
 }
-
-/// The same Edit toggle as an item among a toolbar's others, on the bar's
-/// trailing side. On macOS it is no item at all.
-struct EditButtonToolbarItem: ToolbarContent {
-    var body: some ToolbarContent {
-        #if os(macOS)
-        // No item. An empty arm would be `EmptyView`, which is toolbar
-        // content only from the 27.0 systems; `Optional` has been since 13.
-        ToolbarItem<Void, EmptyView>?.none
-        #else
-        ToolbarItem(placement: .topBarTrailing) { EditButton() }
-        #endif
-    }
-}
