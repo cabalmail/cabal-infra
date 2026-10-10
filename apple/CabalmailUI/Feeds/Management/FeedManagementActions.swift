@@ -86,7 +86,6 @@ struct FeedManagementSheets: ViewModifier {
     var handlesCommands = false
     var onRefresh: () -> Void = {}
     var onSaved: (RssSubscription) -> Void = { _ in }
-    @Environment(AppState.self) private var appState
 
     func body(content: Content) -> some View {
         @Bindable var actions = actions
@@ -110,9 +109,10 @@ struct FeedManagementSheets: ViewModifier {
                 Text("Items you have not opened will be marked read too.")
             }
             .feedOpmlFlows(actions.opml, management: management)
-            .onWindowCommand(appState.feedCommandTick) {
-                guard handlesCommands, let command = appState.pendingFeedCommand else { return }
-                if !actions.handle(command, management: management) { onRefresh() }
+            // The window's one catalog handler: it answers from a tab behind too.
+            .answersCommands(FeedCommand.allCases.map(WindowCommand.feed), whileBehind: true) { command in
+                guard handlesCommands, case .feed(let feed) = command else { return }
+                if !actions.handle(feed, management: management) { onRefresh() }
             }
             // The catalog changed under the selection (an unsubscribe from
             // the list's settings sheet, a folder deleted, another device):

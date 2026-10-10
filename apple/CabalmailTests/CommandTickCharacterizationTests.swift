@@ -3,110 +3,82 @@ import CabalmailKit
 @testable import CabalmailUI
 
 /// Characterization suite for workstream 0.8 of the 2026-10 rearchitecture
-/// proposal: the `AppState` command-tick contract as it stands after its
-/// defect 11, window-scoped menu commands (#1783, d8b58f48, merged as
-/// 5caaec3a). Workstream 3.1 replaces these integer ticks with
-/// focused-window commands; this file is the 1:1 contract that replacement
-/// has to match, quirks included, so any change in behaviour shows up as a
-/// failing assertion rather than a silent drift.
-///
-/// It covers every one of the 13 `request…` entry points (12 window-aimed
-/// ticks), the drag-move tick beside them, and the single shared target slot
-/// the observers read when a tick fires. `CommandWindowTargetingTests` pins
-/// the targeting rules on 6 of the entry points; this table overlaps it
-/// where it needs those rows, then runs the same contract over all 13.
+/// proposal, ported by workstream 3.1 (#1824). The menu commands that were
+/// `AppState` ticks aimed through one shared target slot are now each main
+/// window's own (`WindowCommands`): every row below is the check it was, on
+/// the window's command object, so a command reaches its own window's
+/// surfaces, once, and no other's. Compose keeps its tick and the shared slot
+/// until workstream 3.3, so its rows are as they were, as is the drag-move
+/// tick beside them.
 @MainActor
 final class CommandTickCharacterizationTests: XCTestCase {
     private let windowA = UUID()
     private let windowB = UUID()
 
-    /// Every command tick on `AppState`, keyed by a short name. `move` is the
-    /// drag-move tick: no `request…(in:)` entry point bumps it, so every row
-    /// below must leave it alone.
+    /// The ticks still on `AppState`: compose, and the drag move, which no
+    /// `request…(in:)` entry point bumps.
     private func ticks(_ state: AppState) -> [String: Int] {
-        [
-            "compose": state.composeRequestTick,
-            "refresh": state.refreshRequestTick,
-            "reply": state.replyRequestTick,
-            "replyAll": state.replyAllRequestTick,
-            "forward": state.forwardRequestTick,
-            "toggleSeen": state.toggleSeenRequestTick,
-            "toggleFlagged": state.toggleFlaggedRequestTick,
-            "moveSelection": state.moveSelectionRequestTick,
-            "markFolderRead": state.markFolderReadRequestTick,
-            "settings": state.settingsRequestTick,
-            "feed": state.feedCommandTick,
-            "sidebarTree": state.sidebarTreeCommandTick,
-            "move": state.moveRequestTick,
-        ]
+        ["compose": state.composeRequestTick, "move": state.moveRequestTick]
     }
 
-    /// The 13 entry points the menus, toolbars and handlers call today.
+    /// The compose entry points, the only ones left on the shared slot.
     private var entryPoints: [CommandEntryPoint] {
         [
             CommandEntryPoint(name: "requestCompose(in:)", tick: "compose") { $0.requestCompose(in: $1) },
             CommandEntryPoint(name: "requestCompose(seed:in:)", tick: "compose") {
                 $0.requestCompose(seed: Draft(subject: "seeded"), in: $1)
             },
-            CommandEntryPoint(name: "requestRefresh(in:)", tick: "refresh") { $0.requestRefresh(in: $1) },
-            CommandEntryPoint(name: "requestReply(in:)", tick: "reply") { $0.requestReply(in: $1) },
-            CommandEntryPoint(name: "requestReplyAll(in:)", tick: "replyAll") { $0.requestReplyAll(in: $1) },
-            CommandEntryPoint(name: "requestForward(in:)", tick: "forward") { $0.requestForward(in: $1) },
-            CommandEntryPoint(name: "requestToggleSeen(in:)", tick: "toggleSeen") { $0.requestToggleSeen(in: $1) },
-            CommandEntryPoint(name: "requestToggleFlagged(in:)", tick: "toggleFlagged") {
-                $0.requestToggleFlagged(in: $1)
-            },
-            CommandEntryPoint(name: "requestMoveSelection(in:)", tick: "moveSelection") {
-                $0.requestMoveSelection(in: $1)
-            },
-            CommandEntryPoint(name: "requestMarkFolderRead(in:)", tick: "markFolderRead") {
-                $0.requestMarkFolderRead(in: $1)
-            },
-            CommandEntryPoint(name: "requestSettings(in:)", tick: "settings") { $0.requestSettings(in: $1) },
-            CommandEntryPoint(name: "requestFeedCommand(_:in:)", tick: "feed") {
-                $0.requestFeedCommand(.subscribe, in: $1)
-            },
-            CommandEntryPoint(name: "requestSidebarTree(_:in:)", tick: "sidebarTree") {
-                $0.requestSidebarTree(.collapseAllFolders, in: $1)
-            },
         ]
     }
 
-    // MARK: - T1: one tick per entry point
-
-    func testTheTableCoversEveryWindowAimedTickFromZero() {
-        let entries = entryPoints
-        XCTAssertEqual(entries.count, 13, "13 request entry points today")
-        let fresh = ticks(AppState())
-        XCTAssertTrue(fresh.values.allSatisfy { $0 == 0 }, "every tick starts at zero: \(fresh)")
-        XCTAssertEqual(
-            Set(entries.map(\.tick)), Set(fresh.keys).subtracting(["move"]),
-            "the 12 window-aimed ticks each have at least one entry point; the drag tick has none"
-        )
+    private func makeWindow() -> WindowCommands {
+        WindowCommands(navigator: SceneNavigator(coordinator: { nil }, hasClient: { false }, seed: nil))
     }
 
-    func testEachEntryPointBumpsOnlyItsOwnTickByExactlyOne() {
+    // MARK: - T1: one count per command
+
+    func testTheTableCoversEveryWindowCommandFromZero() {
+        XCTAssertEqual(Self.everyWindowCommand.count, 21, "nine commands, eight feed and four tree")
+        XCTAssertEqual(Set(Self.everyWindowCommand).count, 21, "each listed once")
+        let window = makeWindow()
+        XCTAssertTrue(Self.everyWindowCommand.allSatisfy { window.count(of: $0) == 0 }, "every count starts at zero")
+        XCTAssertEqual(Set(entryPoints.map(\.tick)), ["compose"], "compose keeps its AppState entry points")
+        XCTAssertTrue(ticks(AppState()).values.allSatisfy { $0 == 0 })
+    }
+
+    func testEachCommandBumpsOnlyItsOwnCountByExactlyOne() {
+        for command in Self.everyWindowCommand {
+            let window = makeWindow()
+            window.send(command)
+            let moved = Self.everyWindowCommand.filter { window.count(of: $0) != 0 }
+            XCTAssertEqual(moved, [command], "\(command): its own count +1, every other count unchanged")
+            XCTAssertEqual(window.count(of: command), 1)
+            // A repeat still bumps, which is what makes `.onChange` fire again.
+            window.send(command)
+            XCTAssertEqual(window.count(of: command), 2, "\(command): a repeat bumps again")
+        }
         for entry in entryPoints {
             let appState = AppState()
             var expected = ticks(appState)
-
             entry.request(appState, windowA)
             expected[entry.tick, default: 0] += 1
             XCTAssertEqual(ticks(appState), expected, "\(entry.name): its own tick +1, every other tick unchanged")
-
-            // A repeat of the same command still bumps, which is what makes
-            // `.onChange` fire again for it.
             entry.request(appState, windowA)
             expected[entry.tick, default: 0] += 1
             XCTAssertEqual(ticks(appState), expected, "\(entry.name): a repeat bumps again")
         }
     }
 
-    /// No command posts a mail event: the reader and the composer post
-    /// those, never a menu tick. (The five signal payloads this once read,
-    /// and the failed-removal tick, are the store's events now; a recorder
-    /// hears every kind.)
-    func testNoEntryPointPostsAListEvent() {
+    /// No command posts a mail event or a drag request: the reader and the
+    /// composer post those, never a menu.
+    func testNoCommandPostsAListEvent() {
+        for command in Self.everyWindowCommand {
+            let appState = AppState()
+            let events = MailEventRecorder(appState.mailStore)
+            makeWindow().send(command)
+            XCTAssertNil(appState.pendingMoveRequest, "\(command)")
+            XCTAssertEqual(events.events, [], "\(command)")
+        }
         for entry in entryPoints {
             let appState = AppState()
             let events = MailEventRecorder(appState.mailStore)
@@ -116,7 +88,14 @@ final class CommandTickCharacterizationTests: XCTestCase {
         }
     }
 
-    func testAnEntryPointAimedAtOneWindowReachesOnlyThatWindow() {
+    func testACommandSentToOneWindowReachesOnlyThatWindow() {
+        for command in Self.everyWindowCommand {
+            let windowA = makeWindow()
+            let windowB = makeWindow()
+            windowA.send(command)
+            XCTAssertEqual(windowA.count(of: command), 1, "\(command) reaches the window it was sent to")
+            XCTAssertEqual(windowB.count(of: command), 0, "\(command) must not reach a second window")
+        }
         for entry in entryPoints {
             let appState = AppState()
             entry.request(appState, windowA)
@@ -126,13 +105,13 @@ final class CommandTickCharacterizationTests: XCTestCase {
         }
     }
 
-    func testAnEntryPointAimedAtNoWindowReachesEveryWindow() {
+    func testAComposeAimedAtNoWindowReachesEveryWindow() {
         let windowC = UUID()
         for entry in entryPoints {
             let appState = AppState()
             // Aimed elsewhere first, so a request that skipped the target
             // write (a fresh slot is already nil) cannot pass.
-            appState.requestSettings(in: windowC)
+            appState.requestCompose(in: windowC)
             XCTAssertFalse(appState.commandReaches(windowA), "precondition for \(entry.name)")
 
             entry.request(appState, nil)
@@ -142,7 +121,7 @@ final class CommandTickCharacterizationTests: XCTestCase {
         }
     }
 
-    // MARK: - T1: the payloads that ride beside a tick
+    // MARK: - T1: what rides with a command
 
     func testTheSeededComposeParksItsSeedAndTheZeroArgumentFormLeavesOneInPlace() {
         let appState = AppState()
@@ -160,24 +139,23 @@ final class CommandTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(appState.pendingComposeSeed, seed)
     }
 
-    func testEveryFeedCommandIsNamedBesideItsTick() {
-        let appState = AppState()
-        for (index, command) in Self.everyFeedCommand.enumerated() {
-            appState.requestFeedCommand(command, in: windowA)
-            XCTAssertEqual(appState.pendingFeedCommand, command)
-            XCTAssertEqual(appState.feedCommandTick, index + 1)
+    func testEveryFeedCommandIsItsOwnCommand() {
+        let window = makeWindow()
+        for command in Self.everyFeedCommand {
+            window.send(.feed(command))
+            XCTAssertEqual(window.count(of: .feed(command)), 1, "\(command)")
         }
-        appState.requestFeedCommand(.markAllRead, in: windowA)
-        XCTAssertEqual(appState.feedCommandTick, Self.everyFeedCommand.count + 1, "the same command twice still bumps")
+        window.send(.feed(.markAllRead))
+        XCTAssertEqual(window.count(of: .feed(.markAllRead)), 2, "the same command twice still bumps")
+        XCTAssertEqual(Self.everyFeedCommand.filter { window.count(of: .feed($0)) == 1 }.count, 7, "the rest unchanged")
     }
 
-    func testEverySidebarTreeCommandIsNamedBesideItsTick() {
-        let appState = AppState()
-        for (index, command) in Self.everySidebarTreeCommand.enumerated() {
-            appState.requestSidebarTree(command, in: nil)
-            XCTAssertEqual(appState.pendingSidebarTreeCommand, command)
-            XCTAssertEqual(appState.sidebarTreeCommandTick, index + 1)
-            // Both sidebars observe the one tick; each applies only its own
+    func testEverySidebarTreeCommandIsItsOwnCommand() {
+        let window = makeWindow()
+        for command in Self.everySidebarTreeCommand {
+            window.send(.sidebarTree(command))
+            XCTAssertEqual(window.count(of: .sidebarTree(command)), 1, "\(command)")
+            // Both sidebars answer the four; each applies only its own
             // tree's commands (`FolderListView`, `FeedSidebarSection`).
             switch command {
             case .expandAllFolders, .collapseAllFolders: XCTAssertTrue(command.isMail, "\(command)")
@@ -190,40 +168,33 @@ final class CommandTickCharacterizationTests: XCTestCase {
         }
     }
 
-    /// The named payloads are never cleared: each stays until the next
-    /// request of its own kind replaces it, and only
-    /// `consumePendingComposeSeed()` takes the parked seed
-    /// (`CommandHandoffCharacterizationTests`). Harmless today, since every
-    /// reader of the feed and tree commands runs inside the matching tick's
-    /// `.onWindowCommand` (`FeedManagementSheets`, `FeedItemListView`,
-    /// `FolderListView`, `FeedSidebarSection`); pinned so workstream 3.1
-    /// drops these slots deliberately rather than by accident.
-    func testTheNamedPayloadsOutliveEveryLaterDifferentTick() {
+    /// The feed and tree commands name their action in their case, so there
+    /// is no payload slot for a later command to overwrite before an earlier
+    /// one is answered: what the shared `pendingFeedCommand` and
+    /// `pendingSidebarTreeCommand` slots were pinned for, retired on purpose.
+    /// No window command touches the compose seed `AppState` still parks.
+    func testALaterCommandNeverReplacesAnEarlierOnesAction() {
         let appState = AppState()
         let seed = Draft(subject: "parked")
         appState.requestCompose(seed: seed, in: windowA)
-        appState.requestFeedCommand(.subscribe, in: windowA)
-        appState.requestSidebarTree(.collapseAllFolders, in: windowA)
-        for entry in entryPoints where !["compose", "feed", "sidebarTree"].contains(entry.tick) {
-            entry.request(appState, windowB)
+        let window = makeWindow()
+        window.send(.feed(.subscribe))
+        window.send(.sidebarTree(.collapseAllFolders))
+        let earlier: [WindowCommand] = [.feed(.subscribe), .sidebarTree(.collapseAllFolders)]
+        for command in Self.everyWindowCommand where !earlier.contains(command) {
+            window.send(command)
         }
 
-        XCTAssertEqual(appState.pendingFeedCommand, .subscribe, "a later, different tick leaves it")
-        XCTAssertEqual(appState.pendingSidebarTreeCommand, .collapseAllFolders)
-        XCTAssertEqual(appState.pendingComposeSeed, seed)
-
-        appState.requestFeedCommand(.refresh, in: windowB)
-        XCTAssertEqual(appState.pendingSidebarTreeCommand, .collapseAllFolders, "a feed command leaves the tree's")
-        appState.requestSidebarTree(.expandAllFeedFolders, in: windowB)
-        XCTAssertEqual(appState.pendingFeedCommand, .refresh, "a tree command leaves the feed's")
-        XCTAssertEqual(appState.pendingComposeSeed, seed, "neither touches the parked seed")
+        XCTAssertEqual(window.count(of: .feed(.subscribe)), 1, "a later, different command leaves it")
+        XCTAssertEqual(window.count(of: .sidebarTree(.collapseAllFolders)), 1)
+        XCTAssertEqual(appState.pendingComposeSeed, seed, "no window command touches the parked seed")
     }
 
     func testIdenticalDragMovesStillCompareUnequalAndLeaveTheWindowTargetAlone() throws {
         let list = UUID()
         let items = [MessageDragItem(uid: 7, sourceFolder: "INBOX")]
         let appState = AppState()
-        appState.requestReply(in: windowA)
+        appState.requestCompose(in: windowA)
 
         appState.requestMove(items: items, to: "Archive", from: list)
         let first = try XCTUnwrap(appState.pendingMoveRequest)
@@ -237,22 +208,22 @@ final class CommandTickCharacterizationTests: XCTestCase {
         XCTAssertEqual(second.destination, "Archive")
         XCTAssertEqual(second.items, items)
         XCTAssertEqual(second.sourceList, list)
-        // A drag is scoped to its source list, not a window: the reply's
-        // target survives it.
+        // A drag is scoped to its source list, not a window: the compose
+        // request's target survives it.
         XCTAssertFalse(appState.commandReaches(windowB))
-        XCTAssertEqual(appState.replyRequestTick, 1)
+        XCTAssertEqual(appState.composeRequestTick, 1)
     }
 
-    // MARK: - T2: one shared target slot
+    // MARK: - T2: one shared target slot, compose's alone now
 
     /// The target is read when an observer runs, not stored with the tick
-    /// (`MainWindowCommandScope.swift`, `WindowCommandObserver`). Each entry
-    /// point overwrites the one slot, so the last writer decides who a tick
-    /// that has not been delivered yet reaches.
+    /// (`MainWindowCommandScope.swift`, `WindowCommandObserver`). Each compose
+    /// entry point overwrites the one slot, so the last writer decides who a
+    /// tick that has not been delivered yet reaches.
     func testTheTargetIsOneSharedSlotAndTheLastWriterWins() {
         for entry in entryPoints {
             let state = AppState()
-            state.requestReply(in: windowB)
+            state.requestCompose(in: windowB)
             entry.request(state, windowA)
             XCTAssertFalse(state.commandReaches(windowB), "\(entry.name) replaces an earlier window target")
             entry.request(state, nil)
@@ -261,8 +232,8 @@ final class CommandTickCharacterizationTests: XCTestCase {
     }
 
     /// #1824's main path, fixed: a data-change reload sent after an aimed
-    /// command, before SwiftUI has delivered it, leaves that command aimed
-    /// where it was, so only window A's reader answers the one Reply. The
+    /// request, before SwiftUI has delivered it, leaves that request aimed
+    /// where it was (a compose, the one aimed tick left). The
     /// reload senders run from async continuations on the main actor --
     /// `FolderMarkAllRead.perform`, `FolderListViewModel.emptyTrash` and
     /// `PushRegistrar`'s notification actions after their server call -- so
@@ -272,15 +243,14 @@ final class CommandTickCharacterizationTests: XCTestCase {
     /// `CommandHandoffCharacterizationTests` drives the first two end to end.
     func testADataChangeReloadBeforeDeliveryLeavesAnEarlierAimedTickAlone() {
         let appState = AppState()
-        appState.requestReply(in: windowA)
+        appState.requestCompose(in: windowA)
         XCTAssertFalse(appState.commandReaches(windowB))
 
         appState.mailStore.requestListRefresh()
 
         XCTAssertTrue(appState.commandReaches(windowA))
-        XCTAssertFalse(appState.commandReaches(windowB), "only A's reader answers A's Reply")
-        XCTAssertEqual(appState.replyRequestTick, 1)
-        XCTAssertEqual(appState.refreshRequestTick, 0, "a reload is not a window command")
+        XCTAssertFalse(appState.commandReaches(windowB), "only A's router answers A's compose")
+        XCTAssertEqual(appState.composeRequestTick, 1)
         XCTAssertEqual(appState.mailStore.listRefreshTick, 1)
     }
 
@@ -305,7 +275,7 @@ final class CommandTickCharacterizationTests: XCTestCase {
     /// re-aim a tick already bumped.
     func testNotingOrForgettingAWindowLeavesTheCommandTargetAlone() {
         let appState = AppState()
-        appState.requestReply(in: windowA)
+        appState.requestCompose(in: windowA)
 
         appState.noteActiveMainWindow(windowB)
         XCTAssertFalse(appState.commandReaches(windowB))
@@ -321,19 +291,31 @@ final class CommandTickCharacterizationTests: XCTestCase {
 
 extension CommandTickCharacterizationTests {
     /// Every `FeedCommand`, also the rows of
-    /// `FeedCommandReceiverCharacterizationTests`' table. The enum is not
-    /// `CaseIterable`; `listed` switches over it with no `default`, so a case
-    /// added during workstream 3.1 stops this file compiling until it is
-    /// listed here as well.
+    /// `FeedCommandReceiverCharacterizationTests`' table. `listed` switches
+    /// over it with no `default`, so a new case stops this file compiling
+    /// until it is listed here as well.
     static let everyFeedCommand: [FeedCommand] = [
         .subscribe, .newFolder, .importOpml, .exportOpml, .refresh, .toggleRead, .toggleFlag, .markAllRead,
     ].map(listed)
 
     /// Every `SidebarTreeCommand`; the switches in
-    /// `testEverySidebarTreeCommandIsNamedBesideItsTick` are its exhaustiveness check.
+    /// `testEverySidebarTreeCommandIsItsOwnCommand` are its exhaustiveness check.
     static let everySidebarTreeCommand: [SidebarTreeCommand] = [
         .expandAllFolders, .collapseAllFolders, .expandAllFeedFolders, .collapseAllFeedFolders,
     ]
+
+    /// Every `WindowCommand`; `listedCommand` is its exhaustiveness check.
+    static let everyWindowCommand: [WindowCommand] = ([
+        .reply, .replyAll, .forward, .toggleSeen, .toggleFlagged, .moveSelection, .refresh, .markFolderRead, .settings,
+    ] as [WindowCommand]).map(listedCommand)
+        + everyFeedCommand.map(WindowCommand.feed) + everySidebarTreeCommand.map(WindowCommand.sidebarTree)
+
+    nonisolated private static func listedCommand(_ command: WindowCommand) -> WindowCommand {
+        switch command {
+        case .reply, .replyAll, .forward, .toggleSeen, .toggleFlagged, .moveSelection: command
+        case .refresh, .markFolderRead, .settings, .feed, .sidebarTree: command
+        }
+    }
 
     nonisolated private static func listed(_ command: FeedCommand) -> FeedCommand {
         switch command {

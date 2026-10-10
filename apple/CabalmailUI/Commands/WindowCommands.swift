@@ -7,7 +7,7 @@ import CabalmailKit
 /// `WindowCommands`, so two commands sent in one update never share a
 /// target or a payload slot: a feed or sidebar-tree command names its
 /// action in its case.
-enum WindowCommand: Hashable {
+public enum WindowCommand: Hashable, Sendable {
     case reply, replyAll, forward
     case toggleSeen, toggleFlagged, moveSelection
     case refresh, markFolderRead, settings
@@ -111,7 +111,7 @@ public final class WindowCommands {
     // MARK: - Sending
 
     /// Sends `command` to this window's surfaces.
-    func send(_ command: WindowCommand) {
+    public func send(_ command: WindowCommand) {
         counts[command, default: 0] += 1
     }
 

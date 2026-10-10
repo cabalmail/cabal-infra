@@ -74,7 +74,7 @@ struct VisionSectionView: View {
             await loadFoldersIfNeeded()
         }
         // ⌘, opens Settings — its own tab here, rather than the iPad sheet.
-        .onWindowCommand(appState.settingsRequestTick) {
+        .answersCommand(.settings) {
             navigator.showTab(.settings)
         }
     }

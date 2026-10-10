@@ -50,8 +50,8 @@ struct CabalmailMacApp: App {
     var body: some Scene {
         WindowGroup("Cabalmail", id: mainWindowID) {
             ContentView()
-                // Gives this window the identity its menu commands are aimed
-                // at, so a second window ignores them (MainWindowCommandScope).
+                // Gives this window the identity its compose requests and mail
+                // events are aimed at (MainWindowCommandScope).
                 .mainWindowCommandScope(appState)
                 .environment(appState)
                 .environment(preferences)
