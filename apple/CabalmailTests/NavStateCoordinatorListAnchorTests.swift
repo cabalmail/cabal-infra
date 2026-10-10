@@ -77,6 +77,10 @@ final class NavStateCoordinatorListAnchorTests: XCTestCase {
     func testRecordingThePlaceSavesTheSessionAndWritesNothingToTheServer() async throws {
         saveSession(folder: "INBOX", anchor: nil)
         let coordinator = try makeCoordinator()
+        // A cursor to write, with no save of its own pending: a server save
+        // scheduled from here on would be this record's.
+        coordinator.primeCursor(for: NavState(folder: "INBOX", clientID: "this-install"))
+        XCTAssertNotNil(coordinator.workingCursor, "precondition")
 
         coordinator.recordListAnchor(try place(300), folderPath: "INBOX")
 

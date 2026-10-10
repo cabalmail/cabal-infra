@@ -102,10 +102,11 @@ final class ResumeSessionTests: XCTestCase {
     /// A record written before the list's place was kept: it decodes with
     /// none, and with everything it did hold.
     func testARecordWrittenBeforeTheListPlaceDecodesWithoutOne() throws {
-        let legacy = Data(
-            #"{"section":"feeds","folder":"Lists","uid":3,"messageID":"<l@x>","feedScope":"sub:s","#.utf8
-                + #""feedItemFeedID":"f","feedItemSortKey":"k","savedAt":0}"#.utf8
-        )
+        let fields = [
+            #""section":"feeds""#, #""folder":"Lists""#, #""uid":3"#, #""messageID":"<l@x>""#,
+            #""feedScope":"sub:s""#, #""feedItemFeedID":"f""#, #""feedItemSortKey":"k""#, #""savedAt":0"#,
+        ]
+        let legacy = Data("{\(fields.joined(separator: ","))}".utf8)
 
         let session = try JSONDecoder().decode(ResumeSession.self, from: legacy)
 
