@@ -61,7 +61,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
     ) async -> (navigator: SceneNavigator, compact: UUID) {
         let navigator = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .mail,
-            feedsLaunchTarget: { _ in await lookup.lookup() }
+            feedsLaunchTarget: { _ in (await lookup.lookup()).map { .init(scope: $0) } }
         )
         let compact = UUID()
         await navigator.mailTreeAppeared(compact, isWide: false)
@@ -93,7 +93,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         await handOff.value
         XCTAssertEqual(navigator.folder(in: wide), inbox)
         XCTAssertEqual(navigator.compactColumn(in: wide), .content)
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 9)
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 9)
     }
 
     /// A second swap while the first hand-off waits: the tree it replaced
@@ -164,7 +164,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let lookup = HeldLookup()
         let navigator = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in await lookup.lookup() }
+            feedsLaunchTarget: { _ in (await lookup.lookup()).map { .init(scope: $0) } }
         )
         let landing = Task { await navigator.mailTreeAppeared(UUID(), isWide: true) }
         try await lookup.waitUntilEntered()
@@ -228,8 +228,8 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         navigator.navigate(to: NavState(folder: "INBOX", messageID: "<four@example.com>", uid: 4, clientID: "push"))
         await navigator.mailTreeAppeared(UUID(), isWide: true)
 
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 4)
-        XCTAssertEqual(coordinator.pendingRestore?.messageID, "<four@example.com>")
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 4)
+        XCTAssertEqual(navigator.restores.pendingRestore?.messageID, "<four@example.com>")
     }
 
     /// A navigation's restore carries the reading position another device
@@ -246,8 +246,8 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         navigator.navigate(to: NavState(folder: "INBOX", uid: 4, messageScroll: 640, clientID: "other-install"))
         await navigator.mailTreeAppeared(UUID(), isWide: true)
 
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 4)
-        XCTAssertEqual(coordinator.pendingScrollRestore?.offset, 640)
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 4)
+        XCTAssertEqual(navigator.restores.pendingScrollRestore?.offset, 640)
     }
 
     /// A feed pick in the wide split is a pick: a utility tab carried in
@@ -271,7 +271,8 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         store.saveSession(ResumeSession(section: .feeds, folder: "Archive", feedScope: .all))
         let coordinator = try makeCoordinator()
         let opened = SceneNavigator(
-            coordinator: { coordinator }, hasClient: { true }, seed: .feeds, feedsLaunchTarget: { _ in .all }
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
+            feedsLaunchTarget: { _ in .init(scope: .all) }
         )
         await opened.mailTreeAppeared(UUID(), isWide: true)
         XCTAssertEqual(opened.feeds.scope, .all)
@@ -282,7 +283,7 @@ final class SceneNavigatorHandOffTests: XCTestCase {
         let lookup = HeldLookup()
         let replaced = SceneNavigator(
             coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
-            feedsLaunchTarget: { _ in await lookup.lookup() }
+            feedsLaunchTarget: { _ in (await lookup.lookup()).map { .init(scope: $0) } }
         )
         let landing = Task { await replaced.mailTreeAppeared(UUID(), isWide: true) }
         try await lookup.waitUntilEntered()

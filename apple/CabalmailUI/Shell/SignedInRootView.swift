@@ -252,8 +252,8 @@ struct SignedInRootView: View {
             return {
                 if cursor.kind == .rss {
                     Task {
-                        guard let scope = await appState.navCoordinator?.requestFeedNavigation(cursor) else { return }
-                        navigator.navigateFeeds(to: scope)
+                        guard let target = await appState.navCoordinator?.requestFeedNavigation(cursor) else { return }
+                        navigator.navigateFeeds(to: target)
                     }
                 } else {
                     navigator.navigate(to: cursor)

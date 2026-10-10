@@ -52,8 +52,8 @@ final class SceneNavigatorLandingTests: XCTestCase {
         await navigator.mailTreeAppeared(tree, isWide: false)
         XCTAssertEqual(navigator.selectedFolder, Folder(path: "Lists.Cabal", isSubscribed: true))
         XCTAssertEqual(navigator.route.mail.folderPath, "Lists.Cabal")
-        XCTAssertEqual(coordinator.pendingRestore?.folderPath, "Lists.Cabal")
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 42)
+        XCTAssertEqual(navigator.restores.pendingRestore?.folderPath, "Lists.Cabal")
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 42)
         XCTAssertTrue(navigator.didLand)
         XCTAssertTrue(navigator.awaitingLaunchReconcile)
         XCTAssertEqual(navigator.compactColumn(in: tree), .content)
@@ -73,7 +73,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
 
         navigator.foldersLoaded([inbox, archive])
         XCTAssertEqual(navigator.selectedFolder, archive)
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 5)
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 5)
         XCTAssertTrue(navigator.didLand, "the folder list's landing is the window's landing")
 
         // So backing out and a later load don't land the user again.
@@ -95,7 +95,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
 
         XCTAssertNil(coordinator.navigateRequest, "the window took the request")
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 7)
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 7)
         XCTAssertTrue(navigator.didLand)
         XCTAssertFalse(navigator.awaitingLaunchReconcile, "no provisional landing to reconcile")
     }
@@ -211,7 +211,8 @@ final class SceneNavigatorLandingTests: XCTestCase {
         store.saveSession(ResumeSession(section: .feeds, folder: "Archive", feedScope: .all))
         let coordinator = try makeCoordinator()
         let navigator = SceneNavigator(
-            coordinator: { coordinator }, hasClient: { true }, seed: .feeds, feedsLaunchTarget: { _ in .all }
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
+            feedsLaunchTarget: { _ in .init(scope: .all) }
         )
 
         await navigator.mailTreeAppeared(UUID(), isWide: false)
@@ -227,12 +228,12 @@ final class SceneNavigatorLandingTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let navigator = makeNavigator(coordinator)
         await navigator.mailTreeAppeared(UUID(), isWide: false)
-        XCTAssertEqual(coordinator.pendingRestore?.folderPath, "Gone")
+        XCTAssertEqual(navigator.restores.pendingRestore?.folderPath, "Gone")
 
         navigator.foldersLoaded([archive, inbox])
 
         XCTAssertEqual(navigator.selectedFolder, inbox)
-        XCTAssertNil(coordinator.pendingRestore)
+        XCTAssertNil(navigator.restores.pendingRestore)
         XCTAssertEqual(coordinator.session.folder, "INBOX")
     }
 }

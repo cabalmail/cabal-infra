@@ -41,7 +41,8 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
     ) async -> (navigator: SceneNavigator, tab: UUID) {
         let scope = scope
         let navigator = SceneNavigator(
-            coordinator: { coordinator }, hasClient: { true }, seed: .feeds, feedsLaunchTarget: { _ in scope }
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
+            feedsLaunchTarget: { _ in .init(scope: scope) }
         )
         let tab = UUID()
         await navigator.feedTreeAppeared(tab)
@@ -63,7 +64,9 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         XCTAssertTrue(navigator.splitShowsFeeds)
         XCTAssertEqual(navigator.feeds.scope(in: wide), scope)
         XCTAssertNil(navigator.feeds.item(in: wide), "the list selects it once loaded")
-        XCTAssertEqual(coordinator.pendingFeedRestore, NavStateCoordinator.PendingFeedRestore(scope: scope, item: item))
+        XCTAssertEqual(
+            navigator.restores.pendingFeedRestore, WindowRestores.PendingFeedRestore(scope: scope, item: item)
+        )
         XCTAssertEqual(coordinator.session.feedItemSortKey, "k")
         XCTAssertNil(navigator.folder(in: wide))
 
@@ -90,7 +93,7 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         XCTAssertTrue(navigator.splitShowsFeeds)
         XCTAssertEqual(navigator.route.section, .feeds)
         XCTAssertEqual(navigator.feeds.scope(in: wide), scope)
-        XCTAssertEqual(coordinator.pendingFeedRestore?.item, item)
+        XCTAssertEqual(navigator.restores.pendingFeedRestore?.item, item)
         XCTAssertNil(navigator.folder(in: wide), "the mail side clears, as for a feed pick")
 
         // So a mail navigation to the folder the Mail tab had is a folder
@@ -107,13 +110,13 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let (navigator, tab) = await compactReadingFeed(coordinator)
         navigator.setFeedColumn(.content, from: tab)
-        coordinator.pendingFeedRestore = NavStateCoordinator.PendingFeedRestore(scope: scope, item: other)
+        navigator.restores.pendingFeedRestore = WindowRestores.PendingFeedRestore(scope: scope, item: other)
 
         navigator.selectFeedItem(item, from: tab)
-        XCTAssertNil(coordinator.pendingFeedRestore)
+        XCTAssertNil(navigator.restores.pendingFeedRestore)
 
         await navigator.mailTreeAppeared(UUID(), isWide: true)
-        XCTAssertEqual(coordinator.pendingFeedRestore?.item, item)
+        XCTAssertEqual(navigator.restores.pendingFeedRestore?.item, item)
     }
 
     /// A list picked over the one an item is parked for makes that item
@@ -122,14 +125,13 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
     func testAScopeChangeDropsAnItemParkedForAnotherList() async throws {
         let coordinator = try makeCoordinator()
         let (navigator, _) = await compactReadingFeed(coordinator)
-        coordinator.pendingFeedRestore = NavStateCoordinator.PendingFeedRestore(scope: scope, item: other)
+        navigator.restores.pendingFeedRestore = WindowRestores.PendingFeedRestore(scope: scope, item: other)
 
         navigator.selectFeedScope(.all)
-        XCTAssertNil(coordinator.pendingFeedRestore)
+        XCTAssertNil(navigator.restores.pendingFeedRestore)
 
-        coordinator.pendingFeedRestore = NavStateCoordinator.PendingFeedRestore(scope: scope, item: other)
-        navigator.navigateFeeds(to: scope)
-        XCTAssertEqual(coordinator.pendingFeedRestore?.item, other)
+        navigator.navigateFeeds(to: .init(scope: scope, item: other))
+        XCTAssertEqual(navigator.restores.pendingFeedRestore?.item, other)
     }
 
     /// The other way: narrowing (or folding) while reading in the wide split
@@ -139,7 +141,8 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let scope = scope
         let navigator = SceneNavigator(
-            coordinator: { coordinator }, hasClient: { true }, seed: .feeds, feedsLaunchTarget: { _ in scope }
+            coordinator: { coordinator }, hasClient: { true }, seed: .feeds,
+            feedsLaunchTarget: { _ in .init(scope: scope) }
         )
         let wide = UUID()
         await navigator.mailTreeAppeared(wide, isWide: true)
@@ -151,7 +154,9 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         XCTAssertEqual(navigator.feeds.scope(in: tab), scope)
         XCTAssertNil(navigator.feeds.item(in: tab))
         XCTAssertEqual(navigator.feeds.column(in: tab), .content)
-        XCTAssertEqual(coordinator.pendingFeedRestore, NavStateCoordinator.PendingFeedRestore(scope: scope, item: item))
+        XCTAssertEqual(
+            navigator.restores.pendingFeedRestore, WindowRestores.PendingFeedRestore(scope: scope, item: item)
+        )
     }
 
     /// The parked item coming back is the window restoring its place, not a
@@ -196,12 +201,11 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
     func testAHandOffKeepsABannersParkedItem() async throws {
         let coordinator = try makeCoordinator()
         let (navigator, _) = await compactReadingFeed(coordinator)
-        coordinator.pendingFeedRestore = NavStateCoordinator.PendingFeedRestore(scope: scope, item: other)
-        navigator.navigateFeeds(to: scope)
+        navigator.navigateFeeds(to: .init(scope: scope, item: other))
 
         await navigator.mailTreeAppeared(UUID(), isWide: true)
 
-        XCTAssertEqual(coordinator.pendingFeedRestore?.item, other)
+        XCTAssertEqual(navigator.restores.pendingFeedRestore?.item, other)
     }
 
     /// Widening from the Mail tab: the split shows mail, and the Feeds tab's
@@ -219,10 +223,12 @@ final class SceneNavigatorFeedHandOffTests: XCTestCase {
         XCTAssertFalse(navigator.splitShowsFeeds)
         XCTAssertEqual(navigator.folder(in: wide), inbox)
         XCTAssertEqual(navigator.feeds.item, item)
-        XCTAssertNil(coordinator.pendingFeedRestore)
+        XCTAssertNil(navigator.restores.pendingFeedRestore)
         XCTAssertEqual(coordinator.session.feedItemSortKey, "k")
 
         await navigator.feedTreeAppeared(UUID())
-        XCTAssertEqual(coordinator.pendingFeedRestore, NavStateCoordinator.PendingFeedRestore(scope: scope, item: item))
+        XCTAssertEqual(
+            navigator.restores.pendingFeedRestore, WindowRestores.PendingFeedRestore(scope: scope, item: item)
+        )
     }
 }

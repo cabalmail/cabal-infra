@@ -24,6 +24,9 @@ struct FeedItemListView: View {
     @Environment(Preferences.self) private var preferences
     /// Aims this list's compose requests at its own window.
     @Environment(\.commandWindowID) private var commandWindowID
+    /// The window's navigator, whose parked feed item this list selects; nil
+    /// outside a main window.
+    @Environment(SceneNavigator.self) private var navigator: SceneNavigator?
     /// The window's layout shell, which decides where the scope switch is
     /// drawn (`scopeSwitchHost`).
     @Environment(\.shellLayout) var shellLayout
@@ -130,7 +133,7 @@ struct FeedItemListView: View {
         }
         // A cross-device feed toast for the scope already on screen parks a
         // new item while this list is mounted: open it, over any selection.
-        .onChange(of: appState.navCoordinator?.pendingFeedRestore) { _, restore in
+        .onChange(of: navigator?.restores.pendingFeedRestore) { _, restore in
             if restore != nil { applyLaunchRestoreWhenReady(replacingSelection: true) }
         }
         // The Feeds menu's item chords (`+Commands`), while this list is in
@@ -402,7 +405,7 @@ extension FeedItemListView {
     /// loaded window still opens, as it always has.
     private func applyLaunchRestoreWhenReady(replacingSelection: Bool = false) {
         guard hasAppeared, initialLoadComplete, selection == nil || replacingSelection,
-              let restored = appState.navCoordinator?.consumeFeedItemRestore(for: scope)
+              let restored = navigator?.restores.consumeFeedItemRestore(for: scope)
         else { return }
         selection = model?.items.first { $0.id == restored.id } ?? restored
     }

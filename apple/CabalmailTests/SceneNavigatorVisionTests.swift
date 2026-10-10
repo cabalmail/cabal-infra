@@ -52,7 +52,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
         await navigator.mailTreeAppeared(tree, isWide: false)
 
         XCTAssertEqual(navigator.folder(in: tree)?.path, "Archive")
-        XCTAssertEqual(coordinator.pendingRestore?.uid, 5, "the Mail tab's list reselects it when it loads")
+        XCTAssertEqual(navigator.restores.pendingRestore?.uid, 5, "the Mail tab's list reselects it when it loads")
         XCTAssertEqual(coordinator.session.section, .feeds)
         XCTAssertEqual(coordinator.session.uid, 5, "recording the folder would have dropped the open message")
         XCTAssertEqual(navigator.route.section, .feeds)
@@ -79,7 +79,7 @@ final class SceneNavigatorVisionTests: XCTestCase {
         navigator.foldersLoaded([inbox, archive])
 
         XCTAssertEqual(navigator.selectedFolder, inbox)
-        XCTAssertNil(coordinator.pendingRestore, "the restore was aimed at the missing folder")
+        XCTAssertNil(navigator.restores.pendingRestore, "the restore was aimed at the missing folder")
         XCTAssertEqual(coordinator.session.section, .feeds)
         XCTAssertEqual(coordinator.session.folder, "Gone")
     }
