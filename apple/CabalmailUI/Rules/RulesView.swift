@@ -63,17 +63,7 @@ private struct RulesListView: View {
                 }
             }
         )
-        .toolbar {
-            EditButtonToolbarItem()
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    model.add()
-                } label: {
-                    Label("Add rule", systemImage: "plus")
-                }
-                .disabled(model.rules.count >= RulesValidator.maxRules)
-            }
-        }
+        .editButtonToolbar()
         .safeAreaInset(edge: .bottom) { RulesSaveStatusBar(model: model) }
         .alert("Rules updated on another device", isPresented: $model.conflict) {
             Button("Reload") { Task { await model.load() } }
@@ -94,18 +84,17 @@ private struct RulesListView: View {
                 .onDelete { offsets in
                     model.delete(at: offsets)
                 }
-                #if os(macOS)
-                // The toolbar "+" doesn't reliably render when this list is
-                // hosted in the macOS Settings window, and swipe/EditButton
-                // deletion doesn't exist on macOS — the list itself must
-                // carry the affordances (the rows carry delete; see RuleRow).
+                // Add sits at the foot of the list on every platform, as
+                // "Add flag" does in the Flags screen, rather than as a
+                // toolbar "+" (which never rendered reliably in the macOS
+                // Settings window either). Delete is on the rows (see
+                // RuleRow).
                 Button {
                     model.add()
                 } label: {
                     Label("Add rule", systemImage: "plus")
                 }
                 .disabled(model.rules.count >= RulesValidator.maxRules)
-                #endif
             } footer: {
                 Text(
                     "Rules run top to bottom on every arriving message; "

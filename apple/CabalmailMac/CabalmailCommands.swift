@@ -28,6 +28,13 @@ struct CabalmailCommands: Commands {
     @FocusedValue(\.windowCommands) private var commands
 
     var body: some Commands {
+        // The deep-link router opens a main window through the `openWindow`
+        // these commands hold, the one that works with every main window
+        // closed (New Message below relies on it, #1162). Set on every
+        // evaluation: each closure does the same, and the last one wins. A
+        // bare `_ =` would be taken by the builder as one of the commands.
+        // swiftlint:disable:next redundant_discardable_let
+        let _ = MainMailWindow.opensForDeepLinks(using: openWindow)
         CommandGroup(replacing: .newItem) {
             Button("New Message") {
                 // Opens the compose scene itself rather than bumping

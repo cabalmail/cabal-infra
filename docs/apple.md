@@ -1065,8 +1065,8 @@ difference goes in one of two places:
 - **An API one platform lacks** goes behind an adapter in `Platform/`:
   one call the feature view makes on every platform, with the
   conditional inside it. `inlineNavigationTitle()`, `textEntry(_:)`,
-  `editButtonToolbar()` and `EditButtonToolbarItem`, and the list and
-  form style helpers are adapters of this kind. A file that wraps a
+  `editButtonToolbar()`, and the list and form style helpers are
+  adapters of this kind. A file that wraps a
   UIKit or AppKit view (`UIViewRepresentable`, `NSViewRepresentable` and
   their view-controller forms) is an adapter too, wherever it lives.
 
