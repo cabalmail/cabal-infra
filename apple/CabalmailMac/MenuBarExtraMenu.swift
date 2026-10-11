@@ -27,16 +27,10 @@ struct MenuBarExtraMenu: View {
         Text(statusLine)
         Divider()
         Button("Open Cabalmail") {
-            // Calling `openWindow(id:)` on a `WindowGroup` unconditionally
-            // spawns a fresh window even when one is already open, which
-            // is not what the user expects from a "bring to front" menu
-            // item. Prefer the existing window and only fall back to
-            // opening a new one when none is present (e.g. the user has
-            // closed the last main window).
-            if !MainMailWindow.bringToFront() {
-                openWindow(id: mainWindowID)
-            }
-            NSApp.activate()
+            // Brings the existing window forward, opening one only when the
+            // user has closed the last (`MainMailWindow`): `openWindow(id:)`
+            // alone would spawn a second window beside an open one.
+            MainMailWindow.show(using: openWindow)
         }
         Button("New Message") {
             // Same route as the File menu: the compose window scene both app
