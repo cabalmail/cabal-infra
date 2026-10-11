@@ -97,7 +97,6 @@ COPY shared/service.switch                  /etc/mail/service.switch
 # Shared scripts
 COPY shared/entrypoint.sh                  /entrypoint.sh
 COPY shared/generate-config.sh             /usr/local/bin/generate-config.sh
-COPY shared/sync-users.sh                  /usr/local/bin/sync-users.sh
 COPY shared/reconfigure.sh                 /usr/local/bin/reconfigure.sh
 COPY shared/sendmail-wrapper.sh            /usr/local/bin/sendmail-wrapper.sh
 COPY shared/prepare-sendmail.sh            /usr/local/bin/prepare-sendmail.sh

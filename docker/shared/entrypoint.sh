@@ -87,7 +87,6 @@ if [ "$TIER" = "imap" ] || [ "$TIER" = "smtp-out" ]; then
 
 COGNITO_PASSWORD=\$(cat -)
 COGNITO_USER="\${PAM_USER}"
-AUTH_TYPE="\${PAM_TYPE}"
 
 aws cognito-idp initiate-auth \\
   --region ${AWS_REGION} \\
