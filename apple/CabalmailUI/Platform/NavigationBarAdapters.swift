@@ -17,8 +17,10 @@ extension View {
     }
 
     /// The bar's Edit toggle for a list that reorders or deletes in edit
-    /// mode, at the bar's default placement. macOS has no edit mode: its
-    /// lists reorder and delete directly.
+    /// mode, at the bar's default placement. macOS has no edit mode
+    /// (`HostPlatform.reordersInEditMode`): a list there drags directly,
+    /// but a grouped form doesn't drag at all, so the Settings lists
+    /// reorder there through Move Up / Move Down in their row menus.
     func editButtonToolbar() -> some View {
         #if os(macOS)
         self

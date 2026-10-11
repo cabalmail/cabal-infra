@@ -195,6 +195,25 @@ final class RulesViewModel {
         scheduleSave()
     }
 
+    /// Moves one rule `offset` places: -1 is Move Up and +1 Move Down, the
+    /// row menus' route to reordering and the only one on the Mac, whose
+    /// grouped Settings form ignores `onMove`. Addressed by id, like the
+    /// row's other actions. Past either end, or for a rule that is gone,
+    /// nothing moves and nothing is saved.
+    func move(id: String, by offset: Int) {
+        guard canMove(id: id, by: offset),
+              let index = rules.firstIndex(where: { $0.id == id })
+        else { return }
+        rules.insert(rules.remove(at: index), at: index + offset)
+        scheduleSave()
+    }
+
+    /// Whether `move(id:by:)` would move the rule, for the menus' enabling.
+    func canMove(id: String, by offset: Int) -> Bool {
+        guard offset != 0, let index = rules.firstIndex(where: { $0.id == id }) else { return false }
+        return rules.indices.contains(index + offset)
+    }
+
     func setEnabled(_ id: String, _ enabled: Bool) {
         guard var rule = rule(withID: id) else { return }
         rule.enabled = enabled

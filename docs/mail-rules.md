@@ -16,9 +16,8 @@ the compiler design, and the escaping rules live with the code in
 
 The editor lives in each native client's Settings:
 
-- **iOS / iPadOS / visionOS** — Settings → Mail rules.
-- **macOS** — Settings (⌘,) → Mail rules, which opens the editor as a
-  sheet.
+- **iOS / iPadOS / visionOS** — Settings → Rules.
+- **macOS** — Settings (⌘,) → Rules.
 - **Android** — Settings → Mail rules.
 
 All clients edit the same server-side list. Changes auto-save about a
@@ -31,7 +30,10 @@ There is no merge.
 The list shows one row per rule with an enable switch and a one-line
 summary. Rules can be added (blank or from a starter template),
 duplicated, deleted, and reordered; a disabled rule is kept but never
-evaluated.
+evaluated. To reorder on iPhone, iPad and Vision Pro, tap Edit and drag,
+or choose Move Up or Move Down from a rule's long-press menu. On the Mac,
+choose Move Up or Move Down from a rule's ⋯ menu or its right-click
+menu; Android has the same items in each rule's menu.
 
 ## Conditions
 

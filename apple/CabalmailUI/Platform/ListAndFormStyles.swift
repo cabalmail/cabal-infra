@@ -1,9 +1,10 @@
 import SwiftUI
 
-// List and form styles that one platform asks for and the others leave at
-// their default. Named for where they apply, since the style itself is the
-// same call everywhere; the point is that a feature view doesn't write the
-// platform conditional (`docs/apple.md`, "Platform conditionals").
+// List, form and toggle styles that one platform asks for and the others
+// leave at their default. Named for where they apply, since the style
+// itself is the same call everywhere; the point is that a feature view
+// doesn't write the platform conditional (`docs/apple.md`, "Platform
+// conditionals").
 
 extension View {
     /// `.formStyle(.grouped)` on macOS, whose default form is a column of
@@ -34,6 +35,21 @@ extension View {
         self
         #else
         listStyle(.plain)
+        #endif
+    }
+
+    /// The mini switch a grouped form draws for a toggle, on macOS, for a
+    /// toggle that shares its row with other views (a rule's enable switch
+    /// beside its summary and menu). Left automatic, a Mac toggle outside a
+    /// form row of its own can draw as a checkbox (the rules list's did),
+    /// and a bare `.switch` is the regular size, a step larger than the
+    /// form's. iOS and visionOS toggles are this switch already.
+    func miniSwitchStyleOnMac() -> some View {
+        #if os(macOS)
+        toggleStyle(.switch)
+            .controlSize(.mini)
+        #else
+        self
         #endif
     }
 }

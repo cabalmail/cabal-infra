@@ -6,6 +6,10 @@ import CabalmailKit
 /// through `Preferences.flagPalette`, so the sync coordinator pushes them
 /// like any other setting; renames and recolors are metadata edits that
 /// touch zero messages.
+///
+/// The order is the order pickers use. Rows move by Move Up / Move Down in
+/// their context menu everywhere (the Mac's only route, since this grouped
+/// form ignores `onMove` there) and by edit-mode drag on iOS and visionOS.
 struct FlagPaletteSettingsView: View {
     @Environment(Preferences.self) private var preferences
 
@@ -15,13 +19,21 @@ struct FlagPaletteSettingsView: View {
                 ForEach(preferences.flagPalette) { entry in
                     // The whole row is one NavigationLink hit target — no
                     // nested controls, so the macOS single-target folding
-                    // (#1299) has nothing to swallow.
+                    // (#1299) has nothing to swallow. Move Up / Move Down
+                    // ride on its context menu, outside the label: on the
+                    // Mac that menu is the only way to reorder, because the
+                    // grouped Settings form ignores `onMove` there (#2019).
                     NavigationLink {
                         FlagPaletteEntryEditor(preferences: preferences, slot: entry.slot)
                     } label: {
                         FlagPaletteRowLabel(entry: entry)
                     }
+                    .contextMenu {
+                        moveActions(for: entry.slot)
+                    }
                 }
+                // Edit-mode drag on iOS and visionOS; inert in the Mac's
+                // grouped form.
                 .onMove { source, destination in
                     var palette = preferences.flagPalette
                     palette.move(fromOffsets: source, toOffset: destination)
@@ -34,19 +46,45 @@ struct FlagPaletteSettingsView: View {
                 }
                 .disabled(FlagPalette.firstFreeSlot(in: preferences.flagPalette) == nil)
             } footer: {
-                Text(footerText)
+                Text(Self.footerText(paletteIsEmpty: preferences.flagPalette.isEmpty, on: .current))
                     .sectionFooter()
             }
         }
         .editButtonToolbar()
     }
 
-    private var footerText: String {
-        preferences.flagPalette.isEmpty
-            ? "Flags you define here can be put on any message from any of "
+    /// The footer under the palette: what the order means and how to change
+    /// it on `host`. Drag is promised only where Edit offers it; on the Mac
+    /// the grouped form ignores `onMove`, so it names the context menu.
+    static func footerText(paletteIsEmpty: Bool, on host: HostPlatform) -> String {
+        if paletteIsEmpty {
+            return "Flags you define here can be put on any message from any of "
                 + "your devices. Up to \(FlagPalette.maxEntries)."
-            : "Drag to reorder; the order here is the order pickers use. "
-                + "Up to \(FlagPalette.maxEntries) flags."
+        }
+        let reorder = host.reordersInEditMode
+            ? "Tap Edit to drag flags into a new order"
+            : "Right-click a flag to move it up or down"
+        return reorder + "; the order here is the order pickers use. "
+            + "Up to \(FlagPalette.maxEntries) flags."
+    }
+
+    /// Move Up / Move Down for one row, addressed by slot like the editor's
+    /// bindings (#1340) rather than by a captured index.
+    @ViewBuilder
+    private func moveActions(for slot: String) -> some View {
+        let bindings = FlagPaletteEntryBindings(preferences: preferences, slot: slot)
+        Button {
+            bindings.move(by: -1)
+        } label: {
+            Label("Move Up", systemImage: "arrow.up")
+        }
+        .disabled(!bindings.canMove(by: -1))
+        Button {
+            bindings.move(by: 1)
+        } label: {
+            Label("Move Down", systemImage: "arrow.down")
+        }
+        .disabled(!bindings.canMove(by: 1))
     }
 
     private func addFlag() {

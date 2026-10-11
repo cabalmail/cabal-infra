@@ -43,6 +43,18 @@ struct RulesView: View {
             await target.load()
         }
     }
+
+    /// The rules list's footer: what the order means, then how to change it
+    /// on `host`. Edit and drag where lists have an edit mode; on the Mac,
+    /// whose grouped Settings form ignores `onMove`, the row's menus.
+    static func listFooter(on host: HostPlatform) -> String {
+        let reorder = host.reordersInEditMode
+            ? "Tap Edit to drag rules into a new order."
+            : "To move a rule up or down, right-click it or use its ⋯ menu."
+        return "Rules run top to bottom on every arriving message; "
+            + "the first match applies unless it continues to the next rule. "
+            + reorder
+    }
 }
 
 /// The loaded list: master side of the master/detail flow.
@@ -72,8 +84,23 @@ private struct RulesListView: View {
         }
     }
 
+    /// A grouped `Form`, as every other Settings category is (`SettingsForm`),
+    /// rather than a list. On the Mac only the grouped form draws the
+    /// System Settings look: rows on a card and no separator under the last
+    /// row. A bare list put the rows on the window background and drew a
+    /// line under "Add rule" (#2019); its Enabled toggles drew as checkboxes,
+    /// which `RuleRow.enabledToggle` now styles as the form's mini switch
+    /// whatever its container. Not `SettingsForm` itself, because
+    /// `RulesView` already titles the screen for the loading and empty
+    /// states too.
+    ///
+    /// The cost is drag on the Mac: a grouped form there ignores `onMove`
+    /// (Flags never dragged either), so the Mac reorders with Move Up / Move
+    /// Down in each row's menus (`RuleRow.rowActions`). iOS and visionOS
+    /// forms are list-backed, so `onMove` and `onDelete` keep working there
+    /// in edit mode and by swipe, as Flags' `onMove` already does in a Form.
     private var rulesList: some View {
-        List {
+        Form {
             Section {
                 ForEach(model.rules) { rule in
                     RuleRow(model: model, rule: rule)
@@ -96,13 +123,11 @@ private struct RulesListView: View {
                 }
                 .disabled(model.rules.count >= RulesValidator.maxRules)
             } footer: {
-                Text(
-                    "Rules run top to bottom on every arriving message; "
-                    + "the first match applies unless it continues to the next rule."
-                )
-                .sectionFooter()
+                Text(RulesView.listFooter(on: .current))
+                    .sectionFooter()
             }
         }
+        .groupedFormStyleOnMac()
     }
 }
 
@@ -116,9 +141,10 @@ private struct RuleRow: View {
         // nested inside it stop taking clicks (SwiftUI folds them into the
         // link as accessibility custom actions), so every click in the row
         // pushed the editor instead of hitting the toggle or the menu
-        // (#1299). Both therefore sit beside the link, not in its label.
+        // (#1299). Both therefore sit beside the link, not in its label;
+        // the switch trailing, where the grouped form puts every other
+        // Settings switch.
         HStack(spacing: 12) {
-            enabledToggle
             NavigationLink {
                 RuleEditorView(model: model, ruleID: rule.id)
             } label: {
@@ -127,9 +153,11 @@ private struct RuleRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            enabledToggle
             // Visible stand-in for the context menu below: right-click
-            // is the only other route to Duplicate/Delete on macOS,
-            // and nothing advertises it.
+            // is the only other route to Move/Duplicate/Delete on macOS,
+            // and only the footer mentions it (for Move), so without this
+            // menu Duplicate and Delete would have no visible way in.
             Menu {
                 rowActions
             } label: {
@@ -162,6 +190,10 @@ private struct RuleRow: View {
             set: { model.setEnabled(rule.id, $0) }
         ))
         .labelsHidden()
+        // The grouped form's mini switch on the Mac, where an automatic
+        // toggle sharing its row drew a checkbox in the old list. iOS and
+        // visionOS draw this switch already.
+        .miniSwitchStyleOnMac()
     }
 
     private var summary: some View {
@@ -175,8 +207,24 @@ private struct RuleRow: View {
         }
     }
 
+    /// Shared by the Mac's ⋯ menu and every platform's context menu. Move
+    /// Up / Move Down are the Mac's only way to reorder, since its grouped
+    /// Settings form ignores `onMove`; elsewhere they sit beside Edit's drag.
     @ViewBuilder
     private var rowActions: some View {
+        Button {
+            model.move(id: rule.id, by: -1)
+        } label: {
+            Label("Move Up", systemImage: "arrow.up")
+        }
+        .disabled(!model.canMove(id: rule.id, by: -1))
+        Button {
+            model.move(id: rule.id, by: 1)
+        } label: {
+            Label("Move Down", systemImage: "arrow.down")
+        }
+        .disabled(!model.canMove(id: rule.id, by: 1))
+        Divider()
         Button {
             model.duplicate(rule.id)
         } label: {

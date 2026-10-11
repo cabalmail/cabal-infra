@@ -140,6 +140,47 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
         XCTAssertEqual(prefs.flagPalette[0].color, "blue")
     }
 
+    // MARK: - Move Up / Move Down (the Mac's only reorder, #2019)
+
+    func testMoveStepsTheAddressedEntry() {
+        let prefs = preferences([
+            entry("cabal-flag-01", "Alpha"),
+            entry("cabal-flag-02", "Beta"),
+            entry("cabal-flag-03", "Gamma"),
+        ])
+        FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-03").move(by: -1)
+        XCTAssertEqual(prefs.flagPalette.map(\.label), ["Alpha", "Gamma", "Beta"])
+        FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01").move(by: 1)
+        XCTAssertEqual(prefs.flagPalette.map(\.label), ["Gamma", "Alpha", "Beta"])
+    }
+
+    /// The ends disable their item, and a move that can't happen writes
+    /// nothing, including once the entry is gone.
+    func testMovePastEitherEndOrOnceGoneIsANoOp() {
+        let prefs = preferences([
+            entry("cabal-flag-01", "Alpha"),
+            entry("cabal-flag-02", "Beta"),
+        ])
+        let first = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+        let last = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-02")
+        XCTAssertFalse(first.canMove(by: -1))
+        XCTAssertTrue(first.canMove(by: 1))
+        XCTAssertTrue(last.canMove(by: -1))
+        XCTAssertFalse(last.canMove(by: 1))
+
+        var localChanges = 0
+        prefs.onLocalChange = { localChanges += 1 }
+        first.move(by: -1)
+        last.move(by: 1)
+        XCTAssertEqual(prefs.flagPalette.map(\.label), ["Alpha", "Beta"])
+
+        last.delete()
+        XCTAssertFalse(last.canMove(by: -1))
+        last.move(by: -1)
+        XCTAssertEqual(prefs.flagPalette.map(\.label), ["Alpha"])
+        XCTAssertEqual(localChanges, 1, "only the delete should have written")
+    }
+
     // MARK: - The delete has to be able to reach the server
 
     /// The report's second half: the crash beat the preferences push, so
