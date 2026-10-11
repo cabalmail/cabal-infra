@@ -113,6 +113,15 @@ final class ShellLayoutTests: XCTestCase {
         XCTAssertFalse(HostPlatform.watchOS.alwaysWindows)
     }
 
+    /// Only iOS and visionOS have Edit (`editButtonToolbar()`), so only they
+    /// are told to drag in the Rules and Flags footers.
+    func testOnlyIOSAndVisionOSReorderInEditMode() {
+        XCTAssertTrue(HostPlatform.iOS.reordersInEditMode)
+        XCTAssertTrue(HostPlatform.visionOS.reordersInEditMode)
+        XCTAssertFalse(HostPlatform.macOS.reordersInEditMode)
+        XCTAssertFalse(HostPlatform.watchOS.reordersInEditMode)
+    }
+
     // MARK: - What the layout readers make of it
 
     /// The split's column-scoped bar can't seat the folder or scope switch

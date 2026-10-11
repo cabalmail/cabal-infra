@@ -1061,7 +1061,7 @@ difference goes in one of two places:
   environment, or a `HostPlatform` capability when the question is about
   the host rather than the window (`columnScopedToolbar`,
   `drawsOverPassthrough`, `settingsOpensBothColumns`,
-  `alwaysWindows`).
+  `alwaysWindows`, `reordersInEditMode`).
 - **An API one platform lacks** goes behind an adapter in `Platform/`:
   one call the feature view makes on every platform, with the
   conditional inside it. `inlineNavigationTitle()`, `textEntry(_:)`,

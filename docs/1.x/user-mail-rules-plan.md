@@ -1462,6 +1462,13 @@ layout, the standard padding, the standard pill segmented
 controls. No custom drag-reorder UI -- SwiftUI's native one is
 correct on macOS too.
 
+> **Erratum (2026-10-11):** True only while the macOS rules list was a
+> `List`. Rules is now a Settings category drawn in the same grouped
+> `Form` as the other panes (#2019), and a grouped form on macOS ignores
+> `onMove`, so the Mac reorders rules through Move Up / Move Down in each
+> row's ⋯ menu and context menu. Drag stays on iOS and visionOS, in edit
+> mode. See [`docs/mail-rules.md`](../mail-rules.md).
+
 ### 4.4 visionOS
 
 The shared iOS view runs unchanged on visionOS. Render in

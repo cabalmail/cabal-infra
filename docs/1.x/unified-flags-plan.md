@@ -287,6 +287,12 @@ the entry encodes back byte-identical after a no-op edit.
   on the first enabled row; "Make default" in row menus; "Reset to
   default" replacing Delete on the system entry; the entry
   participates in drag reorder.
+
+  > **Erratum (2026-10-11):** Settings > Flags never drag-reordered on
+  > macOS: its grouped `Form` ignores `onMove` there (#2019). The Mac
+  > reorders through Move Up / Move Down in each row's context menu, so
+  > the system entry joins reordering through that menu (beside "Make
+  > default"), and drag reorder via Edit is iOS / iPadOS / visionOS only.
 - Rendering (decision 4): row dots and reader chips include the system
   entry; the reader flag button reflects the default flag in its
   palette colour; the star and `flaggedFg` usage on mail surfaces go.

@@ -59,4 +59,15 @@ public enum HostPlatform {
     var alwaysWindows: Bool {
         self == .macOS || self == .visionOS
     }
+
+    /// Whether a list reorders by dragging in edit mode, behind the bar's
+    /// Edit button (`editButtonToolbar()`): iOS and visionOS. The Mac has no
+    /// edit mode, and the grouped form its Settings panes are drawn in
+    /// ignores `onMove` there, so the Rules and Flags rows move through Move
+    /// Up / Move Down in their menus instead, and the footers say which
+    /// (`RulesView.listFooter(on:)`,
+    /// `FlagPaletteSettingsView.footerText(paletteIsEmpty:on:)`).
+    var reordersInEditMode: Bool {
+        self == .iOS || self == .visionOS
+    }
 }
