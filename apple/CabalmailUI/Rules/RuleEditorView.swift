@@ -106,10 +106,13 @@ private struct RuleConditionsSection: View {
                     }
                     .labelsHidden()
                     .frame(maxWidth: 110, alignment: .leading)
+                    // Changing the field swaps the keyboard kind, which
+                    // rebuilds this field, so its keyboard follows the new
+                    // field on the next tap.
                     TextField("contains…", text: $condition.value)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
-                        .textEntry(.verbatim)
+                        .textEntry(condition.field.conditionValueEntry)
                     Button(role: .destructive) {
                         rule.conditions.removeAll { $0.id == condition.id }
                     } label: {
@@ -143,6 +146,20 @@ private struct RuleConditionsSection: View {
         case .cc: return "Cc"
         case .subject: return "Subject"
         case .body: return "Body"
+        }
+    }
+}
+
+extension Rule.Field {
+    /// The keyboard a condition's value gets. From, To and Cc hold
+    /// addresses, so most values are a domain or an address fragment, and
+    /// the email keyboard puts `@` and `.` on its first layer. It keeps a
+    /// space bar, so a display name, which the match also searches, is still
+    /// easy to type (#2022). Subject and Body are free text.
+    var conditionValueEntry: TextEntryKind {
+        switch self {
+        case .from, .to, .cc: return .email
+        case .subject, .body: return .verbatim
         }
     }
 }
