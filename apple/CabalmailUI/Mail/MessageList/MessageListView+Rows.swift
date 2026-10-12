@@ -11,17 +11,13 @@ import CabalmailKit
 //     which is the user's, see `MessageListView+Swipe.swift`)
 //   - `filteredEnvelopes` — applies the All/Unread/Flagged tab filter.
 extension MessageListView {
-    /// True on layouts where the sidebar and the message list are visible at
-    /// once (iPad regular width, macOS, visionOS) - the only place a message-
-    /// to-folder drag makes sense. macOS has no size class and is always
-    /// wide; everywhere else reads the environment size class set on the
-    /// main struct.
+    /// True on layouts that show the list beside its reader (the Mac, the
+    /// iPad split, visionOS), which take the wide selection path — keyboard,
+    /// modifier clicks, the multi-selection reader and drag-to-folder
+    /// (`MessageListLayout`). Read from the window's shell: the list column's
+    /// own size class is compact even in a regular-width iPad split (#1985).
     var isWideLayout: Bool {
-        #if os(macOS)
-        return true
-        #else
-        return horizontalSizeClass == .regular
-        #endif
+        MessageListLayout.isWide(in: shellLayout)
     }
 
     @ViewBuilder

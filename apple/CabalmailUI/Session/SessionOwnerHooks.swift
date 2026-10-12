@@ -2,8 +2,8 @@ import Foundation
 import CabalmailKit
 
 /// What a session's start and end do to `AppState`'s own state: the mail
-/// store, a parked Spotlight result, attachment folders, compose windows and
-/// the contacts prompt. `AppState.init` installs
+/// store, a parked deep link, attachment folders, compose windows and the
+/// contacts prompt. `AppState.init` installs
 /// them on its `SessionManager`, which calls each at the point in the
 /// wiring or teardown where it always ran. Until then they do nothing.
 @MainActor
@@ -16,11 +16,8 @@ struct SessionOwnerHooks {
     var clientInstalled: @MainActor (CabalmailClient) -> Void = { _ in }
     /// Wiring, after `.signedIn` and the badge poller: the contacts prompt.
     var requestContactsAccess: @MainActor () -> Void = {}
-    /// Wiring, after the Spotlight sweep starts: route a Spotlight result
-    /// tapped before the session was wired.
-    var routeParkedOpens: @MainActor () -> Void = {}
     /// An interactive sign-in for another account than the last one: a
-    /// Spotlight result parked for that account goes (#1825).
+    /// deep link parked for that account goes (#1825).
     var accountChanged: @MainActor () -> Void = {}
     /// The badge poller's Inbox count, and 0 when it stops.
     var inboxUnreadChanged: @MainActor (Int) -> Void = { _ in }

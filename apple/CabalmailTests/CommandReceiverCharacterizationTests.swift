@@ -8,7 +8,7 @@ import CabalmailKit
 /// (its defect 11, window-scoped menu commands, #1783, is the targeting they
 /// ride on).
 ///
-/// `refreshRequestTick`'s observer in `MessageListView` runs
+/// The `.refresh` window command's observer in `MessageListView` runs
 /// `MessageListViewModel.hardReload()`. Its folder-scope paths, online and
 /// offline, are pinned by `OfflineListResetTests` (#1796); this pins the
 /// search-scope path: re-run the active search in place, never STATUS.

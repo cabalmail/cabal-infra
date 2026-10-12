@@ -120,11 +120,11 @@ struct FeedSidebarList: View {
         .feedManagementSheets(actions, management: management, folders: model?.folders ?? [],
                               subscriptions: model?.subscriptions ?? [], selection: $selection,
                               handlesCommands: true, onRefresh: { Task { await model?.refresh() } })
-        .onWindowCommand(appState.sidebarTreeCommandTick) {
-            // The Feeds menu's Expand all / Collapse all; the mail pair is
-            // the Mail tab's to answer.
-            guard let command = appState.pendingSidebarTreeCommand, !command.isMail else { return }
-            setAllCollapsed(command.collapses)
+        // The Feeds menu's Expand all / Collapse all, from a tab behind too;
+        // the mail pair is the Mail tab's to answer.
+        .answersCommands(SidebarTreeCommand.allCases.map(WindowCommand.sidebarTree), whileBehind: true) { command in
+            guard case .sidebarTree(let tree) = command, !tree.isMail else { return }
+            setAllCollapsed(tree.collapses)
         }
         .task {
             if model == nil, let client = appState.client {

@@ -14,7 +14,7 @@ final class LaunchRestoreSequencingSourceScanTests: XCTestCase {
         // tapped cross-device feed toast (resume-session plan, Phase C) may
         // replace a selection already on screen.
         XCTAssertTrue(list.contains("guard hasAppeared, initialLoadComplete, selection == nil || replacingSelection,"))
-        XCTAssertTrue(list.contains("let restored = appState.navCoordinator?.consumeFeedItemRestore(for: scope)"))
+        XCTAssertTrue(list.contains("let restored = navigator?.restores.consumeFeedItemRestore(for: scope)"))
         XCTAssertEqual(
             list.components(separatedBy: "func applyLaunchRestoreWhenReady(").count - 1, 1, "declared once"
         )

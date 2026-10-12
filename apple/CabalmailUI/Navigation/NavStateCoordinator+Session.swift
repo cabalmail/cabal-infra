@@ -7,16 +7,28 @@ import CabalmailKit
 // the network. See `docs/1.x/resume-session-plan.md`.
 extension NavStateCoordinator {
     /// Where the mail UI should land at launch: the session's folder (INBOX
-    /// when there is none) and, if a message was open, a cursor to hand to
-    /// `scheduleRestore` so the list selects it after its initial load. The
+    /// when there is none) and, if a message was open, a cursor for the
+    /// window to park so its list selects it after its initial load. The
     /// folder is provisional — `MailRootView` swaps the fetched `Folder` in
     /// when the list arrives and falls back to INBOX if it no longer exists.
+    /// `listAnchor` is where the folder's list was scrolled when the app
+    /// last went away, for the window to park beside the message.
     struct MailLaunchTarget: Equatable {
         let folderPath: String
         let messageRestore: NavState?
+        var listAnchor: ListAnchor?
     }
 
-    /// The record a landing restores from: the launch snapshot for the first
+    /// Where the feed reader should land: a scope, and the item that was open
+    /// in it, for the window to park until the scope's list has appeared and
+    /// loaded (#1664). Also what a tapped feed banner opens.
+    struct FeedLaunchTarget: Equatable {
+        let scope: RssItemScope
+        var item: RssItem?
+    }
+
+    /// The record a landing restores from when its window has no stored
+    /// route of its own (`StoredRoute`): the launch snapshot for the first
     /// landing in the process, the live session for any root view rebuilt
     /// after it (a size-class flip, #1555). The live record is by
     /// construction "where the user is now", so a rebuilt view lands there
@@ -31,8 +43,20 @@ extension NavStateCoordinator {
         restoreSource?.section ?? .mail
     }
 
-    func mailLaunchTarget() -> MailLaunchTarget {
-        defer { didConsumeLaunchSession = true }
+    /// The mail landing for a window: its own stored folder and message
+    /// (`stored`) when it has a folder, else the session's (`restoreSource`).
+    /// Either way the launch snapshot is spent, so a window opened later
+    /// lands on the live session. So is the launch's list place, which goes
+    /// to the process's first mail landing and to no other: with the
+    /// session's folder when that is the place's, and nowhere when the
+    /// landing is on another folder or on a window's own stored one, whose
+    /// place the window stored with it (`StoredRoute`).
+    func mailLaunchTarget(stored: AppRoute.Mail = AppRoute.Mail()) -> MailLaunchTarget {
+        let launchAnchor = launchListAnchor
+        defer { endLaunchSnapshot() }
+        if let folder = stored.folderPath, !folder.isEmpty {
+            return MailLaunchTarget(folderPath: folder, messageRestore: stored.message.map(restoreCursor(for:)))
+        }
         guard let saved = restoreSource, let folder = saved.folder, !folder.isEmpty else {
             return MailLaunchTarget(folderPath: "INBOX", messageRestore: nil)
         }
@@ -40,24 +64,48 @@ extension NavStateCoordinator {
         if saved.hasMessage {
             restore = NavState(folder: folder, messageID: saved.messageID, uid: saved.uid, clientID: clientID)
         }
-        return MailLaunchTarget(folderPath: folder, messageRestore: restore)
+        return MailLaunchTarget(
+            folderPath: folder, messageRestore: restore,
+            listAnchor: launchAnchor?.folderPath == folder ? launchAnchor : nil
+        )
+    }
+
+    /// A landing or a navigation has taken the launch's place: a window
+    /// opened from here on lands on the live session (#1966), and the
+    /// launch's list place is no longer where the user is.
+    func endLaunchSnapshot() {
+        didConsumeLaunchSession = true
+        launchListAnchor = nil
     }
 
     /// The feed scope the feed reader should open when it mounts, or nil to
     /// stay at the feed list. Checks the scope against the local `RssStore`
     /// (a departed subscription or folder degrades to the list) and, if an
-    /// item was open and is still in the store, parks it as
-    /// `pendingFeedRestore` for the scope's list to select once loaded. Local
-    /// SQLite reads only — no network at launch. Reads `restoreSource`: the
-    /// launch snapshot for the process's first landing, the live session for
-    /// a window that lands in feeds later. A tree a layout swap rebuilds
-    /// never asks; it takes over its window's place (`SceneNavigator`).
-    func consumeFeedsLaunchTarget() async -> RssItemScope? {
+    /// item was open and is still in the store, returns it beside the scope
+    /// for the window to park until the scope's list has loaded. Local
+    /// SQLite reads only — no network at launch. Reads the window's stored
+    /// scope and item (`stored`) when it has a scope, else `restoreSource`:
+    /// the launch snapshot for the process's first landing, the live session
+    /// for a window that lands in feeds later. A stored scope that is gone
+    /// degrades to the feed list, as the session's does. A tree a layout swap
+    /// rebuilds never asks; it takes over its window's place
+    /// (`SceneNavigator`).
+    func consumeFeedsLaunchTarget(stored: AppRoute.Feeds = AppRoute.Feeds()) async -> FeedLaunchTarget? {
         let source = restoreSource
         didConsumeLaunchSession = true
-        guard let saved = source, let scope = saved.feedScope, let store = client.rssStore else {
-            return nil
+        if let scope = stored.scope {
+            return await feedLaunchTarget(scope, feedID: stored.item?.feedID, sortKey: stored.item?.sortKey)
         }
+        guard let saved = source, let scope = saved.feedScope else { return nil }
+        return await feedLaunchTarget(scope, feedID: saved.feedItemFeedID, sortKey: saved.feedItemSortKey)
+    }
+
+    /// `scope` when it is still in the local store, with the item
+    /// `feedID`/`sortKey` name when that is too; nil when the scope is gone.
+    private func feedLaunchTarget(
+        _ scope: RssItemScope, feedID: String?, sortKey: String?
+    ) async -> FeedLaunchTarget? {
+        guard let store = client.rssStore else { return nil }
         let scopeExists: Bool
         switch scope {
         case .all:
@@ -68,20 +116,11 @@ extension NavStateCoordinator {
             scopeExists = ((try? await store.folders()) ?? []).contains { $0.folderId == id }
         }
         guard scopeExists else { return nil }
-        if let feedID = saved.feedItemFeedID, let sortKey = saved.feedItemSortKey,
-           let item = (try? await store.item(feedId: feedID, sortKey: sortKey)) ?? nil {
-            pendingFeedRestore = PendingFeedRestore(scope: scope, item: item)
+        var target = FeedLaunchTarget(scope: scope)
+        if let feedID, let sortKey {
+            target.item = (try? await store.item(feedId: feedID, sortKey: sortKey)) ?? nil
         }
-        return scope
-    }
-
-    /// Returns and clears the parked feed item if it belongs to `scope`. Called
-    /// by the scope's `FeedItemListView` once it is on screen and loaded, so
-    /// the reader never arrives in the same update as its list (#1664).
-    func consumeFeedItemRestore(for scope: RssItemScope) -> RssItem? {
-        guard let restore = pendingFeedRestore, restore.scope == scope else { return nil }
-        pendingFeedRestore = nil
-        return restore.item
+        return target
     }
 
     // MARK: Recording (session)
@@ -128,8 +167,9 @@ extension NavStateCoordinator {
     }
 
     /// The feed reader's scroll capture: the local position cache, and the
-    /// cross-device cursor when this item is the one it names.
-    func recordFeedScroll(itemID: String, capture: ScrollCapture) {
+    /// cross-device cursor when this item is the one it names and the
+    /// capture's window records (`movesCursor`, `WindowRecorder`).
+    func recordFeedScroll(itemID: String, capture: ScrollCapture, movesCursor: Bool = true) {
         savePosition(
             key: ReadingPositionKey.feed(itemID: itemID),
             anchor: capture.anchor,
@@ -137,10 +177,20 @@ extension NavStateCoordinator {
             fraction: capture.fraction,
             atTop: capture.isAtTop
         )
-        guard activeKind == .rss, feedCursorItem == itemID else { return }
+        guard movesCursor, activeKind == .rss, feedCursorItem == itemID else { return }
         feedAnchor = capture.isAtTop ? nil : capture.anchor
         feedFraction = capture.isAtTop ? nil : capture.fraction
         scheduleSave()
+    }
+
+    /// The window's folder list moved (`ListAnchor`; nil at the top): kept
+    /// in the session for the next launch, only while the session is on
+    /// that folder. Local, with the save debounced like every session save;
+    /// never a server write, so `list_scroll` stays dead on Apple.
+    func recordListAnchor(_ anchor: ListAnchor?, folderPath: String) {
+        guard session.folder == folderPath, session.listAnchor != anchor else { return }
+        session.listAnchor = anchor
+        scheduleSessionSave()
     }
 
     // MARK: Reading positions
@@ -189,7 +239,7 @@ extension NavStateCoordinator {
     }
 
     /// Writes the session record (and the position cache, if it changed) now.
-    /// The scene-phase handlers call this as the app leaves the foreground so
+    /// The app's scene-phase handler calls this as it leaves the foreground so
     /// a debounce in flight isn't lost to a termination.
     public func flushSession() {
         sessionSaveTask?.cancel()
@@ -208,7 +258,6 @@ extension NavStateCoordinator {
         session = ResumeSession(section: .mail)
         positions = ReadingPositionCache()
         positionsDirty = false
-        pendingFeedRestore = nil
         store.clear()
     }
 }

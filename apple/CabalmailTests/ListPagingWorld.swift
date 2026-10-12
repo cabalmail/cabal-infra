@@ -34,8 +34,19 @@ final class ListPagingWorld {
         .appendingPathComponent("list-paging-\(UUID().uuidString)")
     private var models: [MessageListViewModel] = []
 
-    static func serverFolder(size: Int) -> [Envelope] {
-        (0..<size).map { TestFixtures.makeEnvelope(uid: UInt32(size - $0)) }
+    /// The folder's rows. With `stampsMessageIDs` each carries the Message-ID
+    /// `messageID(_:)` gives its UID, for a test that finds a message by it;
+    /// the paging suites leave them bare.
+    static func serverFolder(size: Int, stampsMessageIDs: Bool = false) -> [Envelope] {
+        (0..<size).map { index in
+            let uid = UInt32(size - index)
+            return TestFixtures.makeEnvelope(uid: uid, messageId: stampsMessageIDs ? messageID(uid) : nil)
+        }
+    }
+
+    /// The Message-ID a stamped folder gives UID `uid`.
+    static func messageID(_ uid: UInt32) -> String {
+        "<\(uid)@paging.example.com>"
     }
 
     /// The UIDs an `size`-message folder holds at the absolute indices `range`.
@@ -50,8 +61,8 @@ final class ListPagingWorld {
     /// Scripts a `size`-message folder: every positional page slices it, and
     /// STATUS and the top page answer from it. `statusCount` makes STATUS
     /// report a different total than the folder pages.
-    func scriptServer(size: Int, statusCount: Int? = nil) async {
-        let folder = Self.serverFolder(size: size)
+    func scriptServer(size: Int, statusCount: Int? = nil, stampsMessageIDs: Bool = false) async {
+        let folder = Self.serverFolder(size: size, stampsMessageIDs: stampsMessageIDs)
         await imap.scriptFolderContents(folder)
         await imap.scriptInitialLoad(
             status: Self.status(messages: statusCount ?? size),
@@ -96,11 +107,13 @@ final class ListPagingWorld {
         size: Int = 1000,
         preloaded: Int = 0,
         statusCount: Int? = nil,
+        stampsMessageIDs: Bool = false,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws -> MessageListViewModel {
-        await scriptServer(size: size, statusCount: statusCount)
-        let model = try makeModel(preloaded: Array(Self.serverFolder(size: size).prefix(preloaded)))
+        await scriptServer(size: size, statusCount: statusCount, stampsMessageIDs: stampsMessageIDs)
+        let rows = Self.serverFolder(size: size, stampsMessageIDs: stampsMessageIDs)
+        let model = try makeModel(preloaded: Array(rows.prefix(preloaded)))
         if preloaded > 0 {
             // Rows a real load left showing line up with the STATUS it read,
             // so the window carries that anchor; a bare window would be read

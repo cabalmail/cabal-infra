@@ -90,3 +90,16 @@ private fun fieldName(field: RuleField): String =
         RuleField.SUBJECT -> "Subject"
         RuleField.BODY -> "Body"
     }
+
+/**
+ * Whether a condition on this field takes the email keyboard. From, To and
+ * Cc hold addresses, so most values are a domain or an address fragment;
+ * the email keyboard still has a space bar for a display name, which the
+ * match also searches (#2022). Subject and Body are free text.
+ */
+val RuleField.holdsAddresses: Boolean
+    get() =
+        when (this) {
+            RuleField.FROM, RuleField.TO, RuleField.CC -> true
+            RuleField.SUBJECT, RuleField.BODY -> false
+        }

@@ -705,7 +705,7 @@ TestFlight upload and skips the notarization steps.
 
 | Job | Runs when | What it does |
 |---|---|---|
-| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint + `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) across macOS / iOS / visionOS destinations |
+| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint and the platform-conditionals check, then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) across macOS / iOS / visionOS destinations |
 | `app-build` | Same | Unsigned `xcodebuild build` for `Cabalmail` (iOS) and `CabalmailMac` (macOS) |
 | `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
@@ -954,8 +954,9 @@ The roadmap treats macOS as a first-class platform, so the macOS target
 is native rather than Mac Catalyst. `CabalmailMac/` is a separate app
 target with its own `@main`, menu commands, windows, settings, asset
 catalog and entitlements. Everything it shares with the iOS app comes
-from the `CabalmailUI` module (below), whose views and view models branch
-with `#if os(macOS)` where the platforms diverge.
+from the `CabalmailUI` module (below). Where the platforms diverge there,
+the difference lives in a layout shell or a platform adapter (see
+"Platform conditionals").
 
 ### Shared app layer: the `CabalmailUI` module
 
@@ -1019,22 +1020,22 @@ Loose files in a feature folder are shared by that feature's subfolders.
 
 | Folder | What lives there |
 | --- | --- |
-| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the commands and menus, compose hand-off, drag and drop, contacts, BIMI and `mailStore`; its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
+| `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the compose coordinator and slot registry, drag and drop, contacts, BIMI and `mailStore`, and what the app does once as it leaves and returns to the foreground (`appScenePhaseChanged(to:)`, called by each app entry's scene-level handler); its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
 | `Session/` | The session lifecycle, in `SessionManager`: sign-in and its second factor, restoring the last session, signing out and its ordering (`SessionTeardownGate`), the session's client, cursor, preferences sync and expiry observer, the Inbox badge and feed pollers (`SessionPollers`), and lending the client to the push and App Intents paths (`borrowClient()`, one client per account). `SessionEnvironment` and `SessionHooks` are its seams to the outside; `SessionOwnerHooks` are what a session does to `AppState`'s state. Also the sign-in screen and its error wording |
-| `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, its folder list's selection, and the hand-off to a tree a layout swap rebuilds, which takes a multi-selection along), with the feed reader's `FeedNavigationState` and the `TreeGate` both use; `NavStateCoordinator` (resume, restore and the cross-device cursor) and Spotlight routing |
+| `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, list place, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included, and where that list is scrolled, as a `ListAnchor`: its top row by Message-ID, UID and position), its `StoredRoute` (the route its scene storage keeps, and where its folder list was scrolled, for the account they were stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, which also keeps where the last-used window's folder list was scrolled, on this device only, reading positions and the cross-device cursor); `DeepLinkRouter` (a notification, a Spotlight result or Siri's Open Folder opens in one main window: the system's target, else the window last used) with the `WindowRegistry` it finds windows in, and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
-| `Shell/` | How a window is laid out: the sign-in / signed-in router, the iPhone tab bar, the iPad and Mac split view (`MailRootView`), the Vision Pro tabs, the layout and column policies, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
-| `Shell/Columns/` | Column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
+| `Shell/` | How a window is laid out. The sign-in / signed-in router resolves the window's `ShellLayout` and draws one of four layout shells: `DesktopShell` (the Mac window), `SplitShell` (the iPad split, and iPhone Duo unfolded), `TabShell` (the iPhone tab bar, a narrowed iPad window and Duo folded) and `OrnamentShell` (the Vision Pro tabs). `WideMail` is what the two wide shells share, `CompactTab` is the tab list as data, and `CompactMailStack` is the phone's Mail tab. Also here: the layout and column policies, the split's Settings sheet presenter, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
+| `Shell/Columns/` | What the mail columns show on every layout, with no platform conditionals (`MailSidebarColumn`, `MailContentColumn`, `MailReaderColumn`, `FeedReaderColumn`); column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
 | `Mail/` | Mail pieces used by more than one mail column: drag and drop, Move to Folder, the sender avatar, the authentication line |
 | `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts: the unread ones are the sidebar badges and a message list's Unread pill, the flagged ones its Flagged pill; and the Inbox count behind the app badge), `MessageShields` (the one record of writes in flight and removals just confirmed, which every list's merge and every writer of a fetched STATUS asks, so a refresh can't undo a write made anywhere or count it twice), `MailEvents` (every change to mail, delivered at once and in order to every message list's and reader's view model but the one that made it, naming the window that started it when a reader did, and saying whether another list's selection may move on), and `MailMutationService` (the one place the app's writes go through: every flag change, move, dispose and purge from a list, the reader or the composer is recorded, posted and counted before it goes out, made through the writer's client, then confirmed, forgetting a removed message in the offline caches, or taken back; Mark All as Read and Empty Trash go through it too, acting once the server answers; a notification's actions are the exception, #1973); and `FolderPollers` (the change watching of the folders open in message lists: one `FolderPoller` per folder, made by the first list showing it and stopped with the last or at sign-out, whose watcher events and 60-second tick each ask one STATUS that every list on the folder takes); also saved folder counts |
 | `Mail/Folders/` | The folder sidebar and its view model, filters, rows, New Folder |
-| `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu; `FolderWindowLoader`, a folder list's window (rows, positions, paging, refresh; the search surface has none), with its engines `WindowPager`, `WindowRefresher`, `WindowReconciler` and `WindowSnapshot`, and the value types `EnvelopeOrder` and `WindowPlanner` |
+| `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu; `FolderWindowLoader`, a folder list's window (rows, positions, paging, refresh; the search surface has none), with its engines `WindowPager`, `WindowRefresher`, `WindowReconciler` and `WindowSnapshot`, and the value types `EnvelopeOrder` and `WindowPlanner`; `ListPlaceTracker`, which records a folder list's top row for its window as it scrolls and reopens the list there after a layout swap or a relaunch |
 | `Mail/Reader/` | `MessageDetailView`, `MessageDetailViewModel` and their extension files: the header, the toolbar and its policies, attachments, calendar invites, View Source |
 | `Mail/Search/` | `MailSearchSession`, a list's search (query, filters, results and their paging), the search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
 | `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
-| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (router, slot registry, scene) |
+| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene), and on iPad each main window's scene session, so closing a composer returns to the main window it came from and a notification finds the window it was shown over |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
@@ -1042,15 +1043,63 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout, a list's selection (`SelectionModel`: the rows picked, Select mode, and the anchor and cursor a range selection works from) |
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
-| `Platform/` | Small per-OS adapters: host platform, confirmation-dialog roles, the pasteboard |
+| `Platform/` | Small per-OS adapters: host platform and its capabilities, confirmation-dialog roles, the pasteboard, and the one-line modifiers a feature view calls in place of a platform conditional (navigation-bar title and Edit button, text entry, list and form styles) |
 | `Platform/Services/` | Push (the app delegate and `PushRegistrar`) and the watch hand-off |
 
 A file belongs in `Shared/` only if it knows nothing about any one
 feature, or if several features use it without carrying one feature's
-logic; otherwise it stays with its feature. Platform conditionals
-(`#if os`) are still spread through the feature folders; new
-layout-level branches belong in `Shell/` and new OS adapters in
-`Platform/`.
+logic; otherwise it stays with its feature.
+
+#### Platform conditionals
+
+A view that differs by platform does not write `#if os(...)`. The
+difference goes in one of two places:
+
+- **A layout difference** (columns or tabs, where a control sits, what
+  a bar holds) is decided once, as a `ShellLayout`, and drawn by a
+  layout shell in `Shell/`. A shared view reads `\.shellLayout` from the
+  environment, or a `HostPlatform` capability when the question is about
+  the host rather than the window (`columnScopedToolbar`,
+  `drawsOverPassthrough`, `settingsOpensBothColumns`,
+  `alwaysWindows`, `reordersInEditMode`).
+- **An API one platform lacks** goes behind an adapter in `Platform/`:
+  one call the feature view makes on every platform, with the
+  conditional inside it. `inlineNavigationTitle()`, `textEntry(_:)`,
+  `editButtonToolbar()`, and the list and form style helpers are
+  adapters of this kind. A file that wraps a
+  UIKit or AppKit view (`UIViewRepresentable`, `NSViewRepresentable` and
+  their view-controller forms) is an adapter too, wherever it lives.
+
+`scripts/check-platform-conditionals.py` holds the line in CI, beside
+SwiftLint (`lint.yml`'s swift job and `apple.yml`). In every file under
+`apple/CabalmailUI/` outside `Shell/` and `Platform/`, the wrapper files
+aside, it counts the lines that start with `#if` and test `os(...)` or
+`canImport` of UIKit, AppKit or EventKitUI. The files that still hold
+such conditionals are listed, with their counts, in
+`apple/platform-conditionals-allowlist.txt`. A file that is not listed
+fails, and so does a count above its row, so the list only shrinks. The
+change that removes a conditional lowers or removes the row in the same
+PR (`--seed` prints the rows the tree needs). A row left above its
+file's count does not fail, since two PRs that each lower one row merge
+cleanly, but the check reports it, as a warning on the PR, because it is
+room the next conditional could hide in: take it out when you see it.
+
+Never add a row or raise a count to get a new conditional through. The
+one case that moves a count is moving the code: a renamed file takes
+its row with it, and code extracted into a new file takes its
+conditionals' share of the old row, so the total the check prints
+(`N files, M blocks`) does not rise.
+
+The check reads one line at a time, so two things are left to review: an
+`#elseif os(...)` arm added to an existing block, and a new conditional
+in a file that is exempt because it wraps a UIKit or AppKit view.
+
+The script is standard-library Python and runs anywhere
+(`scripts/build-apple.sh lint` runs it after SwiftLint):
+
+```sh
+python3 scripts/check-platform-conditionals.py
+```
 
 ### Extension-shared values: the `CabalmailShared` module
 
@@ -1523,47 +1572,64 @@ right there (Settings → Debug Log → ShareLink). visionOS doesn't vend
 MetricKit at all, so the collector is a no-op on that platform behind
 `#if canImport(MetricKit) && !os(visionOS)`.
 
-### Commands dispatch through `AppState` tick counters
+### Menu commands go to the window in front
 
-Menu commands (File → New Message ⌘N, Mailbox → Refresh, the Message
-menu) need to reach whichever view currently owns the action — but
-`.commands { }` is defined at the scene level, so there's no direct
-reference to the focused view. `AppState` exposes monotonic intent
-counters (`composeRequestTick`, `refreshRequestTick`, the reply /
-forward ticks, and the selection-scoped `toggleSeenRequestTick` /
-`toggleFlaggedRequestTick` / `moveSelectionRequestTick`); the views
-watch them with `.onChange` and act on each bump. Avoids the
-`@FocusedValue` / responder-chain dance, and the same tick flow works
-on iPadOS (hardware-keyboard menu) and macOS (menu bar). The shared
-Message menu (`MessageMenuCommands`, installed by both app targets)
-carries Reply ⌘R, Reply All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T,
-Flag/Unflag ⌘⇧8, and Move to Folder ⌘M — the ⌘M item deliberately
-shadows Window → Minimize, since custom command menus are matched
-before the Window menu. Dispose (⌘⌫) is deliberately NOT a menu item:
-menu equivalents fire app-wide, so it would trigger from the compose
-window and steal the text system's delete-to-line-start chord
-mid-draft. It rides window-scoped key equivalents instead — the detail
-toolbar's dispose button covers a single open message (and advances to
-the next unread), and the message list installs an invisible ⌘⌫ button
-while a multi-selection exists — so the chord acts on the mail window
-only, but works there regardless of whether the list or the reading
-pane has focus (users can rarely tell which it is). Esc and ⌘A stay
-focus-scoped on the list: window-scoped versions would steal them from
-the search field.
+Menu commands need to reach the view that owns the action, but
+`.commands { }` is declared at the scene level. Each main window has one
+`WindowCommands` (`Commands/WindowCommands.swift`), held by
+`SignedInRootView` beside its `SceneNavigator`, put in the environment
+and published with `focusedSceneValue`. A menu reads the front main
+window's object with `@FocusedValue(\.windowCommands)`; with a compose
+or Settings window in front, or none open, it reads nil and the Message,
+Mailbox and Feeds menus and iPadOS ⌘, dim. New Message stays live: it
+opens the compose scene itself (#1162).
 
-Because `AppState` is one per process, every main window sees every
-tick. Each main window therefore carries an identity
-(`MainWindowCommandScope`: the `commandWindowID` environment value, also
-published with `focusedSceneValue`). A menu command reads the focused
-window with `@FocusedValue` and passes it to the `request…` method,
-falling back to the main window last in front while a compose window is
-key; an in-window button passes its own window. Observers use
-`.onWindowCommand(tick)` instead of `.onChange(of:)`, which drops a tick
-aimed at another window. A `request…` call that names no window reaches
-every window, which is what data-change refreshes (Empty Trash, push
-actions) want. Drag-and-drop moves are scoped tighter still: the drag
-payload names the message list it lifted from, and only that list
-performs the move a sidebar drop posts.
+A menu, or a window's own button (the Mac toolbar's Refresh, the iPad
+Settings gear), sends a `WindowCommand`, which bumps its own count; a
+feed or tree command names its action in its case. Surfaces answer with
+`.answersCommand(_:)`. They report what menus can act on
+(`reportsMessageMenuAvailability`, `reportsFeedMenuAvailability`) keyed
+by the surface they sit in, and the menus read the surface in front: the
+window on the wide layouts, the tab in front on the tab layouts, which
+keep every tab they have shown mounted (`FrontSurfacePolicy`). The feed
+catalog and sidebar trees, one handler a window, answer from a tab
+behind (`whileBehind`). `SharedChordPolicy` gives each chord the Feeds
+menu shares with the Message or Mailbox menu (⌘T, ⌘⇧8, ⌥⌘T) to the
+section in front.
+
+The shared Message menu (`MessageMenuCommands`) carries Reply ⌘R, Reply
+All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T, Flag/Unflag ⌘⇧8 and Move
+to Folder ⌘M, which deliberately shadows Window → Minimize (custom menus
+match first). Dispose (⌘⌫) is NOT a menu item: menu equivalents fire
+app-wide, so it would steal delete-to-line-start in a draft. A hidden
+window-scoped button carries it (`DisposeChordButton`): the reader's for
+one open message, the list's for a multi-selection, only while that
+surface is in front and owns the chord. Esc and ⌘A stay focus-scoped on
+the list, so the search field keeps them.
+
+A compose request is not a menu command either. A window's New Message,
+Reply and Forward, and a mailto: link, go to `AppState.compose`
+(`ComposeCoordinator`) with the main window they are for
+(`MainWindowCommandScope`'s window identity; for a link, the window last
+in front). That window's compose surface (`ComposeRequestRouter`) shows
+the seed, as a compose window or, on a single-window host, a sheet. A
+request that names no window, or one whose window has no compose surface
+(none is recorded as last in front, or it has closed), goes to the window
+opened last. A seed nothing can show yet waits its turn: behind its
+window's open sheet, or, on a cold launch and while signed out, for the
+first window that can. No request reaches two windows. Data-change reloads (Mark All as Read, Empty Trash, push
+actions) are not commands: they bump the mail store's `listRefreshTick`,
+which every list observes (#1824). A drag names the list it lifted from,
+and only that list performs a sidebar drop.
+
+A link from outside a window uses the same identity. A tapped
+notification, a Spotlight result and Siri's Open Folder each go to
+exactly one main window through `DeepLinkRouter`: the window the system
+aimed at when it says (on iPad, the window a notification is shown over,
+or the one that received the Spotlight result), else the window last in
+front, else the window opened last. With no main window yet, as on a cold
+launch, the link parks for the first window to open; a sign-out or another
+account's sign-in drops it.
 
 ### Platform polish
 

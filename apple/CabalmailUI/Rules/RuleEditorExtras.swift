@@ -139,10 +139,7 @@ private struct ForwardAddressList: View {
                 TextField("Forward to address…", text: $newAddress)
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
-                    #if os(iOS) || os(visionOS)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    #endif
+                    .textEntry(.email)
                     .onSubmit(addCurrent)
                 Button("Add", action: addCurrent)
                     .disabled(!canAdd)

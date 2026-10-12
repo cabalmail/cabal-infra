@@ -20,10 +20,10 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
     func testTheOpenInspectorsToggleOutranksCompose() throws {
         // With the inspector open, `@` is the one item that can close it, so
         // it takes the priority above `keepsInBar()`; closed, it is unranked.
-        let body = try Self.source("CabalmailUI/Shell/MailRootView.swift")
+        let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
         let ranked = "if addressInspectorPresented {\n"
-            + "                    ToolbarItem(placement: .primaryAction) { addressInspectorToggle }\n"
-            + "                        .keepsInBarFirst()"
+            + "            ToolbarItem(placement: .primaryAction) { addressInspectorToggle }\n"
+            + "                .keepsInBarFirst()"
         XCTAssertTrue(body.contains(ranked))
         XCTAssertEqual(body.components(separatedBy: ".keepsInBarFirst()").count - 1, 1)
         let helper = try Self.source("CabalmailUI/Shared/Chrome/ToolbarVisibility.swift")
@@ -39,10 +39,10 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         // layout, so it ranks with Compose rather than below it: at the list
         // column's 300 pt floor the bar can seat two trailing items, and the
         // pair that must survive is Compose and `@` (#1626).
-        let body = try Self.source("CabalmailUI/Shell/MailRootView.swift")
+        let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
         let ranked = "} else {\n"
-            + "                    ToolbarItem(placement: .primaryAction) { addressInspectorToggle }\n"
-            + "                        .keepsInBar()"
+            + "            ToolbarItem(placement: .primaryAction) { addressInspectorToggle }\n"
+            + "                .keepsInBar()"
         XCTAssertTrue(body.contains(ranked))
     }
 

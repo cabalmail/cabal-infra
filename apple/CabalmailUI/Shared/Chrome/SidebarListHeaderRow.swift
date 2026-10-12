@@ -9,7 +9,7 @@ import SwiftUI
 /// Rendered by `FolderListView` / `AddressListView` only when their
 /// `externalFilter` binding is present (the wide layout); compact keeps the
 /// buttons in the toolbar and the filter in a `.searchable`. The filter field's
-/// styling matches the search field above the tabs in `MailRootView`.
+/// styling matches the search field above the tabs in the mail sidebar.
 struct SidebarListHeaderRow: View {
     let newAction: () -> Void
     let newDisabled: Bool

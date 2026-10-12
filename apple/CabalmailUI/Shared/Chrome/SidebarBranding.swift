@@ -13,7 +13,7 @@ import CabalmailKit
 /// The four accent tokens the web app's address swatches use, as soft
 /// radial blobs behind the
 /// sidebar material, at a fixed 20% opacity. Scope differs per platform
-/// (`MailRootView` applies it): the whole folder screen on iPhone,
+/// (`MailSidebarColumn` applies it): the whole folder screen on iPhone,
 /// the sidebar column only on iPad and macOS. The native list above it
 /// hides its scroll background (`.scrollContentBackground(.hidden)`) so
 /// the wash reads as color seen through the system material.
@@ -123,7 +123,7 @@ struct CabalmailMark: View {
 // MARK: - Mark as navigation title
 
 /// The mark size the compact iPhone tabs and the iPad floating folder panel
-/// use; `MailRootView` passes 102 for the wide iPad sidebar.
+/// use; `SplitShell` passes 102 for the iPad's folder panel.
 let compactBrandMarkSize: CGFloat = 132
 
 /// Puts the Cabalmail mark where a screen's navigation title would go
@@ -174,7 +174,7 @@ private struct BrandMarkTitle: ViewModifier {
 }
 
 /// True inside the compact iPhone section tab bar (see
-/// `CompactSectionTabs`), where every tab's root screen heads itself with the
+/// `TabShell`), where every tab's root screen heads itself with the
 /// Cabalmail mark instead of a text title. False everywhere else, so the
 /// same `SettingsView` / `AddressListView` bodies keep their text titles in
 /// the iPad settings sheet and the wide sidebar's inspector, where the mark

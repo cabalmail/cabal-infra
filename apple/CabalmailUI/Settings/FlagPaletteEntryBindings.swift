@@ -1,8 +1,9 @@
 import SwiftUI
 import CabalmailKit
 
-/// Slot-addressed, total accessors for the one palette entry a
-/// `FlagPaletteEntryEditor` is editing (#1340).
+/// Slot-addressed, total accessors for one palette entry: the one a
+/// `FlagPaletteEntryEditor` is editing (#1340), or the one a row's Move Up /
+/// Move Down items move.
 ///
 /// The editor is pushed on a `slot`, but every `Binding` it hands to a
 /// live `TextField` or `Toggle` outlives the entry: confirming the delete
@@ -65,6 +66,26 @@ struct FlagPaletteEntryBindings {
     /// so the deletion reaches the server like any other edit.
     func delete() {
         preferences.flagPalette.removeAll { $0.slot == slot }
+    }
+
+    /// Whether `move(by:)` would move the entry: false past either end of
+    /// the palette, and once the entry is gone.
+    func canMove(by offset: Int) -> Bool {
+        guard offset != 0,
+              let index = preferences.flagPalette.firstIndex(where: { $0.slot == slot })
+        else { return false }
+        return preferences.flagPalette.indices.contains(index + offset)
+    }
+
+    /// Moves the entry `offset` places through the palette (-1 is Move Up,
+    /// +1 Move Down), which is the order pickers use. Past either end, or
+    /// once the entry is gone, nothing is written, so nothing is pushed.
+    func move(by offset: Int) {
+        guard canMove(by: offset) else { return }
+        var palette = preferences.flagPalette
+        guard let index = palette.firstIndex(where: { $0.slot == slot }) else { return }
+        palette.insert(palette.remove(at: index), at: index + offset)
+        preferences.flagPalette = palette
     }
 
     /// Mutates the entry in place, or does nothing when it is gone. The

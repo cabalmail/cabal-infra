@@ -33,10 +33,10 @@ final class CompactBrandMarkSourceScanTests: XCTestCase {
     ]
 
     func testTheCompactTabBarTurnsTheMarkOn() throws {
-        let body = try Self.source("CabalmailUI/Shell/CompactSectionTabs.swift")
+        let body = try Self.source("CabalmailUI/Shell/TabShell.swift")
         XCTAssertTrue(
             body.contains(".environment(\\.showsCompactBrandMark, true)"),
-            "CompactSectionTabs' TabView sets showsCompactBrandMark for its tabs"
+            "TabShell's TabView sets showsCompactBrandMark for its tabs"
         )
     }
 
@@ -58,8 +58,8 @@ final class CompactBrandMarkSourceScanTests: XCTestCase {
     /// non-macOS layout, so it takes the ungated modifier rather than the
     /// environment-gated one.
     func testTheMailSidebarKeepsTheUnconditionalMark() throws {
-        let body = try Self.source("CabalmailUI/Shell/MailRootView.swift")
-        XCTAssertTrue(body.contains(".brandMarkTitle(size:"), "MailRootView's sidebar applies brandMarkTitle")
+        let body = try Self.source("CabalmailUI/Shell/Columns/MailSidebarColumn.swift")
+        XCTAssertTrue(body.contains(".brandMarkTitle(size:"), "the mail sidebar applies brandMarkTitle")
         XCTAssertFalse(body.contains(".compactBrandMarkTitle("), "the Mail sidebar is not environment-gated")
     }
 

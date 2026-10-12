@@ -9,7 +9,9 @@ import CabalmailKit
 ///   the device): the section (mail or feeds), list scope, open item, and —
 ///   in `ReadingPositionCache` — where the reader was in each item's body. A
 ///   cold launch restores it silently; reopening a half-read item lands at
-///   the same place. Persisted through `ResumeSessionStore`.
+///   the same place. Persisted through `ResumeSessionStore`. With several
+///   windows, only the one the user last used moves it (`WindowRecorder`);
+///   each window also keeps its own route (`StoredRoute`).
 /// - **The server cursor** (`NavState`, `/set_nav_state`): the cross-device
 ///   signal. Recorded debounced as the user moves through mail; read on
 ///   launch and foreground, and offered as a "pick up where you left off"
@@ -24,62 +26,9 @@ import CabalmailKit
 @Observable
 @MainActor
 public final class NavStateCoordinator {
-    /// A restore target handed to the `MessageListView` for a folder: it finds
-    /// the matching envelope after its initial load and selects it. Carried as
-    /// a value (not applied here) because only the list owns the loaded
-    /// envelopes and the wide/compact selection machinery.
-    struct PendingRestore: Equatable, Sendable {
-        let folderPath: String
-        let messageID: String?
-        let uid: UInt32?
-        let listScroll: Int?
-        /// Monotonic so an already-mounted list re-applies even when the same
-        /// folder/message recurs (e.g. a same-folder cross-device jump).
-        let tick: Int
-    }
-
-    /// Set when a folder's message should be restored or jumped to; consumed by
-    /// the matching `MessageListView`.
-    private(set) var pendingRestore: PendingRestore?
-
-    /// An in-message scroll position to reapply once the reader opens the
-    /// restored message. Consumed by `MessageDetailView` (which owns the body
-    /// renderer), keyed by folder + message so it only lands on the intended
-    /// message. `offset` restores a plain-text body; `anchor` restores an HTML
-    /// body — a message renders as one or the other, so the reader applies
-    /// whichever matches.
-    struct PendingScrollRestore: Equatable, Sendable {
-        let folderPath: String
-        let messageID: String?
-        let uid: UInt32?
-        let offset: Int?
-        let anchor: String?
-    }
-
-    /// Set alongside `pendingRestore` when the restored cursor carried a scroll
-    /// position; consumed by the reader after the message loads.
-    private(set) var pendingScrollRestore: PendingScrollRestore?
-
-    /// A feed item to select once its scope's list is on screen and loaded:
-    /// the feed reader's launch restore, a tapped feed banner, or a layout
-    /// swap's hand-off (`SceneNavigator`). Consumed by `FeedItemListView`
-    /// through `consumeFeedItemRestore`.
-    struct PendingFeedRestore: Equatable, Sendable {
-        let scope: RssItemScope
-        let item: RssItem
-    }
-
-    var pendingFeedRestore: PendingFeedRestore?
-
-    /// A cursor to open, from push, Spotlight or App Intents, which don't
-    /// know which window should answer. Each main window's `SceneNavigator`
-    /// observes it and the first to see it takes it; a window landing for the
-    /// first time drains one parked before it existed.
-    public var navigateRequest: NavState?
-
-    /// True once the launch-time cursor fetch has run. `MailRootView` uses it
-    /// to tell the cold-launch path from a later foreground (both may offer
-    /// the cross-device toast, through different entry points).
+    /// True once the launch-time cursor fetch has run. `SignedInRootView`
+    /// uses it to tell the cold-launch path from a later foreground (both
+    /// may offer the cross-device toast, through different entry points).
     var hasLoadedInitial = false
 
     public let clientID: String
@@ -124,6 +73,9 @@ public final class NavStateCoordinator {
     /// lands on the *live* `session` — where the user is now — rather than
     /// re-landing on where the process started.
     var didConsumeLaunchSession = false
+    /// The list place the last run left (`ResumeSession.listAnchor`), for
+    /// the process's first mail landing to take (`mailLaunchTarget`).
+    var launchListAnchor: ListAnchor?
     /// Debounce for local session writes — short, since it's a local
     /// `UserDefaults` write, and `flushSession` covers the scene going away.
     let sessionSaveDebounce: Duration = .milliseconds(300)
@@ -137,7 +89,6 @@ public final class NavStateCoordinator {
     var lastSeenUpdatedAt: Int64 {
         didSet { store.offeredForeignUpdatedAt = lastSeenUpdatedAt }
     }
-    private var restoreTick = 0
     /// Set by `armProvisionalLanding`: swallow the next `recordFolder`'s server
     /// write (the launch landing) so the cursor probe reads what another
     /// client left, not what this launch just wrote. Released by
@@ -157,6 +108,7 @@ public final class NavStateCoordinator {
         self.store = store
         let loaded = store.loadSession()
         self.launchSession = loaded
+        self.launchListAnchor = loaded?.listAnchor
         self.session = loaded ?? ResumeSession(section: .mail)
         self.positions = store.loadPositions()
         self.lastSeenUpdatedAt = store.offeredForeignUpdatedAt
@@ -164,9 +116,11 @@ public final class NavStateCoordinator {
 
     // MARK: Restore application
 
-    /// Schedules a restore/jump to `cursor`: primes the working cursor and
-    /// publishes a `PendingRestore` for the matching list to consume.
-    func scheduleRestore(for cursor: NavState) {
+    /// A restore or jump to `cursor` is starting in some window: primes every
+    /// working-cursor field from it, so a save before the list selects the
+    /// message writes where the user is going. The window parks the restore
+    /// itself (`WindowRestores`).
+    func primeCursor(for cursor: NavState) {
         folder = cursor.folder
         messageID = cursor.messageID
         uid = cursor.uid
@@ -175,62 +129,6 @@ public final class NavStateCoordinator {
         messageScroll = cursor.messageScroll
         messageAnchor = cursor.messageAnchor
         messageFraction = cursor.messageFraction
-        restoreTick += 1
-        pendingRestore = PendingRestore(
-            folderPath: cursor.folder,
-            messageID: cursor.messageID,
-            uid: cursor.uid,
-            listScroll: cursor.listScroll,
-            tick: restoreTick
-        )
-        // Only publish a scroll restore when the cursor actually carried one, so
-        // the reader doesn't force a message that was saved at the top back to
-        // the top redundantly.
-        if cursor.messageScroll != nil || cursor.messageAnchor != nil {
-            pendingScrollRestore = PendingScrollRestore(
-                folderPath: cursor.folder,
-                messageID: cursor.messageID,
-                uid: cursor.uid,
-                offset: cursor.messageScroll,
-                anchor: cursor.messageAnchor
-            )
-        } else {
-            pendingScrollRestore = nil
-        }
-    }
-
-    /// Drops a scheduled message restore whose folder turned out not to exist
-    /// (the launch landing fell back to INBOX).
-    func clearPendingRestore() {
-        pendingRestore = nil
-        pendingScrollRestore = nil
-    }
-
-    /// Returns and clears the pending restore for `folderPath`, if it targets
-    /// that folder. The list calls this after its initial load.
-    func consumePendingRestore(for folderPath: String) -> PendingRestore? {
-        guard let restore = pendingRestore, restore.folderPath == folderPath else { return nil }
-        pendingRestore = nil
-        return restore
-    }
-
-    /// Returns and clears the pending scroll restore if it targets the message
-    /// `MessageDetailView` just opened — matched by folder plus Message-ID
-    /// (durable across a move) or UID. The reader calls this once the body has
-    /// loaded and applies `offset` (plain text) or `anchor` (HTML).
-    func consumeScrollRestore(folderPath: String, uid: UInt32?, messageID: String?) -> PendingScrollRestore? {
-        guard let restore = pendingScrollRestore, restore.folderPath == folderPath else { return nil }
-        let messageMatches: Bool
-        if let wanted = restore.messageID, let have = messageID {
-            messageMatches = wanted == have
-        } else if let wanted = restore.uid, let have = uid {
-            messageMatches = wanted == have
-        } else {
-            messageMatches = false
-        }
-        guard messageMatches else { return nil }
-        pendingScrollRestore = nil
-        return restore
     }
 
     // MARK: Recording (mail)
@@ -269,6 +167,12 @@ public final class NavStateCoordinator {
         messageFraction = nil
         activeKind = .mail
         session.section = .mail
+        // The list's place is its folder's: the same folder recorded again
+        // (the launch landing) keeps it. The launch's own place is for the
+        // first mail landing, which took it before recording its folder; a
+        // folder shown any other way ends it.
+        if session.folder != folderPath { session.listAnchor = nil }
+        launchListAnchor = nil
         session.folder = folderPath
         session.clearMessage()
         scheduleSessionSave()
@@ -414,19 +318,14 @@ public final class NavStateCoordinator {
 // never written into the cursor: it carries the one a restore primed it
 // with while it still names that message, or none.
 extension NavStateCoordinator {
-    /// Schedules a restore of the message `ref` names: a window re-parking
-    /// its open message for the list a layout swap rebuilt
-    /// (`SceneNavigator`). Carries the ref's UIDVALIDITY when it has one.
-    func scheduleRestore(for ref: MessageRef) {
-        scheduleRestore(for: NavState(
+    /// A restore of the message `ref` names: a window re-parking its open
+    /// message for the list a layout swap rebuilt (`SceneNavigator`). Carries
+    /// the ref's UIDVALIDITY when it has one.
+    func restoreCursor(for ref: MessageRef) -> NavState {
+        NavState(
             folder: ref.folder, messageID: ref.messageId, uid: ref.uid, uidValidity: ref.uidValidity,
             clientID: clientID
-        ))
-    }
-
-    /// Whether a restore for `folderPath` is waiting for its list.
-    func hasPendingRestore(in folderPath: String) -> Bool {
-        pendingRestore?.folderPath == folderPath
+        )
     }
 
     /// Records that the user opened the message `ref` names.
@@ -443,16 +342,13 @@ extension NavStateCoordinator {
         )
     }
 
-    /// The pending scroll restore, if it targets the message `ref` names.
-    func consumeScrollRestore(for ref: MessageRef) -> PendingScrollRestore? {
-        consumeScrollRestore(folderPath: ref.folder, uid: ref.uid, messageID: ref.messageId)
-    }
-}
-
-extension NavStateCoordinator.PendingRestore {
-    /// The message to restore, when the cursor named one by UID: what the
-    /// list falls back to after the Message-ID.
-    var ref: MessageRef? {
-        uid.map { MessageRef(folder: folderPath, uid: $0, messageId: messageID) }
+    /// The reading position of the message `ref` names, without the cursor:
+    /// a reader in a window that does not record (`WindowRecorder`) still
+    /// keeps where the user was in the message.
+    func savePosition(for ref: MessageRef, position: ReadingPosition, atTop: Bool) {
+        savePosition(
+            key: ReadingPositionKey.mail(ref), anchor: position.anchor, offset: position.offset,
+            fraction: position.fraction, atTop: atTop
+        )
     }
 }

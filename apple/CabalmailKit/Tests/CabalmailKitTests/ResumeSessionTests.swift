@@ -79,6 +79,64 @@ final class ResumeSessionTests: XCTestCase {
         XCTAssertEqual(session.folder, "INBOX")
     }
 
+    // MARK: The list's place
+
+    func testTheListPlaceRoundTripsThroughTheStore() {
+        let store = ResumeSessionStore(defaults: defaults)
+        var session = ResumeSession(section: .mail, folder: "INBOX", savedAt: Date(timeIntervalSince1970: 0))
+        session.listAnchorFolder = "INBOX"
+        session.listAnchorMessageID = "<row@x>"
+        session.listAnchorUID = 812
+        session.listAnchorIndex = 300
+
+        store.saveSession(session)
+
+        let loaded = store.loadSession()
+        XCTAssertEqual(loaded, session)
+        XCTAssertEqual(loaded?.listAnchorFolder, "INBOX")
+        XCTAssertEqual(loaded?.listAnchorMessageID, "<row@x>")
+        XCTAssertEqual(loaded?.listAnchorUID, 812)
+        XCTAssertEqual(loaded?.listAnchorIndex, 300)
+    }
+
+    /// A record written before the list's place was kept: it decodes with
+    /// none, and with everything it did hold.
+    func testARecordWrittenBeforeTheListPlaceDecodesWithoutOne() throws {
+        let fields = [
+            #""section":"feeds""#, #""folder":"Lists""#, #""uid":3"#, #""messageID":"<l@x>""#,
+            #""feedScope":"sub:s""#, #""feedItemFeedID":"f""#, #""feedItemSortKey":"k""#, #""savedAt":0"#,
+        ]
+        let legacy = Data("{\(fields.joined(separator: ","))}".utf8)
+
+        let session = try JSONDecoder().decode(ResumeSession.self, from: legacy)
+
+        XCTAssertNil(session.listAnchorFolder)
+        XCTAssertNil(session.listAnchorMessageID)
+        XCTAssertNil(session.listAnchorUID)
+        XCTAssertNil(session.listAnchorIndex)
+        XCTAssertEqual(session, ResumeSession(
+            section: .feeds, folder: "Lists", uid: 3, messageID: "<l@x>", feedScope: .subscription("s"),
+            feedItemFeedID: "f", feedItemSortKey: "k", savedAt: Date(timeIntervalSinceReferenceDate: 0)
+        ))
+    }
+
+    /// A record with no list place stores none of its keys, so what an
+    /// older build reads back is what it always read.
+    func testARecordWithNoListPlaceWritesNoneOfItsKeys() throws {
+        var session = ResumeSession(section: .mail, folder: "INBOX", uid: 5, messageID: "<m@x>")
+        let bare = try keys(of: session)
+        XCTAssertEqual(bare, ["section", "folder", "uid", "messageID", "savedAt"])
+
+        session.listAnchorFolder = "INBOX"
+        session.listAnchorIndex = 40
+        XCTAssertEqual(try keys(of: session), bare.union(["listAnchorFolder", "listAnchorIndex"]))
+    }
+
+    private func keys(of session: ResumeSession) throws -> Set<String> {
+        let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(session)) as? [String: Any]
+        return Set(try XCTUnwrap(object).keys)
+    }
+
     // MARK: Position cache
 
     func testPositionCacheEvictsOldestPastCapacity() {

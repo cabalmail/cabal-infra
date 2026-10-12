@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Which column the collapsed (iPhone-compact) navigation should show after
 /// the read message changed. A pure rule rather than an inline `if` so it can
-/// be tested directly — `MailRootView`'s `@State` isn't reachable from a unit
+/// be tested directly — a shell's `@State` isn't reachable from a unit
 /// test, this is.
 enum CompactColumnPolicy {
     static func column(

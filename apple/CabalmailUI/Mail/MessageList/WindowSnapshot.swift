@@ -57,9 +57,10 @@ struct WindowSnapshot {
     }
 
     /// Writes the loaded rows to the snapshot. Skipped once the front has
-    /// been trimmed: the snapshot must stay top-anchored, so a relaunch lands
-    /// at the top of the folder rather than mid-scroll, which keeps it to the
-    /// first `windowCap` rows. Search results are never the folder's
+    /// been trimmed: the snapshot must stay top-anchored, so a relaunch
+    /// hydrates the top of the folder, which keeps it to the first
+    /// `windowCap` rows. A list that reopens further down (`ListPlaceTracker`)
+    /// loads the page around its place. Search results are never the folder's
     /// snapshot, whatever was due to be written when the search started
     /// (#1870), and with the list gone nothing is written: whether a search
     /// was showing can't be known then.

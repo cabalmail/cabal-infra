@@ -4,22 +4,27 @@ import CabalmailKit
 import AppKit
 #endif
 
-/// Routes app-level compose requests to the platform's compose surface
-/// from a host that is always in the visible hierarchy.
+/// One main window's compose surface: where the app's compose requests for
+/// this window are shown, from a host that is always in the visible
+/// hierarchy.
 ///
-/// `AppState.requestCompose(seed:)` (mailto: URLs) and the zero-arg
-/// `requestCompose()` (macOS File > New Message, toolbar buttons, reply /
-/// forward actions route their seeds through the same funnel) park an
-/// optional seed and bump `composeRequestTick`; this modifier — installed
-/// once on `SignedInRootView` — is the single consumer.
+/// Installed once on `SignedInRootView`, it registers with the app's
+/// `ComposeCoordinator` under its window's identity while the window is
+/// signed in. The coordinator hands it each seed meant for this window: the
+/// window's own New Message, Reply and Forward, and a mailto: link when this
+/// is the window last used. It registers from its `.task`, so a seed that
+/// arrived before the window existed (a cold-launch mailto:, or one that
+/// waited out the sign-in) opens over the fresh session.
 ///
 /// Hosts with multiple windows (macOS, iPadOS, visionOS, an open iPhone
 /// Duo) hand off to the compose `WindowGroup`, which layers a new scene
 /// regardless of what the main window is showing. A single-window host
 /// (any other iPhone, a closed Duo) presents the compose sheet from here,
-/// the signed-in root — see `ComposeSurfacePolicy`. The environment value
-/// is read at request time, so a Duo that was folded between two requests
-/// gets the right surface for each.
+/// the signed-in root — see `ComposeSurfacePolicy`. Which one is decided as
+/// each seed arrives, so a Duo that was folded between two requests gets
+/// the right surface for each. While the sheet is up the surface takes
+/// nothing: the coordinator keeps the next seed, in order, until the sheet
+/// closes, so an incoming mailto: never replaces a draft being typed.
 ///
 /// History: the sheet used to live on `MessageListView`. SwiftUI cannot
 /// present a sheet from a view in a background tab, so a `mailto:` that
@@ -30,54 +35,68 @@ import AppKit
 /// user next visited the Mail tab. Hosting the sheet on the signed-in
 /// root presents from any tab, folder, or modal state.
 struct ComposeRequestRouter: ViewModifier {
+    /// What the registered presenter reads as a seed arrives. A reference,
+    /// kept current by the body: the presenter is registered once, and an
+    /// environment value it captured then would be the one from that
+    /// moment, not the surface the window has now.
+    @MainActor
+    private final class Surface {
+        var opensInWindow = false
+    }
+
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.openWindow) private var openWindow
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.commandWindowID) private var windowID
     @State private var composeSeed: Draft?
-
-    private var opensInWindow: Bool {
-        ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: supportsMultipleWindows)
-    }
+    @State private var surface = Surface()
+    @State private var presenter: ComposeCoordinator.Presenter?
 
     func body(content: Content) -> some View {
         content
-            .task {
-                // Cold-launch mailto: `.onOpenURL` in the app entry parks
-                // the seed before any signed-in view exists. Drain it on
-                // first mount. This also covers "mailto while signed out":
-                // the seed waits out the sign-in flow and compose opens
-                // over the fresh session.
-                if let seed = appState.consumePendingComposeSeed() {
-                    present(seed: seed)
-                }
+            .onChange(of: ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: supportsMultipleWindows),
+                      initial: true) { _, inWindow in
+                surface.opensInWindow = inWindow
             }
-            .onWindowCommand(appState.composeRequestTick) {
-                // Menu shortcuts and toolbar buttons pass no seed; the
-                // mailto: handler parks one. Fall back to a fresh draft
-                // for the former.
-                if opensInWindow || composeSeed == nil {
-                    let seed = appState.consumePendingComposeSeed()
-                        ?? ReplyBuilder.newDraft()
-                    present(seed: seed)
-                }
-                // else: the sheet is already showing a compose.
-                // Leave the seed parked — `drainParkedSeed` picks it up
-                // when the current sheet closes — so an incoming mailto:
-                // never replaces a draft the user is typing.
+            .task(id: windowID) {
+                register()
             }
-            .sheet(item: $composeSeed, onDismiss: drainParkedSeed) { seed in
+            .onDisappear(perform: unregister)
+            .sheet(item: $composeSeed, onDismiss: sheetClosed) { seed in
                 composeSheet(for: seed)
             }
     }
 
-    /// Multi-window hosts open a compose scene; single-window hosts present
-    /// the sheet hosted by this modifier.
-    private func present(seed: Draft) {
-        if opensInWindow {
+    private func register() {
+        unregister()
+        let presenter = ComposeCoordinator.Presenter(window: windowID, present: present)
+        self.presenter = presenter
+        appState.compose.register(presenter)
+    }
+
+    private func unregister() {
+        if let presenter { appState.compose.unregister(presenter) }
+        presenter = nil
+    }
+
+    /// Shows `seed`: a compose scene on a multi-window host, else the sheet
+    /// hosted by this modifier. False while it cannot
+    /// (`ComposeSurfacePolicy.offer`), and the seed stays with the
+    /// coordinator.
+    private func present(_ seed: Draft) -> Bool {
+        let offer = ComposeSurfacePolicy.offer(
+            hasClient: appState.client != nil, opensInWindow: surface.opensInWindow, sheetIsUp: composeSeed != nil
+        )
+        switch offer {
+        case .refuse:
+            return false
+        case .sheet:
+            composeSeed = seed
+        case .window:
             // Recycled slot, not the seed itself: keying the group by the
             // seed leaks one retained presentation per session (#1084).
-            openWindow(id: composeWindowID, value: appState.composeSlots.acquire(seed: seed))
+            openWindow(id: composeWindowID, value: appState.compose.slot(for: seed, from: windowID))
             #if canImport(AppKit)
             // SwiftUI's openWindow occasionally drops the new compose
             // scene behind the main mail window when triggered from a
@@ -86,18 +105,14 @@ struct ComposeRequestRouter: ViewModifier {
             // they were just reading.
             NSApp.activate(ignoringOtherApps: true)
             #endif
-        } else {
-            composeSeed = seed
         }
+        return true
     }
 
-    /// A mailto: that arrived while a compose sheet was up stays parked on
-    /// `AppState` (see the tick observer above). Present it once the sheet
-    /// that blocked it has fully dismissed.
-    private func drainParkedSeed() {
-        if let seed = appState.consumePendingComposeSeed() {
-            composeSeed = seed
-        }
+    /// The sheet that held back later seeds has fully dismissed: the
+    /// coordinator hands over the next one waiting for this window.
+    private func sheetClosed() {
+        appState.compose.presenterIsFree()
     }
 
     @ViewBuilder
@@ -117,9 +132,9 @@ struct ComposeRequestRouter: ViewModifier {
 }
 
 extension View {
-    /// Installs the app-wide compose-request receiver. Apply exactly once,
-    /// on the signed-in root — a second copy would double-consume the
-    /// request tick and open duplicate compose surfaces.
+    /// Installs the window's compose surface. Apply exactly once, on the
+    /// signed-in root: a second copy would register a second presenter for
+    /// the same window.
     func composeRequestRouter() -> some View {
         modifier(ComposeRequestRouter())
     }

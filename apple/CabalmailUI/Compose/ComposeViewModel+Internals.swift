@@ -99,7 +99,7 @@ extension ComposeViewModel {
 
     /// Seed the composer with the forwarded message's attachments. Called
     /// by `ComposeView` on appearance with the bytes the forward action
-    /// stashed on `AppState` (see `MessageDetailView.beginCompose`). The
+    /// sent with its compose request (`MessageDetailView.beginCompose`). The
     /// seeded rows are ordinary `ComposeAttachment`s from here on — the
     /// user can remove them, and send stages them like hand-picked files.
     func seedForwardedAttachments(_ forwarded: [Attachment]) {

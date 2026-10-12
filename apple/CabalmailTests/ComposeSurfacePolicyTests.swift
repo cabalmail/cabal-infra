@@ -26,6 +26,34 @@ final class ComposeSurfacePolicyTests: XCTestCase {
         XCTAssertTrue(ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: true, alwaysWindows: true))
     }
 
+    // MARK: What a surface does with a seed
+
+    func testAMultiWindowSurfaceOpensAWindowWhateverItsSheetHolds() {
+        XCTAssertEqual(ComposeSurfacePolicy.offer(hasClient: true, opensInWindow: true, sheetIsUp: false), .window)
+        // A Duo unfolded with its sheet still up from before: a window.
+        XCTAssertEqual(ComposeSurfacePolicy.offer(hasClient: true, opensInWindow: true, sheetIsUp: true), .window)
+    }
+
+    /// An incoming mailto: never replaces the draft being typed: the seed
+    /// waits until the sheet has closed.
+    func testASheetSurfaceTakesOneSeedAtATime() {
+        XCTAssertEqual(ComposeSurfacePolicy.offer(hasClient: true, opensInWindow: false, sheetIsUp: false), .sheet)
+        XCTAssertEqual(ComposeSurfacePolicy.offer(hasClient: true, opensInWindow: false, sheetIsUp: true), .refuse)
+    }
+
+    /// A window that is signing out builds no composer, so it takes no
+    /// seed: the seed is kept for the next session.
+    func testASurfaceWithNoSessionTakesNothing() {
+        for opensInWindow in [true, false] {
+            for sheetIsUp in [true, false] {
+                XCTAssertEqual(
+                    ComposeSurfacePolicy.offer(hasClient: false, opensInWindow: opensInWindow, sheetIsUp: sheetIsUp),
+                    .refuse
+                )
+            }
+        }
+    }
+
     func testDefaultFollowsTheHostPlatform() {
         XCTAssertEqual(
             ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: false),

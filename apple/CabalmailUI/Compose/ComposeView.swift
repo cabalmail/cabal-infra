@@ -80,17 +80,15 @@ struct ComposeView: View {
         NavigationStack {
             composeContent
             .navigationTitle(model.navigationTitle)
-            #if os(iOS) || os(visionOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
+            .inlineNavigationTitle()
             .toolbar { toolbarContent }
             .task {
-                // Pick up forwarded attachments stashed by the forward
-                // action. They hand off out-of-band, keyed by seed id,
-                // rather than riding the seed itself. Pop-once: a
+                // Pick up the attachments the forward action sent with its
+                // compose request. They hand off out-of-band, keyed by seed
+                // id, rather than riding the seed itself. Pop-once: a
                 // system-restored compose scene finds nothing and simply
                 // composes without them.
-                let forwarded = appState.consumeComposeAttachments(for: model.draftId)
+                let forwarded = appState.compose.takeAttachments(for: model.draftId)
                 if !forwarded.isEmpty {
                     model.seedForwardedAttachments(forwarded)
                 }

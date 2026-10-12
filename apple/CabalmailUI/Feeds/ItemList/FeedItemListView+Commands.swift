@@ -2,7 +2,7 @@ import SwiftUI
 import CabalmailKit
 
 // The Feeds menu's item commands (cross-media plan, Phase 1): ⌘T, ⌘⇧8 and
-// ⌥⌘T arriving through `AppState.requestFeedCommand`, answered by the
+// ⌥⌘T sent to the window in front (`WindowCommand.feed`), answered by the
 // mounted item list. A sibling extension so the primary body stays under
 // SwiftLint's `type_body_length` cap.
 extension FeedItemListView {

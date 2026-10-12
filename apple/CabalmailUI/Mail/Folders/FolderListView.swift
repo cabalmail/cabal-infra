@@ -54,7 +54,7 @@ struct FolderListView: View {
     /// Called at most once, when the first load returns the server's list.
     /// A saved copy drawn offline doesn't count, and neither does a later
     /// load: by then the user may have moved, and the landing would move
-    /// them back. `MailRootView` uses it to complete the launch INBOX landing:
+    /// them back. The mail shells use it to complete the launch INBOX landing:
     /// the fetched INBOX replaces the provisional `Folder(path: "INBOX")`
     /// its launch task pre-selected (so the message list never waited on
     /// this fetch), and the saved-position resume probe runs. Nor does the
@@ -195,7 +195,7 @@ struct FolderListView: View {
         .task(id: feedModel.map(ObjectIdentifier.init)) { await feedModel?.observe() }
         // "Folders" (not "Mailboxes" — the mailbox is the per-user singleton;
         // this list is its folders). In the Mail sidebar the visible text is
-        // suppressed and the Cabalmail mark stands in (see `MailRootView`);
+        // suppressed and the Cabalmail mark stands in (see `MailSidebarColumn`);
         // the string stays for VoiceOver and the back button. The compact
         // Folders management tab shows it as a regular title.
         .navigationTitle("Folders")
@@ -284,9 +284,8 @@ struct FolderListView: View {
         .onChange(of: allCountsWalkKey, initial: true) { _, _ in
             walkAllCountsIfNeeded()
         }
-        .onWindowCommand(appState.sidebarTreeCommandTick) {
-            guard let command = appState.pendingSidebarTreeCommand else { return }
-            applySidebarTreeCommand(command)
+        .answersCommands(SidebarTreeCommand.allCases.map(WindowCommand.sidebarTree), whileBehind: true) { command in
+            if case .sidebarTree(let tree) = command { applySidebarTreeCommand(tree) }
         }
         // Empty Trash and Mark All as Read, staged by the row context menus;
         // one modifier (`+Helpers`) so the body stays under the type-body cap.

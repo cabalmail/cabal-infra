@@ -20,9 +20,7 @@ struct NewFolderSheet: View {
         NavigationStack {
             content
                 .navigationTitle("New Folder")
-                #if os(iOS) || os(visionOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
+                .inlineNavigationTitle()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }
@@ -113,9 +111,7 @@ struct NewFolderSheet: View {
         TextField("Name", text: $form.name, prompt: Text("e.g. Projects"))
             .labelsHidden()
             .autocorrectionDisabled()
-            #if os(iOS) || os(visionOS)
-            .textInputAutocapitalization(.never)
-            #endif
+            .textEntry(.verbatim)
     }
 
     private var parentPicker: some View {

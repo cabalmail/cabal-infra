@@ -273,7 +273,13 @@ private fun ConditionRow(
             onValueChange = { onChange(condition.copy(value = it)) },
             placeholder = { Text(stringResource(R.string.rules_condition_value_hint)) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
+            // A value is a literal substring, so nothing may rewrite it.
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = if (condition.field.holdsAddresses) KeyboardType.Email else KeyboardType.Text,
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
+                ),
             modifier = Modifier.weight(0.58f),
         )
         IconButton(onClick = onRemove) {

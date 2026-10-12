@@ -26,10 +26,7 @@ extension MessageDetailView {
                 userAddresses: addresses,
                 sourceFolder: folder.path
             )
-            if mode == .forward {
-                stashForwardAttachments(for: seed)
-            }
-            presentCompose(seed: seed)
+            presentCompose(seed: seed, attachments: mode == .forward ? forwardedAttachments() : [])
         }
     }
 
@@ -42,13 +39,13 @@ extension MessageDetailView {
 
     /// Forwarding includes the original message's attachments. The detail
     /// view model decoded them to temp files during the MIME parse, so
-    /// re-read the bytes and stash them on `AppState` keyed by the seed
-    /// id — the window value is a recycled slot, not the draft, and
-    /// `ComposeView` consumes the stash on appearance. Inline `cid:`
-    /// images stay behind: they live in the quoted body, not the
-    /// attachment strip, matching the React composer's scope.
-    private func stashForwardAttachments(for seed: Draft) {
-        guard let source = model?.attachments, !source.isEmpty else { return }
+    /// re-read the bytes; they ride the compose request beside the seed
+    /// (the window value is a recycled slot, not the draft), and
+    /// `ComposeView` takes them on appearance. Inline `cid:` images stay
+    /// behind: they live in the quoted body, not the attachment strip,
+    /// matching the React composer's scope.
+    private func forwardedAttachments() -> [Attachment] {
+        guard let source = model?.attachments, !source.isEmpty else { return [] }
         let loaded: [Attachment] = source.compactMap { attachment in
             guard let data = try? Data(contentsOf: attachment.fileURL) else { return nil }
             return Attachment(
@@ -63,8 +60,7 @@ extension MessageDetailView {
                 message: "Some attachments couldn't be carried into the forward."
             ))
         }
-        guard !loaded.isEmpty else { return }
-        appState.stashComposeAttachments(loaded, for: seed.id)
+        return loaded
     }
 
     /// Opens compose resuming the open Drafts-folder message: recipients,
@@ -79,12 +75,12 @@ extension MessageDetailView {
         }
     }
 
-    /// Routes to the app-wide compose receiver (`ComposeRequestRouter` on
+    /// Routes to this window's compose surface (`ComposeRequestRouter` on
     /// `SignedInRootView`): a compose window on macOS / iPadOS / visionOS,
     /// the root-hosted sheet on iPhone. Root-hosted rather than view-local
     /// so a mailto: arriving mid-reply and this reply flow never race two
     /// sheet presentations against each other.
-    func presentCompose(seed: Draft) {
-        appState.requestCompose(seed: seed, in: commandWindowID)
+    func presentCompose(seed: Draft, attachments: [Attachment] = []) {
+        appState.compose.open(seed: seed, attachments: attachments, from: commandWindowID)
     }
 }

@@ -54,9 +54,7 @@ struct NewAddressSheet: View {
         NavigationStack {
             content
                 .navigationTitle("Create Address")
-                #if os(iOS) || os(visionOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
+                .inlineNavigationTitle()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }
@@ -220,16 +218,12 @@ struct NewAddressSheet: View {
         HStack {
             TextField("username", text: $username)
                 .autocorrectionDisabled()
-                #if os(iOS) || os(visionOS)
-                .textInputAutocapitalization(.never)
-                #endif
+                .textEntry(.verbatim)
             Text("@")
                 .foregroundStyle(.secondary)
             TextField("subdomain", text: $subdomain)
                 .autocorrectionDisabled()
-                #if os(iOS) || os(visionOS)
-                .textInputAutocapitalization(.never)
-                #endif
+                .textEntry(.verbatim)
             Text(".")
                 .foregroundStyle(.secondary)
             Picker("", selection: $domain) {

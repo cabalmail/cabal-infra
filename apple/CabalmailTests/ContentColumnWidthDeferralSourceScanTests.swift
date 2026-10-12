@@ -9,11 +9,11 @@ import XCTest
 // column's measured width, took its new width centred on its old frame and
 // grew leftward over the menu while the buttons after it stayed put. The
 // width is therefore recorded only once the main run loop is back in its
-// default mode (`MailRootView.recordContentColumnWidth`), which is after the
+// default mode (`DesktopShell.recordContentColumnWidth`), which is after the
 // mouse is up; a size change made then lays the section out normally.
 //
 // There is no seam for NSToolbar's layout, so this reads the source, in the
-// shape the other `*SourceScanTests` set: the macOS arm writes the width
+// shape the other `*SourceScanTests` set: the Mac's shell writes the width
 // from inside a `.default`-mode run-loop block, not directly.
 //
 // The block is where the width is written, and Foundation declares it
@@ -24,7 +24,7 @@ import XCTest
 // and the statement is what makes it legal — so both are pinned here.
 final class ContentColumnWidthDeferralSourceScanTests: XCTestCase {
 
-    private static let path = "CabalmailUI/Shell/MailRootView.swift"
+    private static let path = "CabalmailUI/Shell/DesktopShell.swift"
 
     func testTheMacWriteWaitsForTheDefaultRunLoopMode() throws {
         let arm = try Self.macArm(in: Self.code(in: try Self.source()))
@@ -99,15 +99,15 @@ final class ContentColumnWidthDeferralSourceScanTests: XCTestCase {
 
     // MARK: - Corpus
 
-    /// The helper's macOS arm: from its declaration to the `#else`.
+    /// The Mac's helper: from its declaration to the end of the function.
     private static func macArm(in code: String) throws -> String {
         let start = try XCTUnwrap(
             code.range(of: "func recordContentColumnWidth(_ width: CGFloat)"),
             "\(path): helper not found"
         )
         let end = try XCTUnwrap(
-            code.range(of: "#else", range: start.upperBound..<code.endIndex),
-            "\(path): helper has no #else arm"
+            code.range(of: "\n    }\n", range: start.upperBound..<code.endIndex),
+            "\(path): helper's end not found"
         )
         return String(code[start.lowerBound..<end.lowerBound])
     }

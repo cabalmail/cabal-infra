@@ -2,8 +2,8 @@ import XCTest
 import CabalmailKit
 @testable import CabalmailUI
 
-/// A Spotlight result tapped while signed out parks on `pendingSpotlightRef`
-/// until a session is wired. The index holds the last signed-in account's
+/// A Spotlight result tapped while signed out parks in the deep-link router
+/// until a session is wired and a window lands on it. The index holds the last signed-in account's
 /// mail, so the ref belongs to that account: the same account signing back
 /// in opens it, and another account's sign-in drops it rather than open a
 /// folder and UID that mean nothing in its mailbox (#1825).
@@ -26,11 +26,14 @@ final class SpotlightSignInTests: XCTestCase {
 
         await signIn(as: "alice")
 
-        let cursor = try XCTUnwrap(harness.appState.navCoordinator)
-        try await waitUntilOnMainActor { cursor.navigateRequest != nil }
-        XCTAssertEqual(cursor.navigateRequest?.folder, "Archive")
-        XCTAssertEqual(cursor.navigateRequest?.uid, 4242)
-        XCTAssertNil(harness.appState.pendingSpotlightRef)
+        let appState = harness.appState
+        let window = SceneNavigator(
+            coordinator: { appState.navCoordinator }, hasClient: { true }, seed: .mail, deepLinks: appState.deepLinks
+        )
+        await window.mailTreeAppeared(UUID(), isWide: false)
+        XCTAssertEqual(window.selectedFolder?.path, "Archive")
+        XCTAssertEqual(window.restores.pendingRestore?.uid, 4242)
+        XCTAssertNil(appState.deepLinks.parked)
     }
 
     func testAnotherAccountsSignInDropsTheParkedResult() async throws {
@@ -38,14 +41,12 @@ final class SpotlightSignInTests: XCTestCase {
 
         await signIn(as: "bob")
 
-        let cursor = try XCTUnwrap(harness.appState.navCoordinator)
-        // A replay routes through a task of its own (the same-account test
-        // above waits for it); give one every chance to land before checking
-        // that none did.
+        XCTAssertNotNil(harness.appState.navCoordinator)
+        // Give any stray route every chance to land before checking that
+        // none did.
         for _ in 0..<20 { await Task.yield() }
         _ = await harness.appState.client?.envelopeCache.snapshot(for: "Archive")
-        XCTAssertNil(cursor.navigateRequest)
-        XCTAssertNil(harness.appState.pendingSpotlightRef)
+        XCTAssertNil(harness.appState.deepLinks.parked)
     }
 
     /// Alice signs in and out, then a result is tapped while signed out.
@@ -53,7 +54,7 @@ final class SpotlightSignInTests: XCTestCase {
         await signIn(as: "alice")
         await harness.appState.signOut()
         harness.appState.routeSpotlightRef(ref)
-        XCTAssertEqual(harness.appState.pendingSpotlightRef, ref, "precondition: parked while signed out")
+        XCTAssertEqual(harness.appState.deepLinks.parked, .spotlight(ref), "precondition: parked while signed out")
     }
 
     private func signIn(as username: String) async {

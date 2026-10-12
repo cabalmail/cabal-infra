@@ -69,6 +69,8 @@ additive optional fields.
   device-scoped state (`PushSettings`, `InstallIdentity`). The most
   recently active window wins on macOS; per-window fidelity is not a
   goal.
+
+  > **Erratum (2026-10-09):** Each main window now also keeps its own route in `@SceneStorage` (workstream 3.3, `StoredRoute`), so a window the system restores comes back on its own folder and message or feed item. The per-install record stays: it is what a new window, a launch with no restored windows and another device resume from, and only the window the user last used writes it (`WindowRecorder`).
 - **Reading positions are keyed by item identity**, not by session:
   Message-ID (falling back to folder + UID) for mail, `RssItem.id` for
   feeds. The cache is bounded (200 entries, least-recently-used

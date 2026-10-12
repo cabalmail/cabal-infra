@@ -50,28 +50,23 @@ struct CabalmailMacApp: App {
     var body: some Scene {
         WindowGroup("Cabalmail", id: mainWindowID) {
             ContentView()
-                // Gives this window the identity its menu commands are aimed
-                // at, so a second window ignores them (MainWindowCommandScope).
-                .mainWindowCommandScope(appState)
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
                 .appRootLifecycle(
                     appState: appState,
                     preferences: preferences,
-                    scenePhase: scenePhase,
                     beforeRestore: {
-                        // Give the AppKit delegate's Spotlight-continuation
-                        // bridge its AppState before the restore suspends —
-                        // a cold launch from a Spotlight result parks its
-                        // activity in the router until this runs.
-                        SpotlightRouter.shared.attach(appState)
                         // Warm the "Open in Private Window" availability
                         // cache so the first link menu of the session lays
                         // out with its rows decided (see PrivateLinkHandoff).
                         PrivateLinkHandoff.prime()
                     }
                 )
+                // Gives this window the identity its compose requests and mail
+                // events are aimed at (MainWindowCommandScope). Last, so
+                // everything above, the launch chain included, has it.
+                .mainWindowCommandScope(appState)
         }
         // A WindowGroup's default reaction to an external event (an
         // incoming mailto: URL) is to *spawn a fresh window of the
@@ -84,6 +79,11 @@ struct CabalmailMacApp: App {
         .handlesExternalEvents(matching: [])
         .commands {
             CabalmailCommands(appState: appState)
+        }
+        // The app's own phase, once for the app however many windows are
+        // open: flush on the way out, reconcile and refresh on the way back.
+        .onChange(of: scenePhase) { _, phase in
+            appState.appScenePhaseChanged(to: phase)
         }
         // Standalone compose window scene — matches every other Mac
         // mail client. The Cabalmail iOS target installs the same

@@ -20,9 +20,7 @@ struct FeedSubscriptionSettingsSheet: View {
         NavigationStack {
             content
                 .navigationTitle(subscription.displayTitle)
-                #if os(iOS) || os(visionOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
+                .inlineNavigationTitle()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }

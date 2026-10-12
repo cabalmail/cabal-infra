@@ -2,8 +2,8 @@ import Foundation
 import CabalmailKit
 
 // Helper value types `AppState` posts — the sign-in reason, the toast and
-// the drag-and-drop move request — plus its command bumpers and window
-// targeting. What the reader and composer change for the message lists is
+// the drag-and-drop move request — plus which main window was last in
+// front. What the reader and composer change for the message lists is
 // posted on `MailEvents` (`AppState.mailStore.events`).
 
 /// Why the app is showing the sign-in form when the user did not ask for it.
@@ -115,27 +115,14 @@ struct MessageMoveRequest: Equatable, Sendable {
     }
 }
 
-// MARK: - Message-menu selection intents
-
-// Bumpers for the selection-scoped tick counters declared on the main
-// type (stored properties can't live in an extension under @Observable).
-// Here rather than in `AppState.swift` so that file stays under SwiftLint's
-// `file_length` cap.
-extension AppState {
-    func requestToggleSeen(in window: UUID? = nil) { commandWindow = window; toggleSeenRequestTick += 1 }
-    func requestToggleFlagged(in window: UUID? = nil) { commandWindow = window; toggleFlaggedRequestTick += 1 }
-    public func requestMarkFolderRead(in window: UUID? = nil) { commandWindow = window; markFolderReadRequestTick += 1 }
-    func requestMoveSelection(in window: UUID? = nil) { commandWindow = window; moveSelectionRequestTick += 1 }
-}
-
-// MARK: - Command window targeting
+// MARK: - The main window last in front
 //
-// Which main window a command tick is for. The `request…` methods record
-// the target in `commandWindow` as they bump a tick; the observers, through
-// `onWindowCommand` (`Views/MainWindowCommandScope.swift`), ask `commandReaches`
-// before acting. A nil target reaches every window: that is what a
-// data-change refresh wants (Empty Trash, a push action), and it keeps any
-// caller that names no window working as it did before targeting existed.
+// Which main window a request from outside any of them is for: a mailto:
+// link opens its composer in the window last in front (`ComposeCoordinator`),
+// a deep link the system aimed at no window opens there (`DeepLinkRouter`),
+// and only that window records the place the app resumes from
+// (`WindowRecorder`). The menus' own commands go to the window in front
+// (`WindowCommands`).
 @MainActor
 extension AppState {
     /// Records `window` as the main window most recently in front.
@@ -143,23 +130,9 @@ extension AppState {
         lastActiveMainWindow = window
     }
 
-    /// Forgets a main window that closed, so a command issued from a
-    /// compose window cannot be aimed at a window no longer there.
+    /// Forgets a main window that closed, so nothing is aimed at a window
+    /// no longer there.
     func forgetMainWindow(_ window: UUID) {
         if lastActiveMainWindow == window { lastActiveMainWindow = nil }
-    }
-
-    /// The window a menu command is for: the focused main window, or the
-    /// one last in front when the key window is a compose or Settings
-    /// window.
-    public func menuCommandTarget(focused: UUID?) -> UUID? {
-        focused ?? lastActiveMainWindow
-    }
-
-    /// Whether the latest command tick is for the window `window`. A view
-    /// outside any main window (nil) answers every tick, as before.
-    func commandReaches(_ window: UUID?) -> Bool {
-        guard let target = commandWindow, let window else { return true }
-        return target == window
     }
 }

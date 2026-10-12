@@ -14,6 +14,8 @@ import CabalmailKit
 /// The registrar runs over a recording notification center and a private
 /// defaults suite, never the host app's, and is driven from the harness's
 /// session hooks the way `SessionHooks.live` drives `PushRegistrar.shared`.
+/// A tap opens through the harness's own deep-link router; with no window
+/// mounted it parks there, and a window landed on the session takes it.
 @MainActor
 final class PushAccountSwitchTests: XCTestCase {
     private var ref: PushMessageRef!
@@ -31,7 +33,7 @@ final class PushAccountSwitchTests: XCTestCase {
         defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         center = RecordingNotificationCenter()
         harness = try SessionHarness()
-        drive(harness, with: makeRegistrar())
+        drive(harness, with: makeRegistrar(for: harness))
     }
 
     override func tearDown() async throws {
@@ -60,7 +62,8 @@ final class PushAccountSwitchTests: XCTestCase {
 
         await signIn(harness, as: "bob")
 
-        XCTAssertNil(try XCTUnwrap(harness.appState.navCoordinator).navigateRequest)
+        XCTAssertNotNil(harness.appState.navCoordinator)
+        XCTAssertNil(harness.appState.deepLinks.parked)
         XCTAssertEqual(center.removals, 2, "one at alice's sign-out, one as bob's session starts")
     }
 
@@ -72,7 +75,7 @@ final class PushAccountSwitchTests: XCTestCase {
 
         await signIn(harness, as: "alice")
 
-        assertOpened(harness)
+        await assertOpened(harness)
         XCTAssertEqual(center.removals, 1, "only alice's sign-out removed anything")
     }
 
@@ -96,7 +99,32 @@ final class PushAccountSwitchTests: XCTestCase {
 
         await signIn(harness, as: "alice")
 
-        XCTAssertNil(try XCTUnwrap(harness.appState.navCoordinator).navigateRequest)
+        XCTAssertNotNil(harness.appState.navCoordinator)
+        XCTAssertNil(harness.appState.deepLinks.parked)
+    }
+
+    /// The registrar's own two drops, with a router the app state does not
+    /// share (in the app they share one, and `AppState` drops the link too):
+    /// its session's end, and a session for another account than the last.
+    func testTheRegistrarDropsAParkedTapByItsOwnRules() async throws {
+        let world = try SessionHarness()
+        extraHarnesses.append(world)
+        let own = DeepLinkRouter()
+        let registrar = PushRegistrar(
+            notificationCenter: center.center, defaults: defaults,
+            enrichmentStore: PushEnrichmentStore(secureStore: nil, defaults: defaults), deepLinks: own
+        )
+        drive(world, with: registrar)
+        await signIn(world, as: "alice")
+        await registrar.handleNotificationAction(identifier: "OPEN", ref: ref)
+        XCTAssertNotNil(own.parked, "precondition: no window of this router to take it")
+
+        await world.appState.signOut()
+        XCTAssertNil(own.parked, "the session's end")
+
+        await registrar.handleNotificationAction(identifier: "OPEN", ref: ref)
+        await signIn(world, as: "bob")
+        XCTAssertNil(own.parked, "another account's session")
     }
 
     /// A cold launch from a tap: the restore wires the account the tap was
@@ -113,7 +141,7 @@ final class PushAccountSwitchTests: XCTestCase {
         await restore.value
 
         XCTAssertEqual(harness.appState.status, .signedIn)
-        assertOpened(harness)
+        await assertOpened(harness)
         XCTAssertEqual(center.removals, 0)
     }
 
@@ -125,13 +153,14 @@ final class PushAccountSwitchTests: XCTestCase {
         await signIn(harness, as: "alice")
         let relaunched = try SessionHarness()
         extraHarnesses.append(relaunched)
-        let registrar = makeRegistrar()
+        let registrar = makeRegistrar(for: relaunched)
         drive(relaunched, with: registrar)
         await registrar.handleNotificationAction(identifier: "OPEN", ref: ref)
 
         await signIn(relaunched, as: "bob")
 
-        XCTAssertNil(try XCTUnwrap(relaunched.appState.navCoordinator).navigateRequest)
+        XCTAssertNotNil(relaunched.appState.navCoordinator)
+        XCTAssertNil(relaunched.appState.deepLinks.parked)
         XCTAssertEqual(center.removals, 1, "bob's session start removed alice's notifications")
     }
 
@@ -185,11 +214,12 @@ final class PushAccountSwitchTests: XCTestCase {
 
     private var registrars: [ObjectIdentifier: PushRegistrar] = [:]
 
-    private func makeRegistrar() -> PushRegistrar {
+    private func makeRegistrar(for world: SessionHarness) -> PushRegistrar {
         PushRegistrar(
             notificationCenter: center.center,
             defaults: defaults,
-            enrichmentStore: PushEnrichmentStore(secureStore: nil, defaults: defaults)
+            enrichmentStore: PushEnrichmentStore(secureStore: nil, defaults: defaults),
+            deepLinks: world.appState.deepLinks
         )
     }
 
@@ -228,11 +258,25 @@ final class PushAccountSwitchTests: XCTestCase {
         return restore
     }
 
-    private func assertOpened(_ world: SessionHarness, file: StaticString = #filePath, line: UInt = #line) {
-        let request = world.appState.navCoordinator?.navigateRequest
-        XCTAssertEqual(request?.folder, "INBOX", file: file, line: line)
-        XCTAssertEqual(request?.uid, 4271, file: file, line: line)
-        XCTAssertEqual(request?.messageID, "<m1@example.com>", file: file, line: line)
+    /// The tap is waiting for a window, and the first window to land on
+    /// the session opens it.
+    private func assertOpened(_ world: SessionHarness, file: StaticString = #filePath, line: UInt = #line) async {
+        guard case .message(let request)? = world.appState.deepLinks.parked else {
+            return XCTFail("no tap is waiting", file: file, line: line)
+        }
+        XCTAssertEqual(request.folder, "INBOX", file: file, line: line)
+        XCTAssertEqual(request.uid, 4271, file: file, line: line)
+        XCTAssertEqual(request.messageID, "<m1@example.com>", file: file, line: line)
+
+        let appState = world.appState
+        let window = SceneNavigator(
+            coordinator: { appState.navCoordinator }, hasClient: { true }, seed: .mail, deepLinks: appState.deepLinks
+        )
+        await window.mailTreeAppeared(UUID(), isWide: false)
+        XCTAssertNil(appState.deepLinks.parked, "the window took it", file: file, line: line)
+        XCTAssertEqual(window.selectedFolder?.path, "INBOX", file: file, line: line)
+        XCTAssertEqual(window.restores.pendingRestore?.uid, 4271, file: file, line: line)
+        XCTAssertEqual(window.restores.pendingRestore?.messageID, "<m1@example.com>", file: file, line: line)
     }
 }
 

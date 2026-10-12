@@ -110,15 +110,18 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Spotlight-result continuation. On macOS this AppKit callback is the
     /// only reliable delivery path — SwiftUI's `.onContinueUserActivity`
     /// never fires for `CSSearchableItemActionType` here (see
-    /// `SpotlightRouter`). iOS keeps the SwiftUI path and does not
-    /// implement the UIKit equivalent.
+    /// `SpotlightRouting.swift`). It names no window, so the result opens in
+    /// the window last used (`DeepLinkRouter`). iOS keeps the SwiftUI path
+    /// and does not implement the UIKit equivalent.
     public func application(
         _ application: NSApplication,
         continue userActivity: NSUserActivity,
         restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
     ) -> Bool {
         guard userActivity.activityType == CSSearchableItemActionType else { return false }
-        SpotlightRouter.shared.handle(userActivity)
+        if let ref = SpotlightMessageRef(activity: userActivity) {
+            DeepLinkRouter.shared.open(.spotlight(ref))
+        }
         return true
     }
 }
@@ -156,7 +159,8 @@ extension AppDelegate {
 // they'd inherit the class's application-delegate-inferred @MainActor
 // isolation and trip strict concurrency (non-Sendable UN* parameters can't
 // cross into an isolated witness). Sendable values are extracted up front;
-// only those hop to the main actor. Shared verbatim by iOS and macOS.
+// only those hop to the main actor. Shared by iOS and macOS; only iOS names
+// the scene a notification was shown over.
 extension AppDelegate: UNUserNotificationCenterDelegate {
     /// Foreground delivery. On iOS (and while the Mac app is frontmost) the
     /// polling-driven UI already shows the new message, so a banner would
@@ -199,6 +203,11 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     /// `NSInternalInconsistencyException: Call must be made on main thread`.
     /// Taking the handler explicitly puts the hop where it can be stated and
     /// tested instead of leaving it to the bridge.
+    ///
+    /// On iPad the response names the scene the notification was shown over
+    /// (`targetScene`), and a tap opens in that main window
+    /// (`MainMailScene.window(for:)`); otherwise, or when the scene is not a
+    /// main window yet, in the window last used.
     public nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
@@ -206,8 +215,16 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     ) {
         let identifier = response.actionIdentifier
         let ref = PushMessageRef(userInfo: response.notification.request.content.userInfo)
+        #if os(iOS)
+        let scene = response.targetScene
+        #endif
         Task {
-            await PushRegistrar.shared.handleNotificationAction(identifier: identifier, ref: ref)
+            #if os(iOS)
+            let window = await MainActor.run { MainMailScene.window(for: scene?.session) }
+            #else
+            let window: UUID? = nil
+            #endif
+            await PushRegistrar.shared.handleNotificationAction(identifier: identifier, ref: ref, in: window)
             await PushActionCompletion.finish(completionHandler)
         }
     }

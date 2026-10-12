@@ -35,12 +35,12 @@ public final class MailSessionStore {
     /// resets this store). `acceptsCounts(from:)` answers from it.
     @ObservationIgnored private let teardownGate: SessionTeardownGate
 
-    /// Hard-reloads every mounted message list. `AppState` points this at its
-    /// own refresh request once, when it creates the store, so a view model
-    /// that changes a folder's contents behind the list (Mark All as Read,
-    /// Empty Trash) asks for it without holding `AppState`, and no
-    /// construction site can forget to wire it.
-    @ObservationIgnored var onListRefreshRequested: @MainActor () -> Void = {}
+    /// Bumped once per change made behind the message lists (Mark All as
+    /// Read, Empty Trash, a notification's action); every mounted list
+    /// observes it and hard-reloads. Here rather than among the menu
+    /// commands, so it reaches every window's lists without re-aiming a
+    /// command another window has not answered yet (#1824).
+    private(set) var listRefreshTick = 0
 
     /// Built by `AppState` only, over its own `teardownGate`: a store over
     /// any other gate would never see that sign-out ended a client.
@@ -202,9 +202,9 @@ public final class MailSessionStore {
     }
 
     /// Asks every mounted message list to hard-reload after a change made
-    /// behind it (`onListRefreshRequested`).
+    /// behind it (`listRefreshTick`).
     func requestListRefresh() {
-        onListRefreshRequested()
+        listRefreshTick += 1
     }
 
     /// Sign-out: what the store knows about the account goes, so the next

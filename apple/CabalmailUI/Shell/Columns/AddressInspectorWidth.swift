@@ -87,7 +87,7 @@ extension View {
     /// the width it was last left at (`AddressInspectorWidthPolicy`).
     /// `isPresented` is the inspector's presentation state. (Compiled out on
     /// visionOS, where the inspector APIs are unavailable and the one caller,
-    /// `MailRootView`, is never built.)
+    /// `WideMail`, is never built.)
     @ViewBuilder
     func addressInspectorWidth(isPresented: Bool) -> some View {
         #if os(macOS)

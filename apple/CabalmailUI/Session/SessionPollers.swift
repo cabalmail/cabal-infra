@@ -96,7 +96,7 @@ final class SessionPollers {
     }
 
     /// One feed pass: new items and the pending mutation queue. The poller's
-    /// tick, and the foreground refresh the scene-phase handlers call; a
+    /// tick, and the foreground refresh the app's scene-phase handler calls; a
     /// no-op when signed out.
     func refreshFeeds() async {
         guard let engine = client()?.rssSync else { return }

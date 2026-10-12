@@ -17,7 +17,7 @@ import XCTest
 // the eviction in place: Settings lives on the floating folder panel now, and
 // the column's bar carries the folder toggle alone.
 final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
-    private static let path = "CabalmailUI/Shell/MailRootView.swift"
+    private static let path = "CabalmailUI/Shell/SplitShell.swift"
 
     /// The rule: nothing in the message-list column's toolbar block builds a
     /// gear. Re-adding one there re-creates the overflow this issue is about.
@@ -42,17 +42,6 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
         XCTAssertEqual(Self.settingsRequestHits(in: block), 1)
     }
 
-    /// The gear opens Settings in its own window. With no window named, the
-    /// request reached every iPad window, so each one opened Settings; the
-    /// menu's Settings command was aimed at the window in front, but the gear
-    /// was missed. `CommandTickCharacterizationTests` pins what a request
-    /// aimed at a window reaches; a toolbar button's action has no seam of
-    /// its own, so this holds the call site.
-    func testTheFolderPanelGearAimsAtItsWindow() throws {
-        let block = try Self.code(in: Self.folderPanelBlock())
-        XCTAssertEqual(Self.windowedSettingsRequestHits(in: block), 1, "the gear names no window")
-    }
-
     /// The folder-panel toggle stays in the column bar: it is the only way to
     /// open the panel the gear now lives on, so evicting *it* would strand
     /// both (#1690).
@@ -71,14 +60,11 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
         XCTAssertEqual(Self.gearHits(in: #"Image(systemName: "gearshape")"#), 1)
         XCTAssertEqual(Self.gearHits(in: #"Image(systemName: "gearshape.fill")"#), 1)
         XCTAssertEqual(Self.gearHits(in: #"Image(systemName: "sidebar.leading")"#), 0)
-        XCTAssertEqual(Self.settingsRequestHits(in: "appState.requestSettings()"), 1)
-        XCTAssertEqual(Self.settingsRequestHits(in: "appState.requestSettings(in: commandWindowID)"), 1)
-        XCTAssertEqual(Self.settingsRequestHits(in: "appState.requestSettings(\n    in: window\n)"), 1)
-        XCTAssertEqual(Self.settingsRequestHits(in: "appState.requestRefresh()"), 0)
-        XCTAssertEqual(Self.settingsRequestHits(in: "appState.requestRefresh(in: commandWindowID)"), 0)
-        XCTAssertEqual(Self.windowedSettingsRequestHits(in: "appState.requestSettings(in: commandWindowID)"), 1)
-        XCTAssertEqual(Self.windowedSettingsRequestHits(in: "appState.requestSettings()"), 0)
-        XCTAssertEqual(Self.windowedSettingsRequestHits(in: "appState.requestSettings(in: nil)"), 0)
+        XCTAssertEqual(Self.settingsRequestHits(in: "windowCommands?.send(.settings)"), 1)
+        XCTAssertEqual(Self.settingsRequestHits(in: "commands?.send(.settings)"), 1)
+        XCTAssertEqual(Self.settingsRequestHits(in: "windowCommands?.send(\n    .settings\n)"), 1)
+        XCTAssertEqual(Self.settingsRequestHits(in: "windowCommands?.send(.refresh)"), 0)
+        XCTAssertEqual(Self.settingsRequestHits(in: "windowCommands?.send(.sidebarTree(.expandAllFolders))"), 0)
     }
 
     /// A comment naming the gear is not a use of it — and the comment left in
@@ -86,7 +72,7 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
     func testTheScanReadsCodeNotProse() {
         let reverted = """
         // The app-level Settings gear used to sit here: Image(systemName: "gearshape")
-        // calling appState.requestSettings().
+        // calling windowCommands?.send(.settings).
         ToolbarItem(placement: .topBarLeading) { folderToggle }
         """
         XCTAssertEqual(Self.gearHits(in: Self.code(in: reverted)), 0)
@@ -96,7 +82,7 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
     /// Floor: a mis-rooted read finds nothing and passes everything above.
     func testTheBlocksAreReadable() throws {
         XCTAssertTrue(
-            try Self.columnToolbarBlock().contains("showsSettingsGear"),
+            try Self.columnToolbarBlock().contains("ToolbarItem(placement: .topBarLeading) {"),
             "the column toolbar block did not load from \(Self.path)"
         )
         XCTAssertTrue(
@@ -112,11 +98,7 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
     }
 
     private static func settingsRequestHits(in body: String) -> Int {
-        matches(body, #"requestSettings\("#)
-    }
-
-    private static func windowedSettingsRequestHits(in body: String) -> Int {
-        matches(body, #"requestSettings\(\s*in:\s*commandWindowID\s*\)"#)
+        matches(body, #"send\(\s*\.settings\s*\)"#)
     }
 
     private static func matches(_ body: String, _ pattern: String) -> Int {
@@ -124,10 +106,13 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
         return regex.numberOfMatches(in: body, range: NSRange(body.startIndex..., in: body))
     }
 
-    /// The `showsSettingsGear` toolbar block — the message-list column's own
-    /// bar on regular-width iPad — through the `#endif` that closes it.
+    /// The split's leading toolbar item — the message-list column's own bar
+    /// on regular-width iPad — through the end of the column's builder.
     private static func columnToolbarBlock() throws -> String {
-        try slice(from: "if showsSettingsGear {", to: "    /// Records the measured content-column width")
+        try slice(
+            from: "ToolbarItem(placement: .topBarLeading) {",
+            to: "    /// Records the measured content-column width"
+        )
     }
 
     /// `folderPanelOverlay`'s body, through the end of its extension.

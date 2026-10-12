@@ -51,13 +51,34 @@ enum ComposeSurfacePolicy {
         alwaysWindows || supportsMultipleWindows
     }
 
-    /// The host platform, as a value rather than a `#if`, so the rule above
-    /// can be exercised for both answers on whichever platform the tests run.
-    #if os(macOS) || os(visionOS)
-    static let platformAlwaysWindows = true
-    #else
-    static let platformAlwaysWindows = false
-    #endif
+    /// What a main window's compose surface does with a seed it is offered.
+    enum Offer: Equatable {
+        /// Opens a compose window on it.
+        case window
+        /// Presents it in the surface's sheet.
+        case sheet
+        /// Takes nothing now; the seed waits with `ComposeCoordinator`.
+        case refuse
+    }
+
+    /// - Parameters:
+    ///   - hasClient: whether a session is wired. Without one the surface
+    ///     builds no composer: its window is signing out, and the view is
+    ///     about to go, so a seed handed to it then would be lost.
+    ///   - opensInWindow: `opensInWindow(supportsMultipleWindows:)`, as the
+    ///     window is now.
+    ///   - sheetIsUp: whether the surface's sheet is showing a compose,
+    ///     which a second seed must not replace.
+    static func offer(hasClient: Bool, opensInWindow: Bool, sheetIsUp: Bool) -> Offer {
+        guard hasClient else { return .refuse }
+        if opensInWindow { return .window }
+        return sheetIsUp ? .refuse : .sheet
+    }
+
+    /// The host platform's answer (`HostPlatform.alwaysWindows`), as a value
+    /// so the rule above can be exercised for both answers on whichever
+    /// platform the tests run.
+    static let platformAlwaysWindows = HostPlatform.current.alwaysWindows
 }
 
 /// Compose scene group. Both `CabalmailApp` (iOS / iPadOS / visionOS)
@@ -166,11 +187,12 @@ private struct ComposeWindowContent: View {
                     if let slot { appState.composeSlots.release(slot) }
                     // iPadOS shows the home screen when the frontmost
                     // scene is dismissed with no sibling activated; bring
-                    // the main mail scene forward first so closing compose
-                    // lands back on the split view (see
+                    // the main window this composer came from forward
+                    // first, else the one last used, so closing compose
+                    // lands back on its split view (see
                     // MainSceneActivation.swift).
                     #if os(iOS)
-                    MainMailScene.activate()
+                    MainMailScene.activate(appState.compose.origin(of: slot), fallback: appState.lastActiveMainWindow)
                     #endif
                     dismissWindow()
                 }

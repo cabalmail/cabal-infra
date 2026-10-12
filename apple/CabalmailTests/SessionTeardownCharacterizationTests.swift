@@ -27,7 +27,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     func testASpotlightTapBeforeASessionParksTheRef() {
         let state = AppState()
         state.routeSpotlightRef(parked)
-        XCTAssertEqual(state.pendingSpotlightRef, parked)
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(parked))
     }
 
     /// One slot: the latest tap wins.
@@ -35,29 +35,36 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         let state = AppState()
         state.routeSpotlightRef(parked)
         state.routeSpotlightRef(later)
-        XCTAssertEqual(state.pendingSpotlightRef, later)
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(later))
     }
 
     func testASpotlightActivityBeforeASessionParksItsRef() {
         let state = AppState()
         state.handleSpotlightActivity(Self.activity(identifier: parked.stringValue))
-        XCTAssertEqual(state.pendingSpotlightRef, parked)
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(parked))
     }
 
     func testAnActivityThatIsNotOursParksNothing() {
         let state = AppState()
         state.handleSpotlightActivity(Self.activity(identifier: "com.example.other|4242"))
         state.handleSpotlightActivity(NSUserActivity(activityType: CSSearchableItemActionType))
-        XCTAssertNil(state.pendingSpotlightRef)
+        XCTAssertNil(state.deepLinks.parked)
     }
 
-    /// The replay `wireSession` runs clears the slot and routes again, and
-    /// with no session that parks the ref straight back.
-    func testReplayingWithNoSessionParksTheRefAgain() {
+    /// Nothing replays a parked ref at session start any more: it waits in
+    /// the router for a window. A window with no session to open it in
+    /// hands it straight back, so it stays parked.
+    func testAWindowWithNoSessionLeavesTheRefParked() {
         let state = AppState()
         state.routeSpotlightRef(parked)
-        state.routePendingSpotlightOpen()
-        XCTAssertEqual(state.pendingSpotlightRef, parked)
+        let window = SceneNavigator(
+            coordinator: { nil }, hasClient: { false }, seed: .mail, deepLinks: state.deepLinks
+        )
+        window.windowID = UUID()
+
+        state.deepLinks.register(window)
+
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(parked))
     }
 
     /// The slot is not tied to an account, so a sign-out drops what it holds
@@ -72,7 +79,7 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
 
         await state.signOut()
 
-        XCTAssertNil(state.pendingSpotlightRef)
+        XCTAssertNil(state.deepLinks.parked)
     }
 
     /// An expiry ends the wait through the same teardown.
@@ -80,11 +87,11 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         let state = AppState()
         state.sessionManager.status = .signedIn
         state.routeSpotlightRef(parked)
-        XCTAssertEqual(state.pendingSpotlightRef, parked, "precondition: no session is wired")
+        XCTAssertEqual(state.deepLinks.parked, .spotlight(parked), "precondition: no session is wired")
 
         await state.sessionManager.handleSessionExpiry()
 
-        XCTAssertNil(state.pendingSpotlightRef)
+        XCTAssertNil(state.deepLinks.parked)
         XCTAssertEqual(state.signedOutReason, .sessionExpired)
     }
 
@@ -144,9 +151,10 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         XCTAssertEqual(state.toast, toast, "sign-out leaves the toast to its own timer")
     }
 
-    /// The command ticks, their window target and the one-shot handoffs. The
-    /// refactor replaces the ticks with focused-window commands; today a
-    /// sign-out never resets any of them. The reader's mail events (a failed
+    /// The drag-move tick, the window last in front and a compose waiting
+    /// for a window to show it (the menu commands go with their window's signed-in
+    /// view, workstream 3.1; compose left its tick in 3.3); a sign-out never
+    /// resets any of them. The reader's mail events (a failed
     /// removal, a dispose) were delivered when posted, and a sign-out
     /// neither posts another nor takes them back.
     func testSignOutWithNoClientLeavesTheCommandsAndHandoffsAlone() async {
@@ -164,11 +172,8 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
         await state.signOut()
 
         XCTAssertEqual(Self.ticks(of: state), ticks)
-        XCTAssertEqual(state.commandWindow, window)
         XCTAssertEqual(state.lastActiveMainWindow, window)
-        XCTAssertEqual(state.pendingComposeSeed, seed)
-        XCTAssertEqual(state.pendingFeedCommand, .refresh)
-        XCTAssertEqual(state.pendingSidebarTreeCommand, .expandAllFolders)
+        XCTAssertEqual(state.compose.seedsWaiting(for: nil), [seed], "still waiting for a window to show it")
         let expected: [MailEvent.Change] = [
             .restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false),
             .removed([MessageRef(folder: "INBOX", uid: 9)]),
@@ -197,33 +202,15 @@ final class SessionTeardownCharacterizationTests: XCTestCase {
     // MARK: - Helpers
 
     private static func bumpEveryCommand(on state: AppState, seed: Draft, window: UUID) {
-        state.requestRefresh()
-        state.requestReply()
-        state.requestReplyAll()
-        state.requestForward()
-        state.requestToggleSeen()
-        state.requestToggleFlagged()
-        state.requestMoveSelection()
-        state.requestMarkFolderRead()
-        state.requestFeedCommand(.refresh)
-        state.requestSidebarTree(.expandAllFolders)
         state.requestMove(items: [MessageDragItem(uid: 9, sourceFolder: "INBOX")], to: "Archive", from: nil)
         state.mailStore.events.post(.restored(MessageRef(folder: "INBOX", uid: 8), markUnread: false), from: nil)
         state.mailStore.events.post(.removed([MessageRef(folder: "INBOX", uid: 9)]), from: nil)
-        state.requestSettings()
         state.noteActiveMainWindow(window)
-        // Last, so its window is the recorded target.
-        state.requestCompose(seed: seed, in: window)
+        state.compose.open(seed: seed, from: window)
     }
 
     private static func ticks(of state: AppState) -> [Int] {
-        [
-            state.composeRequestTick, state.refreshRequestTick, state.replyRequestTick,
-            state.replyAllRequestTick, state.forwardRequestTick, state.toggleSeenRequestTick,
-            state.toggleFlaggedRequestTick, state.moveSelectionRequestTick, state.markFolderReadRequestTick,
-            state.settingsRequestTick, state.feedCommandTick, state.sidebarTreeCommandTick,
-            state.moveRequestTick,
-        ]
+        [state.moveRequestTick]
     }
 
     private static func activity(identifier: String) -> NSUserActivity {

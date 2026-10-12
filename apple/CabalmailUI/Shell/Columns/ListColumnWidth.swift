@@ -29,7 +29,7 @@ enum ListColumnWidth {
     /// the column at. Zero (the missing-key default) means "never resized" and
     /// resolves to `ideal`. Not the iPad layout's
     /// `cabalmail.layout.listColumnWidth`: that one is the width the column is
-    /// pinned to, and `MailRootView` observes it, so sharing it would re-render
+    /// pinned to, and `SplitShell` observes it, so sharing it would re-render
     /// the whole root on every point of a divider drag here.
     static let storageKey = "cabalmail.layout.macListColumnWidth"
 
@@ -142,7 +142,7 @@ enum ListColumnWidth {
     /// Width the pinned column leaves over and above the reader's floor.
     ///
     /// Where the column is pinned to an exact width (regular-width iPad and
-    /// visionOS — see `MailRootView.resizableContentColumn`) a ceiling of
+    /// visionOS — see `SplitShell.listColumn`) a ceiling of
     /// `splitWidth - readerFloor` makes the two constraints sum to exactly the
     /// window. UIKit resolves that fit at launch but not during a size
     /// transition: re-resolving it mid-resize, it gives up tiling and drops the
@@ -224,9 +224,9 @@ private struct ListColumnWidthPolicy: ViewModifier {
 
 extension View {
     /// macOS: see `ListColumnWidthPolicy`. Every other platform sizes the list
-    /// column elsewhere — regular-width iPad and visionOS pin it to the width
-    /// the drag handle persists (`resizableContentColumn`), compact iPhone
-    /// collapses the split to a stack — so this passes through.
+    /// column elsewhere — the iPad split pins it to the width the drag handle
+    /// persists (`SplitShell.listColumn`), the tab layout collapses its split
+    /// to a stack — so this passes through.
     ///
     /// On macOS it also carries the switch that turns off AppKit's autosave of
     /// the main window's split (`SplitViewAutosave`).

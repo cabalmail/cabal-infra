@@ -24,11 +24,12 @@ struct FeedItemListView: View {
     @Environment(Preferences.self) private var preferences
     /// Aims this list's compose requests at its own window.
     @Environment(\.commandWindowID) private var commandWindowID
-    #if !os(macOS)
-    /// Whether this is the wide layout, which decides where the scope switch
-    /// is drawn (`scopeSwitchHost`).
-    @Environment(\.showsSettingsGear) var showsSettingsGear
-    #endif
+    /// The window's navigator, whose parked feed item this list selects; nil
+    /// outside a main window.
+    @Environment(SceneNavigator.self) private var navigator: SceneNavigator?
+    /// The window's layout shell, which decides where the scope switch is
+    /// drawn (`scopeSwitchHost`).
+    @Environment(\.shellLayout) var shellLayout
     @State var model: FeedItemListViewModel?
     /// Gates for the launch restore — see `applyLaunchRestoreWhenReady`.
     @State private var hasAppeared = false
@@ -59,12 +60,10 @@ struct FeedItemListView: View {
             }
             .navigationTitle(title)
         )
-        #if os(iOS) || os(visionOS)
         // Inline, as the message list's title is. On a wide iPad the switch
         // draws in the column instead (`scopeSwitchHost`), and a large
         // title's band would stay behind there, empty, above it.
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         .toolbar {
             // New Message stays in the toolbar in feed scope, in the same
             // slot the mail list gives it, so switching between mail and
@@ -132,20 +131,20 @@ struct FeedItemListView: View {
         }
         // A cross-device feed toast for the scope already on screen parks a
         // new item while this list is mounted: open it, over any selection.
-        .onChange(of: appState.navCoordinator?.pendingFeedRestore) { _, restore in
+        .onChange(of: navigator?.restores.pendingFeedRestore) { _, restore in
             if restore != nil { applyLaunchRestoreWhenReady(replacingSelection: true) }
         }
-        // The Feeds menu's item chords (`+Commands`); the catalog commands
-        // on the same tick are the sidebar's and are ignored here.
-        .onWindowCommand(appState.feedCommandTick) {
-            guard let model, let command = appState.pendingFeedCommand else { return }
-            handleFeedCommand(command, model: model)
+        // The Feeds menu's item chords (`+Commands`), while this list is in
+        // front; the catalog commands are the sidebar's and are ignored here.
+        .answersCommands(FeedCommand.allCases.map(WindowCommand.feed)) { command in
+            guard let model, case .feed(let feed) = command else { return }
+            handleFeedCommand(feed, model: model)
         }
     }
 
     private var composeButton: some View {
         Button {
-            appState.requestCompose(seed: ReplyBuilder.newDraft(), in: commandWindowID)
+            appState.compose.open(seed: ReplyBuilder.newDraft(), from: commandWindowID)
         } label: {
             Image(systemName: "square.and.pencil")
                 .accessibilityLabel("New Message")
@@ -404,7 +403,7 @@ extension FeedItemListView {
     /// loaded window still opens, as it always has.
     private func applyLaunchRestoreWhenReady(replacingSelection: Bool = false) {
         guard hasAppeared, initialLoadComplete, selection == nil || replacingSelection,
-              let restored = appState.navCoordinator?.consumeFeedItemRestore(for: scope)
+              let restored = navigator?.restores.consumeFeedItemRestore(for: scope)
         else { return }
         selection = model?.items.first { $0.id == restored.id } ?? restored
     }

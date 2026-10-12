@@ -339,7 +339,7 @@ final class MailMutationService {
 
     /// Hard-reloads every mounted message list after a change made behind
     /// them; the store points it at its own request
-    /// (`MailSessionStore.onListRefreshRequested`).
+    /// (`MailSessionStore.requestListRefresh()`).
     var onListRefreshRequested: @MainActor () -> Void = {}
 
     /// Marks every unseen message in `folderPath` read in one server call

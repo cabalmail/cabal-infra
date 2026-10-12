@@ -25,9 +25,7 @@ struct MoveToFolderSheet: View {
         NavigationStack {
             content
                 .navigationTitle("Move to folder")
-                #if os(iOS) || os(visionOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
+                .inlineNavigationTitle()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel", action: onCancel)
@@ -67,9 +65,7 @@ struct MoveToFolderSheet: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    #if os(iOS) || os(visionOS)
-                    .listStyle(.plain)
-                    #endif
+                    .plainListStyleOffMac()
                 }
             }
         )

@@ -134,6 +134,13 @@ jobs:
         working-directory: apple
         run: swiftlint lint --strict --quiet
 
+      - name: Platform conditionals
+        # The ratchet lint.yml's swift job also runs: no platform `#if` in
+        # apple/CabalmailUI outside Shell/ and Platform/ beyond the allowlist
+        # (docs/apple.md, "Platform conditionals").
+        if: matrix.platform == 'macOS'
+        run: python3 scripts/check-platform-conditionals.py
+
       - name: Resolve test destination for ${{ matrix.platform }}
         id: dest
         # Runner images ship simulator runtimes without any devices created

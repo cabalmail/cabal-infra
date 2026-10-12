@@ -1,7 +1,6 @@
 import SwiftUI
 import CabalmailKit
 
-#if !os(macOS)
 /// True when a view is hosted inside `SettingsSheet` (the regular-width iOS
 /// modal), so it should offer a Done button to dismiss. False everywhere
 /// else - the macOS Settings scene and the compact-width section tabs both
@@ -18,25 +17,6 @@ extension EnvironmentValues {
     var inSettingsSheet: Bool {
         get { self[InSettingsSheetKey.self] }
         set { self[InSettingsSheetKey.self] = newValue }
-    }
-}
-
-/// True when the regular-width single-rail layout is active, so the mailbox
-/// sidebar should show the Settings gear (the gear opens `SettingsSheet`;
-/// compact width reaches the same sections through its Settings tab instead).
-///
-/// Set by `SignedInRootView` on the regular-width branch and read by
-/// `FolderListView`. A plain environment flag rather than a `horizontalSizeClass`
-/// check because the sidebar is a narrow `NavigationSplitView` column and
-/// reports a compact size class even on a regular-width iPad.
-private struct ShowsSettingsGearKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension EnvironmentValues {
-    var showsSettingsGear: Bool {
-        get { self[ShowsSettingsGearKey.self] }
-        set { self[ShowsSettingsGearKey.self] = newValue }
     }
 }
 
@@ -73,9 +53,9 @@ extension View {
 /// Address and folder management used to live here as extra tabs, but they now
 /// belong to the always-visible mailbox sidebar (`AddressListView` /
 /// `FolderListView` carry the full request/revoke and create/delete
-/// affordances). So this sheet is just General preferences, presented from
-/// `SignedInRootView` via `AppState.settingsRequestTick` (sidebar gear button /
-/// ⌘, command) at regular width, where the section tab bar is gone.
+/// affordances). So this sheet is just General preferences, presented by the
+/// split (`SettingsSheetPresenter`) for `WindowCommand.settings` (the folder
+/// panel's gear button / ⌘, command), where the section tab bar is gone.
 ///
 /// `SettingsView` supplies its own navigation (a category split view that
 /// collapses to a drill-in list at the sheet's compact width) and offers a
@@ -87,4 +67,3 @@ struct SettingsSheet: View {
             .environment(\.inSettingsSheet, true)
     }
 }
-#endif

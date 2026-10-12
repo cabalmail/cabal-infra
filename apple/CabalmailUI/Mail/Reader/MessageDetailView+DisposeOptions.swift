@@ -55,11 +55,8 @@ extension MessageDetailView {
     /// equivalents in one window leave AppKit to pick a winner.
     @ViewBuilder
     var disposeChordHost: some View {
-        if let model, appState.messageMenuAvailability.disposeChordHost == .reader {
-            Button("") { runDispose(model: model) }
-                .keyboardShortcut(.delete, modifiers: .command)
-                .opacity(0)
-                .accessibilityHidden(true)
+        if let model {
+            DisposeChordButton(host: .reader) { runDispose(model: model) }
         }
     }
 

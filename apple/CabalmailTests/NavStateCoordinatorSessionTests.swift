@@ -72,7 +72,7 @@ final class NavStateCoordinatorSessionTests: XCTestCase {
         let coordinator = try makeCoordinator()
         let first = await coordinator.consumeFeedsLaunchTarget()
         XCTAssertNil(first)
-        XCTAssertNil(coordinator.pendingFeedRestore)
+        XCTAssertNil(first?.item, "no item for the window to park")
         XCTAssertTrue(coordinator.didConsumeLaunchSession)
     }
 
@@ -102,15 +102,6 @@ final class NavStateCoordinatorSessionTests: XCTestCase {
         // No store on the test client, so the scope itself degrades to nil.
         let scope = await coordinator.consumeFeedsLaunchTarget()
         XCTAssertNil(scope)
-    }
-
-    func testFeedItemRestoreIsConsumedOnlyForItsScope() throws {
-        let coordinator = try makeCoordinator()
-        let item = makeItem()
-        coordinator.pendingFeedRestore = .init(scope: .subscription("sub-1"), item: item)
-        XCTAssertNil(coordinator.consumeFeedItemRestore(for: .all))
-        XCTAssertEqual(coordinator.consumeFeedItemRestore(for: .subscription("sub-1")), item)
-        XCTAssertNil(coordinator.consumeFeedItemRestore(for: .subscription("sub-1")), "one-shot")
     }
 
     // MARK: Recording

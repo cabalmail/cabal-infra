@@ -16,8 +16,9 @@ name: Lint
 #   - Python:    pylint over lambda/api and lambda/counter (from app.yml),
 #                plus the lambda/api/_shared unittest suites (new for the PR
 #                gate; no deploy workflow runs them).
-#   - Swift:     swiftlint --strict (from apple.yml; apple.yml's own
-#                pull_request run builds and tests).
+#   - Swift:     swiftlint --strict and the platform-conditionals ratchet
+#                (both from apple.yml; apple.yml's own pull_request run
+#                builds and tests).
 #   - React:     eslint (new for the PR gate; the deploy path only builds).
 #   - Rust:      cargo xtask ci (new for the PR gate; there is no Linux deploy
 #                workflow yet — the Phase 2 linux.yml will invoke this same
@@ -86,6 +87,7 @@ jobs:
             - '.github/workflows/lint.yml'
           swift:
             - 'apple/**'
+            - 'scripts/check-platform-conditionals.py'
             - '.github/workflows/lint.yml'
           react:
             - 'react/admin/**'
@@ -293,9 +295,10 @@ jobs:
       run: python3 -m unittest discover -s docker/shared/test/append-drain -p "test_*.py"
 
   # ---------------------------------------------------------------------------
-  # Swift. swiftlint --strict, the same gate apple.yml runs on its macOS leg.
-  # SwiftLint parses the sources directly, so no xcodegen/project generation is
-  # needed here. This is the fast lint signal; apple.yml's pull_request run is
+  # Swift. swiftlint --strict and the platform-conditionals ratchet, the same
+  # gates apple.yml runs on its macOS leg. Both read the sources directly, so
+  # no xcodegen/project generation is needed here. This is the fast lint
+  # signal; apple.yml's pull_request run is
   # the build-and-test gate. Same `xcode-27` image as apple.yml, so both lint
   # with the same swiftlint and a rule can't pass here and fail there.
   # ---------------------------------------------------------------------------
@@ -317,6 +320,12 @@ jobs:
     - name: swiftlint
       working-directory: apple
       run: swiftlint lint --strict --quiet
+    - name: platform-conditionals
+      # The ratchet on platform `#if`s in apple/CabalmailUI: none outside
+      # Shell/ and Platform/ beyond the allowlist, which only shrinks
+      # (docs/apple.md, "Platform conditionals"). Standard-library Python
+      # over the sources, so it needs no build either.
+      run: python3 scripts/check-platform-conditionals.py
 
   # ---------------------------------------------------------------------------
   # React. eslint over react/admin (flat config in react/admin/eslint.config.js).

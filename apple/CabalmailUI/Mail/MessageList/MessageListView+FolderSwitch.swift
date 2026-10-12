@@ -63,16 +63,12 @@ extension MessageListView {
         }
     }
 
-    #if !os(macOS)
     /// Where the switch is drawn on this layout (`FolderSwitchPlacement`).
-    /// Reads the same `showsSettingsGear` flag `MailRootView` does, and for
-    /// the same reason: the message list is a narrow split column and reports
-    /// a compact size class even on a regular-width iPad.
+    /// Reads the window's shell rather than the size class: the message list
+    /// is a narrow split column and reports a compact size class even on a
+    /// regular-width iPad.
     var folderSwitchHost: FolderSwitchHost {
-        FolderSwitchPlacement.host(
-            isWideSidebar: showsSettingsGear,
-            columnScopedToolbar: GlobalSearchFieldPlacement.platformColumnScopedToolbar
-        )
+        FolderSwitchPlacement.host(in: shellLayout)
     }
 
     /// iPadOS: the folder name as a menu in a header row inside the column,
@@ -104,7 +100,6 @@ extension MessageListView {
             .padding(.vertical, 4)
         }
     }
-    #endif
 
     #if os(macOS)
     /// macOS: the folder name, bold like the toolbar title it stands in

@@ -2,92 +2,39 @@ import Foundation
 import CoreSpotlight
 import CabalmailKit
 
-// Routes a tapped Spotlight result to the message it names.
+// Routes a tapped Spotlight result to the message it names, in one window
+// (`DeepLinkRouter`). The searchable item's identifier encodes (folder, uid);
+// the window that takes the result recovers the durable Message-ID from the
+// envelope cache, so the list can still find a message another client has
+// since moved.
 //
-// Both app entries attach `.onContinueUserActivity(CSSearchableItemActionType)`
-// and forward the activity here. The searchable item's identifier encodes
-// (folder, uid); the durable Message-ID is recovered from the envelope cache
-// at routing time so the existing `navigateRequest` machinery can fall back
-// to its Message-ID match if another client has since moved the message.
-// Compiled into the iOS/visionOS and macOS app targets (CabalmailMac takes
-// all of Cabalmail/ minus its exclude list — see project.yml).
+// iOS and visionOS receive the result in a main window's
+// `.onContinueUserActivity`, which knows its window. macOS never delivers it
+// there (Apple Developer Forums thread 760522; the 2026-08-12 probe saw only
+// the AppKit delegate callback), so the Mac `AppDelegate` opens it with no
+// window, and it goes to the window last used.
 extension AppState {
     /// Entry point for `.onContinueUserActivity(CSSearchableItemActionType)`.
-    public func handleSpotlightActivity(_ activity: NSUserActivity) {
-        guard
-            let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-            let ref = SpotlightMessageRef(string: identifier)
-        else { return }
-        routeSpotlightRef(ref)
+    /// - Parameter window: the main window that received the result.
+    public func handleSpotlightActivity(_ activity: NSUserActivity, in window: UUID? = nil) {
+        guard let ref = SpotlightMessageRef(activity: activity) else { return }
+        routeSpotlightRef(ref, in: window)
     }
 
-    /// Drives the same `navigateRequest` machinery as a push-notification
-    /// tap. Before the session is wired (cold launch from a Spotlight
-    /// result) the ref parks on `pendingSpotlightRef` and `wireSession`
-    /// re-routes it — a window's first landing drains a request parked
-    /// before it (`SceneNavigator`), so parking works even before any view
-    /// exists.
-    func routeSpotlightRef(_ ref: SpotlightMessageRef) {
-        guard let coordinator = navCoordinator, let client else {
-            pendingSpotlightRef = ref
-            return
-        }
-        Task { @MainActor in
-            let messageID = await client.envelopeCache
-                .snapshot(for: ref.folder)?
-                .envelopes[ref.uid]?
-                .messageId
-            coordinator.navigateRequest = NavState(
-                folder: ref.folder,
-                messageID: messageID,
-                uid: ref.uid,
-                clientID: coordinator.clientID
-            )
-        }
-    }
-
-    /// Replays a Spotlight tap that arrived before sign-in / restore
-    /// completed. Called at the end of `wireSession`.
-    func routePendingSpotlightOpen() {
-        guard let ref = pendingSpotlightRef else { return }
-        pendingSpotlightRef = nil
-        routeSpotlightRef(ref)
+    /// Opens a Spotlight result in `window`, else the window last used.
+    /// Before a window can take it (a cold launch from search, or before
+    /// sign-in) it parks in the router for the first window to open; a
+    /// sign-out or another account's sign-in drops it.
+    func routeSpotlightRef(_ ref: SpotlightMessageRef, in window: UUID? = nil) {
+        deepLinks.open(.spotlight(ref), in: window)
     }
 }
 
-/// Bridges the AppKit `application(_:continue:restorationHandler:)` callback
-/// to `AppState` on macOS. SwiftUI's `.onContinueUserActivity` never fires
-/// for `CSSearchableItemActionType` on macOS (Apple Developer Forums thread
-/// 760522; also observed in the 2026-08-12 probe — only the AppKit delegate
-/// callback delivered the activity), so the macOS `AppDelegate` branch hands
-/// activities here. The SwiftUI modifier stays attached in both app entries:
-/// it is the working path on iOS/visionOS and harmless redundancy on macOS.
-///
-/// A singleton (like `PushRegistrar` / `IntentBridge`) because the delegate
-/// exists before the SwiftUI tree: an activity from a cold Spotlight-result
-/// launch can arrive before `attach(_:)` runs, so it parks here; AppState's
-/// own `pendingSpotlightRef` covers the later not-yet-signed-in window.
-@MainActor
-public final class SpotlightRouter {
-    public static let shared = SpotlightRouter()
-
-    private(set) weak var appState: AppState?
-    private var pendingActivity: NSUserActivity?
-
-    /// Called from the app entry's `.task` as soon as the root AppState
-    /// exists; replays a parked cold-launch activity.
-    public func attach(_ appState: AppState) {
-        self.appState = appState
-        guard let activity = pendingActivity else { return }
-        pendingActivity = nil
-        appState.handleSpotlightActivity(activity)
-    }
-
-    func handle(_ activity: NSUserActivity) {
-        guard let appState else {
-            pendingActivity = activity
-            return
-        }
-        appState.handleSpotlightActivity(activity)
+extension SpotlightMessageRef {
+    /// The message a Spotlight result activity names; nil for an activity
+    /// that is not one of ours.
+    public init?(activity: NSUserActivity) {
+        guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return nil }
+        self.init(string: identifier)
     }
 }

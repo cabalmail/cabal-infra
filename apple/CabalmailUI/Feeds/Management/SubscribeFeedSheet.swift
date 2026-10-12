@@ -18,9 +18,7 @@ struct SubscribeFeedSheet: View {
         NavigationStack {
             content
                 .navigationTitle("Subscribe to Feed")
-                #if os(iOS) || os(visionOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
+                .inlineNavigationTitle()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }
@@ -63,10 +61,7 @@ struct SubscribeFeedSheet: View {
         TextField("Address", text: $form.url, prompt: Text("https://example.com/feed"))
             .labelsHidden()
             .autocorrectionDisabled()
-            #if os(iOS) || os(visionOS)
-            .textInputAutocapitalization(.never)
-            .keyboardType(.URL)
-            #endif
+            .textEntry(.url)
             .onSubmit { if form.canSubscribe { Task { await submit() } } }
             .accessibilityIdentifier("feed.subscribe.url")
     }

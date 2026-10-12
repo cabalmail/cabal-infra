@@ -33,9 +33,7 @@ struct ComposingSettingsView: View {
                 TextField("Name (optional)", text: $displayName)
                     .disabled(!displayNameLoaded)
                     .autocorrectionDisabled()
-                    #if os(iOS) || os(visionOS)
-                    .textInputAutocapitalization(.words)
-                    #endif
+                    .textEntry(.words)
                     .onChange(of: displayName) { _, newValue in
                         scheduleDisplayNameSave(newValue)
                     }
@@ -61,9 +59,7 @@ struct ComposingSettingsView: View {
                 )
                 .lineLimit(1...6)
                 .autocorrectionDisabled()
-                #if os(iOS) || os(visionOS)
-                .textInputAutocapitalization(.sentences)
-                #endif
+                .textEntry(.sentences)
             } footer: {
                 Text("Name appears as the display name on mail you send, e.g. \"Chris Carr <address>\".")
                     .sectionFooter()

@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Which `Message` menu commands can currently do anything.
 ///
-/// The menu's commands dispatch through `AppState` tick counters, and the
-/// surfaces that consume them act on `shortcutTargetRefs` (the multi-select
+/// The menu's commands go to the window in front (`WindowCommands`), and the
+/// surfaces that answer them act on `shortcutTargetRefs` (the multi-select
 /// set, else the reading-pane message, else nothing) or — for the reply
 /// family — on the open message in `MessageDetailView`. Nothing selected
 /// means every one of them is a no-op, so the menu advertised seven live
@@ -32,14 +32,11 @@ struct MessageMenuAvailability: Equatable {
     /// own — matching `shortcutTargetRefs`.
     var canActOnSelection: Bool { selectedCount > 0 || hasOpenMessage }
 
-    /// Which surface installs the window-scoped Cmd+Delete equivalent.
-    ///
-    /// The chord can't be a menu item (see `MessageMenuCommands`: an app-wide
-    /// equivalent would fire from the compose window and steal the text
-    /// system's delete-to-line-start), so it rides a window-scoped control —
-    /// and exactly one at a time. Two equivalents in one window leave AppKit
-    /// to pick a winner, which is how an always-on list button silently did
-    /// nothing.
+    /// Which surface installs the window-scoped Cmd+Delete equivalent
+    /// (`DisposeChordButton`; it can't be a menu item, see
+    /// `MessageMenuCommands`), exactly one at a time: two in one window leave
+    /// AppKit to pick a winner, which is how an always-on list button
+    /// silently did nothing.
     var disposeChordHost: DisposeChordHost {
         if selectedCount > 1 { return .list }
         if hasOpenMessage { return .reader }
@@ -58,23 +55,25 @@ enum DisposeChordHost: Equatable {
 }
 
 private struct MessageMenuAvailabilityReporter: ViewModifier {
-    @Environment(AppState.self) private var appState
+    @Environment(\.windowCommands) private var commands
+    @Environment(\.commandTab) private var tab
+    @State private var reporter = UUID()
     let availability: MessageMenuAvailability
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: availability, initial: true) { _, new in
-                appState.messageMenuAvailability = new
+            // Reported on every appearance too: a tab coming back to the
+            // front reports again what it withdrew when it left.
+            .onAppear {
+                commands?.report(availability, in: tab, by: reporter)
+                // The Mailbox menu's coarser question: is a list on screen
+                // at all? Refresh is dead with none, whatever the selection (#1162).
+                commands?.mailbox.surfaceAppeared()
             }
-            // The macOS Mailbox menu asks a coarser question — is a list on
-            // screen at all — because Refresh is dead with no window open,
-            // whatever the selection (#1162).
-            .onAppear { appState.mailboxMenuAvailability.surfaceAppeared() }
-            // A mail surface going away (sign-out, scene teardown) leaves
-            // nothing for the commands to act on.
+            .onChange(of: availability) { _, new in commands?.report(new, in: tab, by: reporter) }
             .onDisappear {
-                appState.messageMenuAvailability = .none
-                appState.mailboxMenuAvailability.surfaceDisappeared()
+                commands?.withdrawMessageReport(in: tab, by: reporter)
+                commands?.mailbox.surfaceDisappeared()
             }
     }
 }

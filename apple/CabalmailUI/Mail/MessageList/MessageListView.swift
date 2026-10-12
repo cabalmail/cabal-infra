@@ -52,21 +52,12 @@ struct MessageListView: View {
     /// (`SceneNavigator.mailSelection(for:)`). Optional so a list hosted
     /// outside a main window still builds, with a selection of its own.
     @Environment(SceneNavigator.self) private var navigator: SceneNavigator?
-    #if !os(macOS)
-    // Wide vs. compact gates whether message rows are draggable. On a
-    // compact iPhone the sidebar and the message list never share the
-    // screen, so there's nowhere to drop a message, and a long-press drag
-    // would only fight each row's context menu. Non-private so the `+Rows`
-    // extension that builds the rows can read it. macOS has no size class
-    // and is always treated as wide (see `isWideLayout`).
-    @Environment(\.horizontalSizeClass) var horizontalSizeClass
-    // Whether the wide single-rail layout is active (regular-width iPad,
-    // visionOS). Decides where the folder switch is drawn: a column-scoped
-    // bar can't host it (`FolderSwitchPlacement`, #1626). A plain flag rather
-    // than the size class above for the reason its own doc gives — this is a
-    // narrow split column and reports compact even on a regular-width iPad.
-    @Environment(\.showsSettingsGear) var showsSettingsGear
-    #endif
+    // The window's layout shell. Decides which selection path the list takes
+    // (`isWideLayout`) and where the folder switch is drawn: the split's
+    // column-scoped bar can't host it (`FolderSwitchPlacement`, #1626). The
+    // shell rather than the size class, because this is a narrow split
+    // column and reports compact even on a regular-width iPad (#1985).
+    @Environment(\.shellLayout) var shellLayout
     // Drives the background-snapshot optimization: while the scene isn't
     // `.active`, `messageRow` (in `+Selection`) renders cheap placeholder
     // rows instead of the per-row `List` that backs the swipe actions, so
@@ -88,9 +79,11 @@ struct MessageListView: View {
     /// The "Mark all messages in … as read?" confirmation (`+MarkAllRead`),
     /// staged by the toolbar's More menu and the Mailbox menu's ⌥⌘T.
     @State var markAllReadConfirmPresented = false
-    /// This window's identity, for aiming its own compose and refresh
-    /// requests at itself (`MainWindowCommandScope`).
+    /// This window's identity, for aiming its own compose requests and mail
+    /// events at itself (`MainWindowCommandScope`).
     @Environment(\.commandWindowID) var commandWindowID
+    /// This window's commands, which the toolbar's Refresh sends to.
+    @Environment(\.windowCommands) var windowCommands
     /// This list's identity, carried on the drags it starts so that only
     /// it performs the move a sidebar drop posts (`MessageMoveRequest`).
     @State var dragSourceID = UUID()
@@ -98,6 +91,10 @@ struct MessageListView: View {
     /// (`ListSelectionReactions.tick`). Kept per view, since a model can be
     /// shown by two windows at once (the shared search model).
     @State var appliedSelectionReactions = 0
+    /// This list's part in keeping its window's list place
+    /// (`ListPlaceTracking`): what it records as it scrolls, and the place
+    /// it lands on once it has appeared and loaded.
+    @State var listPlace = ListPlaceTracker()
     /// List-row height. Rows are pinned to this so the virtualized list
     /// (`+Selection`'s `virtualizedList`) can reserve the off-window rows as
     /// exact blank space: the scroll extent then reflects the whole folder, the
@@ -233,14 +230,14 @@ struct MessageListView: View {
         }
     }
 
-    /// Routes to the app-wide compose receiver (`ComposeRequestRouter`
+    /// Routes to this window's compose surface (`ComposeRequestRouter`
     /// on `SignedInRootView`), which opens a compose window on the
     /// platforms that support one and hosts the compose sheet on
     /// iPhone. Presentation is deliberately NOT view-local: a sheet
     /// anchored here can't present when this view isn't visible, and
     /// two competing sheet hosts would block each other.
     private func presentCompose(seed: Draft) {
-        appState.requestCompose(seed: seed, in: commandWindowID)
+        appState.compose.open(seed: seed, from: commandWindowID)
     }
 
     @ViewBuilder
@@ -334,15 +331,13 @@ extension MessageListView {
         // The folder-switch menu's rows (`+FolderSwitch`); a no-op on the
         // search surface.
         .task { await loadFolderSwitchChoices() }
-        #if os(iOS) || os(visionOS)
         // Without this, `.searchable` + the `safeAreaInset(.top)` filter
         // tabs leave the default large-title bar in a half-collapsed
         // state on first appearance: the folder name (e.g. "INBOX") is
         // hidden until the user pulls down or scrolls up. Inline keeps
-        // it pinned to the nav bar at all times, matching how the same
-        // platforms treat MessageDetailView.
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        // it pinned to the nav bar at all times, matching how iOS and
+        // visionOS treat MessageDetailView.
+        .inlineNavigationTitle()
         .toolbar {
             // Compose stays as a toolbar item — it's a primary action
             // pinned to the top edge in every Mac mail client. The list-
@@ -368,17 +363,11 @@ extension MessageListView {
                         .accessibilityLabel("New Message")
                 }
                 .keyboardShortcut("n", modifiers: .command)
-                // Force-reload button. macOS only — iOS / iPadOS / visionOS
-                // users reach the cheap merge-refresh via pull-to-refresh,
-                // which is the gesture those platforms expect. Routed
-                // through `requestRefresh()` so the toolbar button and the
-                // Mailbox > Refresh menu item share one code path — both
-                // land on `MessageListViewModel.hardReload()`, which wipes
-                // in-memory state before the server fetch so the user has a
-                // reliable escape from any stale-state bug the merge path
-                // doesn't catch.
+                // Force-reload button, macOS only (the touch platforms
+                // pull to refresh). Sent to this window as Mailbox > Refresh
+                // is, so both land on `MessageListViewModel.hardReload()`.
                 Button {
-                    appState.requestRefresh(in: commandWindowID)
+                    windowCommands?.send(.refresh)
                 } label: {
                     RefreshActivityIcon(isLoading: model?.isLoading == true)
                         .accessibilityLabel("Refresh")
@@ -525,7 +514,7 @@ extension MessageListView {
         .onDisappear {
             // Take the list off its folder's poller when it drops off-screen;
             // the last list off a folder stops its watcher and tick. The view
-            // is rebuilt (via `.id(folder.path)` in MailRootView) when the
+            // is rebuilt (via `.id(folder.path)` in `MailContentColumn`) when the
             // user picks another folder, so `startWatching` in the new
             // instance's `.task` puts the new list on the new folder's
             // poller; the same view coming back puts it back too.
@@ -534,38 +523,36 @@ extension MessageListView {
         }
     }
 
-    /// Observers: `AppState`'s menu / shortcut ticks, the selection
+    /// Observers: the window's menu commands (`WindowCommands`), the selection
     /// reactions the model queues from mail events, and drag-and-drop move
     /// requests.
     private var observersLayer: some View {
         lifecycleLayer
-        // macOS Commands menu (Mailbox → Refresh) and keyboard shortcuts
-        // route through `AppState` tick counters. Using the currently-
-        // displayed list as the refresh target matches every desktop mail
-        // client's convention. (`composeRequestTick` is consumed by
-        // `ComposeRequestRouter` on the signed-in root, not here — this
-        // view isn't in the visible hierarchy in every state a compose
-        // request can arrive from.)
-        .onWindowCommand(appState.refreshRequestTick) {
-            // Manual refresh paths (Mailbox > Refresh menu item, the
-            // arrow.clockwise toolbar button) get hard-reload semantics
-            // — wipe in-memory state before refresh — so the user has a
-            // reliable escape from any stale-state bug the merge path
-            // doesn't catch. The folder's poller keeps handing the list an
-            // ordinary `refresh(prefetched:)`; it fires too often to be
-            // discarding cached envelopes on every tick.
+        // Mailbox → Refresh and the Mac toolbar's Refresh, aimed at this
+        // window, get hard-reload semantics (wipe in-memory state before the
+        // fetch), so the user has a reliable escape from any stale-state bug
+        // the merge path doesn't catch. So does a change made behind every
+        // list (Mark All as Read, Empty Trash, a notification's action),
+        // which the mail store announces to every mounted list rather than
+        // through the window commands (#1824). The folder's poller keeps
+        // handing the list an ordinary `refresh(prefetched:)`; it fires too
+        // often to be discarding cached envelopes on every tick.
+        .answersCommand(.refresh) {
             Task { await model?.hardReload() }
         }
-        // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) acting on the
-        // current selection. Handlers live in `MessageListView+Actions.swift`;
-        // each no-ops when nothing is selected.
-        .onWindowCommand(appState.toggleSeenRequestTick) {
+        .onChange(of: appState.mailStore.listRefreshTick) { _, _ in
+            Task { await model?.hardReload() }
+        }
+        // Message-menu chords (Cmd+T / Cmd+Shift+8 / Cmd+M) on the current
+        // selection, while this list is in front of its window. Handlers live
+        // in `MessageListView+Actions.swift`; each no-ops with no selection.
+        .answersCommand(.toggleSeen) {
             if let model { toggleSeenOnSelection(model: model) }
         }
-        .onWindowCommand(appState.toggleFlaggedRequestTick) {
+        .answersCommand(.toggleFlagged) {
             if let model { toggleFlaggedOnSelection(model: model) }
         }
-        .onWindowCommand(appState.moveSelectionRequestTick) {
+        .answersCommand(.moveSelection) {
             if let model { moveSelection(model: model) }
         }
         // What the reader's and the composer's changes ask of this list's
@@ -592,7 +579,7 @@ extension MessageListView {
         // run, so re-apply here; a folder-switch jump re-mounts the list and
         // is handled by the `.task` consume instead. `consumePendingRestore`
         // makes the two paths idempotent.
-        .onChange(of: appState.navCoordinator?.pendingRestore) { _, _ in
+        .onChange(of: navigator?.restores.pendingRestore) { _, _ in
             if let model { applyPendingRestore(model: model) }
         }
     }
@@ -607,6 +594,7 @@ extension MessageListView {
     /// two call sites idempotent.
     private func applyPendingRestoreWhenReady() {
         guard hasAppeared, initialLoadComplete, let model else { return }
+        listPlace.land(model: model, in: navigator)
         applyPendingRestore(model: model)
     }
 
@@ -617,7 +605,7 @@ extension MessageListView {
     /// window) leaves the list unselected — the graceful-degradation path.
     private func applyPendingRestore(model: MessageListViewModel) {
         guard let folder,
-              let restore = appState.navCoordinator?.consumePendingRestore(for: folder.path)
+              let restore = navigator?.restores.consumePendingRestore(for: folder.path)
         else { return }
         let match = restore.messageID.flatMap { messageID in
             model.envelopes.first { $0.messageId == messageID }

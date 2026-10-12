@@ -54,9 +54,9 @@ struct ColumnResizeHandle: View {
 }
 
 #if os(macOS)
-/// macOS resizes and persists its columns natively and never takes the handle
-/// branch (`resizableColumns`); the stub is here so the shared view compiles
-/// for both app targets.
+/// macOS resizes and persists its columns natively, and only `SplitShell`
+/// builds the handle; the stub is here so the handle compiles for both app
+/// targets.
 private struct ColumnResizePanTarget: View {
     @Binding var width: CGFloat
     let minWidth: CGFloat

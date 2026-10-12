@@ -211,6 +211,50 @@ final class RulesViewModelTests: XCTestCase {
         XCTAssertEqual(model.rules.count, 2)
     }
 
+    /// Move Up / Move Down, the Mac's only reorder (its grouped Settings
+    /// form ignores `onMove`, #2019): one step each way, saved as one PUT
+    /// carrying the final order.
+    func testMoveByIDStepsARuleAndSavesTheNewOrder() async {
+        let backend = FakeRulesBackend()
+        backend.ruleSet = RuleSet(
+            rules: [sampleRule(name: "A"), sampleRule(name: "B"), sampleRule(name: "C")],
+            version: 1
+        )
+        let model = makeModel(backend)
+        await model.load()
+        model.saveDebounce = .milliseconds(50)
+        let ids = model.rules.map(\.id)
+
+        XCTAssertFalse(model.canMove(id: ids[0], by: -1))
+        XCTAssertFalse(model.canMove(id: ids[2], by: 1))
+        XCTAssertTrue(model.canMove(id: ids[1], by: 1))
+
+        model.move(id: ids[2], by: -1)
+        XCTAssertEqual(model.rules.map(\.name), ["A", "C", "B"])
+        model.move(id: ids[0], by: 1)
+        XCTAssertEqual(model.rules.map(\.name), ["C", "A", "B"])
+
+        await waitForSaves(backend, 1)
+        XCTAssertEqual(backend.savedSets[0].rules.map(\.name), ["C", "A", "B"])
+    }
+
+    /// Past either end, or for an id that is gone, nothing moves and no PUT
+    /// goes out.
+    func testMoveByIDPastEitherEndIsANoOp() async {
+        let backend = FakeRulesBackend()
+        backend.ruleSet = RuleSet(rules: [sampleRule(name: "A"), sampleRule(name: "B")], version: 1)
+        let model = makeModel(backend)
+        await model.load()
+
+        model.move(id: model.rules[0].id, by: -1)
+        model.move(id: model.rules[1].id, by: 1)
+        model.move(id: "gone", by: 1)
+        XCTAssertFalse(model.canMove(id: "gone", by: -1))
+        XCTAssertEqual(model.rules.map(\.name), ["A", "B"])
+        try? await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(backend.savedSets.count, 0)
+    }
+
     func testAddRefusesBeyondServerCap() async {
         let backend = FakeRulesBackend()
         backend.ruleSet = RuleSet(

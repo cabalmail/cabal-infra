@@ -51,13 +51,9 @@ struct RuleEditorView: View {
             RuleDestinationSection(model: model, rule: rule, conversionNote: $conversionNote)
             RuleExtrasSection(rule: rule)
         }
-        #if os(macOS)
-        .formStyle(.grouped)
-        #endif
+        .groupedFormStyleOnMac()
         .navigationTitle(model.rule(withID: ruleID)?.name ?? "Rule")
-        #if os(iOS) || os(visionOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
     }
 
     private var isDelete: Bool {
@@ -110,12 +106,13 @@ private struct RuleConditionsSection: View {
                     }
                     .labelsHidden()
                     .frame(maxWidth: 110, alignment: .leading)
+                    // Changing the field swaps the keyboard kind, which
+                    // rebuilds this field, so its keyboard follows the new
+                    // field on the next tap.
                     TextField("contains…", text: $condition.value)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
-                        #if os(iOS) || os(visionOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
+                        .textEntry(condition.field.conditionValueEntry)
                     Button(role: .destructive) {
                         rule.conditions.removeAll { $0.id == condition.id }
                     } label: {
@@ -149,6 +146,20 @@ private struct RuleConditionsSection: View {
         case .cc: return "Cc"
         case .subject: return "Subject"
         case .body: return "Body"
+        }
+    }
+}
+
+extension Rule.Field {
+    /// The keyboard a condition's value gets. From, To and Cc hold
+    /// addresses, so most values are a domain or an address fragment, and
+    /// the email keyboard puts `@` and `.` on its first layer. It keeps a
+    /// space bar, so a display name, which the match also searches, is still
+    /// easy to type (#2022). Subject and Body are free text.
+    var conditionValueEntry: TextEntryKind {
+        switch self {
+        case .from, .to, .cc: return .email
+        case .subject, .body: return .verbatim
         }
     }
 }
@@ -330,9 +341,7 @@ private struct CopyFoldersPicker: View {
                 && selection.count >= RulesValidator.maxCopyFolders)
         }
         .navigationTitle("Copy to folders")
-        #if os(iOS) || os(visionOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
     }
 
     private func toggle(_ path: String) {

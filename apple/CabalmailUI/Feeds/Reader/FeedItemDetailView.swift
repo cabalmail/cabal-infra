@@ -11,6 +11,9 @@ struct FeedItemDetailView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
+    /// The window's navigator, which records this reader's scroll for its
+    /// window (`WindowRecorder`); nil outside a main window.
+    @Environment(SceneNavigator.self) private var navigator: SceneNavigator?
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
@@ -35,9 +38,7 @@ struct FeedItemDetailView: View {
             }
         }
         .navigationTitle(model?.subscription?.displayTitle ?? "Feed")
-        #if os(iOS) || os(visionOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
+        .inlineNavigationTitle()
         // Build the model from `.onAppear`, not `.task`: on an iPhone-compact
         // NavigationStack push, `.task` can fire twice for the same identity
         // and cancel both at entry (see `MessageDetailView`'s note). The
@@ -142,7 +143,11 @@ struct FeedItemDetailView: View {
                         // edge, where the tray shield would swallow their taps.
                         runsUnderBottomBar: bodyRunsUnderBottomBar,
                         onScrollCaptured: { capture in
-                            appState.navCoordinator?.recordFeedScroll(itemID: item.id, capture: capture)
+                            if let navigator {
+                                navigator.recordFeedScroll(itemID: item.id, capture: capture)
+                            } else {
+                                appState.navCoordinator?.recordFeedScroll(itemID: item.id, capture: capture)
+                            }
                         }
                     )
                 }

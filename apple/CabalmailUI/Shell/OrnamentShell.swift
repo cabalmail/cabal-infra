@@ -2,11 +2,12 @@
 import SwiftUI
 import CabalmailKit
 
-/// visionOS section navigation: a floating leading tab bar.
+/// The visionOS shell: a floating leading tab bar.
 ///
 /// On visionOS a `TabView` is presented as an ornament docked to the window's
-/// leading edge — the spatial idiom for top-level navigation. Each tab is a
-/// destination:
+/// leading edge — the spatial idiom for top-level navigation. The tabs are
+/// `CompactTab.tabs(for: .ornament)`, the tab layout's list with Folders
+/// added, and Search a plain tab rather than the phone's search role:
 ///
 /// - **Mail** — the message list + reader for the selected folder. There is no
 ///   folder sidebar here; the Folders tab is how the mailbox in view changes.
@@ -17,10 +18,10 @@ import CabalmailKit
 /// - **Search** — cross-folder search.
 ///
 /// This replaces the earlier visionOS path, which reused the iPad
-/// `MailRootView`: its folders lived in a show/hide `NavigationSplitView`
+/// split: its folders lived in a show/hide `NavigationSplitView`
 /// sidebar whose reveal toggle visionOS never surfaced, leaving no discoverable
 /// way to reach the folder list.
-struct VisionSectionView: View {
+struct OrnamentShell: View {
     @Environment(AppState.self) private var appState
     @Environment(SceneNavigator.self) private var navigator
 
@@ -32,7 +33,8 @@ struct VisionSectionView: View {
     /// The visible tab, through the navigator: a Folders pick, the ⌘,
     /// command and a resume tap switch tabs there, and a switch notes the
     /// section on the resume session. Seeded from the stored session, so a
-    /// launch that ended in the feed reader opens on Feeds.
+    /// launch that ended in the feed reader opens on Feeds. Each tab's content
+    /// names its tab (`commandTab`), so only the tab in front answers the menus.
     private var selection: Binding<CompactTab> {
         Binding(get: { navigator.compactTab }, set: { navigator.showTab($0) })
     }
@@ -45,23 +47,18 @@ struct VisionSectionView: View {
 
     var body: some View {
         TabView(selection: selection) {
-            Tab("Mail", systemImage: "tray", value: CompactTab.mail) {
-                VisionMailPane(tree: tree)
-            }
-            Tab("Folders", systemImage: "folder", value: CompactTab.folders) {
-                foldersTab
-            }
-            Tab("Feeds", systemImage: "dot.radiowaves.up.forward", value: CompactTab.feeds) {
-                FeedRootView()
-            }
-            Tab("Addresses", systemImage: "at", value: CompactTab.addresses) {
-                AddressManagementTab()
-            }
-            Tab("Settings", systemImage: "gear", value: CompactTab.settings) {
-                SettingsView()
-            }
-            Tab("Search", systemImage: "magnifyingglass", value: CompactTab.search) {
-                SearchView()
+            ForEach(CompactTab.tabs(for: .ornament), id: \.self) { tab in
+                if tab.role(in: .ornament) == .search {
+                    Tab(value: tab, role: .search) {
+                        content(for: tab)
+                            .environment(\.commandTab, tab)
+                    }
+                } else {
+                    Tab(LocalizedStringKey(tab.title), systemImage: tab.systemImage, value: tab) {
+                        content(for: tab)
+                            .environment(\.commandTab, tab)
+                    }
+                }
             }
         }
         // Land at launch regardless of which tab is showing, so the message
@@ -73,12 +70,21 @@ struct VisionSectionView: View {
             await loadFoldersIfNeeded()
         }
         // ⌘, opens Settings — its own tab here, rather than the iPad sheet.
-        .onWindowCommand(appState.settingsRequestTick) {
+        .answersCommand(.settings) {
             navigator.showTab(.settings)
         }
-        // For the menus that share a chord across mail and feeds
-        // (`SharedChordPolicy`).
-        .reportsActiveSection(navigator.compactTab.resumeSection)
+    }
+
+    @ViewBuilder
+    private func content(for tab: CompactTab) -> some View {
+        switch tab {
+        case .mail: VisionMailPane(tree: tree)
+        case .folders: foldersTab
+        case .feeds: FeedRootView()
+        case .addresses: AddressManagementTab()
+        case .settings: SettingsView()
+        case .search: SearchView()
+        }
     }
 
     /// Folders tab: the shared `FolderListView` bound to the window's folder.
@@ -141,6 +147,13 @@ private struct VisionMailPane: View {
         .onChange(of: selectedFolder?.path) {
             listSelectionCount = 0
         }
+        // Keep the Message menu's commands validated against what they'd
+        // actually act on (see `MessageMenuAvailability`), as the other
+        // shells' mail does (#1995).
+        .reportsMessageMenuAvailability(
+            selectedCount: listSelectionCount,
+            hasOpenMessage: selectedEnvelope != nil
+        )
     }
 
     @ViewBuilder
@@ -164,25 +177,12 @@ private struct VisionMailPane: View {
         }
     }
 
-    @ViewBuilder
     private var detailColumn: some View {
-        if listSelectionCount >= 2 {
-            ContentUnavailableView(
-                "\(listSelectionCount) Messages Selected",
-                systemImage: "envelope.badge",
-                description: Text("Use the action bar below the list to act on them together.")
-            )
-        } else if let selectedEnvelope,
-                  let folder = MessageFolderPolicy.folder(for: selectedEnvelope, in: selectedFolder) {
-            MessageDetailView(folder: folder, envelope: selectedEnvelope)
-                .id("\(folder.path)#\(selectedEnvelope.uid)")
-        } else {
-            ContentUnavailableView(
-                "No message selected",
-                systemImage: "envelope",
-                description: Text("Pick a message from the list to read it.")
-            )
-        }
+        MailReaderColumn(
+            selectionCount: listSelectionCount,
+            envelope: selectedEnvelope,
+            sidebarFolder: selectedFolder
+        )
     }
 }
 #endif

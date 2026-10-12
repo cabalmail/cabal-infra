@@ -184,7 +184,7 @@ final class MailMutationServiceTests: XCTestCase {
         await imap.scriptEmptyTrashResults([.success(())])
         let world = try await ServiceWorld(imap, fixture: fixture)
         world.store.counts.setFolderCounts(folderPath: FolderTree.trashPath, unread: 1, total: 4)
-        let refreshes = world.appState.refreshRequestTick
+        let refreshes = world.store.listRefreshTick
 
         let flipped = try await world.mutations.markFolderRead("INBOX", through: world.client)
         try await world.mutations.emptyTrash(through: world.client)
@@ -193,7 +193,7 @@ final class MailMutationServiceTests: XCTestCase {
         XCTAssertEqual(world.unread("INBOX"), 0)
         XCTAssertEqual(world.store.counts.folderTotalCounts["INBOX"], 20)
         XCTAssertEqual(world.store.counts.folderTotalCounts[FolderTree.trashPath], 0)
-        XCTAssertEqual(world.appState.refreshRequestTick, refreshes + 2, "each asks the lists to reload once")
+        XCTAssertEqual(world.store.listRefreshTick, refreshes + 2, "each asks the lists to reload once")
     }
 
     /// Answered once the session has ended, neither touches the next
@@ -205,14 +205,14 @@ final class MailMutationServiceTests: XCTestCase {
         let world = try await ServiceWorld(imap, fixture: fixture)
         world.signOutAndIn()
         world.store.counts.setFolderCounts(folderPath: FolderTree.trashPath, unread: 1, total: 4)
-        let refreshes = world.appState.refreshRequestTick
+        let refreshes = world.store.listRefreshTick
 
         try await world.mutations.markFolderRead("INBOX", through: world.client)
         try await world.mutations.emptyTrash(through: world.client)
 
         XCTAssertEqual(world.unread("INBOX"), 7)
         XCTAssertEqual(world.store.counts.folderTotalCounts[FolderTree.trashPath], 4)
-        XCTAssertEqual(world.appState.refreshRequestTick, refreshes)
+        XCTAssertEqual(world.store.listRefreshTick, refreshes)
     }
 }
 
