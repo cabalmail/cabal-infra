@@ -5,6 +5,131 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.0] - 2026-10-12
+
+### Added
+- Apple: **The message list reopens where you left it.** Quitting or
+  swiping the app away used to send every message list back to the top
+  of its folder at the next launch. A list now reopens on the message
+  that was at its top: in each window when the system restores your
+  windows, otherwise in the window you used last. The place is kept on
+  the device only, for the folder's main list in its default order.
+
+### Changed
+- Android: **Email keyboard for rule address fields.** A rule condition
+  on From, To or Cc now brings up the email keyboard; Subject and Body
+  keep the plain one. Autocorrect is now off on every condition value, as
+  it already was on iPhone, so a value is matched exactly as typed.
+- Apple: **Email keyboard for address conditions in rules.** A rule
+  condition on From, To or Cc now brings up the email keyboard on iPhone
+  and iPad, with @ and . on its first layer; Subject and Body keep the
+  plain keyboard. The email keyboard still has a space bar, so a display
+  name is as easy to type as before.
+- Apple: **Rules settings without a toolbar.** The Rules screen in
+  Settings no longer has a + button in a toolbar of its own. "Add rule"
+  sits at the foot of the rules list on every platform, the way "Add
+  flag" does in Flags. On iPhone and iPad, Edit stays at the top for
+  reordering and deleting.
+- Apple: **Each window comes back where it was.** On iPad, iPhone Duo,
+  Vision Pro and the Mac, a window the system restores reopens on its own
+  folder and message, or its own feed and article, instead of where the
+  last-touched window was. The place a new window opens on, a relaunch
+  after swiping the app away, and the position your other devices offer to
+  pick up from now follow the window you used last, rather than whichever
+  window happened to move last.
+
+### Fixed
+- Apple: **One Reply after Mark All as Read.** Marking a folder read,
+  emptying Trash, or using Mark as Read or Archive on a notification no
+  longer sends a menu command you had just given one window to every
+  window too, which could open a reply or toggle a message in each window
+  at once. Every window's message list still reloads after the change.
+- Apple: **Notifications open in the window that shows them.** On iPad,
+  tapping a notification opens its message in the window iPadOS brings
+  forward, and a Spotlight result opens in the window that received it.
+  Siri's Open Folder, and a notification shown over a compose window,
+  open in the window you used last. Before, whichever window noticed
+  first opened it. A window that launches on its Feeds tab now opens the
+  notification it was launched from right away, instead of waiting for
+  you to tap Mail.
+- Apple: **iPad message list works like the Mac's.** In the iPad split, a
+  hardware keyboard moves the selection with the arrow keys, Home and End,
+  and Page Up and Page Down; Command-A selects every message and Escape
+  clears the selection; Shift-click and Command-click extend it; checking two
+  or more messages in Select mode shows "N Messages Selected" in the reader;
+  and messages can be dragged onto a folder in the folder panel. The list
+  had been taking the iPhone's path, because its column reports a compact
+  width even on a full-screen iPad. The visionOS Mail tab's list gets the
+  same treatment.
+- Apple: **A message list keeps its place when the layout changes.**
+  Folding or unfolding an iPhone Duo, or resizing an iPad window across
+  the point where the layout changes, used to send the message list back
+  to the top of the folder. It now reopens on the same message, even
+  when mail arrived above it meanwhile.
+- Apple: **Spotlight and notifications open a Mac window.** With every
+  main window closed and Cabalmail still running, clicking a Spotlight
+  result or a notification now opens a main window on that message, the
+  way Open Cabalmail in the menu-bar icon does. Before, nothing opened
+  until you opened a window yourself, which then showed the message.
+- Apple: **Rules and Flags settings on the Mac.** Rules now sits on the
+  same cards as the other Settings screens, with switches instead of
+  checkboxes and no stray line under "Add rule". Neither list drags into
+  order on the Mac (Flags never did, despite its "Drag to reorder"
+  hint): right-click a rule or a flag, or use a rule's ⋯ menu, and
+  choose Move Up or Move Down. On iPhone, iPad and Vision Pro, Edit
+  still drags and each row's long-press menu has the same two items.
+  Both footers now say how to reorder on the device you are using.
+- Apple: **Mailbox and Feeds commands stay in their window.** On the Mac,
+  Mailbox > Refresh, Mark All as Read and Expand or Collapse All Folders,
+  and the Feeds menu's commands, now act only on the window in front, with
+  no shared target that another command could re-aim. On an iPad window
+  narrowed to the tab layout, Cmd-comma now opens the Settings tab.
+- Apple: **Menus follow the window in front.** With two windows open, the
+  Message, Mailbox and Feeds menus now enable according to the window you
+  are in, and Cmd-Delete works there, instead of following whichever window
+  last reported. While a compose window or Settings is in front, those menus
+  dim; New Message stays available. In the tab layout only the tab you are
+  on answers a menu command, and the Message menu follows the Search tab
+  when it is in front.
+- Apple: **One composer per mailto: link.** With two iPad windows open, a
+  mailto: link could open a composer in each, the second one blank. A
+  second link that arrived while an iPhone composer was open replaced
+  the first one waiting, so only one of them opened; now both do, one
+  after the other. Closing an iPad compose window returns to the window
+  it was opened from, not whichever window was used last.
+- Apple: **The sign-in code form stays put.** While the second-factor
+  code form was up, opening another window, or following a mailto: link
+  on the Mac, could send the form back to the password step, or sign in
+  with a session still stored on the device instead of the one you were
+  finishing. With no session stored, opening a window also cleared a
+  sign-in error you had not read yet. The form, its pending code and that
+  error now stay as they were.
+- Apple: **Search and Mail tabs keep to themselves.** On iPhone, a narrow
+  iPad window and a folded iPhone Duo, the Search tab searches all mail
+  instead of narrowing itself to the Mail tab's folder, and the Mail tab
+  always shows its own folder rather than the Search tab's results, so Mark
+  as Read/Unread there toggles the open message again. Picking a folder in
+  the Mail tab no longer ends the Search tab's search. Narrowing an iPad
+  window or folding a Duo in the middle of a search now opens the Search tab
+  with its field, query and results. Widening or unfolding from the Search
+  tab keeps the search; from any other tab, a search left behind in the
+  Search tab ends, so the wider layout shows what you were reading.
+- Apple: **Settings stays open across a fold.** Folding an iPhone Duo or
+  narrowing an iPad window with Settings open now lands on the Settings tab,
+  and unfolding or widening from the Settings tab reopens Settings.
+- Apple: **Message menu in the visionOS Mail tab.** Reply, Forward, Mark as
+  Read/Unread, Flag, Move to Folder and Command-Delete now work in the Mail
+  tab with a message open or several selected; they were always dimmed
+  there.
+- Apple: **Resume opens in the window you tapped.** With two Mac or iPad
+  windows on one folder, Resume, a notification, Spotlight or Siri could
+  open its message in the other window, and narrowing one of two iPad
+  windows across the size-class line could hand its open message to the
+  other. Each window now keeps its own place to restore, so the message
+  opens in the window that was asked. A window opened after launching
+  from a notification now opens where the notification took you, not
+  where the app was before it.
+
 ## [1.30.0] - 2026-10-09
 
 ### Changed
