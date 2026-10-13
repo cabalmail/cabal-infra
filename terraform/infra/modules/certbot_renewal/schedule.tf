@@ -33,14 +33,18 @@ resource "aws_iam_role_policy" "scheduler_invoke" {
 
 resource "aws_scheduler_schedule" "certbot" {
   name        = "cabal-certbot-renewal"
-  description = "Renew Let's Encrypt certificate every 60 days"
+  description = "Daily check; renews the Let's Encrypt certificate once half its lifetime has passed"
 
   flexible_time_window {
     mode                      = "FLEXIBLE"
     maximum_window_in_minutes = 60
   }
 
-  schedule_expression = "rate(60 days)"
+  # Daily so a failed issuance is retried the next day. The Lambda itself
+  # decides whether renewal is due (see RENEW_FRACTION in handler.py), which
+  # keeps it correct as Let's Encrypt shortens lifetimes to 64 and then 45
+  # days.
+  schedule_expression = "rate(1 day)"
 
   target {
     arn      = aws_lambda_function.certbot.arn

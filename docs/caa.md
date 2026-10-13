@@ -172,7 +172,8 @@ silently broken renewal weeks later.
 - **Let's Encrypt on the control domain**: rerun the certbot command above
   with `--domains caa-test.<control_domain>`. Expected: a staging certificate
   is issued. The fuller version is invoking the `cabal-certbot-renewal`
-  Lambda, which exercises the production renewal path itself at the cost of
+  Lambda with the payload `{"force": true}` (without it, the Lambda skips
+  issuance until renewal is due), which exercises the production renewal path itself at the cost of
   rolling the mail tiers.
 - **ACM on the control domain**: request a throwaway DNS-validated
   certificate for `caa-test.<control_domain>`, confirm it reaches ISSUED,

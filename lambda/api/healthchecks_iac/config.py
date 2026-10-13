@@ -32,9 +32,9 @@ CHECKS = [
     {
         'name': 'certbot-renewal',
         'kind': 'simple',
-        'timeout': 60 * _DAY,
-        'grace': 24 * _HOUR,
-        'desc': 'cabal-certbot-renewal Lambda. Runs every 60 days via EventBridge Scheduler.',
+        'timeout': 1 * _DAY,
+        'grace': 3 * _DAY,
+        'desc': 'cabal-certbot-renewal Lambda. Runs daily via EventBridge Scheduler; renews when half the cert lifetime has passed.',
         'tags': ['cabalmail', 'lambda', 'certs'],
         'ssm_param': '/cabal/healthcheck_ping_certbot_renewal',
     },

@@ -17,6 +17,7 @@ socket can be silently dead after a freeze/thaw, so entries expire after
 POOL_IDLE_SECONDS and the mandatory re-SELECT on checkout doubles as a liveness
 probe (reconnect once on failure). The tuning knobs read env with defaults, so
 only the on/off flag has to be wired through Terraform.'''
+import imaplib
 import os
 import time
 from imapclient import IMAPClient, SocketTimeout  # pylint: disable=import-error
@@ -36,6 +37,15 @@ from imap_pool import ImapConnectionPool  # pylint: disable=import-error
 # imap.<control-domain> resolves to an NLB with no IMAP listener behind it.
 INTERNAL_HOST = os.environ.get('IMAP_INTERNAL_HOST', '')
 INTERNAL_PORT = 143
+
+# imaplib refuses any single response line over _MAXLINE (1,000,000 bytes by
+# default) and raises mid-command. SORT and SEARCH return every matching UID on
+# one untagged line, ~7 bytes per UID, so a folder of roughly 140k messages
+# overflows it and /list_messages fails with a 502. The only server we talk to
+# is our own Dovecot, so the cap guards against nothing here; 10 MB covers
+# folders of over a million messages. imapclient reads through imaplib, so the
+# module global is the one knob.
+imaplib._MAXLINE = 10_000_000  # pylint: disable=protected-access
 
 POOL_ENABLED = os.environ.get('IMAP_POOL_ENABLED', 'false').lower() == 'true'
 POOL_MAX_SIZE = int(os.environ.get('IMAP_POOL_MAX_SIZE', '8'))
