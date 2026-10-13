@@ -1,10 +1,10 @@
 # Runbook: heartbeat missed — `certbot-renewal`
 
-Fired by Healthchecks when the `certbot-renewal` check has been silent past its grace window (24 h beyond the 60-day expected cadence).
+Fired by Healthchecks when the `certbot-renewal` check has been silent past its grace window (3 days beyond the daily expected cadence).
 
 ## What this means
 
-The `cabal-certbot-renewal` Lambda did not ping its Healthchecks URL on its last scheduled run. It may have:
+The `cabal-certbot-renewal` Lambda has not pinged its Healthchecks URL for several daily runs. It pings on every successful run, whether it renewed or found renewal not yet due. It may have:
 - Failed to invoke at all (EventBridge schedule disabled or stale).
 - Invoked and crashed before reaching the ping.
 - Invoked, succeeded, but couldn't reach Healthchecks (network or token issue).
@@ -13,7 +13,7 @@ The Lambda is the source of Let's Encrypt certs **for the mail tiers** (Sendmail
 
 ## Who/what is impacted
 
-Mail-tier TLS certs expire on a 90-day Let's Encrypt cycle. The Lambda runs every 60 days, leaving 30 days of buffer. One missed run drops to ~30 days of buffer; two missed runs lets certs actually expire — at which point IMAP TLS, Submission TLS, and STARTTLS all break for users. Inbound SMTP relay still works since most peers don't validate.
+The Lambda runs daily and renews once half the certificate's lifetime has passed, so a renewal starts with half the lifetime still remaining: 45 days on a 90-day certificate, 32 on a 64-day one (Let's Encrypt's default from February 2027), 22 on a 45-day one (from February 2028). Every failed day eats one day of that buffer; once it runs out the certs expire — at which point IMAP TLS, Submission TLS, and STARTTLS all break for users. Inbound SMTP relay still works since most peers don't validate.
 
 ## First three things to check
 
@@ -40,7 +40,7 @@ Mail-tier TLS certs expire on a 90-day Let's Encrypt cycle. The Lambda runs ever
 
 ## Escalation
 
-- **Force a renewal now**: `aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json && cat /tmp/out.json`. This both renews and pings; the Healthchecks check should turn green within a minute (after Lambda cold-start).
+- **Re-run the check now**: `aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json && cat /tmp/out.json`. This renews only if renewal is due, and pings either way; the Healthchecks check should turn green within a minute (after Lambda cold-start). To renew regardless, pass `--cli-binary-format raw-in-base64-out --payload '{"force": true}'`; that also rolls the mail tiers.
 - **Schedule disabled in Terraform**: re-enable in the `certbot_renewal` module.
 - **Account key issue**: the ACME account is a one-time bootstrap (see [docs/setup.md](../../setup.md)). If lost, generate a new key and re-register.
-- This alert is `critical`. The buffer between heartbeat-missed and actual cert expiry is 30+ days, so don't panic-page yourself out of bed for a 2 AM alert; address it the next business day. But don't *ignore* it for a week.
+- This alert is `critical`. The buffer between heartbeat-missed and actual cert expiry is about two weeks even on 45-day certificates, so don't panic-page yourself out of bed for a 2 AM alert; address it the next business day. But don't *ignore* it for a week.

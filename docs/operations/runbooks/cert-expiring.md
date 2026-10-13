@@ -18,7 +18,7 @@ The alert's `instance` label identifies which endpoint is expiring. Two distinct
 
 ## What this means
 
-The TLS certificate serving `{{ $labels.instance }}` is approaching expiry. ACM normally auto-renews around T-30; the certbot Lambda runs daily and renews when remaining days drop below a configured threshold. <21 days remaining on either source means that pipeline is stuck.
+The TLS certificate serving `{{ $labels.instance }}` is approaching expiry. ACM normally auto-renews around T-30; the certbot Lambda runs daily and renews once half the certificate's lifetime has passed. <21 days remaining on either source means that pipeline is stuck.
 
 ## Who/what is impacted
 
@@ -46,6 +46,8 @@ Which pipeline depends on which endpoint the alert names.
 1. **When did `cabal-certbot-renewal` last run?** Check the Lambda's last invocation and any errors:
    ```sh
    aws lambda invoke --function-name cabal-certbot-renewal /tmp/out.json && cat /tmp/out.json
+   # renew even though it reports "not due":
+   aws lambda invoke --function-name cabal-certbot-renewal --cli-binary-format raw-in-base64-out --payload '{"force": true}' /tmp/out.json
    aws logs tail /aws/lambda/cabal-certbot-renewal --since 7d
    ```
    The Lambda is scheduled and also can be invoked manually to force a renewal attempt.
