@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.1] - 2026-10-13
+
+### Changed
+- **Certificate renewal ready for shorter Let's Encrypt lifetimes.** The
+  mail tiers' certificate renewal now runs daily instead of every 60 days
+  and renews once half the current certificate's lifetime has passed,
+  reading the lifetime off the certificate itself. The 60-day cadence would
+  have left 4 days of margin on the 64-day certificates Let's Encrypt
+  issues from February 2027 and let the 45-day ones from February 2028
+  expire outright; daily runs also retry a failed issuance the next day.
+  The Healthchecks `certbot-renewal` check moves to a daily period with a
+  3-day grace. Invoke the Lambda with `{"force": true}` to renew early.
+
+### Fixed
+- **Very large folders open again.** A folder of roughly 140,000 messages or
+  more failed to load with "Internal server error": the message-list
+  endpoint's IMAP SORT response came back as a single line over Python
+  imaplib's 1 MB line limit. The Lambda API now accepts lines up to 10 MB.
+
 ## [1.31.0] - 2026-10-12
 
 ### Added
