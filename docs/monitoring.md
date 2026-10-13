@@ -210,7 +210,7 @@ Expected output: `{"status":"ok","reconciled":6,"failed":0,"extras":[],"checks":
 
 | Check name             | Schedule          | Grace | Pinged by                                                       |
 | ---------------------- | ----------------- | ----- | --------------------------------------------------------------- |
-| `certbot-renewal`      | Every 60 days     | 24 h  | `cabal-certbot-renewal` Lambda (EventBridge Scheduler).         |
+| `certbot-renewal`      | Every 1 day       | 3 d   | `cabal-certbot-renewal` Lambda (EventBridge Scheduler).         |
 | `aws-backup`           | Every 1 day       | 6 h   | `backup_heartbeat` Lambda (EventBridge `JOB_COMPLETED`).        |
 | `dmarc-ingest`         | Every 6 hours     | 2 h   | `process_dmarc` Lambda.                                         |
 | `ecs-reconfigure`      | Every 30 minutes  | 30 m  | `reconfigure.sh` loop in mail-tier containers.                  |

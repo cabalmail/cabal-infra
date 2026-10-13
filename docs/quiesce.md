@@ -60,4 +60,4 @@ Forgetting this step is recoverable: the next `infra.yml` run will simply restor
 - Alarms wired to `UnHealthyHostCount` on the NLB target groups will fire continuously while quiesced. This is expected; suppress or accept the noise on non-prod.
 - The NLB itself is not torn down. It costs roughly $16/month idle. Tearing it down was considered but rejected for v1: it triggers Route 53 alias re-resolution on resume and adds non-trivial cascade.
 - The monitoring ALB is also kept up when `monitoring = true`. Same rationale.
-- The certbot-renewal Lambda continues to run on its 60-day schedule and will renew certificates while the environment is quiesced. This is intentional - it avoids cert expiry during long quiesce periods.
+- The certbot-renewal Lambda continues to run on its daily schedule and will renew certificates while the environment is quiesced. This is intentional - it avoids cert expiry during long quiesce periods.
