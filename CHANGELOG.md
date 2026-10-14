@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.2] - 2026-10-14
+
+### Fixed
+- **Creating an address that is already in use.** The request now answers
+  with a message saying so, and repeating a request for one of your own
+  addresses leaves it as it was. New addresses are created in lower case.
+- Apple: **Safer reply and forward.** Quoting a message in a reply or
+  forward no longer loads its remote images, and the composer keeps only
+  the formatting of a quoted, pasted or dropped message.
+
 ## [1.31.1] - 2026-10-13
 
 ### Changed

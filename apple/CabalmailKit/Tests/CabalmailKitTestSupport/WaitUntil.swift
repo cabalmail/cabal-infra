@@ -36,16 +36,17 @@ public func waitUntil(
 /// letting the model's own tasks run between polls, until it holds, failing
 /// at the caller's line after `timeout`. Staying on the main actor keeps the
 /// condition from crossing an isolation boundary, which `waitUntil`'s
-/// nonisolated closure would.
+/// nonisolated closure would. The condition may await main-actor work, such
+/// as a web view's script result.
 @MainActor
 public func waitUntilOnMainActor(
     timeout: TimeInterval = defaultWaitTimeout,
     file: StaticString = #filePath,
     line: UInt = #line,
-    _ condition: () -> Bool
+    _ condition: () async throws -> Bool
 ) async throws {
     let deadline = Date().addingTimeInterval(timeout)
-    while !condition() {
+    while try await !condition() {
         guard Date() < deadline else {
             XCTFail(String(format: "condition never held within %.0fs", timeout), file: file, line: line)
             return

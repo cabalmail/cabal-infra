@@ -3,8 +3,8 @@ import WebKit
 import XCTest
 @testable import CabalmailKit
 
-/// The composer's navigation policy (only the editor's own file load is
-/// allowed; every link is cancelled) runs only while WebKit can see it. Under
+/// The composer's navigation policy (the editor's own page loads once; every
+/// other navigation is cancelled) runs only while WebKit can see it. Under
 /// complete concurrency checking the completion-handler form of the method
 /// stopped matching the SDK's requirement, which left it a plain Swift method
 /// WebKit never calls, with only a warning to say so; this asks the
@@ -25,6 +25,46 @@ final class RichTextEditorNavigationPolicyTests: XCTestCase {
     func testWebKitCanSeeTheContentProcessHandler() {
         let selector = NSSelectorFromString("webViewWebContentProcessDidTerminate:")
         XCTAssertTrue(RichTextEditorController.instancesRespond(to: selector))
+    }
+
+    // MARK: - The policy itself
+
+    private let editor = URL(fileURLWithPath: "/bundle/WebAssets/editor.html")
+
+    private func allows(
+        _ url: URL?,
+        type: WKNavigationType = .other,
+        inMainFrame: Bool = true,
+        editorPageAllowed: Bool = false
+    ) -> Bool {
+        RichTextEditorController.allowsNavigation(
+            to: url,
+            type: type,
+            inMainFrame: inMainFrame,
+            editorURL: editor,
+            editorPageAllowed: editorPageAllowed
+        )
+    }
+
+    func testTheEditorPageLoadsOnce() {
+        XCTAssertTrue(allows(editor))
+        XCTAssertFalse(allows(editor, editorPageAllowed: true), "a second load would wipe the draft")
+    }
+
+    /// Before, any `file://` URL loaded in the main frame.
+    func testNoOtherLocalFileLoads() {
+        XCTAssertFalse(allows(URL(fileURLWithPath: "/bundle/WebAssets/editor-bridge.js")))
+        XCTAssertFalse(allows(URL(fileURLWithPath: "/etc/hosts")))
+    }
+
+    func testNothingElseNavigatesTheComposer() {
+        XCTAssertFalse(allows(nil))
+        XCTAssertFalse(allows(URL(string: "https://example.com/")))
+        XCTAssertFalse(allows(URL(string: "about:blank")))
+        XCTAssertFalse(allows(editor, inMainFrame: false), "no frame loads anything")
+        for type in [WKNavigationType.linkActivated, .reload, .formSubmitted, .backForward, .formResubmitted] {
+            XCTAssertFalse(allows(editor, type: type), "\(type.rawValue)")
+        }
     }
 }
 #endif

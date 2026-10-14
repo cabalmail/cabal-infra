@@ -156,6 +156,11 @@ public final class RichTextEditorController: NSObject {
     private var pendingReadyContinuations: [CheckedContinuation<Void, Never>] = []
     private var readyTimeoutTask: Task<Void, Never>?
     private let readyTimeout: TimeInterval
+    /// The editor page this controller loads, and whether WebKit has been
+    /// let load it yet. It is the one document the web view ever shows,
+    /// once (see `allowsNavigation`).
+    private var editorURL: URL?
+    private var editorPageAllowed = false
 
     /// `readyTimeout` bounds how long the first `waitUntilReady()` parks
     /// before the bridge is declared dead. Ten seconds is far longer than a
@@ -197,6 +202,7 @@ public final class RichTextEditorController: NSObject {
             assertionFailure("editor.html not present in CabalmailKit bundle")
             return
         }
+        editorURL = editorUrl
         webView.loadFileURL(editorUrl, allowingReadAccessTo: editorUrl.deletingLastPathComponent())
 
         if let placeholder, !placeholder.isEmpty {
@@ -223,9 +229,20 @@ public final class RichTextEditorController: NSObject {
 
     // MARK: - Editor state
 
-    public func setHTML(_ html: String) async {
+    /// Replaces the editor's content. The page keeps formatting and drops
+    /// anything that could run or load in the composer (`editor-bridge.js`,
+    /// "inbound HTML"). `blockingRemoteImages` also turns an image that
+    /// would load from the network into its alt text or address, and drops
+    /// inline style: the reply and forward seed sets it, so quoting a
+    /// message never fetches anything from its sender's servers. Images in
+    /// `trustedMarkdown`, the user's own signature, stay.
+    public func setHTML(
+        _ html: String,
+        blockingRemoteImages: Bool = false,
+        keepingImagesFrom trustedMarkdown: String = ""
+    ) async {
         await waitUntilReady()
-        await call("setHTML", args: [html])
+        await call("setHTML", args: [html, blockingRemoteImages, trustedMarkdown])
     }
 
     public func getHTML() async -> String {
@@ -505,14 +522,35 @@ extension RichTextEditorController: WKNavigationDelegate {
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction
     ) async -> WKNavigationActionPolicy {
-        // Only allow the initial file:// load of editor.html. Any link click
-        // (or window.location assignment) escapes to the user's default
-        // browser via the host app, not inside the composer surface.
-        if navigationAction.navigationType == .other,
-           navigationAction.request.url?.isFileURL == true {
-            return .allow
+        let allowed = Self.allowsNavigation(
+            to: navigationAction.request.url,
+            type: navigationAction.navigationType,
+            inMainFrame: navigationAction.targetFrame?.isMainFrame == true,
+            editorURL: editorURL,
+            editorPageAllowed: editorPageAllowed
+        )
+        if allowed { editorPageAllowed = true }
+        return allowed ? .allow : .cancel
+    }
+
+    /// The composer's web view shows one document, the editor page, loaded
+    /// once in the main frame. Nothing navigates it after that: a link
+    /// click (or a `location` assignment) escapes to the user's browser via
+    /// the host, never in here, and markup in a quoted message can neither
+    /// reload the page, which would wipe the draft, nor open another local
+    /// file in it.
+    static func allowsNavigation(
+        to url: URL?,
+        type: WKNavigationType,
+        inMainFrame: Bool,
+        editorURL: URL?,
+        editorPageAllowed: Bool
+    ) -> Bool {
+        guard !editorPageAllowed, inMainFrame, type == .other,
+              let url, let editorURL, url.isFileURL else {
+            return false
         }
-        return .cancel
+        return url.standardizedFileURL.path == editorURL.standardizedFileURL.path
     }
 
     /// The web content process can be jetsammed or crash *after* the bridge

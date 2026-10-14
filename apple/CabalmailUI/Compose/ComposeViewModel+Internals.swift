@@ -157,6 +157,13 @@ extension ComposeViewModel {
         SignatureFormatter.seedBody(base: "", signature: preferences.signature)
     }
 
+    /// Whether the body quotes somebody else's message: a reply, reply-all
+    /// or forward. The rich pane shows that quote without its remote
+    /// images. A new compose, a mailto and a resumed draft are `.new`.
+    var quotes: Bool {
+        composeIntent != .new
+    }
+
     /// Whether the markdown pane carries something the user wrote, as
     /// opposed to a seed they never touched. Send-time provenance, not
     /// emptiness — see `ComposeBodyPolicy.source` (#1091).

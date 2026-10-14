@@ -153,6 +153,10 @@ class _FakeTable:
     def put_item(self, Item=None, **_kwargs):  # pylint: disable=invalid-name
         self.items.append(Item)
 
+    def scan(self, **_kwargs):
+        '''/new reads the stored addresses before it writes one.'''
+        return {'Items': list(self.items)}
+
 
 def _event(subdomain, tld, user='alice', usernames=('alice',)):
     '''An API Gateway proxy event for either create endpoint. The admin arm
