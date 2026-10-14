@@ -357,7 +357,7 @@ final class ComposeViewModel {
     /// Markdown" toolbar button.
     func importFromMarkdown() async {
         let html = await editorController.markdownToHtml(markdownBody)
-        await editorController.setHTML(html)
+        await editorController.setHTML(html, blockingRemoteImages: quotes, keepingImagesFrom: preferences.signature)
         richMirrorsMarkdown = false
         editorMode = .rich
     }
@@ -396,7 +396,9 @@ final class ComposeViewModel {
         let seeded = shouldFocusBodyOnAppear
             ? "<p><br></p><p><br></p>" + html
             : html
-        await editorController.setHTML(seeded)
+        // Quoting somebody else's message must not fetch anything from
+        // their servers; the user's own signature keeps its images.
+        await editorController.setHTML(seeded, blockingRemoteImages: quotes, keepingImagesFrom: preferences.signature)
         richMirrorsMarkdown = true
     }
 
