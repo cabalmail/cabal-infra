@@ -1315,6 +1315,21 @@ marked + flattenParagraphs + styleParagraphs), or both-filled. So every
 outgoing message ships with both MIME parts populated and no recipient
 sees a blank message because their mail client preferred `text/html`.
 
+The editor page runs its own script, so markup that comes into it is
+treated as somebody else's. `setHTML` (the reply, forward and mailto
+seeds, a reopened draft, Import from Markdown) and an HTML paste or drop
+parse it in an inert `<template>` and keep only formatting elements and
+attributes ("inbound HTML" in `editor-bridge.js`). The page's content
+security policy (`editor.html`) refuses inline script and requests made
+from script, and the controller lets the web view load the editor page
+once and go nowhere after that. In a reply or forward, `setHTML` also
+turns an image that would load from the network into its alt text or
+address and drops inline style, which can fetch too
+(`setHTML(_:blockingRemoteImages:keepingImagesFrom:)`), so quoting a
+message fetches nothing from its sender's servers. The images in the
+user's own signature stay, and a new compose, a mailto, a reopened draft
+and a paste keep theirs.
+
 #### Why a WKWebView instead of native NSTextView / UITextView
 
 Native rich-text editing on Apple platforms means `NSAttributedString`,
@@ -1330,10 +1345,10 @@ contenteditable.
 
 #### Why marked + turndown are fetched, not committed
 
-`apple/CabalmailKit/Sources/CabalmailKit/Compose/Resources/` is the
+`apple/CabalmailKit/Sources/CabalmailKit/Compose/WebAssets/` is the
 SwiftPM resource directory `editor.html` looks up its sibling scripts
-from. `editor.html` and `editor-bridge.js` are first-party and
-committed; `marked.umd.js`, `turndown.js`, and their MIT LICENSE files
+from. `editor.html`, `error-relay.js` and `editor-bridge.js` are
+first-party and committed; `marked.umd.js`, `turndown.js`, and their MIT LICENSE files
 are gitignored and materialize at build time from
 `react/admin/node_modules/` via `apple/scripts/sync-vendored.sh`.
 

