@@ -6,7 +6,8 @@ import CabalmailKit
 /// the subscription's own (`WKWebsiteDataStore(forIdentifier:)`, D11): a
 /// login on this feed's site never leaks to another feed's, even at the
 /// same publisher. JavaScript stays on for the live page - publishers need
-/// it - and off for the reader rendering.
+/// it - and off for the reader rendering, whose document also refuses
+/// script, plugins and frames by its own content security policy (#1911).
 ///
 /// Reader mode runs the vendored Readability.js over the loaded page and
 /// re-renders the extracted article with the mail reader's stylesheet; the
@@ -98,6 +99,15 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     private var pageLoaded = false
     private var extracting = false
     private var readerDocument: String?
+    /// Set from `showReader` until the reader document commits. That load,
+    /// and no other, runs with page JavaScript off (#1911). `showingReader`
+    /// can't stand in for it: it is still true while a link tapped in the
+    /// reader is decided, and that link must load its page with scripts on.
+    private var loadingReader = false
+    /// A link tapped in the reader is loading. The reader state changes only
+    /// once its page commits, so a link that opens nothing here (a new-window
+    /// link, a download) leaves the reader as it was.
+    private var linkOutOfReader = false
     /// Reports a top-level load failure (or nil once a load finishes) to the
     /// SwiftUI layer, which draws the notice.
     private let onFailure: @MainActor (String?) -> Void
@@ -138,6 +148,8 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         } else if let pageURL {
             showingReader = false
             pageLoaded = false
+            loadingReader = false
+            linkOutOfReader = false
             webView.load(URLRequest(url: pageURL))
         }
     }
@@ -168,10 +180,25 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     private func showReader(_ document: String, on webView: WKWebView) {
         showingReader = true
         pageLoaded = false
+        loadingReader = true
+        linkOutOfReader = false
         webView.loadHTMLString(document, baseURL: pageURL)
     }
 
     // MARK: WKNavigationDelegate
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        loadingReader = false
+        if linkOutOfReader {
+            // The link's page is on screen but not loaded, so nothing
+            // extracts it yet: `didFinish` adopts its URL, then `reconcile`
+            // extracts it again while the toolbar asks for the reader.
+            linkOutOfReader = false
+            showingReader = false
+            pageLoaded = false
+            readerDocument = nil
+        }
+    }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         pageLoaded = true
@@ -187,6 +214,8 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        loadingReader = false
+        linkOutOfReader = false
         report(error)
     }
 
@@ -209,25 +238,29 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         decidePolicyFor navigationAction: WKNavigationAction,
         preferences: WKWebpagePreferences
     ) async -> (WKNavigationActionPolicy, WKWebpagePreferences) {
-        // The reader rendering is static HTML we built; the live page needs
-        // its scripts.
-        preferences.allowsContentJavaScript = !(showingReader && navigationAction.request.url?.scheme == "about")
-        if showingReader, navigationAction.navigationType == .linkActivated,
-           let url = navigationAction.request.url, url.scheme?.hasPrefix("http") == true {
-            // A link tapped inside the reader rendering leaves reader mode for
-            // the live destination, like Safari Reader does.
-            showingReader = false
-            readerDocument = nil
-            pageURL = url
+        // The reader rendering holds the publisher's markup, event handlers
+        // included, so its load runs no page script; the live page needs its
+        // scripts. The load's request carries the page's https URL, not
+        // about:blank, so the scheme can't tell the two apart.
+        let inMainFrame = navigationAction.targetFrame?.isMainFrame == true
+        preferences.allowsContentJavaScript = ArticleNavigationPolicy.allowsJavaScript(
+            type: navigationAction.navigationType, inMainFrame: inMainFrame, loadingReader: loadingReader)
+        if ArticleNavigationPolicy.leavesReader(
+            type: navigationAction.navigationType, url: navigationAction.request.url,
+            inMainFrame: inMainFrame, showingReader: showingReader) {
+            linkOutOfReader = true
         }
         return (.allow, preferences)
     }
 
-    /// Runs Readability over a clone of the document and returns JSON.
+    /// Runs Readability over a clone of the document and returns JSON. The
+    /// video pattern matches nothing, so Readability drops every iframe,
+    /// embed and object, video players included: reader mode runs no
+    /// third-party code, and the players stay on the publisher's page.
     static let extractionProgram = """
     (function () {
       try {
-        var article = new Readability(document.cloneNode(true)).parse();
+        var article = new Readability(document.cloneNode(true), { allowedVideoRegex: /(?!)/ }).parse();
         if (!article) { return null; }
         return JSON.stringify({ title: article.title || "", byline: article.byline || "",
                                 content: article.content || "" });
@@ -256,8 +289,16 @@ enum ArticleReaderDocument {
         \(article.content)
         </article>
         """
-        return rewrite(html: body, inlineImages: [:], readerMode: true)
+        return contentPolicy + rewrite(html: body, inlineImages: [:], readerMode: true)
     }
+
+    /// Refuses script, plugins and frames in the reader document, whatever
+    /// the article carries (Readability keeps inline event handlers). It
+    /// leads the document, because only a policy in the head applies and
+    /// `rewrite` places its head defaults after the first tag that starts
+    /// with `<head`, which an article's `<header>` also matches.
+    static let contentPolicy = "<meta http-equiv=\"Content-Security-Policy\" "
+        + "content=\"script-src 'none'; object-src 'none'; frame-src 'none'\">"
 
     private static func escape(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;")
