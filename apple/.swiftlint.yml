@@ -78,6 +78,24 @@ custom_rules:
     message: "Log through CabalmailLog, which writes the unified log and the Debug Log"
     severity: warning
 
+  # Page JavaScript stays off in a web view that shows HTML somebody else
+  # wrote (the mail reader, the feed article in reader mode). Turning it on
+  # anywhere in shipped code takes a reasoned
+  # `swiftlint:disable:next content_javascript_enabled` on the line before,
+  # as at the composer and the feed article view: CLAUDE.md names the web
+  # views, their rule, and the tests that hold it.
+  content_javascript_enabled:
+    name: "Page JavaScript enabled"
+    regex: '\ballowsContentJavaScript(?=\s*=(?!=)(?!\s*false\b))'
+    match_kinds: identifier
+    excluded:
+      - "CabalmailKit/Tests/"
+      - "CabalmailTests/"
+      - "CabalmailiOSTests/"
+      - "Tools/"
+    message: "Page JavaScript stays off in web views that show someone else's HTML; see CLAUDE.md before turning it on"
+    severity: warning
+
 type_name:
   min_length: 3
   max_length:

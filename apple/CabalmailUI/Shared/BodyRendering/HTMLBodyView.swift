@@ -419,18 +419,20 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     /// anchored element and `scrollIntoView`s it, then nudges by the saved
     /// delta. Re-run once after a short delay because inline images decoding
     /// after `didFinish` can still shift layout. `nil`/empty anchors no-op.
+    /// Like the bridges, our scripts run in `WKContentWorld.defaultClient`,
+    /// out of the message's reach; the DOM they scroll is shared.
     private func applyRestoreIfNeeded(on webView: WKWebView) {
         guard !didApplyRestore, let anchor = restoreAnchor, !anchor.isEmpty else { return }
         didApplyRestore = true
         let script = Self.restoreScript(anchor: anchor)
-        webView.evaluateJavaScript(script, completionHandler: nil)
+        webView.evaluateJavaScript(script, in: nil, in: .defaultClient)
         Task { [weak webView] in
             try? await Task.sleep(for: .milliseconds(400))
-            // Deliberately NOT the async evaluateJavaScript variant: the
-            // restore script's IIFE returns undefined and the async
-            // refinement traps on nil results. The sync closure keeps the
-            // nil-safe completion-handler API out of the async context.
-            await MainActor.run { webView?.evaluateJavaScript(script, completionHandler: nil) }
+            // Deliberately NOT an async evaluateJavaScript variant: the
+            // restore script's IIFE returns undefined, and the async
+            // refinement without a content world traps on nil results. The
+            // completion-handler form with no handler never reads a result.
+            await MainActor.run { webView?.evaluateJavaScript(script, in: nil, in: .defaultClient) }
         }
     }
 
@@ -446,7 +448,9 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     }
 
     private func captureAndReport(from webView: WKWebView) async {
-        let result = try? await webView.evaluateJavaScript(Self.captureScript)
+        // The content-world async variant returns `Any?`, so unlike the
+        // plain one it cannot trap on a nil result.
+        let result = try? await webView.evaluateJavaScript(Self.captureScript, contentWorld: .defaultClient)
         guard let payload = result as? [String: Any], let capture = ScrollCapture(bridgePayload: payload) else {
             return
         }
@@ -671,7 +675,8 @@ extension HTMLBodyCoordinator {
     /// The poll's capture: the anchor plus the raw scroll offset (so the
     /// receiver can tell "at the top" apart from a real position), as the
     /// same `{anchor, top}` payload the scroll bridge posts. App-initiated
-    /// (runs even though page-content JS is disabled).
+    /// (runs even though page-content JS is disabled), in the bridges'
+    /// `WKContentWorld.defaultClient`.
     static let captureScript = """
     (function(){
       \(anchorFunctionSource)
