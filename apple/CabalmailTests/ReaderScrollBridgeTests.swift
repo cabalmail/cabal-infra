@@ -118,6 +118,27 @@ final class ReaderScrollBridgeTests: XCTestCase {
     })()
     """
 
+    /// Both bridges and their message handlers live in the app's own script
+    /// world: the message's world sees none of them. Page JavaScript is off,
+    /// so nothing in a message runs today; this keeps the bridges out of its
+    /// reach if that ever changes.
+    func testTheBridgesAreOutOfTheMessagesReach() async throws {
+        let view = try await loadedReader(coordinator: HTMLBodyCoordinator(allowRemote: false))
+        let page = try await view.evaluateJavaScript(Self.bridgeProbe, contentWorld: .page) as? String
+        let app = try await view.evaluateJavaScript(Self.bridgeProbe, contentWorld: .defaultClient) as? String
+        XCTAssertEqual(page, "undefined,undefined,undefined,undefined")
+        XCTAssertEqual(app, "boolean,boolean,object,object")
+    }
+
+    private static let bridgeProbe = """
+    (function(){
+      var mh=window.webkit&&window.webkit.messageHandlers;
+      return [typeof window.__cabalLinkBridge, typeof window.__cabalScrollBridge,
+        typeof (mh&&mh.\(HTMLBodyCoordinator.linkBridgeHandlerName)),
+        typeof (mh&&mh.\(HTMLBodyCoordinator.scrollBridgeHandlerName))].join(",");
+    })()
+    """
+
     func testScrollingBackToTheTopReportsAtTop() async throws {
         let coordinator = HTMLBodyCoordinator(allowRemote: false)
         var captures: [ScrollCapture] = []

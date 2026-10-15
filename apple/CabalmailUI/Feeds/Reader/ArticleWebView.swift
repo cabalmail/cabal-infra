@@ -121,6 +121,9 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         if let dataStoreID {
             configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier: dataStoreID)
         }
+        // The live page is the publisher's site and needs its scripts. The
+        // reader rendering's own load turns them off (`decidePolicyFor`).
+        // swiftlint:disable:next content_javascript_enabled
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
@@ -243,6 +246,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         // scripts. The load's request carries the page's https URL, not
         // about:blank, so the scheme can't tell the two apart.
         let inMainFrame = navigationAction.targetFrame?.isMainFrame == true
+        // swiftlint:disable:next content_javascript_enabled
         preferences.allowsContentJavaScript = ArticleNavigationPolicy.allowsJavaScript(
             type: navigationAction.navigationType, inMainFrame: inMainFrame, loadingReader: loadingReader)
         if ArticleNavigationPolicy.leavesReader(
