@@ -1,0 +1,66 @@
+# Working agreements for the post-Wave 3 plans
+
+> **Repo copy (2026-10-15):** Written in the 2026-10 Cabalmail Client Architecture project, which has closed. This copy is self-contained: what it took from that project's audits, scope docs, soak notes and threads is stated where it is used. Names, machines and test accounts are generalized for publication. Facts about the code are as of the commit named in the first paragraph; check the code before relying on them.
+
+Written 2026-10-12, at the close of the "Cabalmail Client Architecture" project, against `stage` at `50e6022` (release 1.31.0). Every plan in this folder assumes these agreements. They are how the 2026-10-02 to 2026-10-12 rearchitecture actually ran, not an ideal. A session (or a new Claude project) that runs one of these plans reads this file with it, from `docs/1.x/post-wave-3/` in this repo: the rearchitecture project's shared folder is not readable from the repo, and project memory was off there, so nothing else carries over.
+
+## What already exists
+
+- The rearchitecture's four waves (0.1 to 3.3) are merged and soaked. The proposal, the seven audits of 2026-10-02 and every scope doc stay with the closed rearchitecture project's records and are not in the repo; each plan states what it takes from them where it uses it, and `docs/apple.md` describes the code as built. They are historical: implementation diverged from them in places, and not every divergence has an erratum. Check the code before relying on any of them.
+- The shape the waves left: an app layer in the `CabalmailUI` static library (XcodeGen target, feature folders), a per-account `SessionManager` and `MailSessionStore`, a `MailMutationService` that owns optimistic mail writes, `MessageRef` identity, a per-window `SceneNavigator` with a `Codable` route, `FocusedValue` window commands, four layout shells (`DesktopShell`, `SplitShell`, `TabShell`, `OrnamentShell`) chosen from one `ShellLayout` signal, per-window `@SceneStorage` restore, one `DeepLinkRouter` and one compose coordinator. Feeds keep `RssStore` (SQLite) and `RssSyncEngine` with a durable pending queue. Mail still caches envelopes as JSON files per folder.
+- **The Duo design is the maintainer's Oct 7 spec,** the Claude Doc "Cabalmail on iPhone Duo: Poses and Transitions" in the maintainer's account (private to it; a session run by the maintainer can read it), linked from duo-support.md. Its "Your book, laptop and portrait spec" section and "Choices for you" are decided; the rest is the design. It asks for one view tree on iOS, while Wave 3 shipped `SplitShell` and `TabShell` swapped on a close or open; until duo-support.md Decision 9 settles that, add no new hand-off rules or tree-specific state across the swap. In the spec, a fold is book or laptop pose, which swaps nothing; closing and opening the Duo is what swaps the shells. Layout follows size class, window shape and the active fold region, never the device.
+
+## How work runs
+
+- **Scope doc first.** Each workstream starts with a short scope doc written against current `stage`: the maintainer's questions at the top, each answerable in one word with a recommended answer, quoted in full when posted; one line per planned PR saying what the maintainer will see change; then the brief. Keep it short. The maintainer has said long docs are hard to use and that questions buried in them get lost.
+- **Bugs before structure.** The maintainer's standing preference: when a structural workstream and known user-visible bugs compete for the same slot, the bugs go first.
+- **One PR at a time per hotspot.** A file that several workstreams edit (in the waves: `AppState*.swift`, the root and shell views, `MessageListViewModel*.swift`, `TestSupport.swift`, `project.yml`) is edited by one open PR at a time. Plans name their hotspots.
+- **Small PRs to `stage`.** The maintainer reviews and merges. A PR that is out of draft with every check green is ready to merge without a check-in. Threads do not open a PR that has to wait on another one.
+- **Pace CI.** One Apple PR run takes about six to eight macOS jobs, and the account's GitHub plan runs about five macOS jobs at once. Too many open Apple PRs starve each other and the maintainer's stage builds. Push only when something needs fixing; let outdated runs cancel.
+- **No Swift toolchain in cloud containers.** Every Apple compile from a cloud session is a CI round trip. Builds, simulator checks and soaks ran through Remote Control sessions on the maintainer's Mac mini (**the Mini**: soaks, live checks and the Android emulator; shared with the maintainer's tester) and Mac Studio (**the Studio**: Xcode 27.2 beta with the iPhone Duo simulator). The Studio is the only machine with the Duo simulator. Check whether the maintainer's tester is using a machine before driving its GUI.
+
+  > **Note (2026-10-16):** duo-support.md, ipad-layout-and-keyboard.md and apple-ci-and-build-config.md say the Studio's beta is Xcode 27.1, and multi-window-and-restore.md says 27.1 or 27.2. Which one is installed was not re-checked for this copy; check on the machine.
+
+- **Stage test accounts.** **Test account 1** and **test account 2** (MFA on) are the two stage test accounts set aside for AI use; the plans call them by these names. live-verification.md and multi-window-and-restore.md also use **test account 3**, a third stage test account. Their credentials are read at run time from AWS Parameter Store by a helper on the rig; never print them. The maintainer asked only that sessions coordinate their use, since a sign-in on one device can sign out another.
+
+  > **Erratum (2026-10-16):** The helper serves test accounts 2 and 3 only, not test account 1 (live-verification.md, "The rig"; the hardening session found the same on 2026-10-15). It ran on the Mini and was later allowed on the Studio; at the start of the session, ask the maintainer where it is and how it hands over a credential. Test account 1 is what the rigs' simulators and Mac app stay signed in as, and how a session signs it back in after a sign-out was not recorded. So do no sign-out of test account 1 without asking the maintainer how to restore it: on the Mac a sign-out signs out every copy of the app, the tester's included. Do sign-out checks on a throwaway simulator clone, as live-verification.md does. Coordinating use now means telling the maintainer, as "Working from the repo" below says.
+
+- **Soak before promote.** Stage is promoted to prod with `make promote` (see `docs/releasing.md`) after a soak on the Mini: build stage, run the platform lanes, re-reproduce each defect with a second agent, verify the `needs-verification` issues, clean up fixtures. The release dashboard holds Promote while an issue with a fix merged on stage is still open. Keep one structural change per release where possible, so a regression is easy to trace. Anything merged to `stage` while the promotion PR is open rides along.
+- **Device checks hold Promote, not merge.** By-hand checks happen on the stage TestFlight build after merge. The maintainer collects them in one checklist when there is time.
+
+  > **Erratum (2026-10-16):** That checklist was a file in the rearchitecture project's shared folder and has no home in the repo. Where a plan says to add a check to the maintainer's checklist or the soak checklist, follow "Working from the repo" below.
+
+## Working from the repo (2026-10-16)
+
+In the rearchitecture, sessions shared a project folder and threads that every session could read, and the plans' "post in the thread", "coordinate with other sessions" and "the maintainer's checklist" relied on them. A session that starts from this repo has neither. Where a plan or brief says one of those things, these rules say what it means now.
+
+- **The maintainer is the coordinator.** A session tells the maintainer in its own conversation, and waits for a go-ahead, before it takes the Mini's or the Studio's screen and before it signs in a test account, and tells the maintainer again when it is done.
+- **Scope docs and answers.** The session posts its scope doc to the maintainer in its own conversation. Its first PR (or a small docs-only PR) records each answer under its decision in the plan, as `- **Answered YYYY-MM-DD: ...**`, and puts the planned PRs in the plan's Progress table. A later session of the same plan reads the answers there; where a brief says to paste an earlier session's answers or scope doc, read the plan's decisions instead.
+- **Outputs another plan needs** (a fixture account and its size, a soak result, a device checklist, a script another plan will commit) go in the producing plan's Status lines through a docs-only PR, or in a GitHub issue with no PII that those Status lines link. Never only in the conversation or a scratch folder.
+- **Device checks that must hold Promote.** Open a `needs-verification` issue (no PII) for each one, and name it with a closing keyword (`Fixes #N`) in the stage PR that needs it: the release dashboard holds Promote while a merged stage PR claims an issue that is still open (`scripts/release-dashboard.py`). List the issues in the session's last message to the maintainer. The pre-promote soak verifies them.
+- **Rig locks.** On the Mini and the Studio, hold `/tmp/cabal-build.lock` around every `xcodebuild` or `swift test`, and `/tmp/cabal-push.lock` around every push, as the Wave 3.3 rig rule did; push only when no Apple CI run is queued or running. macOS ships no `flock`, so ask the maintainer how the rig holds them.
+- **Soak records** go to the maintainer, and the facts another plan needs go in Status lines as above.
+
+## Repository rules that bite (from `CLAUDE.md`)
+
+- Changelog: a fragment per user-visible change in `changelog.d/`; Apple client changes must start with `Apple:` (the `apple-changelog.yml` gate fails otherwise; `no-changelog` label for refactors and test-only work). Android changes start with `Android:` and have a 500-character release-notes budget.
+- Source-scan tests: never edit a scan's expected text or anchor just to make it pass. A change that needs a scan edit needs the maintainer's yes, asked up front.
+- SwiftLint `file_length` and `type_body_length` are design signals: extract a type that owns behaviour, never a `Foo+Bar.swift` extension to get under the cap.
+- Platform conditionals: `scripts/check-platform-conditionals.py` and `apple/platform-conditionals-allowlist.txt` form a ratchet; the allowlist may only shrink. `#if os(...)` belongs in shells, `Platform/` adapters and UIKit/AppKit wrappers.
+- API compatibility (a rule the maintainer set on 2026-10-02 and kept only in project memory until now): Lambda changes stay additive (new endpoints, optional request fields, new response fields). A removal or rename gets a sibling endpoint named `<name>_v2`, not a `/v2` tree. Shipped Apple and Android builds keep working. A server change ships to `stage` before or with the client that needs it.
+
+  > **Note (2026-10-16):** The deploy order is an open question: docs-and-bookkeeping.md decision 2 recommends that a server change reach prod one release before a client that relies on it, and is unanswered. Until it is answered, a plan that states prod first (sqlite-mail-store.md design rule 6) follows its own rule, and other plans ask in their scope doc.
+
+- No PII in anything that reaches GitHub. No hard-wrapped paragraphs in GitHub-posted text.
+- Web views that render mail or feed HTML someone else wrote run with JavaScript off. Do not turn it on. The composer needs script for its editor, so it is the exception, and it must never run script that arrives in quoted mail. The first rule has open gaps today; hardening-web-and-writes.md fixes them.
+
+  > **Withheld (2026-10-15):** Part of this bullet's account of the open gaps on 2026-10-12 is withheld under the hardening plan's decision 1, which keeps unfixed-security detail out of public forums until the fixes are on prod for every client (for Apple, the App Store build people install), which is not yet confirmed. Those fixes shipped in release 1.31.2.
+
+  > **Erratum (2026-10-15):** The first rule's gap in the feed reader (#1911) is fixed on `stage` by hardening PR 2 (#2056), not yet released, and #1911 stays open until the hardening session's stage check. Hardening PR 3 (#2057, also on `stage`, not yet released) moved the mail reader's bridges into the app's own script world, added a SwiftLint rule that flags a web view turning JavaScript on, and wrote the three web views' JavaScript rule into `CLAUDE.md`.
+
+## Session or project
+
+The plans recommend one of two vehicles:
+
+- **Session**: one Claude Code session, usually one thread, carries the work end to end. It writes its own short scope doc, gets the maintainer's answers in one batch, opens a handful of sequential PRs, and hands off to the next soak. Most rearchitecture workstreams ran this way, including the large 1.0 module move.
+- **Project**: a new Claude project with a coordinator and several threads, used when the work needs its own audit or scope phase, parallel threads, several releases with a soak between them, a server change and a migration that must be sequenced, many decisions spread over time, or waits on outside events (a device shipping, a runner image).
