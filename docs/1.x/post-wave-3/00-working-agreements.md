@@ -1,0 +1,28 @@
+# Working agreements for the post-Wave 3 plans
+
+> **Repo copy (2026-10-15):** Written in the 2026-10 Cabalmail Client Architecture project, which has closed. This copy is self-contained: what it took from that project's audits, scope docs, soak notes and threads is stated where it is used. Names, machines and test accounts are generalized for publication. Facts about the code are as of the commit named in the first paragraph; check the code before relying on them.
+
+Written 2026-10-12, at the close of the "Cabalmail Client Architecture" project, against `stage` at `50e6022` (release 1.31.0). Every plan in this folder assumes these agreements. They are how the 2026-10-02 to 2026-10-12 rearchitecture actually ran, not an ideal. A session (or a new Claude project) that runs one of these plans reads this file with it, from `docs/1.x/post-wave-3/` in this repo: the rearchitecture project's shared folder is not readable from the repo, and project memory was off there, so nothing else carries over.
+
+## What already exists
+
+- The rearchitecture's four waves (0.1 to 3.3) are merged and soaked. The proposal, the seven audits of 2026-10-02 and every scope doc stay with the closed rearchitecture project's records and are not in the repo; each plan states what it takes from them where it uses it, and `docs/apple.md` describes the code as built. They are historical: implementation diverged from them in places, and not every divergence has an erratum. Check the code before relying on any of them.
+- The shape the waves left: an app layer in the `CabalmailUI` static library (XcodeGen target, feature folders), a per-account `SessionManager` and `MailSessionStore`, a `MailMutationService` that owns optimistic mail writes, `MessageRef` identity, a per-window `SceneNavigator` with a `Codable` route, `FocusedValue` window commands, four layout shells (`DesktopShell`, `SplitShell`, `TabShell`, `OrnamentShell`) chosen from one `ShellLayout` signal, per-window `@SceneStorage` restore, one `DeepLinkRouter` and one compose coordinator. Feeds keep `RssStore` (SQLite) and `RssSyncEngine` with a durable pending queue. Mail still caches envelopes as JSON files per folder.
+- **The Duo design is the maintainer's Oct 7 spec,** the Claude Doc "Cabalmail on iPhone Duo: Poses and Transitions" in the maintainer's account (private to it; a session run by the maintainer can read it), linked from duo-support.md. Its "Your book, laptop and portrait spec" section and "Choices for you" are decided; the rest is the design. It asks for one view tree on iOS, while Wave 3 shipped `SplitShell` and `TabShell` swapped on a close or open; until duo-support.md Decision 9 settles that, add no new hand-off rules or tree-specific state across the swap. In the spec, a fold is book or laptop pose, which swaps nothing; closing and opening the Duo is what swaps the shells. Layout follows size class, window shape and the active fold region, never the device.
+
+## Working from the repo (2026-10-16)
+
+In the rearchitecture, sessions shared a project folder and threads that every session could read, and the plans' "post in the thread", "coordinate with other sessions" and "the maintainer's checklist" relied on them. A session that starts from this repo has neither. Where a plan or brief says one of those things, these rules say what it means now.
+
+- **The maintainer is the coordinator.** A session tells the maintainer in its own conversation, and waits for a go-ahead, before it takes the Mini's or the Studio's screen and before it signs in a test account, and tells the maintainer again when it is done.
+- **Scope docs and answers.** The session posts its scope doc to the maintainer in its own conversation. Its first PR (or a small docs-only PR) records each answer under its decision in the plan, as `- **Answered YYYY-MM-DD: ...**`, and puts the planned PRs in the plan's Progress table. A later session of the same plan reads the answers there; where a brief says to paste an earlier session's answers or scope doc, read the plan's decisions instead.
+- **Outputs another plan needs** (a fixture account and its size, a soak result, a device checklist, a script another plan will commit) go in the producing plan's Status lines through a docs-only PR, or in a GitHub issue with no PII that those Status lines link. Never only in the conversation or a scratch folder.
+- **Soak records** go to the maintainer, and the facts another plan needs go in Status lines as above.
+- **Memory and `CLAUDE.md` control.** This project developed an idiosyncratic workflow that the maintainer does not wish to carry over. Where the documents in this direcory contradict established workflow as memorialized in local memory or `CLAUDE.md`, the established workflow controls, and the dictate of the documents in this directory should be ignored where they contradict.
+
+## Session or project
+
+The plans recommend one of two vehicles:
+
+- **Session**: one Claude Code session, usually one thread, carries the work end to end. It writes its own short scope doc, gets the maintainer's answers in one batch, opens a handful of sequential PRs, and hands off to the next soak. Most rearchitecture workstreams ran this way, including the large 1.0 module move.
+- **Project**: a new Claude project with a coordinator and several threads, used when the work needs its own audit or scope phase, parallel threads, several releases with a soak between them, a server change and a migration that must be sequenced, many decisions spread over time, or waits on outside events (a device shipping, a runner image).
