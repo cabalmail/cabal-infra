@@ -172,6 +172,10 @@ public final class RichTextEditorController: NSObject {
         let config = WKWebViewConfiguration()
         let controller = WKUserContentController()
         config.userContentController = controller
+        // The editor page is ours and runs on its bundled scripts. Markup it
+        // did not write passes the bridge's sanitizer, and the page's policy
+        // refuses inline script (`editor.html`).
+        // swiftlint:disable:next content_javascript_enabled
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         let webView = WKWebView(frame: .zero, configuration: config)

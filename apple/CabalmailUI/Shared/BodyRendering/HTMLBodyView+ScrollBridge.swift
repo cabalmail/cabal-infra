@@ -38,7 +38,8 @@ struct ScrollCapture: Equatable, Sendable {
 /// reads, so the last stretch before leaving an item isn't lost to the
 /// fallback poll's interval. Same arrangement as the link bridge: an
 /// app-injected `WKUserScript` (which runs while page-content JavaScript
-/// stays disabled) and a weakly-held relay. The script posts the anchor
+/// stays disabled) and a weakly-held relay, both in
+/// `WKContentWorld.defaultClient`. The script posts the anchor
 /// after each scroll settles — trailing-debounced `scroll` events, or
 /// `scrollend` where WebKit fires it.
 extension HTMLBodyCoordinator {
@@ -50,11 +51,13 @@ extension HTMLBodyCoordinator {
         let script = WKUserScript(
             source: Self.scrollBridgeScript,
             injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
+            forMainFrameOnly: true,
+            in: .defaultClient
         )
         controller.addUserScript(script)
         controller.add(
             ScrollBridgeRelay(target: self),
+            contentWorld: .defaultClient,
             name: Self.scrollBridgeHandlerName
         )
     }

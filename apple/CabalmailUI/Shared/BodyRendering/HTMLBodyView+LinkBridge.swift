@@ -6,7 +6,11 @@ import SwiftUI
 /// The reader disables page-content JavaScript
 /// (`allowsContentJavaScript = false`), which deliberately does *not*
 /// affect app-injected `WKUserScript`s — so this bridge runs while the
-/// message's own scripts stay dead. It intercepts primary activation
+/// message's own scripts stay dead. The script and its handler live in
+/// `WKContentWorld.defaultClient`, a script world the message's markup
+/// cannot see, so they stay out of its reach even if page script were
+/// ever allowed. The DOM is shared, so the listeners still see every
+/// click on the message's links. It intercepts primary activation
 /// (click / tap) on anchors and reports pointer hover, feeding the link
 /// action menu and the Safari-style status pill in `HTMLBodyView`.
 /// Secondary interactions (right-click, long-press) are untouched and
@@ -20,11 +24,13 @@ extension HTMLBodyCoordinator {
         let script = WKUserScript(
             source: Self.linkBridgeScript,
             injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
+            forMainFrameOnly: true,
+            in: .defaultClient
         )
         controller.addUserScript(script)
         controller.add(
             LinkBridgeRelay(target: self),
+            contentWorld: .defaultClient,
             name: Self.linkBridgeHandlerName
         )
     }
