@@ -118,6 +118,59 @@ final class HTTPTransportTests: XCTestCase {
         XCTAssertEqual(ScriptedURLProtocol.callCount, 1)
     }
 
+    func testAWriteWhoseSecondCopyIsNotSafeIsSentOnce() async throws {
+        // The first copy may have landed; a second /new_folder would answer
+        // "already exists" for a folder this request created.
+        ScriptedURLProtocol.script(
+            failures: [URLError(.networkConnectionLost)],
+            responses: [(Data("{}".utf8), 200)]
+        )
+        var request = URLRequest(url: URL(string: "https://api.cabalmail.example/prod/new_folder")!)
+        request.httpMethod = "PUT"
+        do {
+            _ = try await makeTransport().perform(request)
+            XCTFail("Expected throw")
+        } catch let error as CabalmailError {
+            guard case .network = error else { return XCTFail("Expected .network, got \(error)") }
+        }
+        XCTAssertEqual(ScriptedURLProtocol.callCount, 1)
+    }
+
+    func testCancellingDuringTheBackoffSendsNoSecondCopy() async throws {
+        ScriptedURLProtocol.script(
+            failures: [URLError(.networkConnectionLost)],
+            responses: [(Data("{}".utf8), 200)]
+        )
+        // A path no other test uses, to find this request's log line.
+        let path = "probe-\(UUID().uuidString)"
+        let request = URLRequest(url: URL(string: "https://api.cabalmail.example/prod/\(path)")!)
+        var configured = makeTransport()
+        // Far longer than any runner stall, so the cancel always lands
+        // inside the backoff; a cancelled sleep returns at once.
+        configured.retryBackoffNanoseconds = 60_000_000_000
+        let transport = configured
+        let call = Task { () -> Error? in
+            do {
+                _ = try await transport.perform(request)
+                return nil
+            } catch {
+                return error
+            }
+        }
+        // The line is logged just before the backoff starts.
+        try await waitUntil {
+            DebugLogStore.shared.snapshot().contains {
+                $0.category == "HTTPTransport" && $0.message.hasPrefix("retrying GET \(path)")
+            }
+        }
+
+        call.cancel()
+        let error = await call.value
+
+        XCTAssertEqual(error as? CabalmailError, .cancelled)
+        XCTAssertEqual(ScriptedURLProtocol.callCount, 1, "the request was sent again after its caller gave up")
+    }
+
     func testHTTPErrorStatusReturnedDirectlyForCallerToHandle() async throws {
         // `URLSessionHTTPTransport` only normalizes URLError-level failures.
         // Non-2xx HTTP responses pass through so `URLSessionApiClient.send`

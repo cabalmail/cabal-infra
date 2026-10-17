@@ -1250,9 +1250,13 @@ among them the sign-in form (`SignInErrorText`), the composer
   `.decoding`, which for `/fetch_bimi` is a lookup the cache retries
   rather than a cached "no logo".
 - **No answer: `.network`.** `URLSessionHTTPTransport` turns every
-  `URLError` but the caller's own cancel into `.network`, retrying a
-  dropped connection, a timeout or a cancel nobody asked for once first.
-  A reply that isn't HTTP at all is `.transport`.
+  `URLError` but the caller's own cancel into `.network`. A dropped
+  connection, a timeout or a cancel nobody asked for is retried once first
+  when a second copy of the request is safe to send: every GET, the
+  presigned S3 requests, and the writes and Cognito operations
+  `RequestReplayPolicy` lists. Any other write is sent once, since its
+  first copy may have landed. [request-replay.md](request-replay.md) has
+  the table. A reply that isn't HTTP at all is `.transport`.
 - **The caller gave up: `.cancelled`.** Only when the request's own task
   was cancelled, as when SwiftUI tears down a view's `.task`. Callers that
   stay quiet on a cancel read `Task.isCancelled` rather than matching
