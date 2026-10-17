@@ -148,6 +148,13 @@ resource "aws_cognito_user_pool_client" "users" {
   user_pool_id        = aws_cognito_user_pool.users.id
   explicit_auth_flows = ["USER_PASSWORD_AUTH"]
 
+  # The attributes users may set on their own record, at SignUp and later
+  # through UpdateUserAttributes: what the clients' sign-up forms and
+  # React's VerifyEmail gate send. Every other attribute is set by the
+  # pool's triggers or by admin calls. A client that starts writing
+  # another attribute adds it here.
+  write_attributes = ["email", "phone_number", "preferred_username"]
+
   access_token_validity  = 12
   id_token_validity      = 12
   refresh_token_validity = 7
