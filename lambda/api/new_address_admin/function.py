@@ -112,7 +112,7 @@ def exists_response(address):
     '''The 409 for an address that already has a row, carrying the sentence as
     both `Error` and `message`, as /new's 409 does, because the clients read
     different keys'''
-    sentence = f'{address} already exists. Assign it to change who can use it.'
+    sentence = f'{address} already exists. Use Assign to change who can use it.'
     return {
         'statusCode': 409,
         'body': json.dumps({

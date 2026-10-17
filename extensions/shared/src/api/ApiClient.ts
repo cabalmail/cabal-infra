@@ -12,10 +12,34 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** The raw response body, for the console; `message` is what users see. */
+    public readonly body?: string,
   ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/**
+ * The sentence an error body carries for people, or null when it has none.
+ * The Lambdas put it under `message` or `Error` (`/new`'s 409 carries both,
+ * since clients read different keys). A lower-case `error` holds a raw
+ * exception string and `status` is a folder endpoint's convention, so
+ * neither is shown.
+ */
+export function serverSentence(body: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  for (const key of ['message', 'Error']) {
+    const value = (parsed as Record<string, unknown>)[key];
+    if (typeof value === 'string' && value.trim() !== '') return value.trim();
+  }
+  return null;
 }
 
 export interface NewAddressRequest {
@@ -56,7 +80,12 @@ export class ApiClient {
         throw new AuthError('session-expired', 'API rejected refreshed token');
       }
       if (!resp.ok) {
-        throw new ApiError(resp.status, await resp.text().catch(() => resp.statusText));
+        const body = await resp.text().catch(() => resp.statusText);
+        throw new ApiError(
+          resp.status,
+          serverSentence(body) ?? `The Cabalmail server answered ${resp.status}.`,
+          body,
+        );
       }
       return (await resp.json()) as T;
     }

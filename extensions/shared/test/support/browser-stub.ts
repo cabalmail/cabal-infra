@@ -33,6 +33,7 @@ export function setNativeResponder(fn: ((message: unknown) => unknown) | null): 
  */
 export const listeners = {
   tabsUpdated: [] as ((tabId: number, changeInfo: { url?: string }) => void)[],
+  runtimeMessage: [] as ((message: unknown) => Promise<unknown>)[],
 };
 
 export const calls = {
@@ -72,7 +73,18 @@ const stub: {
       return nativeResponder(message);
     },
     onMessage: {
-      addListener: () => {},
+      addListener: (fn: (message: unknown) => Promise<unknown>) => {
+        listeners.runtimeMessage.push(fn);
+      },
+    },
+    // Delivered to whatever registered runtime.onMessage in this process --
+    // the background, when a suite imports it -- so a content-side port can
+    // be driven across the bridge in-process. Rejects, as Chrome does, when
+    // nothing is listening.
+    sendMessage: async (message: unknown) => {
+      const [listener] = listeners.runtimeMessage;
+      if (!listener) throw new Error('Could not establish connection. Receiving end does not exist.');
+      return listener(message);
     },
   },
   tabs: {

@@ -13,7 +13,9 @@ export type BackgroundRequest =
   | { kind: 'sign-in' }
   | { kind: 'sign-out' }
   | { kind: 'list-domains' }
-  | { kind: 'list-addresses' }
+  // `fresh` skips the background's short-lived cache: a create the user just
+  // asked for must not trust a list that predates an address made elsewhere.
+  | { kind: 'list-addresses'; fresh?: boolean }
   | {
       kind: 'create-address';
       address: { tld: string; subdomain: string; username: string; comment?: string };
@@ -37,7 +39,8 @@ export type BackgroundResponse =
   | { ok: true; kind: 'address-created'; address: string }
   | { ok: true; kind: 'address-confirmed' }
   | { ok: true; kind: 'address-revoked' }
-  | { ok: false; error: BackgroundError; message: string };
+  // `message` is a sentence for people; `status` is the API's, when there was one.
+  | { ok: false; error: BackgroundError; message: string; status?: number };
 
 export type BackgroundError =
   | 'no-control-domain'
@@ -45,7 +48,37 @@ export type BackgroundError =
   | 'session-expired'
   | 'network'
   | 'api'
+  // The API refused the request (409): `/new` for an address that is
+  // already in use, with a sentence that says so.
+  | 'refused'
   | 'bad-request';
+
+/**
+ * An `ok: false` answer, thrown on the content and popup side of the bridge
+ * with its kind intact, so a caller can tell a refusal from an outage
+ * without reading the sentence.
+ */
+export class BackgroundCallError extends Error {
+  constructor(
+    public readonly kind: BackgroundError,
+    message: string,
+    public readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'BackgroundCallError';
+  }
+}
+
+/** Did the API refuse the request, rather than fail to answer it? */
+export function isRefusal(err: unknown): boolean {
+  return err instanceof BackgroundCallError && err.kind === 'refused';
+}
+
+/** The sentence to show for a failure: never empty, never a class name. */
+export function failureMessage(err: unknown): string {
+  const text = err instanceof Error ? err.message : String(err ?? '');
+  return text.trim() !== '' ? text : 'Something went wrong, and the extension could not say what.';
+}
 
 /** Type guard used on the background side of the bridge. */
 export function isBackgroundRequest(value: unknown): value is BackgroundRequest {

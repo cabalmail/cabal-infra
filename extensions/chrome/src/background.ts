@@ -20,6 +20,7 @@ import {
   resolveControlDomain,
   saveControlDomain,
 } from '@cabalmail/extension-shared/config/controlDomain';
+import { errorResponse } from '@cabalmail/extension-shared/messaging/errorResponse';
 import {
   isBackgroundRequest,
   type BackgroundRequest,
@@ -115,12 +116,15 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
       return { ok: true, kind: 'domains', domains };
     }
     case 'list-addresses': {
-      if (!addressesCache || Date.now() - addressesCache.at > CACHE_TTL_MS) {
+      if (request.fresh || !addressesCache || Date.now() - addressesCache.at > CACHE_TTL_MS) {
         addressesCache = { at: Date.now(), addresses: await api.listAddresses() };
       }
       return { ok: true, kind: 'addresses', addresses: addressesCache.addresses };
     }
     case 'create-address': {
+      // Invalidated whatever the outcome: a refusal means the list the
+      // caller checked against was out of date.
+      invalidateAddresses();
       const address = await api.newAddress({
         username: request.address.username,
         subdomain: request.address.subdomain,
@@ -149,16 +153,7 @@ browser.runtime.onMessage.addListener(async (message: unknown): Promise<Backgrou
   try {
     return await handle(message);
   } catch (err) {
-    if (err instanceof AuthError) {
-      const error =
-        err.reason === 'session-expired'
-          ? 'session-expired'
-          : err.reason === 'not-signed-in'
-            ? 'not-signed-in'
-            : 'api';
-      return { ok: false, error, message: err.message };
-    }
-    return { ok: false, error: 'api', message: String(err) };
+    return errorResponse(err);
   }
 });
 
