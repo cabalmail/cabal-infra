@@ -28,7 +28,10 @@ public protocol HTTPTransport: Sendable {
 ///    `URLError.networkConnectionLost`, `URLError.timedOut`, or a spurious
 ///    `URLError.cancelled` (one that arrives while our own Task is NOT
 ///    cancelled — URLSession drops data tasks on its own; see fe73f2f0),
-///    retries once after a short backoff (Apple's own guidance for `-1005`).
+///    retries once after a short backoff (Apple's own guidance for `-1005`),
+///    if `RequestReplayPolicy` says a second copy of the request is safe:
+///    the first may have reached the server. A caller that cancels during
+///    the backoff gets `CabalmailError.cancelled`, not a second copy.
 ///    Any `URLError` that escapes is normalized into
 ///    `CabalmailError.network(localizedDescription)` so callers and toast
 ///    UIs see a readable message instead of the verbose NSError dump —
@@ -38,6 +41,8 @@ public protocol HTTPTransport: Sendable {
 ///    recognise it (#1815).
 public struct URLSessionHTTPTransport: HTTPTransport {
     public let session: URLSession
+    /// The pause before the one retry. Internal so a test can stretch it.
+    var retryBackoffNanoseconds: UInt64 = 250_000_000
     #if canImport(UIKit) && !os(watchOS)
     let backgroundTasks: BackgroundTaskCalls
     #endif
@@ -75,11 +80,25 @@ public struct URLSessionHTTPTransport: HTTPTransport {
         do {
             return try await performOnce(request)
         } catch let err as URLError where Self.isRetryableTransportError(err) {
+            let name = RequestReplayPolicy.logName(request)
+            guard RequestReplayPolicy.allowsReplay(request) else {
+                CabalmailLog.warn(
+                    "HTTPTransport",
+                    "not retrying \(name) after URLError \(err.code.rawValue): a second copy isn't safe to send"
+                )
+                throw Self.normalized(err)
+            }
             CabalmailLog.warn(
                 "HTTPTransport",
-                "retrying after URLError \(err.code.rawValue): \(err.localizedDescription)"
+                "retrying \(name) after URLError \(err.code.rawValue): \(err.localizedDescription)"
             )
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            do {
+                try await Task.sleep(nanoseconds: retryBackoffNanoseconds)
+            } catch {
+                // Cancelled during the backoff: the caller has given up, so
+                // its request isn't sent again.
+                throw CabalmailError.cancelled
+            }
             do {
                 return try await performOnce(request)
             } catch let retryErr as URLError {
