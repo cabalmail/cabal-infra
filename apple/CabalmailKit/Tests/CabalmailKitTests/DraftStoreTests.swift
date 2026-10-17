@@ -177,4 +177,29 @@ final class DraftStoreTests: XCTestCase {
         let loaded = try await store.load(id: draft.id)
         XCTAssertEqual(loaded?.subject, "v2")
     }
+
+    /// Compose autosaves every few seconds, so a store that can't write
+    /// must say so once when it starts failing and once when it recovers,
+    /// not on every tick.
+    func testAFailingAutosaveLogsOnceAndItsRecoveryOnce() async throws {
+        let store = try DraftStore(directory: directory)
+        let draft = Draft(subject: "kept")
+        // A file where the directory was: every write into it fails.
+        try FileManager.default.removeItem(at: directory)
+        try Data().write(to: directory)
+        for _ in 0..<3 {
+            await store.autosave(draft)
+        }
+        try FileManager.default.removeItem(at: directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        await store.autosave(draft)
+        await store.autosave(draft)
+
+        let levels = DebugLogStore.shared.snapshot()
+            .filter { $0.category == "DraftStore" && $0.message.contains(draft.id.uuidString) }
+            .map(\.level)
+        XCTAssertEqual(levels, [.error, .info])
+        let loaded = try await store.load(id: draft.id)
+        XCTAssertEqual(loaded?.subject, "kept")
+    }
 }
