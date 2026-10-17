@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.31.3] - 2026-10-17
+
+### Fixed
+- Apple: **Feed reader mode runs no script.** An article in reader mode no
+  longer runs scripts or event handlers from the publisher's markup, and
+  video players now show only on the publisher's page (#1911).
+
 ## [1.31.2] - 2026-10-14
 
 ### Fixed
