@@ -22,8 +22,8 @@ final class SendQueueDeliveredTests: XCTestCase {
     }
 
     func testADeliveredEntryWhoseRemovalFailsIsNotSentAgain() async throws {
-        let files = FailingFileManager()
-        let outbox = try Outbox(directory: directory, fileManager: files)
+        let files = FileFailures()
+        let outbox = try Outbox(directory: directory, fileManager: FailingFileManager(failures: files))
         let clock = TestClock()
         // An earlier failed attempt, long enough ago that the entry is due:
         // the case that used to loop on the retry timer.
@@ -73,8 +73,8 @@ final class SendQueueDeliveredTests: XCTestCase {
         // A never-attempted entry used to come back only on the next kick,
         // and be sent again then. Now the retry timer retries the removal
         // alone, with no kick, and a run of failures logs one error.
-        let files = FailingFileManager()
-        let outbox = try Outbox(directory: directory, fileManager: files)
+        let files = FileFailures()
+        let outbox = try Outbox(directory: directory, fileManager: FailingFileManager(failures: files))
         let entry = try await outbox.enqueue(Self.makeMessage(subject: "fresh"))
         let sends = Counter()
         let queue = SendQueue(
@@ -96,8 +96,8 @@ final class SendQueueDeliveredTests: XCTestCase {
     }
 
     func testAnOutboxThatCannotBeListedIsLoggedNotTakenAsEmpty() async throws {
-        let files = FailingFileManager()
-        let outbox = try Outbox(directory: directory, fileManager: files)
+        let files = FileFailures()
+        let outbox = try Outbox(directory: directory, fileManager: FailingFileManager(failures: files))
         _ = try await outbox.enqueue(Self.makeMessage(subject: "waiting"))
         let sends = Counter()
         let queue = SendQueue(outbox: outbox) { _ in await sends.bump() }
@@ -150,20 +150,16 @@ private actor Counter {
     func bump() { count += 1 }
 }
 
-/// A `FileManager` whose removals, or directory listings, throw on demand.
-/// The listing error carries a token so a test can find its own log line in
-/// the process-wide Debug Log. Its state sits behind a `Mutex`, since the
-/// outbox calls it from its own executor while the test reads and sets it;
-/// hence `@unchecked Sendable`, which Foundation doesn't give `FileManager`.
-private final class FailingFileManager: FileManager, @unchecked Sendable {
+/// Which `FailingFileManager` operations fail. The test sets these while the
+/// outbox calls the file manager from its own executor, so they sit behind a
+/// `Mutex` in a `Sendable` class. The file manager itself can't be `Sendable`
+/// (an `@unchecked` mark on the subclass doesn't take), so each test hands a
+/// fresh one to the `Outbox` actor and keeps only this.
+private final class FileFailures: Sendable {
     private struct State {
         var failRemovals = false
         var listingToken: String?
         var removalAttempts = 0
-    }
-
-    private struct InjectedFailure: Error, CustomStringConvertible {
-        let description: String
     }
 
     private let state = Mutex(State())
@@ -184,12 +180,36 @@ private final class FailingFileManager: FileManager, @unchecked Sendable {
         return token
     }
 
-    override func removeItem(at url: URL) throws {
-        let fail = state.withLock { state in
+    /// Counts a removal and says whether it should fail.
+    func removalRefused() -> Bool {
+        state.withLock { state in
             state.removalAttempts += 1
             return state.failRemovals
         }
-        if fail { throw InjectedFailure(description: "removal refused") }
+    }
+
+    var listingToken: String? {
+        state.withLock { $0.listingToken }
+    }
+}
+
+/// A `FileManager` whose removals, or directory listings, throw when its
+/// `FileFailures` say so. The listing error carries a token so a test can
+/// find its own log line in the process-wide Debug Log.
+private final class FailingFileManager: FileManager {
+    private struct InjectedFailure: Error, CustomStringConvertible {
+        let description: String
+    }
+
+    private let failures: FileFailures
+
+    init(failures: FileFailures) {
+        self.failures = failures
+        super.init()
+    }
+
+    override func removeItem(at url: URL) throws {
+        if failures.removalRefused() { throw InjectedFailure(description: "removal refused") }
         try super.removeItem(at: url)
     }
 
@@ -198,7 +218,7 @@ private final class FailingFileManager: FileManager, @unchecked Sendable {
         includingPropertiesForKeys keys: [URLResourceKey]?,
         options mask: FileManager.DirectoryEnumerationOptions
     ) throws -> [URL] {
-        if let token = state.withLock({ $0.listingToken }) {
+        if let token = failures.listingToken {
             throw InjectedFailure(description: "listing refused (\(token))")
         }
         return try super.contentsOfDirectory(at: url, includingPropertiesForKeys: keys, options: mask)
