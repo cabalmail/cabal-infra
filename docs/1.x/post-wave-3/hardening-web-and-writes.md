@@ -35,8 +35,8 @@ This table and the **Status:** line under each work item are updated in the same
 | Session B, PR 4: the transport retries only replay-safe requests (W1) | Not started |
 | Session B, PR 5: no re-send after delivery, no silent outbox or draft failures (W2, W3) | Not started |
 | Session B, PR 7: the browser extension and a refused address create (W5) | Not started (added 2026-10-17) |
-| Session B, PR 8: the admin create-address route and an existing address (W6) | Not started (added 2026-10-17); waits on decision 8 |
-| Decisions | 1, 2, 3, 6 and 7 answered; 4 and 8 (Session B) open; 5 a recorded decline |
+| Session B, PR 8: the admin create-address route and an existing address (W6) | Not started (added 2026-10-17); decision 8 answered: add the handling |
+| Decisions | 1, 2, 3, 6, 7 and 8 answered; 4 (Session B) open; 5 a recorded decline |
 
 ## Decisions for the maintainer
 
@@ -60,7 +60,7 @@ Session A asks 1, 2, 3, 6 and 7; Session B asks 4 and, since 2026-10-17, 8. Deci
 7. **Remote images in a quoted message: Block or Allow?** **Block (recommended).** Consequence: tapping Reply or Forward never fetches anything from the original sender's servers. Pasted images and reopened drafts are untouched. Allow: today's behaviour. Default: block.
    - **Answered 2026-10-15: block remote images in quoted messages.** Session A recorded it, taken on the recommended answer; PR 1 (#2053) merged on it and shipped in 1.31.2.
 8. **(Session B, added 2026-10-17) The admin create-address route (W6): give it the handling of an existing address that `/new` has had since 1.31.2, leave it, or remove it?** **Add the handling (recommended).** Consequence: an admin create for an address that is already in use is refused with a plain sentence, and new addresses are created in lower case, as with `/new`; an admin who wants to change an existing address's users uses Assign. Leave: no change. Remove: the route, its function and the web app's unused client call go away, and anything else that calls the route breaks. Default: add the handling.
-   - Asked 2026-10-17; open.
+   - **Answered 2026-10-17: add the handling.** The maintainer chose the recommended answer; PR 8 carries it in Session B.
 
 > **Withheld (2026-10-15):** The consequence clauses of decisions 6 and 7 described the effects of W4 and of C1's remote-image path. That detail is withheld from this public copy under decision 1 (out of public forums until the fixes are on prod for every client, not yet confirmed). Both fixes shipped in 1.31.2.
 
@@ -233,7 +233,7 @@ Each Apple PR adds tests that fail on the parent commit and an `Apple:` changelo
 - Changelog: a server fragment, neutral under decision 1.
 - Risk: low; nothing calls it.
 
-**Status:** Not started (2026-10-17); waits on decision 8.
+**Status:** Not started (2026-10-17). Decision 8 was answered the same day (add the handling), so PR 8 opens with Session B.
 
 **Hotspots, one open PR at a time each.** `Compose/WebAssets/*` and `RichTextEditorController.swift` (kit-split.md PR D). `ComposeViewModel*.swift` (shared-load-error-state.md A1 and A4, mail-navigation-refactors.md PR 3, platform-conditionals.md). `HTMLBodyView*.swift` (platform-conditionals.md S1 PR 6; swift6-and-strict-checking.md B3). `ArticleWebView.swift` (shared-load-error-state.md leaves it to this plan while #1911 runs). `HTTPTransport.swift`, `AuthService.swift`, `URLSessionApiClient*.swift` (shared-load-error-state.md A2 and A3, kit-split.md). `SendQueue.swift`, `CabalmailClient.swift` (test-debt.md A4 and A5, sqlite-mail-store.md, account-isolation.md, kit-split.md). `.swiftlint.yml` and `apple.yml` (apple-ci-and-build-config.md; this plan does not expect to edit `apple.yml`). `CLAUDE.md` (docs-and-bookkeeping.md).
 
