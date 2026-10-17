@@ -240,6 +240,11 @@ function Popup() {
         // confirmed rather than pending.
         pending: false,
       }).then((result) => {
+        // The server's sentence for a name in use asks for another one;
+        // here the name was generated, so another click is the remedy.
+        if (!result.ok && result.error === 'refused') {
+          throw new Error(`${result.message} Mint again for a different one.`);
+        }
         if (!result.ok) throw new Error(result.message);
         return result.kind === 'address-created' ? result.address : generated.address;
       });

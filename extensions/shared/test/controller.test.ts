@@ -7,6 +7,7 @@ import {
   type SuggestOutcome,
 } from '../src/content/controller';
 import { scoreForm } from '../src/detect/scorer';
+import { BackgroundCallError } from '../src/messaging/messages';
 
 function signupForm(): HTMLFormElement {
   document.body.innerHTML = `
@@ -23,7 +24,16 @@ interface Fakes {
     created: { username: string; subdomain: string; tld: string; pending: boolean }[];
     confirmed: string[];
     revoked: string[];
+    /** The server's list, which a fresh read returns. */
     addresses: string[];
+    /** What the background's cache answers; null serves `addresses`. */
+    cached: string[] | null;
+    /** Answers for successive fresh reads, ahead of `addresses`. */
+    freshLists: string[][];
+    freshReads: number;
+    /** Thrown by successive creates, in order; an empty queue succeeds. */
+    createErrors: unknown[];
+    createAttempts: number;
     failConfirm: boolean;
   };
   overlay: OverlayPort & {
@@ -32,6 +42,10 @@ interface Fakes {
     adoptChoice: 'create' | 'dismiss';
     guardChoice: 'create-and-submit' | 'submit-anyway' | 'cancel';
     confirmFailedChoices: ('retry' | 'submit-anyway' | 'cancel')[];
+    confirmFailures: ({ stage: 'create' | 'confirm'; message?: string } | undefined)[];
+    refusals: { address: string; message: string }[];
+    problems: string[];
+    guardShown: number;
     reuseNotices: string[];
   };
 }
@@ -42,10 +56,22 @@ function makeFakes(): Fakes {
     confirmed: [],
     revoked: [],
     addresses: [],
+    cached: null,
+    freshLists: [],
+    freshReads: 0,
+    createErrors: [],
+    createAttempts: 0,
     failConfirm: false,
     listDomains: async () => ['cabalmail.com'],
-    listAddresses: async () => background.addresses,
+    listAddresses: async (options) => {
+      if (!options?.fresh) return background.cached ?? background.addresses;
+      background.freshReads += 1;
+      return background.freshLists.shift() ?? background.addresses;
+    },
     createAddress: async (req) => {
+      background.createAttempts += 1;
+      const error = background.createErrors.shift();
+      if (error) throw error;
       background.created.push({
         username: req.username,
         subdomain: req.subdomain,
@@ -69,6 +95,10 @@ function makeFakes(): Fakes {
     adoptChoice: 'dismiss',
     guardChoice: 'cancel',
     confirmFailedChoices: [],
+    confirmFailures: [],
+    refusals: [],
+    problems: [],
+    guardShown: 0,
     reuseNotices: [],
     showSuggestPopover: async (_anchor, model) => {
       if (typeof overlay.suggestResult === 'function') return overlay.suggestResult(model);
@@ -79,9 +109,21 @@ function makeFakes(): Fakes {
       overlay.banners.push(address);
       return overlay.adoptChoice;
     },
-    showSubmitGuardModal: async () => overlay.guardChoice,
-    showConfirmFailedBanner: async () =>
-      overlay.confirmFailedChoices.shift() ?? 'cancel',
+    showSubmitGuardModal: async () => {
+      overlay.guardShown += 1;
+      return overlay.guardChoice;
+    },
+    showConfirmFailedBanner: async (_anchor, failure) => {
+      overlay.confirmFailures.push(failure);
+      return overlay.confirmFailedChoices.shift() ?? 'cancel';
+    },
+    showCreateRefused: async (address, message) => {
+      overlay.refusals.push({ address, message });
+      return 'edit';
+    },
+    showCreateProblem: (_anchor, message) => {
+      overlay.problems.push(message);
+    },
     showSubdomainReuseNotice: (_anchor, subdomain) => {
       overlay.reuseNotices.push(subdomain);
     },
@@ -326,6 +368,225 @@ describe('abandonment', () => {
     await vi.waitFor(() => {
       expect(background.revoked).toEqual(['abcdef12@ghijkl34.cabalmail.com']);
     });
+  });
+});
+
+describe('a create the API refuses or cannot answer', () => {
+  const TAKEN = 'taken@made-up.cabalmail.com';
+  const SENTENCE = `${TAKEN} is already taken. Choose another username or subdomain.`;
+  const refusal = () => new BackgroundCallError('refused', SENTENCE, 409);
+
+  function submitEvent(): Event {
+    return new Event('submit', { bubbles: true, cancelable: true });
+  }
+
+  /**
+   * Leave the adopt banner unanswered, as a user who ignores it does, so the
+   * offer is standing when submit fires. Returns the check to settle at the end.
+   */
+  async function ignoreBanner(
+    fakes: ReturnType<typeof make>,
+    value: string,
+  ): Promise<() => Promise<void>> {
+    const { controller, overlay, score } = fakes;
+    let answer!: (c: 'create' | 'dismiss') => void;
+    overlay.showAdoptBanner = async (_a, address) => {
+      overlay.banners.push(address);
+      return new Promise((res) => {
+        answer = res;
+      });
+    };
+    score.emailField!.value = value;
+    const check = controller.checkAdopt(score, 'k1');
+    await vi.waitFor(() => expect(overlay.banners).toHaveLength(1));
+    return async () => {
+      answer('dismiss');
+      await check;
+    };
+  }
+
+  it('holds a guarded form the API refuses, says why, and hands the field back', async () => {
+    const form = signupForm();
+    const fakes = make(form);
+    const { controller, background, overlay, score } = fakes;
+    // Attach the real listeners, so focusing the field would open the
+    // suggest popover if the controller did not hold it back.
+    controller.scan();
+    let suggestOpened = 0;
+    overlay.showSuggestPopover = async () => {
+      suggestOpened += 1;
+      return { kind: 'dismissed' };
+    };
+    const settle = await ignoreBanner(fakes, TAKEN);
+    overlay.guardChoice = 'create-and-submit';
+    background.createErrors = [refusal()];
+    form.requestSubmit = vi.fn();
+
+    const first = submitEvent();
+    controller.onSubmit(first, score, 'k1');
+    expect(first.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(overlay.refusals).toEqual([{ address: TAKEN, message: SENTENCE }]));
+    expect(form.requestSubmit).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(score.emailField);
+    expect(suggestOpened).toBe(0);
+
+    // Submitting the same address again says so again, without offering to
+    // create it (whose Submit anyway would send it) or asking the API twice.
+    const second = submitEvent();
+    controller.onSubmit(second, score, 'k1');
+    expect(second.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(overlay.refusals).toHaveLength(2));
+    expect(overlay.guardShown).toBe(1);
+    expect(background.createAttempts).toBe(1);
+    expect(form.requestSubmit).not.toHaveBeenCalled();
+
+    // An ordinary focus still opens the popover: the hold-back was one-shot.
+    score.emailField!.blur();
+    score.emailField!.focus();
+    await vi.waitFor(() => expect(suggestOpened).toBe(1));
+    await settle();
+  });
+
+  it('shows a refused adopt create at the field and keeps the form held', async () => {
+    const form = signupForm();
+    const { controller, background, overlay, score } = make(form);
+    overlay.adoptChoice = 'create';
+    background.createErrors = [refusal()];
+    score.emailField!.value = TAKEN;
+    await controller.checkAdopt(score, 'k1');
+    expect(overlay.problems).toEqual([SENTENCE]);
+    expect(background.created).toEqual([]);
+
+    form.requestSubmit = vi.fn();
+    const event = submitEvent();
+    controller.onSubmit(event, score, 'k1');
+    expect(event.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(overlay.refusals).toEqual([{ address: TAKEN, message: SENTENCE }]));
+    expect(overlay.guardShown).toBe(0);
+    expect(form.requestSubmit).not.toHaveBeenCalled();
+  });
+
+  it("releases a refused address the fresh list shows is the user's own in another case", async () => {
+    const form = signupForm();
+    const fakes = make(form);
+    const { controller, background, overlay, score } = fakes;
+    const settle = await ignoreBanner(fakes, 'mine@made-up.cabalmail.com');
+    overlay.guardChoice = 'create-and-submit';
+    // Not in the list before the create; there (as the server stores it)
+    // when the refusal sends the controller back to look.
+    background.freshLists = [[], ['Mine@Made-Up.cabalmail.com']];
+    background.createErrors = [
+      new BackgroundCallError('refused', 'You already have this address as Mine@Made-Up.cabalmail.com.', 409),
+    ];
+    form.requestSubmit = vi.fn();
+    controller.onSubmit(submitEvent(), score, 'k1');
+    await vi.waitFor(() => expect(form.requestSubmit).toHaveBeenCalledOnce());
+    expect(overlay.refusals).toEqual([]);
+    expect(background.confirmed).toEqual([]);
+    controller.onPageHide();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(background.revoked).toEqual([]);
+    await settle();
+  });
+
+  it("creates nothing for one of the user's addresses the cache had not seen", async () => {
+    const form = signupForm();
+    const { controller, background, overlay, score } = make(form);
+    // Made elsewhere a moment ago, in mixed case: the cache predates it.
+    background.cached = [];
+    background.addresses = ['Fresh@Made-Up.cabalmail.com'];
+    overlay.adoptChoice = 'create';
+    score.emailField!.value = 'fresh@made-up.cabalmail.com';
+    await controller.checkAdopt(score, 'k1');
+    expect(overlay.banners).toEqual(['fresh@made-up.cabalmail.com']);
+    expect(background.freshReads).toBe(1);
+    expect(background.createAttempts).toBe(0);
+    expect(overlay.problems).toEqual([]);
+
+    const event = submitEvent();
+    controller.onSubmit(event, score, 'k1');
+    expect(event.defaultPrevented).toBe(false);
+    controller.onPageHide();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(background.revoked).toEqual([]);
+  });
+
+  it("does not offer the user's own address stored in another case", async () => {
+    const form = signupForm();
+    const { controller, background, overlay, score } = make(form);
+    background.addresses = ['Have@It.cabalmail.com', 'old@Shared.cabalmail.com'];
+    score.emailField!.value = 'have@it.cabalmail.com';
+    await controller.checkAdopt(score, 'k1');
+    expect(overlay.banners).toEqual([]);
+
+    overlay.adoptChoice = 'dismiss';
+    score.emailField!.value = 'new@shared.cabalmail.com';
+    await controller.checkAdopt(score, 'k1');
+    expect(overlay.reuseNotices).toEqual(['shared.cabalmail.com']);
+  });
+
+  it('shows a create that failed to reach the server, and Retry creates it', async () => {
+    const form = signupForm();
+    const fakes = make(form);
+    const { controller, background, overlay, score } = fakes;
+    const settle = await ignoreBanner(fakes, 'test@made-up.cabalmail.com');
+    overlay.guardChoice = 'create-and-submit';
+    background.createErrors = [new BackgroundCallError('network', 'TypeError: Failed to fetch')];
+    overlay.confirmFailedChoices = ['retry'];
+    form.requestSubmit = vi.fn();
+    controller.onSubmit(submitEvent(), score, 'k1');
+    await vi.waitFor(() => expect(form.requestSubmit).toHaveBeenCalledOnce());
+    expect(overlay.confirmFailures).toEqual([
+      { stage: 'create', message: 'TypeError: Failed to fetch' },
+    ]);
+    // Retry went back to the create, not to the guard modal.
+    expect(overlay.guardShown).toBe(1);
+    expect(background.createAttempts).toBe(2);
+    expect(background.confirmed).toEqual(['test@made-up.cabalmail.com']);
+    await settle();
+  });
+
+  it('sends the form with nothing created on Submit anyway after a failed create', async () => {
+    const form = signupForm();
+    const fakes = make(form);
+    const { controller, background, overlay, score } = fakes;
+    const settle = await ignoreBanner(fakes, 'test@made-up.cabalmail.com');
+    overlay.guardChoice = 'create-and-submit';
+    background.createErrors = [new BackgroundCallError('api', 'The Cabalmail server answered 502.', 502)];
+    overlay.confirmFailedChoices = ['submit-anyway'];
+    form.requestSubmit = vi.fn();
+    controller.onSubmit(submitEvent(), score, 'k1');
+    await vi.waitFor(() => expect(form.requestSubmit).toHaveBeenCalledOnce());
+    expect(background.created).toEqual([]);
+    expect(background.confirmed).toEqual([]);
+    await settle();
+  });
+
+  it('keeps an address the form went out with after a failed confirm', async () => {
+    const form = signupForm();
+    const { controller, background, overlay, score } = make(form);
+    overlay.suggestResult = async (model) => {
+      const m = model as { commit: (c: object) => Promise<string> };
+      const address = await m.commit({
+        local: 'abcdef12',
+        subdomain: 'ghijkl34',
+        apex: 'cabalmail.com',
+        comment: '',
+      });
+      return { kind: 'used', address };
+    };
+    await controller.openSuggest(score, 'k1');
+    background.failConfirm = true;
+    overlay.confirmFailedChoices = ['submit-anyway'];
+    form.requestSubmit = vi.fn();
+    controller.onSubmit(submitEvent(), score, 'k1');
+    await vi.waitFor(() => expect(form.requestSubmit).toHaveBeenCalledOnce());
+    expect(overlay.confirmFailures).toEqual([{ stage: 'confirm', message: 'offline' }]);
+    // The submit's own navigation fires pagehide; the site has the address
+    // now, so the reaper or arriving mail decides, not the extension.
+    controller.onPageHide();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(background.revoked).toEqual([]);
   });
 });
 

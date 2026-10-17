@@ -2,7 +2,7 @@
 
 import browser from 'webextension-polyfill';
 import type { BackgroundPort } from '../content/controller';
-import type { BackgroundRequest, BackgroundResponse } from './messages';
+import { BackgroundCallError, type BackgroundRequest, type BackgroundResponse } from './messages';
 
 export async function sendToBackground(request: BackgroundRequest): Promise<BackgroundResponse> {
   const response: unknown = await browser.runtime.sendMessage(request);
@@ -24,7 +24,7 @@ function unwrap<K extends Extract<BackgroundResponse, { ok: true }>['kind']>(
   response: BackgroundResponse,
   kind: K,
 ): Extract<BackgroundResponse, { ok: true; kind: K }> {
-  if (!response.ok) throw new Error(`${response.error}: ${response.message}`);
+  if (!response.ok) throw new BackgroundCallError(response.error, response.message, response.status);
   if (response.kind !== kind) throw new Error(`unexpected response ${response.kind}`);
   return response as Extract<BackgroundResponse, { ok: true; kind: K }>;
 }
@@ -40,8 +40,11 @@ export function runtimeBackgroundPort(): BackgroundPort {
       const r = unwrap(await sendToBackground({ kind: 'list-domains' }), 'domains');
       return r.domains.map((d) => d.domain);
     },
-    async listAddresses() {
-      const r = unwrap(await sendToBackground({ kind: 'list-addresses' }), 'addresses');
+    async listAddresses(options) {
+      const r = unwrap(
+        await sendToBackground({ kind: 'list-addresses', fresh: options?.fresh === true }),
+        'addresses',
+      );
       return r.addresses.map((a) => a.address);
     },
     async createAddress(req) {

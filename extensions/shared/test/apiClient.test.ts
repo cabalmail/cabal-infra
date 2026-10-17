@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiClient, ApiError } from '../src/api/ApiClient';
+import { ApiClient, ApiError, serverSentence } from '../src/api/ApiClient';
 import type { HostedUiAuth } from '../src/auth/HostedUiAuth';
 
 const auth = {
@@ -95,5 +95,44 @@ describe('ApiClient.listMyDomains', () => {
     await expect(
       new ApiClient('https://admin.cabal-mail.example/prod', auth).listMyDomains(),
     ).resolves.toEqual(['cabal-mail.com', 'cabal-mail.io']);
+  });
+});
+
+describe('ApiClient errors', () => {
+  const client = () => new ApiClient('https://admin.cabal-mail.example/prod', auth);
+  const create = () => client().newAddress({ username: 'taken', subdomain: 'made-up', tld: 'cabal-mail.example' });
+
+  it("carries /new's 409 sentence and status, keeping the raw body aside", async () => {
+    // Verbatim shape of lambda/api/new/function.py's conflict_response.
+    const sentence = 'taken@made-up.cabal-mail.example is already taken. Choose another username or subdomain.';
+    respond({ Error: sentence, message: sentence }, 409);
+    const err = await create().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 409, message: sentence });
+    expect((err as ApiError).body).toContain('"message"');
+  });
+
+  it('reads Error when there is no message, as /new\'s 400 and 403 send', async () => {
+    respond({ Error: 'Not permitted to create addresses on "cabal-mail.example"' }, 403);
+    await expect(create()).rejects.toMatchObject({
+      status: 403,
+      message: 'Not permitted to create addresses on "cabal-mail.example"',
+    });
+  });
+
+  it('shows no raw exception text from a 500', async () => {
+    // /new's 500 carries the exception under a lower-case `error`.
+    respond({ address: 'a@b.cabal-mail.example', error: 'An error occurred (ProvisionedThroughputExceededException)' }, 500);
+    await expect(create()).rejects.toMatchObject({
+      status: 500,
+      message: 'The Cabalmail server answered 500.',
+    });
+  });
+
+  it('reads API Gateway\'s own message, and falls back on a body that is not JSON', () => {
+    expect(serverSentence('{"message": "Internal server error"}')).toBe('Internal server error');
+    expect(serverSentence('<html>Bad Gateway</html>')).toBeNull();
+    expect(serverSentence('{"status": "There is no folder called X"}')).toBeNull();
+    expect(serverSentence('{"message": "  "}')).toBeNull();
   });
 });
