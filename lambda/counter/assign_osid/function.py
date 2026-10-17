@@ -14,6 +14,12 @@ ssm = boto3.client('ssm', region_name=region)
 
 _PING_URL = None
 
+# Cognito fires the post-confirmation trigger for a confirmed password reset
+# too (PostConfirmation_ConfirmForgotPassword). Only a sign-up confirmation
+# needs a uid. A reset is an existing user whose mail on EFS is owned by the
+# uid they already have; a new one would leave those files owned by the old.
+SIGN_UP = 'PostConfirmation_ConfirmSignUp'
+
 
 def _ping_healthcheck():
     '''Best-effort heartbeat to Healthchecks. Silent on failure.'''
@@ -40,6 +46,11 @@ def _ping_healthcheck():
 
 def handler(event, _context):
     '''Assigns an OS user ID to a newly created Cognito user'''
+    source = event.get('triggerSource')
+    if source != SIGN_UP:
+        print(f'[assign_osid] {source}: not a sign-up, uid left as it is')
+        _ping_healthcheck()
+        return event
     osid = get_counter()
     update_user(event['userPoolId'], event['userName'], osid)
     refresh_containers()
