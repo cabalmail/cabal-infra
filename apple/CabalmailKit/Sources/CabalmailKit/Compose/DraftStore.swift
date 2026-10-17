@@ -23,6 +23,8 @@ public actor DraftStore {
     static let schemaVersion = 1
 
     private let directory: URL
+    /// Drafts whose last `autosave(_:)` failed; see there.
+    private var failingAutosaves: Set<UUID> = []
 
     public init(directory: URL) throws {
         self.directory = directory
@@ -44,6 +46,22 @@ public actor DraftStore {
         updated.updatedAt = Date()
         let data = try PersistedRecordCoding.encode(updated, version: Self.schemaVersion, encoder: encoder)
         try data.write(to: fileURL(for: updated.id), options: .atomic)
+    }
+
+    /// `save(_:)` for the compose window's autosave, which runs every few
+    /// seconds. A failure is logged when it starts and when it clears, not
+    /// on every tick, and nothing is thrown: the next tick tries again, and
+    /// the server copy keeps saving on its own schedule.
+    public func autosave(_ draft: Draft) {
+        do {
+            try save(draft)
+            if failingAutosaves.remove(draft.id) != nil {
+                CabalmailLog.info("DraftStore", "saved the local copy of draft \(draft.id) again")
+            }
+        } catch {
+            guard failingAutosaves.insert(draft.id).inserted else { return }
+            CabalmailLog.error("DraftStore", "couldn't save the local copy of draft \(draft.id): \(error)")
+        }
     }
 
     /// Returns the draft with the given id, or nil if it's missing or
