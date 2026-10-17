@@ -176,12 +176,21 @@ query($owner: String!, $name: String!, $cursor: String) {
 # only reached if a lifecycle-labelled issue is very old.
 PR_SCAN_MAX_PAGES = 25
 
-# A fix-intent phrase: address/fix/close/resolve within a few words of one or
-# more `#N`s ("Addresses #1217", "fixes issue #12 and #34"). See
+# A fix-intent phrase: address/fix/close/resolve with the `#N`s as its direct
+# object ("Addresses #1217", "fix for #1908", "fixes issue #12 and #34").
+# Only filler words may sit between the verb and the first ref. An earlier
+# version allowed any 30 non-`#` characters there, which read prose about an
+# issue's lifecycle as a claim: "#1911 closed on 2026-10-17, with #2060 and
+# #2061 filed from it" (issues *filed*, the opposite of fixed) held Promote
+# on a docs-only PR, and "not fixed here: #1995" / "every window closed
+# (#1162)" are the same family. Punctuation other than a colon, dates, and
+# prepositions like "on"/"with" therefore break the claim. See
 # claimed_issues() for why this is narrower than a bare-mention scan.
 FIX_CLAIM_RE = re.compile(
     r"\b(?:address(?:es|ed|ing)?|fix(?:es|ed|ing)?|clos(?:es?|ed|ing)|"
-    r"resolv(?:es?|ed|ing))\b[^#\n]{0,30}((?:#\d+[,;\s]*(?:and\s+)?)+)",
+    r"resolv(?:es?|ed|ing))\b"
+    r"(?:[ \t]+(?:for|the|issues?|bugs?))*[ \t]*:?[ \t]*"
+    r"((?:#\d+[,;\s]*(?:and\s+)?)+)",
     re.IGNORECASE)
 
 REPO_SLUG = None
