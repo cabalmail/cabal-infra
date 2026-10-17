@@ -44,11 +44,15 @@ class _Recorder:
         return {'Parameter': {'Value': ''}}
 
 
-def load(calls):
+def load(calls, ping_param=''):
     '''The trigger module, imported against a fake boto3 that appends to calls.'''
     fake = types.ModuleType('boto3')
     fake.client = lambda *_args, **_kwargs: _Recorder(calls)
-    env = {'AWS_REGION': 'us-east-1', 'ECS_CLUSTER_NAME': 'cabal', 'HEALTHCHECK_PING_PARAM': ''}
+    env = {
+        'AWS_REGION': 'us-east-1',
+        'ECS_CLUSTER_NAME': 'cabal',
+        'HEALTHCHECK_PING_PARAM': ping_param,
+    }
     with mock.patch.dict(sys.modules, {'boto3': fake}), mock.patch.dict(os.environ, env):
         spec = importlib.util.spec_from_file_location('assign_osid_under_test', _FUNCTION)
         module = importlib.util.module_from_spec(spec)
@@ -68,15 +72,15 @@ def event(trigger_source):
 
 
 class AssignOsidTest(unittest.TestCase):
-    '''Only a sign-up confirmation takes a uid from the counter.'''
+    '''A password reset never takes a uid from the counter; a sign-up does.'''
 
     def setUp(self):
         self.calls = []
         self.trigger = load(self.calls)
 
-    def test_sign_up_assigns_a_uid_and_rolls_the_mail_tiers(self):
-        '''A confirmed sign-up takes the next uid, stores it and rolls the tiers.'''
-        sent = event('PostConfirmation_ConfirmSignUp')
+    def assert_assigned(self, trigger_source):
+        '''The handler took the next uid, stored it and rolled the three tiers.'''
+        sent = event(trigger_source)
         self.assertIs(self.trigger.handler(sent, None), sent)
         names = [name for name, _ in self.calls]
         self.assertEqual(names, [
@@ -96,11 +100,22 @@ class AssignOsidTest(unittest.TestCase):
         self.assertIs(self.trigger.handler(sent, None), sent)
         self.assertEqual(self.calls, [])
 
-    def test_unknown_source_leaves_the_uid_alone(self):
-        '''A trigger source this function does not know is treated like a reset.'''
-        sent = event('PostConfirmation_SomethingNew')
-        self.assertIs(self.trigger.handler(sent, None), sent)
-        self.assertEqual(self.calls, [])
+    def test_password_reset_still_pings_the_heartbeat(self):
+        '''The reset path reaches the healthcheck ping and nothing else, which
+        is what the cognito-user-sync runbook's manual invoke relies on.'''
+        calls = []
+        trigger = load(calls, ping_param='/cabal/healthcheck_ping_cognito_user_sync')
+        trigger.handler(event('PostConfirmation_ConfirmForgotPassword'), None)
+        self.assertEqual([name for name, _ in calls], ['ssm.get_parameter'])
+
+    def test_sign_up_assigns_a_uid_and_rolls_the_mail_tiers(self):
+        '''ConfirmSignUp and AdminConfirmSignUp both send this source.'''
+        self.assert_assigned('PostConfirmation_ConfirmSignUp')
+
+    def test_other_source_is_treated_as_a_sign_up(self):
+        '''AWS doesn't document the source for an auto-confirmed sign-up, so
+        anything but a reset still gets a uid rather than none.'''
+        self.assert_assigned('PostConfirmation_SomethingNew')
 
 
 if __name__ == '__main__':

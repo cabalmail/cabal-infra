@@ -15,10 +15,12 @@ ssm = boto3.client('ssm', region_name=region)
 _PING_URL = None
 
 # Cognito fires the post-confirmation trigger for a confirmed password reset
-# too (PostConfirmation_ConfirmForgotPassword). Only a sign-up confirmation
-# needs a uid. A reset is an existing user whose mail on EFS is owned by the
-# uid they already have; a new one would leave those files owned by the old.
-SIGN_UP = 'PostConfirmation_ConfirmSignUp'
+# too. A reset is an existing user whose mail on EFS is owned by the uid they
+# already have; a new one would leave those files owned by the old. Every
+# other source is a sign-up: ConfirmSignUp and AdminConfirmSignUp send
+# PostConfirmation_ConfirmSignUp, and AWS doesn't document the source for a
+# sign-up check_invite auto-confirms, so only the reset is skipped.
+PASSWORD_RESET = 'PostConfirmation_ConfirmForgotPassword'
 
 
 def _ping_healthcheck():
@@ -46,9 +48,8 @@ def _ping_healthcheck():
 
 def handler(event, _context):
     '''Assigns an OS user ID to a newly created Cognito user'''
-    source = event.get('triggerSource')
-    if source != SIGN_UP:
-        print(f'[assign_osid] {source}: not a sign-up, uid left as it is')
+    if event.get('triggerSource') == PASSWORD_RESET:
+        print('[assign_osid] password reset: uid left as it is')
         _ping_healthcheck()
         return event
     osid = get_counter()
