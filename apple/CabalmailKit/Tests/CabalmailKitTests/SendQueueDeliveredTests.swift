@@ -153,8 +153,9 @@ private actor Counter {
 /// A `FileManager` whose removals, or directory listings, throw on demand.
 /// The listing error carries a token so a test can find its own log line in
 /// the process-wide Debug Log. Its state sits behind a `Mutex`, since the
-/// outbox calls it from its own executor.
-private final class FailingFileManager: FileManager {
+/// outbox calls it from its own executor while the test reads and sets it;
+/// hence `@unchecked Sendable`, which Foundation doesn't give `FileManager`.
+private final class FailingFileManager: FileManager, @unchecked Sendable {
     private struct State {
         var failRemovals = false
         var listingToken: String?
