@@ -10,6 +10,16 @@ locals {
   # through to the shared SNS sandbox and signup fails with no user-facing
   # remediation. See issue #712 and docs/sms-10dlc.md.
   sms_enabled = var.ten_dlc_campaign_registration_id != ""
+
+  # The attributes users may set on their own record, at SignUp and later
+  # through UpdateUserAttributes: what the clients' sign-up forms and
+  # React's VerifyEmail gate send. Every app client in this module that
+  # issues tokens to users or their apps uses this list; every other
+  # attribute is set by the pool's triggers or by admin calls. A client
+  # that starts writing another attribute adds it here. Keep it non-empty:
+  # Cognito doesn't document an empty list as "none", and its default for
+  # a client with no list is wider.
+  user_write_attributes = ["email", "phone_number", "preferred_username"]
 }
 
 resource "aws_cognito_user_pool" "users" {
@@ -148,12 +158,7 @@ resource "aws_cognito_user_pool_client" "users" {
   user_pool_id        = aws_cognito_user_pool.users.id
   explicit_auth_flows = ["USER_PASSWORD_AUTH"]
 
-  # The attributes users may set on their own record, at SignUp and later
-  # through UpdateUserAttributes: what the clients' sign-up forms and
-  # React's VerifyEmail gate send. Every other attribute is set by the
-  # pool's triggers or by admin calls. A client that starts writing
-  # another attribute adds it here.
-  write_attributes = ["email", "phone_number", "preferred_username"]
+  write_attributes = local.user_write_attributes
 
   access_token_validity  = 12
   id_token_validity      = 12
@@ -200,6 +205,10 @@ resource "aws_cognito_user_pool_client" "extension" {
     var.extension_redirect_uris,
   )
   explicit_auth_flows = ["ALLOW_REFRESH_TOKEN_AUTH"]
+
+  # The extension writes no attributes; the shared list keeps this client
+  # from granting more than cabal_admin_client does.
+  write_attributes = local.user_write_attributes
 
   access_token_validity  = 1
   id_token_validity      = 1
