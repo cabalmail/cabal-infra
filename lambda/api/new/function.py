@@ -8,6 +8,7 @@ from address_events import notify_containers  # pylint: disable=import-error
 from helper import new_address_response_or_none  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import publish_address_dns_records  # pylint: disable=import-error
+from helper import stored_address_row_or_none  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
@@ -93,21 +94,12 @@ def taken_response(address):
 
 
 def existing_address_response_or_none(user, address):
-    '''Answers a create for an address that already has a row, or returns None
-    when nothing stored matches it.
-
-    The comparison ignores case. The mail tier folds addresses to lower case,
-    so two rows that differ only in case would collide there. The handler
-    folds the addresses it creates, but rows written before it did can hold
-    upper case, and the table cannot be asked for a key regardless of case,
-    so this reads every row's address and owners, a full scan like the one
-    /list does.
+    '''Answers a create for an address that already has a row, in any case
+    (see helper.stored_address_row_or_none), or returns None when nothing
+    stored matches it.
     '''
-    wanted = address.lower()
-    for row in address_rows():
-        if row['address'].lower() == wanted:
-            return existing_address_response(user, address, row)
-    return None
+    row = stored_address_row_or_none(table, address)
+    return None if row is None else existing_address_response(user, address, row)
 
 
 def existing_address_response(user, address, row):
@@ -123,22 +115,6 @@ def existing_address_response(user, address, row):
     if row['address'] != address:
         return conflict_response(f"You already have this address as {row['address']}.")
     return created_response(address)
-
-
-def address_rows():
-    '''Yields every row's address and owners, read consistently'''
-    scan_kwargs = {
-        # `user` is a DynamoDB reserved word.
-        'ProjectionExpression': 'address, #u',
-        'ExpressionAttributeNames': {'#u': 'user'},
-        'ConsistentRead': True
-    }
-    while True:
-        page = table.scan(**scan_kwargs)
-        yield from page.get('Items', [])
-        if 'LastEvaluatedKey' not in page:
-            return
-        scan_kwargs['ExclusiveStartKey'] = page['LastEvaluatedKey']
 
 
 def record_address(user, body, address):
