@@ -57,15 +57,18 @@ final class SendQueueDeliveredTests: XCTestCase {
         files.failRemovals(false)
         clock.advance(by: SendQueue.Backoff.standard.base)
         await queue.kickDrain()
-        try await waitUntil { try await outbox.count() == 0 }
+        // The line is logged after the outbox actor removes the file, so wait
+        // for it rather than for the outbox to empty.
+        let id = entry.id.uuidString
+        try await waitUntil {
+            Self.lines(mentioning: id).contains {
+                $0.level == .info && $0.message.hasPrefix("removed delivered")
+            }
+        }
+        let remainingAfterRemoval = try await outbox.count()
+        XCTAssertEqual(remainingAfterRemoval, 0)
         let sentAfterRemoval = await sends.count
         XCTAssertEqual(sentAfterRemoval, 1, "the drain that retried the removal sent the message again")
-        XCTAssertTrue(
-            Self.lines(mentioning: entry.id.uuidString).contains {
-                $0.level == .info && $0.message.hasPrefix("removed delivered")
-            },
-            "the removal's recovery wasn't logged"
-        )
         await queue.stop()
     }
 

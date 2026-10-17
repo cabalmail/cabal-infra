@@ -88,8 +88,8 @@ public actor SendQueue {
     /// with when the last removal failed. Drains skip these when sending and
     /// retry the removal instead. Kept in this queue's memory only, so a new
     /// queue over the same outbox (after a relaunch, for one) sends a file
-    /// still there again, and the server's Message-ID dedupe is what stands
-    /// between it and a second copy.
+    /// still there again, and the server's 600-second Message-ID dedupe is
+    /// what keeps a prompt resend from delivering a second copy.
     private var delivered: [UUID: Date] = [:]
 
     public init(
