@@ -103,7 +103,11 @@ final class RequestReplayTableTests: XCTestCase {
     private static func transport() -> URLSessionHTTPTransport {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [ScriptedURLProtocol.self]
-        return URLSessionHTTPTransport(session: URLSession(configuration: config))
+        var transport = URLSessionHTTPTransport(session: URLSession(configuration: config))
+        // The rows count attempts; the real pause before a retry would only
+        // add a quarter of a second to each of them.
+        transport.retryBackoffNanoseconds = 0
+        return transport
     }
 
     private static func apiClient() -> URLSessionApiClient {
