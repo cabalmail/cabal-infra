@@ -18,6 +18,8 @@
 
 Labels: C1 is PR 1, C2 (#1911) is PR 2, C3 is PR 3, W1 is PR 4, W2 and W3 are PR 5, W4 is PR 6. The numbers stay fixed because sibling plans cite them. Session A runs PRs 1, 2, 6, 3 in that order; Session B runs 4, then 5.
 
+> **Added (2026-10-17):** W5 is PR 7 (the browser extension and a refused address create) and W6 is PR 8 (the admin create-address route, after decision 8). Both belong to Session B and run beside PRs 4 and 5, since neither touches a Kit file.
+
 ## Progress
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
@@ -26,17 +28,19 @@ This table and the **Status:** line under each work item are updated in the same
 | --- | --- |
 | Session A, before PR 1: reproduce C1 on the Mini | Not recorded; PR 1 has since merged and shipped |
 | Session A, PR 1: composer (C1) | Done: #2053 (`5eb7284`), released in 1.31.2 |
-| Session A, PR 2: #1911, feed reader mode runs no script (C2) | Merged to `stage` as #2056 (`5046716`), not yet released; #1911 stays open until a reader check on the Mini and the maintainer's iPhone check of the stage TestFlight build |
-| Session A, PR 6: `/new` and an existing address (W4) | Merged as #2054 (`c467789`), released in 1.31.2; the stage proof waits on the maintainer running a proof script on the Mini as test accounts 2 and 3 |
+| Session A, PR 2: #1911, feed reader mode runs no script (C2) | Merged to `stage` as #2056 (`5046716`), not yet released; stage check passed (the Mini's reader check and the maintainer's iPhone check of the stage TestFlight build) and #1911 closed on 2026-10-17 |
+| Session A, PR 6: `/new` and an existing address (W4) | Done: #2054 (`c467789`), released in 1.31.2; stage proof passed on 2026-10-17 |
 | Session A, PR 3: bridges in their own world, a lint rule, the rule written down (C3) | Merged to `stage` on 2026-10-15 as #2057 (`f078467`), not yet released |
 | Session B, before PR 4: check the replay premise on stage | Not started |
 | Session B, PR 4: the transport retries only replay-safe requests (W1) | Not started |
 | Session B, PR 5: no re-send after delivery, no silent outbox or draft failures (W2, W3) | Not started |
-| Decisions | 1, 2, 3, 6 and 7 answered; 4 (Session B) open; 5 a recorded decline |
+| Session B, PR 7: the browser extension and a refused address create (W5) | Not started (added 2026-10-17) |
+| Session B, PR 8: the admin create-address route and an existing address (W6) | Not started (added 2026-10-17); waits on decision 8 |
+| Decisions | 1, 2, 3, 6 and 7 answered; 4 and 8 (Session B) open; 5 a recorded decline |
 
 ## Decisions for the maintainer
 
-Session A asks 1, 2, 3, 6 and 7; Session B asks 4. Decision 5 is a recorded decline.
+Session A asks 1, 2, 3, 6 and 7; Session B asks 4 and, since 2026-10-17, 8. Decision 5 is a recorded decline.
 
 1. **C1 and W4: public issue now, or private until fixed?** **Private (recommended):** each is reproduced privately, fixed under a neutral PR title, and filed publicly once the fix is on prod. Consequence: no issue describes an open hole, though the fix's diff and tests are public from the branch's first push, so the session tests PR 1 on the Mini before pushing and asks for a promote as soon as it soaks. Public now: the recipe is public for the whole fix cycle. Default: private.
    - **Answered 2026-10-13: private.** The maintainer: keep it "out of public forums until implemented". Session A is next.
@@ -51,8 +55,12 @@ Session A asks 1, 2, 3, 6 and 7; Session B asks 4. Decision 5 is a recorded decl
 
    > **Erratum (2026-10-16):** No domain grant was needed for test accounts 1 and 2: they already share stage domains (the maintainer, 2026-10-15). But the rig's credential helper serves test accounts 2 and 3, not 1, so on 2026-10-15 the hardening session wrote a proof script for the maintainer to run on the Mini as test accounts 2 and 3, through the API only. It stops before writing anything if those two share no stage domain; granting test account 3 one of test account 2's stage domains would then unblock it. The script and its report stay with the closed project; see "Session A remainder" under "How to start it".
 
+   > **Erratum (2026-10-17):** The stage proof has run and passed: the maintainer ran the script on the Mini on 2026-10-17 as the two stage test accounts, which share a stage domain, so no grant was needed. See PR 6's **Status:**.
+
 7. **Remote images in a quoted message: Block or Allow?** **Block (recommended).** Consequence: tapping Reply or Forward never fetches anything from the original sender's servers. Pasted images and reopened drafts are untouched. Allow: today's behaviour. Default: block.
    - **Answered 2026-10-15: block remote images in quoted messages.** Session A recorded it, taken on the recommended answer; PR 1 (#2053) merged on it and shipped in 1.31.2.
+8. **(Session B, added 2026-10-17) The admin create-address route (W6): give it the handling of an existing address that `/new` has had since 1.31.2, leave it, or remove it?** **Add the handling (recommended).** Consequence: an admin create for an address that is already in use is refused with a plain sentence, and new addresses are created in lower case, as with `/new`; an admin who wants to change an existing address's users uses Assign. Leave: no change. Remove: the route, its function and the web app's unused client call go away, and anything else that calls the route breaks. Default: add the handling.
+   - Asked 2026-10-17; open.
 
 > **Withheld (2026-10-15):** The consequence clauses of decisions 6 and 7 described the effects of W4 and of C1's remote-image path. That detail is withheld from this public copy under decision 1 (out of public forums until the fixes are on prod for every client, not yet confirmed). Both fixes shipped in 1.31.2.
 
@@ -64,6 +72,8 @@ Session A asks 1, 2, 3, 6 and 7; Session B asks 4. Decision 5 is a recorded decl
 - **PR 3 (bridges, lint rule, CLAUDE.md):** nothing visible. Mail's link and scroll helpers stay out of reach of any script a message could carry, and a new web view that turns JavaScript on fails lint until someone signs off.
 - **PR 4 (retry):** on a flaky connection, creating a folder, saving rules or resetting a password no longer reports "already exists" or "changed elsewhere" for a change that landed. Archive, move, flag, delete and send behave as today.
 - **PR 5 (outbox and local draft):** nothing visible normally. A delivered message is never sent again because its outbox file could not be deleted, and failures that used to vanish reach the debug log.
+- **PR 7 (browser extension):** when an address can't be created, the extension shows the server's sentence instead of its raw reply, and a sign-up form is no longer sent with an address that could not be created unless you choose to.
+- **PR 8 (server, after decision 8):** nothing visible. The admin create-address route answers an address that is already in use as `/new` does.
 
 > **Withheld (2026-10-15):** The PR 1 and PR 6 lines are reworded to the level of the 1.31.2 changelog; what they said about C1's and W4's mechanism is withheld from this public copy under decision 1. Both fixes shipped in 1.31.2.
 
@@ -97,6 +107,19 @@ Session A asks 1, 2, 3, 6 and 7; Session B asks 4. Decision 5 is a recorded decl
 **W4. `/new` and an address that already exists (verified by reading; not reproduced; fixed in 1.31.2).** PR 6 fixed it as #2054 (`c467789`, "API: /new folds case and answers clearly for an existing address"), released in 1.31.2 with the entry "**Creating an address that is already in use.** The request now answers with a message saying so, and repeating a request for one of your own addresses leaves it as it was. New addresses are created in lower case."
 
 > **Withheld (2026-10-15):** This section's account of W4 (the code path and its effects) is withheld from this public copy under decision 1: it stays out of public forums until the fix is on prod for every client, which is not yet confirmed, and the stage proof has not run. The fix shipped in 1.31.2.
+
+> **Erratum (2026-10-17):** The stage proof has since run and passed (see PR 6's **Status:**). The rest of the note stands.
+
+**W5. The browser extension and a refused address create (verified by reading on 2026-10-17 at `stage` 0b8d7ac; not reproduced).** Since 1.31.2, `/new` refuses an address that is already in use with a 409 and a sentence, under both `Error` and `message`. The extension did not change with it:
+- The API client throws `ApiError(status, raw body)` (`extensions/shared/src/api/ApiClient.ts:59`). The background's catch-all flattens that to `{ ok: false, error: 'api', message: String(err) }` (`extensions/chrome/src/background.ts:161`), dropping the status, and the content side's `unwrap` throws `api: ApiError: {"Error": ...}` (`extensions/shared/src/messaging/client.ts:27`). The suggest popover shows that raw string (`extensions/chrome/src/overlay/overlay.tsx:127`), as does the popup's mint (`extensions/chrome/src/popup/popup.tsx:243`). Both mint random names, so a refusal there is rare, and neither sends a form.
+- Typed addresses are where a refusal is likely, because the user picks the name. The submit guard's Create and submit (`extensions/shared/src/content/controller.ts:311-320`) catches a failed create silently and releases the form, so the site gets an address that was not created.
+- The adopt banner's Create (`controller.ts:261-262`) leaves the rejection unhandled, so nothing is shown; the offer stays, so the submit guard asks again at submit and then takes the silent path above.
+- `checkAdopt` compares the lower-cased typed address with the user's list exactly (`controller.ts:247`), so one of the user's own addresses stored in mixed case is offered for creation and refused.
+- Adjacent (inferred, not reproduced): `/new` answers a repeat create for one of the caller's own addresses with the same 201 as a fresh create, and the background caches the address list for 30 s (`background.ts:72`, `:119`). An address the user created elsewhere within that window can therefore be "created" again, tracked as pending, and revoked on page hide (`controller.ts:354-357`) or when superseded (`:201`).
+
+**W6. The admin create-address route and an existing address (verified by reading on 2026-10-17).** `/new_address_admin` creates an address for one or more named users. It is admin only (admin group, a per-caller rate limit and an audit log, `lambda/api/new_address_admin/function.py:29-35`), and no shipped client calls it: React defines `newAddressAdmin` (`react/admin/src/ApiClient.js:845`), but the admin Addresses view's New Address uses the ordinary `/new` and then Assign. It does not yet answer an address that is already in use the way `/new` has since 1.31.2, and it does not fold case. It was introduced by the 0.5.x user-management plan (`docs/0.5.x/user-management-plan.md:233`).
+
+> **Withheld (2026-10-17):** What W6 does with an existing address is withheld from this public copy under decision 1, with W4.
 
 ## Where things stand
 
@@ -139,11 +162,11 @@ Each Apple PR adds tests that fail on the parent commit and an `Apple:` changelo
 - Verify: CI; on the Mini, macOS and the iOS and visionOS simulators, articles from two real stage feeds in reader mode (images, links, toggling back to a live page that still runs its script); stage TestFlight on iPhone. Close #1911 after the stage check.
 - Risk: low. A flag left off breaks live pages visibly; the toggle-back check catches it.
 
-**Status:** Merged to `stage` as #2056 (`5046716`, "Apple: feed reader mode runs no script from the article"), not yet released (2026-10-15). It fixes #1911: the reader rendering loads with page JavaScript off and leads with a content security policy refusing script, plugins and frames; Readability drops every video player; a link tapped in the reader leaves it only once its page commits. Still to do (2026-10-16): the stage check, which is a reader check on the Mini (Verify above) and the maintainer's check of the stage TestFlight build on iPhone, then closing #1911, which is still open. android-parity.md's PR 1, which this plan wanted in PR 2's release, has not started.
+**Status:** Merged to `stage` as #2056 (`5046716`, "Apple: feed reader mode runs no script from the article"), not yet released (2026-10-15). It fixes #1911: the reader rendering loads with page JavaScript off and leads with a content security policy refusing script, plugins and frames; Readability drops every video player; a link tapped in the reader leaves it only once its page commits. Stage check (2026-10-17): passed. The reader check on the Mini ran on macOS and the iOS and visionOS simulators, and the maintainer checked the stage TestFlight build on iPhone; #1911 was closed as completed on 2026-10-17. The check turned up two older issues, now filed: a link followed from reader view opens re-extracted in reader view rather than as the live page (#2060), and a table-view warning logged at launch on macOS (#2061). android-parity.md's PR 1, which this plan wanted in PR 2's release, has not started.
 
 **PR 6 (server, after decision 6). `/new` answers clearly for an existing address.**
 
-**Status:** Merged as #2054 (`c467789`, "API: /new folds case and answers clearly for an existing address") and released in 1.31.2 (PR #2055, dated 2026-10-14) with the entry "**Creating an address that is already in use.** The request now answers with a message saying so, and repeating a request for one of your own addresses leaves it as it was. New addresses are created in lower case." Still to do (2026-10-16): the stage proof, which waits on the maintainer running a proof script on the Mini as test accounts 2 and 3 (see the erratum under decision 6), with rows, any grant and DNS cleaned up after and no production data.
+**Status:** Merged as #2054 (`c467789`, "API: /new folds case and answers clearly for an existing address") and released in 1.31.2 (PR #2055, dated 2026-10-14) with the entry "**Creating an address that is already in use.** The request now answers with a message saying so, and repeating a request for one of your own addresses leaves it as it was. New addresses are created in lower case." Stage proof (2026-10-17): passed, 17 checks of what `lambda/api/_shared/tests/test_address_create_existing.py` asserts, run by the maintainer on the Mini through the API as the two stage test accounts on a stage domain they share. The test addresses and their DNS records were gone after cleanup; no production data was touched.
 
 > **Withheld (2026-10-15):** PR 6's scope, tests, checks and risk described W4's mechanism, so they are withheld from this public copy under decision 1. The fix shipped in 1.31.2; commit `c467789` holds the change.
 
@@ -184,6 +207,32 @@ Each Apple PR adds tests that fail on the parent commit and an `Apple:` changelo
 
 **Status:** Not started (2026-10-15).
 
+**PR 7 (added 2026-10-17). The browser extension handles a refused address create (W5).**
+- Why its own PR, not part of PR 4 or 5: it is TypeScript under `extensions/`, touches no Kit file (so the Kit freeze does not hold it), and runs different CI (see CI below). It can open before PR 4 or beside PRs 4 and 5.
+- Scope:
+  - Carry the refusal across the message boundary. The background maps an `ApiError` with status 409 to a new `BackgroundError` kind and puts the server's sentence (the body's `message`, else `Error`) in `message`; other API errors carry the sentence too when the body has one, not the raw JSON. `unwrap` throws a typed error that keeps the kind.
+  - Suggest popover and popup: show the sentence. On a refusal the popover offers a fresh suggestion rather than retrying the same name.
+  - Adopt banner Create: catch the failure, show the sentence at the field, and keep the offer, so the submit guard still holds.
+  - Submit guard Create and submit: on a refusal because the address is already taken, do not release the form; show the sentence, with Edit address (cancel and focus the field) as the escape hatch and no submit-anyway. On "You already have this address as X" the address is the user's, so release the form. Other failures (network, 5xx) keep today's outcome but stop being silent: reuse the confirm-failed banner's Retry, Submit anyway and Cancel.
+  - `checkAdopt` compares addresses ignoring case.
+  - Before an adopt or guard create, read `/list` past the cache (one GET on an explicit click). If the address is already the user's, create nothing and track nothing, so the extension never revokes an address it did not create.
+- Files: `extensions/chrome/src/background.ts`, `extensions/shared/src/messaging/messages.ts`, `extensions/shared/src/messaging/client.ts`, `extensions/shared/src/content/controller.ts` (and its `OverlayPort`), `extensions/chrome/src/overlay/overlay.tsx`, `extensions/chrome/src/popup/popup.tsx`. Check whether the Safari bundle reuses the Chrome overlay and background or has its own.
+- Tests (`extensions/shared/test/controller.test.ts`, `apiClient.test.ts`, and the background's handler): a 409 from the fake background's `createAddress` leaves the guarded form unsubmitted and shows the sentence; the adopt banner's Create shows it and keeps the offer; the own-address-in-another-case refusal releases; a network failure shows the banner instead of releasing silently; a mixed-case own address is not offered; an address already in a fresh `/list` is neither created nor revoked on page hide.
+- Verify: `npm run lint`, `npm test` and `npm run build` in `extensions/`; CI. On stage, with an unpacked build signed in as one stage test account: type an address the other test account owns into a sign-up form on a local test page, choose Create and submit, and see the sentence with the form held. Coordinate with the maintainer before signing in on the Mini.
+- Changelog: one fragment, neutral under decision 1, with the `Apple:` prefix, because the Mac app embeds this extension's Safari bundle (`apple/scripts/sync-vendored.sh:89-100`) and TestFlight testers should see it; its body names the browser extension.
+- CI: today only `extensions.yml` runs (one Linux job and one macOS Safari build). If apple-ci-and-build-config.md's PR gate has landed, `extensions/**` also starts `apple.yml`, so pace PR 7 like an Apple PR.
+- Risk: low. A wrong mapping could hold a form the user meant to send; Edit address and Cancel keep the form usable, and the tests cover each branch.
+
+**Status:** Not started (2026-10-17).
+
+**PR 8 (added 2026-10-17; server, after decision 8). The admin create-address route answers an existing address as `/new` does (W6).**
+- Scope: in `lambda/api/new_address_admin/function.py`, the handling PR 6 gave `/new`, shared through `_shared/helper.py` or copied, whichever is the smaller diff, with a sentence that points an admin to Assign. Fold username and subdomain to lower case. Tests beside `_shared/tests/test_address_create_existing.py`.
+- Verify: pytest and pylint per `CLAUDE.md`; CI. A stage check needs an admin account, so it is the maintainer's or skipped.
+- Changelog: a server fragment, neutral under decision 1.
+- Risk: low; nothing calls it.
+
+**Status:** Not started (2026-10-17); waits on decision 8.
+
 **Hotspots, one open PR at a time each.** `Compose/WebAssets/*` and `RichTextEditorController.swift` (kit-split.md PR D). `ComposeViewModel*.swift` (shared-load-error-state.md A1 and A4, mail-navigation-refactors.md PR 3, platform-conditionals.md). `HTMLBodyView*.swift` (platform-conditionals.md S1 PR 6; swift6-and-strict-checking.md B3). `ArticleWebView.swift` (shared-load-error-state.md leaves it to this plan while #1911 runs). `HTTPTransport.swift`, `AuthService.swift`, `URLSessionApiClient*.swift` (shared-load-error-state.md A2 and A3, kit-split.md). `SendQueue.swift`, `CabalmailClient.swift` (test-debt.md A4 and A5, sqlite-mail-store.md, account-isolation.md, kit-split.md). `.swiftlint.yml` and `apple.yml` (apple-ci-and-build-config.md; this plan does not expect to edit `apple.yml`). `CLAUDE.md` (docs-and-bookkeeping.md).
 
 ## Background from the rearchitecture
@@ -220,6 +269,8 @@ Session B brief:
 > Workstream "Hardening: reader web content and write paths", Session B (PRs 4 and 5). Read this plan (its "Background from the rearchitecture" section included) and `00-working-agreements.md` in `docs/1.x/post-wave-3/`, re-check line numbers against current stage, and confirm no promotion PR is open and kit-split.md's Kit freeze is not running. Post a short scope doc with decision 4 quoted in full and one line per PR. Run the stage replay check before PR 4, open PR 4 with its endpoint table as the first commit, then PR 5. Hand the finished table to sqlite-mail-store.md.
 
 > **Note (2026-10-16):** "Kit freeze is not running" means no open PR for kit-split.md's PR C or PR D, whose freeze runs from C opening until D merges (kit-split.md, "Kit freeze"), and no freeze announced by the maintainer. "Hand the finished table to sqlite-mail-store.md" means recording it in that plan's decision 9 Status line, through the docs-only route in the agreements' "Working from the repo".
+
+> **Added (2026-10-17):** Session B also opens PR 7, before or beside PRs 4 and 5, and PR 8 once decision 8 is answered. Its scope doc quotes decision 8 in full beside decision 4.
 
 ## Risks and checks
 
