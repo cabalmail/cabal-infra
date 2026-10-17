@@ -13,7 +13,7 @@
 #   https://github.com/slusarz/dovecot-fts-flatcurve (v1.0.5)
 # Licences are preserved at /usr/share/doc/{xapian,fts-flatcurve}/
 # in the runtime image; see docs/operations.md.
-FROM amazonlinux:2023@sha256:5b29412077a463b4a3a8fbc99a8cdf4b929f38a3ecc8dac10328d8f36b0099b8 AS fts-builder
+FROM amazonlinux:2023@sha256:8ed3c0a996841537f75607e7d1de2114d8150391f75792e8da9268738547e73f AS fts-builder
 
 ARG XAPIAN_VERSION=1.4.31
 ARG FTS_FLATCURVE_VERSION=v1.0.5
@@ -94,7 +94,7 @@ RUN rm -rf /staging/usr/local \
 # ───────────────────────────────────────────────────────────────
 # Runtime image
 # ───────────────────────────────────────────────────────────────
-FROM amazonlinux:2023@sha256:5b29412077a463b4a3a8fbc99a8cdf4b929f38a3ecc8dac10328d8f36b0099b8
+FROM amazonlinux:2023@sha256:8ed3c0a996841537f75607e7d1de2114d8150391f75792e8da9268738547e73f
 
 # System packages
 # Same $releasever unpinning as the other stage in this file: without
