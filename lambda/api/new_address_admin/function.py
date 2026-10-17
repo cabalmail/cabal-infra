@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 import boto3  # pylint: disable=import-error
+from botocore.exceptions import ClientError  # pylint: disable=import-error
 from address_events import notify_containers  # pylint: disable=import-error
 from admin_limits import ( # pylint: disable=import-error
     admin_response_or_none,
@@ -13,6 +14,7 @@ from admin_limits import ( # pylint: disable=import-error
 from helper import new_address_response_or_none  # pylint: disable=import-error
 from helper import parse_json_body  # pylint: disable=import-error
 from helper import publish_address_dns_records  # pylint: disable=import-error
+from helper import stored_address_row_or_none  # pylint: disable=import-error
 from helper import user_authorized_for_domain  # pylint: disable=import-error
 
 domains = json.loads(os.environ['DOMAINS'])
@@ -45,6 +47,12 @@ def handler(event, _context):
     refusal = new_address_response_or_none(body, domains, control_domain)
     if refusal:
         return refusal
+    # Folded to lower case, as /new folds the addresses it creates and the mail
+    # tier folds every address: the table's key is case-sensitive, so a key in
+    # the case the admin typed could sit beside a lower-case one and collide
+    # with it in the sendmail maps.
+    body['username'] = body['username'].lower()
+    body['subdomain'] = body['subdomain'].lower()
     # Derive the address server-side rather than trusting body['address']: it is
     # the DynamoDB primary key and the value user_authorized_for_sender matches
     # on, so it must equal the real routing identity. username/subdomain/tld are
@@ -67,9 +75,18 @@ def handler(event, _context):
                         )
                     })
                 }
+        # An address that already has a row, in any case and whoever owns it,
+        # is refused before anything is written: changing who may use an
+        # existing address is assign_address's job.
+        stored = stored_address_row_or_none(table, address)
+        if stored is not None:
+            audit_log(caller, 'new_address_admin', address, 'refused')
+            return exists_response(stored['address'])
         publish_address_dns_records(
             domains[body['tld']], body['subdomain'], body['tld'], control_domain)
-        record_address(usernames, body, address)
+        if not record_address(usernames, body, address):
+            audit_log(caller, 'new_address_admin', address, 'refused')
+            return exists_response(address)
         notify_containers()
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f"Error creating address {address}: {err}")
@@ -91,6 +108,20 @@ def handler(event, _context):
     }
 
 
+def exists_response(address):
+    '''The 409 for an address that already has a row, carrying the sentence as
+    both `Error` and `message`, as /new's 409 does, because the clients read
+    different keys'''
+    sentence = f'{address} already exists. Assign it to change who can use it.'
+    return {
+        'statusCode': 409,
+        'body': json.dumps({
+            'Error': sentence,
+            'message': sentence
+        })
+    }
+
+
 def cognito_user_exists(username):
     '''Returns True if the username exists in the Cognito user pool'''
     try:
@@ -101,13 +132,22 @@ def cognito_user_exists(username):
 
 
 def record_address(usernames, body, address):
-    '''Records the new address in DynamoDB'''
-    table.put_item(Item={
-        'address': address,
-        'tld': body['tld'],
-        'user': '/'.join(usernames),
-        'username': body['username'],
-        'subdomain': body['subdomain'],
-        'comment': body.get('comment', ''),
-        'RequestTime': datetime.now(timezone.utc).isoformat()
-    })
+    '''Records the new address in DynamoDB. Returns False, having written
+    nothing, when a row for the address was created after the handler's
+    read; the handler folds case first, so that includes a create that
+    differs only in case.'''
+    try:
+        table.put_item(Item={
+            'address': address,
+            'tld': body['tld'],
+            'user': '/'.join(usernames),
+            'username': body['username'],
+            'subdomain': body['subdomain'],
+            'comment': body.get('comment', ''),
+            'RequestTime': datetime.now(timezone.utc).isoformat()
+        }, ConditionExpression='attribute_not_exists(address)')
+    except ClientError as err:
+        if err.response['Error']['Code'] != 'ConditionalCheckFailedException':
+            raise
+        return False
+    return True

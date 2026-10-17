@@ -907,6 +907,37 @@ def new_address_response_or_none(body, domains, control_domain):
         body['subdomain'], body['tld'], control_domain)
 
 
+def stored_address_row_or_none(table, address):
+    '''The stored row whose address matches `address` ignoring case, holding
+    its `address` and `user` attributes, or None when no row matches.
+
+    Shared by the two create endpoints (`new` and `new_address_admin`) so they
+    agree on what "already exists" means. The comparison ignores case because
+    the mail tier folds addresses to lower case, so two rows that differ only
+    in case would collide there. The creates fold the addresses they write,
+    but rows written before they did can hold upper case, and the table cannot
+    be asked for a key regardless of case, so this reads every row's address
+    and owners, a full scan like the one /list does, stopping at the first
+    match. The read is consistent, so a row written a moment ago is seen.
+    `table` is the caller's cabal-addresses Table.
+    '''
+    wanted = address.lower()
+    scan_kwargs = {
+        # `user` is a DynamoDB reserved word.
+        'ProjectionExpression': 'address, #u',
+        'ExpressionAttributeNames': {'#u': 'user'},
+        'ConsistentRead': True
+    }
+    while True:
+        page = table.scan(**scan_kwargs)
+        for row in page.get('Items', []):
+            if row['address'].lower() == wanted:
+                return row
+        if 'LastEvaluatedKey' not in page:
+            return None
+        scan_kwargs['ExclusiveStartKey'] = page['LastEvaluatedKey']
+
+
 def _route53():
     '''Lazily builds the shared Route 53 client (only the DNS handlers need it,
     so non-DNS lambdas importing helper never pay for it).'''

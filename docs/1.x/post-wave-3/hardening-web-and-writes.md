@@ -28,14 +28,14 @@ This table and the **Status:** line under each work item are updated in the same
 | --- | --- |
 | Session A, before PR 1: reproduce C1 on the Mini | Not recorded; PR 1 has since merged and shipped |
 | Session A, PR 1: composer (C1) | Done: #2053 (`5eb7284`), released in 1.31.2 |
-| Session A, PR 2: #1911, feed reader mode runs no script (C2) | Merged to `stage` as #2056 (`5046716`), not yet released; stage check passed (the Mini's reader check and the maintainer's iPhone check of the stage TestFlight build) and #1911 closed on 2026-10-17 |
+| Session A, PR 2: #1911, feed reader mode runs no script (C2) | Done: #2056 (`5046716`), released in 1.31.3 (2026-10-17); stage check passed (the Mini's reader check and the maintainer's iPhone check of the stage TestFlight build) and #1911 closed on 2026-10-17 |
 | Session A, PR 6: `/new` and an existing address (W4) | Done: #2054 (`c467789`), released in 1.31.2; stage proof passed on 2026-10-17 |
-| Session A, PR 3: bridges in their own world, a lint rule, the rule written down (C3) | Merged to `stage` on 2026-10-15 as #2057 (`f078467`), not yet released |
+| Session A, PR 3: bridges in their own world, a lint rule, the rule written down (C3) | Done: #2057 (`f078467`), released in 1.31.3 (2026-10-17) |
 | Session B, before PR 4: check the replay premise on stage | Not started |
 | Session B, PR 4: the transport retries only replay-safe requests (W1) | Not started |
 | Session B, PR 5: no re-send after delivery, no silent outbox or draft failures (W2, W3) | Not started |
 | Session B, PR 7: the browser extension and a refused address create (W5) | Not started (added 2026-10-17) |
-| Session B, PR 8: the admin create-address route and an existing address (W6) | Not started (added 2026-10-17); decision 8 answered: add the handling |
+| Session B, PR 8: the admin create-address route and an existing address (W6) | In review (2026-10-17); decision 8 answered: add the handling |
 | Decisions | 1, 2, 3, 6, 7 and 8 answered; 4 (Session B) open; 5 a recorded decline |
 
 ## Decisions for the maintainer
@@ -164,7 +164,7 @@ Each Apple PR adds tests that fail on the parent commit and an `Apple:` changelo
 - Verify: CI; on the Mini, macOS and the iOS and visionOS simulators, articles from two real stage feeds in reader mode (images, links, toggling back to a live page that still runs its script); stage TestFlight on iPhone. Close #1911 after the stage check.
 - Risk: low. A flag left off breaks live pages visibly; the toggle-back check catches it.
 
-**Status:** Merged to `stage` as #2056 (`5046716`, "Apple: feed reader mode runs no script from the article"), not yet released (2026-10-15). It fixes #1911: the reader rendering loads with page JavaScript off and leads with a content security policy refusing script, plugins and frames; Readability drops every video player; a link tapped in the reader leaves it only once its page commits. Stage check (2026-10-17): passed. The reader check on the Mini ran on macOS and the iOS and visionOS simulators, and the maintainer checked the stage TestFlight build on iPhone; #1911 was closed as completed on 2026-10-17. The check turned up two older issues, now filed: a link followed from reader view opens re-extracted in reader view rather than as the live page (#2060), and a table-view warning logged at launch on macOS (#2061). android-parity.md's PR 1, which this plan wanted in PR 2's release, has not started. The maintainer chose on 2026-10-17 to ship PR 2 without it.
+**Status:** Merged to `stage` as #2056 (`5046716`, "Apple: feed reader mode runs no script from the article"), not yet released (2026-10-15). It fixes #1911: the reader rendering loads with page JavaScript off and leads with a content security policy refusing script, plugins and frames; Readability drops every video player; a link tapped in the reader leaves it only once its page commits. Stage check (2026-10-17): passed. The reader check on the Mini ran on macOS and the iOS and visionOS simulators, and the maintainer checked the stage TestFlight build on iPhone; #1911 was closed as completed on 2026-10-17. The check turned up two older issues, now filed: a link followed from reader view opens re-extracted in reader view rather than as the live page (#2060), and a table-view warning logged at launch on macOS (#2061). android-parity.md's PR 1, which this plan wanted in PR 2's release, has not started. The maintainer chose on 2026-10-17 to ship PR 2 without it. Released in 1.31.3 (PR #2062, 2026-10-17).
 
 **PR 6 (server, after decision 6). `/new` answers clearly for an existing address.**
 
@@ -182,7 +182,7 @@ Each Apple PR adds tests that fail on the parent commit and an `Apple:` changelo
 
 - Risk: low. A handler in the wrong world fails silently (links open without the menu, scroll falls back to the 2 s poll); the click test catches it. `.swiftlint.yml` and `CLAUDE.md` are also edited by apple-ci-and-build-config.md and docs-and-bookkeeping.md: rebase onto theirs, and let this PR slip to Session B if theirs are open.
 
-**Status:** Merged to `stage` on 2026-10-15 as #2057 (`f078467`, "Apple: reader bridges run in the app's own script world"), not yet released; label `no-changelog`. Both bridges, their handlers and the coordinator's restore and capture scripts run in `WKContentWorld.defaultClient`; a `content_javascript_enabled` SwiftLint custom rule has a reasoned `swiftlint:disable:next` at the composer and the feed article view; a `CLAUDE.md` bullet names the three web views, their JavaScript rule and the tests that hold them.
+**Status:** Merged to `stage` on 2026-10-15 as #2057 (`f078467`, "Apple: reader bridges run in the app's own script world"), not yet released; label `no-changelog`. Both bridges, their handlers and the coordinator's restore and capture scripts run in `WKContentWorld.defaultClient`; a `content_javascript_enabled` SwiftLint custom rule has a reasoned `swiftlint:disable:next` at the composer and the feed article view; a `CLAUDE.md` bullet names the three web views, their JavaScript rule and the tests that hold them. Released in 1.31.3 (PR #2062, 2026-10-17).
 
 ### Session B (Next): PRs 4 and 5
 
@@ -233,7 +233,7 @@ Each Apple PR adds tests that fail on the parent commit and an `Apple:` changelo
 - Changelog: a server fragment, neutral under decision 1.
 - Risk: low; nothing calls it.
 
-**Status:** Not started (2026-10-17). Decision 8 was answered the same day (add the handling), so PR 8 opens with Session B.
+**Status:** In review (2026-10-17). The lookup `/new` used moved into `_shared/helper.py` as `stored_address_row_or_none`, and both create endpoints call it, so they share one definition of an existing address as they already share their input checks and DNS publisher. The admin route folds username and subdomain to lower case and, after its user checks and before any DNS or table write, answers an existing row in any case, whoever owns it, with a 409 whose sentence points to Assign; its put is conditional, so a create that lands between its read and its write gets the same 409. Refusals are audited as `refused`. Tests sit beside `/new`'s in `_shared/tests/test_address_create_existing.py` (unittest, as the suite runs in CI, not pytest). No stage check: it needs an admin account.
 
 **Hotspots, one open PR at a time each.** `Compose/WebAssets/*` and `RichTextEditorController.swift` (kit-split.md PR D). `ComposeViewModel*.swift` (shared-load-error-state.md A1 and A4, mail-navigation-refactors.md PR 3, platform-conditionals.md). `HTMLBodyView*.swift` (platform-conditionals.md S1 PR 6; swift6-and-strict-checking.md B3). `ArticleWebView.swift` (shared-load-error-state.md leaves it to this plan while #1911 runs). `HTTPTransport.swift`, `AuthService.swift`, `URLSessionApiClient*.swift` (shared-load-error-state.md A2 and A3, kit-split.md). `SendQueue.swift`, `CabalmailClient.swift` (test-debt.md A4 and A5, sqlite-mail-store.md, account-isolation.md, kit-split.md). `.swiftlint.yml` and `apple.yml` (apple-ci-and-build-config.md; this plan does not expect to edit `apple.yml`). `CLAUDE.md` (docs-and-bookkeeping.md).
 
