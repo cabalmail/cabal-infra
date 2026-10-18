@@ -702,19 +702,16 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMacTests
         GENERATE_INFOPLIST_FILE: YES
-        # The warning groups this bundle is clean of (#1842). Add a group here
-        # as it reaches zero - but the actor-isolation sweep could not extend
-        # this line, and both ways of trying were measured on this target:
-        # `-Werror ActorIsolatedCall` is accepted (a bogus name warns
-        # `#UnknownWarningGroup`, this one does not) and still leaves the
-        # diagnostic a warning, and `-warnings-as-errors -Wwarning
-        # SendingRisksDataRace` promotes the `sending` warnings anyway, so the
-        # blanket flag beats a per-group demotion rather than the other way
-        # round. The isolation diagnostics are also ungrouped (no `[#Name]` to
-        # promote). So what finally guards them is blanket
-        # SWIFT_TREAT_WARNINGS_AS_ERRORS, which the remaining 31 `sending
-        # value of non-Sendable type` warnings are the last thing blocking.
-        OTHER_SWIFT_FLAGS: "-Werror NoUsage -Werror WeakMutability -Werror UnnecessaryEffectMarker"
+        # This bundle compiles with zero warnings and keeps it that way
+        # (#1842): a concurrency warning here is a real isolation question
+        # about a test, and 248 of them accumulated unnoticed because
+        # nothing failed on one. It replaces the per-group `-Werror` list
+        # tranche 1 added, which only covered the three groups the bundle
+        # was clean of then; the isolation diagnostics are ungrouped (no
+        # `[#Name]` to promote), so blanket promotion is the only thing
+        # that can guard them. Adding a warning-emitting test now fails the
+        # build rather than growing the backlog.
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         # XcodeGen derives TEST_HOST from the host target's NAME, but
         # CabalmailMac overrides PRODUCT_NAME to "Cabalmail" (the bundle
         # ships as Cabalmail.app), so spell the path out.

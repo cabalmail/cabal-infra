@@ -54,7 +54,7 @@ final class AppForegroundTests: XCTestCase {
         harness.appState.appScenePhaseChanged(to: .active)
 
         let cognito = harness.cognito
-        try await waitUntil {
+        try await waitUntilOnMainActor {
             await cognito.trail.filter { $0 == "API GET /prod/get_preferences" }.count == before + 1
         }
         try await Task.sleep(for: .milliseconds(200))

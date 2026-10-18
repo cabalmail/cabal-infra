@@ -54,7 +54,7 @@ final class SessionLendingRaceTests: XCTestCase {
         XCTAssertEqual(harness.clients.count, 2)
         let built = try XCTUnwrap(harness.clients.last)
         XCTAssertFalse(built === wired)
-        try await waitUntil { await built.isShutDown }
+        try await waitUntilOnMainActor { await built.isShutDown }
         let wiredIsShutDown = await wired.isShutDown
         XCTAssertFalse(wiredIsShutDown)
     }
@@ -131,7 +131,7 @@ final class SessionLendingRaceTests: XCTestCase {
         registrar.sessionDidStart(appState: harness.appState, client: try XCTUnwrap(harness.appState.client))
         registrar.deviceTokenDidChange("ab01")
         let cognito = harness.cognito
-        try await waitUntil { await cognito.trail.contains { $0.hasSuffix("/push_register") } }
+        try await waitUntilOnMainActor { await cognito.trail.contains { $0.hasSuffix("/push_register") } }
 
         await registrar.sessionWillEnd()
         XCTAssertNotNil(harness.appState.client, "precondition: the manager still holds the ending session's client")

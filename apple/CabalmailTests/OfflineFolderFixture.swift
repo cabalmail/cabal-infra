@@ -117,7 +117,11 @@ final class OfflineFolderFixture {
     }
 }
 
-/// Polls `condition` until it holds, failing at the caller's line if it never does.
+/// Polls `condition` until it holds, failing at the caller's line if it never
+/// does. Main-actor-isolated for the same reason `waitUntilOnMainActor` is:
+/// the suites that call it are `@MainActor`, and a nonisolated poll would
+/// make every condition closure cross an isolation boundary.
+@MainActor
 func eventually(
     file: StaticString = #filePath,
     line: UInt = #line,

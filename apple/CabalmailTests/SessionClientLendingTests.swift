@@ -177,7 +177,7 @@ final class SessionClientLendingTests: XCTestCase {
 
         let wired = try XCTUnwrap(harness.appState.client)
         XCTAssertFalse(wired === lent)
-        try await waitUntil { await lent.isShutDown }
+        try await waitUntilOnMainActor { await lent.isShutDown }
         let now = try await manager.borrowClient()
         XCTAssertTrue(now === wired)
     }
@@ -196,7 +196,7 @@ final class SessionClientLendingTests: XCTestCase {
 
         XCTAssertEqual(harness.appState.status, .signedOut)
         XCTAssertEqual(harness.appState.signedOutReason, .sessionExpired)
-        try await waitUntil { await lent.isShutDown }
+        try await waitUntilOnMainActor { await lent.isShutDown }
         let now = try await manager.borrowClient()
         XCTAssertNil(now)
         XCTAssertEqual(harness.clients.count, 1)

@@ -164,7 +164,7 @@ final class MailEventsTests: XCTestCase {
         XCTAssertEqual(recorder.events, [
             MailEvent(change: .flagsChanged([archive], flag: .answered, added: true), origin: nil),
         ])
-        try await waitUntil { await !imap.flagCalls.isEmpty }
+        try await waitUntilOnMainActor { await !imap.flagCalls.isEmpty }
     }
 }
 
