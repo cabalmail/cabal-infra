@@ -285,7 +285,7 @@ private actor RotatingAuthService: AuthService {
     func confirmTotpEnrollment(code: String) async throws {}
     func disableTotp() async throws {}
     func signUp(
-        username: String, password: String, email: String, phone: String?, invitationCode: String?
+        username: String, password: String, email: String?, phone: String?, invitationCode: String?
     ) async throws -> SignUpResult { .confirmed }
     func confirmSignUp(username: String, code: String) async throws {}
     func resendConfirmationCode(username: String) async throws -> CodeDelivery? { nil }

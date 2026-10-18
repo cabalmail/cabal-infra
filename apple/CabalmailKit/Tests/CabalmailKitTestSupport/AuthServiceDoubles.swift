@@ -36,7 +36,7 @@ public actor StubAuthService: AuthService {
     public func disableTotp() async throws {}
 
     public func signUp(
-        username: String, password: String, email: String, phone: String?, invitationCode: String?
+        username: String, password: String, email: String?, phone: String?, invitationCode: String?
     ) async throws -> SignUpResult { .confirmed }
     public func confirmSignUp(username: String, code: String) async throws {}
     public func resendConfirmationCode(username: String) async throws -> CodeDelivery? { nil }
@@ -76,7 +76,7 @@ public actor NullAuthService: AuthService {
     public func confirmTotpEnrollment(code: String) async throws {}
     public func disableTotp() async throws {}
     public func signUp(
-        username: String, password: String, email: String, phone: String?, invitationCode: String?
+        username: String, password: String, email: String?, phone: String?, invitationCode: String?
     ) async throws -> SignUpResult { .confirmed }
     public func confirmSignUp(username: String, code: String) async throws {}
     public func resendConfirmationCode(username: String) async throws -> CodeDelivery? { nil }

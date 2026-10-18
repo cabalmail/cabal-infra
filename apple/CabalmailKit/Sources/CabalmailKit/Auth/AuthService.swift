@@ -54,15 +54,16 @@ public protocol AuthService: Sendable {
     /// Throws if no challenge is pending or the code is rejected; a wrong
     /// code leaves the challenge session usable for a retry.
     func submitMfaCode(_ code: String) async throws
-    /// Creates an account (`docs/auth.md`, "Sign-up"). `email` is the
-    /// recovery address, always collected; pass `phone` (E.164) only when
-    /// the configuration's `smsEnabled`. A refused invitation code throws
+    /// Creates an account (`docs/auth.md`, "Sign-up"). `email` (the
+    /// recovery address) and `phone` (E.164, only when the configuration's
+    /// `smsEnabled`) are each sent only when given; which a deployment asks
+    /// for is the sign-up screen's call. A refused invitation code throws
     /// `.invalidInvitationCode`; a refused username throws `.server` with
     /// `check_invite`'s own sentence.
     func signUp(
         username: String,
         password: String,
-        email: String,
+        email: String?,
         phone: String?,
         invitationCode: String?
     ) async throws -> SignUpResult
@@ -197,14 +198,14 @@ public actor CognitoAuthService: AuthService {
     public func signUp(
         username: String,
         password: String,
-        email: String,
+        email: String?,
         phone: String?,
         invitationCode: String?
     ) async throws -> SignUpResult {
-        var attributes = [
-            ["Name": "preferred_username", "Value": username],
-            ["Name": "email", "Value": email],
-        ]
+        var attributes = [["Name": "preferred_username", "Value": username]]
+        if let email, !email.isEmpty {
+            attributes.append(["Name": "email", "Value": email])
+        }
         if let phone, !phone.isEmpty {
             attributes.append(["Name": "phone_number", "Value": phone])
         }

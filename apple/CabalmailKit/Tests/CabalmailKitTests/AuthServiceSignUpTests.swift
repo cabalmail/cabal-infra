@@ -77,20 +77,31 @@ final class AuthServiceSignUpTests: XCTestCase {
         XCTAssertEqual(body["ValidationData"] as? [[String: String]], [["Name": "invitationCode", "Value": ""]])
     }
 
-    func testAPhoneIsSentOnlyWhenGiven() async throws {
-        let http = RecordingHTTPTransport(responses: [Self.confirmedReply, Self.confirmedReply])
+    /// Neither contact is required by the kit: a deployment can sign up an
+    /// account with only a phone, so Cabalmail can be someone's only email.
+    func testEmailAndPhoneAreSentOnlyWhenGiven() async throws {
+        let http = RecordingHTTPTransport(responses: [Self.confirmedReply, Self.confirmedReply, Self.confirmedReply])
         let session = service(http)
         _ = try await session.signUp(
             username: "alice", password: "pw", email: "alice@example.net", phone: "+15555550123", invitationCode: nil
         )
         _ = try await session.signUp(
-            username: "bob", password: "pw", email: "bob@example.net", phone: "", invitationCode: nil
+            username: "bob", password: "pw", email: nil, phone: "+15555550124", invitationCode: nil
+        )
+        _ = try await session.signUp(
+            username: "carol", password: "pw", email: "", phone: "", invitationCode: nil
         )
 
-        let withPhone = try await sentBody(http, at: 0)["UserAttributes"] as? [[String: String]]
-        XCTAssertEqual(withPhone?.last, ["Name": "phone_number", "Value": "+15555550123"])
-        let blankPhone = try await sentBody(http, at: 1)["UserAttributes"] as? [[String: String]]
-        XCTAssertEqual(blankPhone?.map { $0["Name"] }, ["preferred_username", "email"])
+        let both = try await sentBody(http, at: 0)["UserAttributes"] as? [[String: String]]
+        XCTAssertEqual(both, [
+            ["Name": "preferred_username", "Value": "alice"],
+            ["Name": "email", "Value": "alice@example.net"],
+            ["Name": "phone_number", "Value": "+15555550123"],
+        ])
+        let phoneOnly = try await sentBody(http, at: 1)["UserAttributes"] as? [[String: String]]
+        XCTAssertEqual(phoneOnly?.map { $0["Name"] }, ["preferred_username", "phone_number"])
+        let blanks = try await sentBody(http, at: 2)["UserAttributes"] as? [[String: String]]
+        XCTAssertEqual(blanks?.map { $0["Name"] }, ["preferred_username"])
     }
 
     // MARK: - SignUp reply

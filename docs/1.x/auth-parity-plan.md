@@ -252,8 +252,9 @@ conformer, including the shared test doubles.
 As built (Apple): `signUp(username:password:email:phone:invitationCode:)`
 returns a `SignUpResult`: `.confirmationCodeSent(CodeDelivery)` (medium
 and masked destination) or `.confirmed` (`check_invite` confirmed the
-account itself). `email` is no longer optional, since the contract
-always collects it. A refused invitation code throws
+account itself). `email` and `phone` are each sent only when given, so
+which a deployment asks for is the screens' call, not the kit's. A
+refused invitation code throws
 `CabalmailError.invalidInvitationCode`. A refused username stays
 `.server(code: "UserLambdaValidationException", ...)` with the trigger's
 sentence, which the sign-in form already shows as written. Other
