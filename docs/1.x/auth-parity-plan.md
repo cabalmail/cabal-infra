@@ -216,8 +216,9 @@ As built:
   `React.StrictMode` runs mount effects twice there. Once deployed,
   that showed up as two sessions and two refreshes per reload. #2116
   guards the bootstrap effect with a ref, and adds a StrictMode test.
-  Until #2115 is fixed, check a webmail build live with
-  `NODE_ENV=stage npx vite build`, not a plain production build.
+  The fix for #2115 drops `NODE_ENV` from the build step, and
+  `vite build` now refuses any value other than `production`, so the
+  build checked locally is the build CI ships.
 
 ### A3 — Promote the contract
 

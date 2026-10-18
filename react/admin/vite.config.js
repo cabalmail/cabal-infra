@@ -27,8 +27,30 @@ function copyRepoLicense() {
   };
 }
 
+// React picks its production build only when NODE_ENV is `production`, and
+// vite build honours a NODE_ENV it finds in the environment, so a build run
+// with NODE_ENV set to anything else ships React's development build: twice
+// the size, with development-only checks and StrictMode running every mount
+// effect twice. app.yml did exactly that for years by setting NODE_ENV to the
+// environment's name (#2115). Fail such a build rather than ship it.
+function refuseDevelopmentReactBuild() {
+  return {
+    name: 'cabalmail:refuse-development-react-build',
+    config(_config, { command }) {
+      const nodeEnv = process.env.NODE_ENV;
+      if (command === 'build' && nodeEnv && nodeEnv !== 'production') {
+        throw new Error(
+          `NODE_ENV=${nodeEnv} would make vite build ship React's development build. `
+          + 'Unset NODE_ENV, or set it to production, to build the webmail.'
+        );
+      }
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    refuseDevelopmentReactBuild(),
     copyRepoLicense(),
     react(),
     license({
