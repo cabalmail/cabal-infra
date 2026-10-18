@@ -6,7 +6,7 @@ import './Security.css';
  * Account security view (identity plan Phase 1): TOTP two-factor
  * enrollment and management.
  *
- * The Cognito calls live in App.jsx (where the user pool client lives)
+ * The Cognito calls live in App.jsx (where the Cognito client lives)
  * and arrive here as the `mfaApi` prop:
  *   getStatus(cb)            -> cb(err, enabled)
  *   beginEnroll(callbacks)   -> associateSecretCode(secret) / onFailure(err)

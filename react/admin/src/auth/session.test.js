@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createSession, SESSION_STORAGE_KEY } from './session';
+import { createSession, hasStoredSession, SESSION_STORAGE_KEY } from './session';
 import { createCognitoClient } from './cognito';
 import { CognitoError, isSignInRequired } from './errors';
 import { makeJwt, stubFetch, reply, cognitoError, sent } from '../test/cognito';
@@ -229,6 +229,14 @@ describe('refresh failures', () => {
 });
 
 describe('restore after a reload', () => {
+  it('says synchronously whether there is a session to restore', () => {
+    expect(hasStoredSession()).toBe(false);
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ username: 'a', refreshToken: 'r' }));
+    expect(hasStoredSession()).toBe(true);
+    expect(hasStoredSession(null)).toBe(false);
+    expect(hasStoredSession({ getItem: () => { throw new Error('SecurityError'); } })).toBe(false);
+  });
+
   it('has nothing to restore in a new tab', async () => {
     const { session, fetchImpl } = setup();
     expect(await session.restore()).toBeNull();

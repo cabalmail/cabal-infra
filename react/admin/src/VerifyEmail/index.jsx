@@ -7,10 +7,10 @@ import VerificationCodeField from '../Login/VerificationCodeField';
  *
  * - "add": the account has no email attribute (users who signed up
  *   before email collection existed). Prompts for a recovery address;
- *   App.jsx saves it via updateAttributes, which makes Cognito send a
+ *   App.jsx saves it via UpdateUserAttributes, which makes Cognito send a
  *   verification code automatically.
  * - "verify": an email is on file but not verified. Code entry plus a
- *   "Send a new code" action (getAttributeVerificationCode).
+ *   "Send a new code" action (GetUserAttributeVerificationCode).
  *
  * Both modes are skippable: existing SMS-only users must keep working
  * (the plan's migration constraint) and email is a recovery fallback,

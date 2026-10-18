@@ -5,7 +5,8 @@
  */
 
 export { createCognitoClient, clientsFromConfig, codeDelivery } from './cognito';
-export { createSession, SESSION_STORAGE_KEY } from './session';
+export { createSession, hasStoredSession, SESSION_STORAGE_KEY } from './session';
+export { purgeLibraryStorage, LIBRARY_KEY_PREFIX } from './legacy';
 export {
   CognitoError,
   isInvalidInvitationCode,

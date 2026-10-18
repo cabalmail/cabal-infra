@@ -11,7 +11,7 @@
  * confirmed at sign-up) and anything else stays the generic failure.
  *
  * @param {{code?: string, name?: string, message?: string}|null} err - the
- *   error amazon-cognito-identity-js passed to the signUp callback.
+ *   CognitoError the auth client's signUp rejected with (src/auth).
  * @returns {string} the message for the sign-up screen.
  */
 export function signUpErrorMessage(err) {

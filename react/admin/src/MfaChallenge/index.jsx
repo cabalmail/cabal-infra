@@ -4,8 +4,8 @@ import VerificationCodeField from '../Login/VerificationCodeField';
 /**
  * Second-factor challenge screen (identity plan Phase 1). Shown when
  * Cognito answers a password login with a SOFTWARE_TOKEN_MFA (TOTP) or
- * SMS_MFA challenge; App.jsx holds the pending CognitoUser and completes
- * the login via sendMFACode when this form submits.
+ * SMS_MFA challenge; App.jsx holds the pending challenge and completes
+ * the login via RespondToAuthChallenge when this form submits.
  */
 function MfaChallenge({
   onSubmit,
