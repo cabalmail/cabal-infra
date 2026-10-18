@@ -63,7 +63,18 @@ enum class SettingsCategory(
     ACTIONS(R.string.settings_actions),
     NOTIFICATIONS(R.string.settings_notifications),
     APPEARANCE(R.string.settings_appearance),
+    USERS(R.string.users_title),
     ABOUT(R.string.settings_about),
+    ;
+
+    companion object {
+        /**
+         * The categories to list for this session: all of them, with Users
+         * only for an administrator. Users is the admin's view of the user
+         * pool; the server refuses its calls to anyone else regardless.
+         */
+        fun listed(isAdmin: Boolean): List<SettingsCategory> = entries.filter { it != USERS || isAdmin }
+    }
 }
 
 /**
@@ -94,6 +105,11 @@ fun SettingsScreen(
      * 4b). `onBack` is null when the category list is visible alongside.
      */
     rulesPane: @Composable (onBack: (() -> Unit)?) -> Unit,
+    /**
+     * The Users category's detail pane (auth parity plan, C2), listed only
+     * when [SettingsUiState.isAdmin]. `onBack` as for [rulesPane].
+     */
+    usersPane: @Composable (onBack: (() -> Unit)?) -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -111,12 +127,24 @@ fun SettingsScreen(
         }
     }
 
+    // Admin access went away while Users was open: leave it.
+    LaunchedEffect(state.isAdmin) {
+        if (!state.isAdmin && navigator.currentDestination?.contentKey == SettingsCategory.USERS) {
+            if (twoPane) {
+                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, SettingsCategory.ACCOUNT)
+            } else {
+                navigator.navigateBack()
+            }
+        }
+    }
+
     NavigableListDetailPaneScaffold(
         navigator = navigator,
         modifier = modifier.fillMaxSize(),
         listPane = {
             AnimatedPane {
                 SettingsCategoryList(
+                    categories = SettingsCategory.listed(state.isAdmin),
                     selected = navigator.currentDestination?.contentKey.takeIf { twoPane },
                     onSelect = { category ->
                         scope.launch { navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, category) }
@@ -134,6 +162,7 @@ fun SettingsScreen(
                     // the auto-select above lands.
                     null -> Unit
                     SettingsCategory.RULES -> rulesPane(onBack)
+                    SettingsCategory.USERS -> usersPane(onBack)
                     else ->
                         SettingsCategoryDetail(
                             category = category,
@@ -157,6 +186,7 @@ fun SettingsScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsCategoryList(
+    categories: List<SettingsCategory>,
     selected: SettingsCategory?,
     onSelect: (SettingsCategory) -> Unit,
 ) {
@@ -171,7 +201,7 @@ private fun SettingsCategoryList(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState()),
         ) {
-            SettingsCategory.entries.forEach { category ->
+            categories.forEach { category ->
                 ListItem(
                     headlineContent = { Text(stringResource(category.titleRes)) },
                     colors =
@@ -235,8 +265,8 @@ private fun SettingsCategoryDetail(
                 SettingsCategory.ACCOUNT -> AccountSettings(state, preferences, onUpdate, onSignOut)
                 SettingsCategory.READING -> ReadingSettings(preferences, onUpdate)
                 SettingsCategory.COMPOSING -> ComposingSettings(state, preferences, onUpdate)
-                // Handled by the caller (the pane comes from the nav host).
-                SettingsCategory.RULES -> Unit
+                // Handled by the caller (the panes come from the nav host).
+                SettingsCategory.RULES, SettingsCategory.USERS -> Unit
                 SettingsCategory.FLAGS -> FlagPaletteSettings(preferences, onUpdate)
                 SettingsCategory.ACTIONS -> ActionsSettings(preferences, onUpdate)
                 SettingsCategory.NOTIFICATIONS ->
