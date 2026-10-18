@@ -597,7 +597,10 @@ jobs:
       # the value. env-block substitution writes the literal string
       # into the process environment, and Terraform auto-picks up
       # TF_VAR_* env vars without any shell re-interpretation.
-      TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
+      # Read from the environment secret; the variable of the same name is
+      # only a fallback for an environment that has not moved it to a
+      # secret yet.
+      TF_VAR_invitation_code: ${{ secrets.TF_VAR_INVITATION_CODE || vars.TF_VAR_INVITATION_CODE }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -765,7 +768,10 @@ jobs:
       # the value. env-block substitution writes the literal string
       # into the process environment, and Terraform auto-picks up
       # TF_VAR_* env vars without any shell re-interpretation.
-      TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
+      # Read from the environment secret; the variable of the same name is
+      # only a fallback for an environment that has not moved it to a
+      # secret yet.
+      TF_VAR_invitation_code: ${{ secrets.TF_VAR_INVITATION_CODE || vars.TF_VAR_INVITATION_CODE }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
