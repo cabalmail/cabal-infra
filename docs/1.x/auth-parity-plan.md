@@ -47,7 +47,7 @@ for A.
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
-| C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Not started |
+| C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Apple in review; Android next |
 | C2    | Native: first admin feature — Users (approve, disable, delete)   | Not started |
 
 Tracking issues: A #1950, B #1951, C #1952.
@@ -277,7 +277,7 @@ scheduled.
 
 ### C1 — `isAdmin` in the kits
 
-**Status:** Not started.
+**Status:** Apple in review; Android next, as its own PR.
 
 Decode the ID token payload (base64url JSON, no signature check; the
 token came from Cognito over TLS and D3 makes it a hint), expose
@@ -285,6 +285,18 @@ token came from Cognito over TLS and D3 makes it a hint), expose
 refresh, sign-out and account switch. Kit tests cover the claim
 renderings `admin_limits.is_admin` accepts and a group whose name only
 contains "admin".
+
+As built (Apple): `IdTokenClaims(idToken:)` in
+`CabalmailKit/Auth/IdTokenClaims.swift` (`groups`, `isAdmin`), plus
+`AuthTokens.isAdmin` and an `AuthService.isAdmin()` protocol
+extension. The extension computes the answer from `currentTokens()` on
+every call rather than caching it, so it follows a refresh (a group
+granted or removed shows up in the next token Cognito issues), a
+sign-out, and an account switch (an ended session reads no tokens),
+with no new protocol requirement for the test doubles. Nothing in the
+app reads it yet. C2 decides where the admin views appear and reads it
+at session start. `TestFixtures.idToken(claims:)` builds unsigned test
+tokens.
 
 ### C2 — First admin feature: Users
 

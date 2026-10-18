@@ -140,7 +140,7 @@ Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySo
 | Enrollment suggestion | Yes | No | No | No |
 | Locked-out TOTP setup | Yes | No | No | No |
 | TOTP on and off (Security settings) | Yes | Kit only, no UI | No | No |
-| Admin recognition | Yes | No | No | No |
+| Admin recognition | Yes | Kit only (`AuthService.isAdmin()`), no UI | No | No |
 
 The native gaps are planned in [the auth parity plan](./1.x/auth-parity-plan.md): sign-up (B1–B3), the recovery-email check (B4), and admin recognition with a native Users view (C1–C2). The Linux client's sign-in, MFA and refresh are in progress against this contract ([Linux client plan](./1.x/linux-client-plan.md)).
 

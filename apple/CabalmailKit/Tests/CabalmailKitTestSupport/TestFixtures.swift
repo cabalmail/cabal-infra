@@ -5,6 +5,21 @@ import CabalmailKit
 /// view-model factories (`makeModel`, `makeComposeModel`) in an extension of
 /// this enum, since those types live in the app module.
 public enum TestFixtures {
+    /// An unsigned compact JWT carrying `claims`. The Kit reads ID-token
+    /// claims without verifying a signature (`IdTokenClaims`), so a test
+    /// token needs nothing more than a decodable payload.
+    public static func idToken(claims: [String: Any]) -> String {
+        func base64url(_ object: [String: Any]) -> String {
+            // swiftlint:disable:next force_try
+            let data = try! JSONSerialization.data(withJSONObject: object)
+            return data.base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        return "\(base64url(["alg": "RS256", "kid": "test"])).\(base64url(claims)).c2lnbmF0dXJl"
+    }
+
     public static func makeConfiguration() -> Configuration {
         Configuration(
             controlDomain: "cabalmail.example",
