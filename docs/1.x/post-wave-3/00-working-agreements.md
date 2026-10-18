@@ -19,6 +19,7 @@ In the rearchitecture, sessions shared a project folder and threads that every s
 - **Outputs another plan needs** (a fixture account and its size, a soak result, a device checklist, a script another plan will commit) go in the producing plan's Status lines through a docs-only PR, or in a GitHub issue with no PII that those Status lines link. Never only in the conversation or a scratch folder.
 - **Soak records** go to the maintainer, and the facts another plan needs go in Status lines as above.
 - **Memory and `CLAUDE.md` control.** This project developed an idiosyncratic workflow that the maintainer does not wish to carry over. Where the documents in this direcory contradict established workflow as memorialized in local memory or `CLAUDE.md`, the established workflow controls, and the dictate of the documents in this directory should be ignored where they contradict.
+- **Changelog fragments (policy change, 2026-10-18).** Where a plan in this folder says a PR takes the `no-changelog` label, the label now waives only the `Apple:`/`Android:` tester-notes prefix. Every PR that changes more than documentation still needs a changelog fragment - unprefixed for non-user-facing work - enforced by the repo-wide `changelog-fragment` check. See `changelog.d/README.md`.
 
 ## Session or project
 

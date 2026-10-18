@@ -15,8 +15,10 @@
 # It is a heuristic backstop, not a proof: a CI check cannot know whether a
 # fragment truly describes the client change, only that a well-formed one
 # exists. Some client-source PRs are legitimately not user-facing (refactors,
-# test-only, CI, project generation). Apply the `no-changelog` PR label to opt
-# those out.
+# test-only, CI, project generation). Apply the `no-changelog` PR label to
+# waive the prefix for those - the entry then stays out of the tester notes.
+# The label waives only the prefix: the PR still needs an unprefixed fragment,
+# enforced by check-changelog-fragment.sh (the repo-wide changelog gate).
 #
 # Runs from the apple-changelog.yml / android-changelog.yml workflows on every
 # pull_request event (including labeled/unlabeled). No path filter: this script
@@ -57,7 +59,7 @@ echo "[$tag] $PREFIX client sources changed:"
 printf '%s\n' "$client_changed" | sed 's/^/  /'
 
 if [ "${OPT_OUT:-false}" = "true" ]; then
-  echo "::notice::'no-changelog' label present; skipping the $PREFIX changelog requirement."
+  echo "::notice::'no-changelog' label present; waiving the $PREFIX: prefix requirement. An unprefixed fragment is still required by the changelog-fragment gate."
   exit 0
 fi
 
@@ -96,6 +98,8 @@ Add a fragment changelog.d/<slug>.<category>.md whose entry begins with
 The ${PREFIX}: prefix scopes the entry into the ${PREFIX} testers' release notes.
 
 If this PR has no user-facing ${PREFIX}-client change (refactor, test-only, CI),
-apply the "no-changelog" label to the PR to opt out.
+apply the "no-changelog" label: it waives this prefix requirement, keeping the
+entry out of the tester notes. The PR still needs an unprefixed fragment to
+satisfy the repo-wide changelog-fragment gate.
 MSG
 exit 1
