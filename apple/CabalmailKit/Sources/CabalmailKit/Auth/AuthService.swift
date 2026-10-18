@@ -352,7 +352,18 @@ public actor CognitoAuthService: AuthService {
             }
             throw CabalmailError.server(code: code, message: message)
         }
-        return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        do {
+            return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        } catch {
+            // A 2xx whose body isn't JSON at all - an empty body, or an HTML
+            // page from something in the network path answering for Cognito -
+            // used to throw Foundation's NSError straight out of the package,
+            // where callers that branch on `CabalmailError` couldn't catch it
+            // (#1902). Same normalization the Lambda client's `decodeReply`
+            // does (#1805), and the detail names the call, never the body:
+            // these replies carry tokens.
+            throw CabalmailError.decoding("\(target) returned an unexpected reply")
+        }
     }
 
     private func parseError(_ data: Data) -> (code: String, message: String) {

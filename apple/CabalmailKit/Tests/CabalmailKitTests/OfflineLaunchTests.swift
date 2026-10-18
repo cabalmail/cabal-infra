@@ -65,6 +65,19 @@ final class OfflineLaunchTests: XCTestCase {
         }
     }
 
+    /// A 2xx the client can't read is not Cognito refusing the session: it
+    /// is a captive portal or a proxy answering for it, so restore keeps the
+    /// stored tokens and goes on (#1902).
+    func testUnreadableRefreshReplyPasses() async throws {
+        for body in [Data(), Data("<html>sign in to this network</html>".utf8)] {
+            let http = RecordingHTTPTransport(responses: [(body, 200)])
+            let service = try await serviceWithExpiredToken(transport: http)
+            try await OfflineLaunch.validateStoredSession(service)
+            let tokens = await service.currentTokens()
+            XCTAssertEqual(tokens?.idToken, "OLD-ID", "the stored tokens are kept as they were")
+        }
+    }
+
     /// A refusal that is about the user still ends the launch.
     func testAnotherRefusalStillThrows() async throws {
         let http = RecordingHTTPTransport(responses: [(Self.refusal("UserNotFoundException"), 400)])
