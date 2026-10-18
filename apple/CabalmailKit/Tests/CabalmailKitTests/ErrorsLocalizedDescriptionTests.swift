@@ -115,6 +115,83 @@ final class ErrorsLocalizedDescriptionTests: XCTestCase {
         }
     }
 
+    /// #1918: most mail-side handlers refuse a request as
+    /// `{"Error": "<sentence>"}`, and that sentence used to be dropped for
+    /// the generic status sentence. The four bodies here are the ones the
+    /// verification took off live stage, verbatim.
+    func testARefusalUnderTheErrorKeyReadsAsItsOwnSentence() {
+        struct Refusal { let status: Int, body: String, text: String }
+        let refusals = [
+            Refusal(status: 400,
+                    body: #"{"Error": "Subdomain \"mail-admin\" is reserved on every mail domain"}"#,
+                    text: "Subdomain \"mail-admin\" is reserved on every mail domain."),
+            Refusal(status: 400,
+                    body: #"{"Error": "Unknown domain \"not-a-cabal-domain.invalid\""}"#,
+                    text: "Unknown domain \"not-a-cabal-domain.invalid\"."),
+            Refusal(status: 400,
+                    body: #"{"Error": "Invalid input: username is required"}"#,
+                    text: "Invalid input: username is required."),
+            Refusal(status: 403,
+                    body: #"{"Error": "Address not associated with authenticated user"}"#,
+                    text: "Address not associated with authenticated user.")
+        ]
+        for refusal in refusals {
+            XCTAssertEqual(
+                CabalmailError.http(status: refusal.status, body: refusal.body).localizedDescription,
+                refusal.text
+            )
+            XCTAssertEqual(
+                CabalmailError.server(code: String(refusal.status), message: refusal.body).localizedDescription,
+                refusal.text,
+                "the two cases must still read alike"
+            )
+        }
+    }
+
+    /// The other half of #1918, and the reason the key is read only for a
+    /// 4xx: `set_favorite`, `assign_address`, `push_register` and
+    /// `push_deregister` put `str(err)` under the same key in their 500,
+    /// and internal exception text is not for a user.
+    func testAnExceptionUnderTheErrorKeyInA500StaysGeneric() {
+        let body = #"{"Error": "An error occurred (ResourceNotFoundException) when calling the GetItem operation"}"#
+        XCTAssertEqual(
+            CabalmailError.http(status: 500, body: body).localizedDescription,
+            "The server couldn't complete that request (500)."
+        )
+        XCTAssertEqual(
+            CabalmailError.http(status: 503, body: body).localizedDescription,
+            "The server couldn't complete that request (503)."
+        )
+        // A non-numeric code (the RSS and Cognito tokens) cannot be placed
+        // either side of the 4xx line, so it is treated as the 500 it may be.
+        XCTAssertEqual(
+            CabalmailError.server(code: "unable", message: body).localizedDescription,
+            "The server couldn't complete that request (unable)."
+        )
+    }
+
+    /// `status` and `message` still win where a handler sends both, so the
+    /// new key cannot change a sentence that already worked.
+    func testTheEstablishedKeysStillTakePrecedence() {
+        XCTAssertEqual(
+            CabalmailError.http(status: 404,
+                                body: #"{"status": "That message is no longer in INBOX", "Error": "not found"}"#)
+                .localizedDescription,
+            "That message is no longer in INBOX."
+        )
+        XCTAssertEqual(
+            CabalmailError.http(status: 403,
+                                body: #"{"message": "User is not authorized", "Error": "nope"}"#)
+                .localizedDescription,
+            "User is not authorized."
+        )
+        // A one-word marker under the new key is machine state too.
+        XCTAssertEqual(
+            CabalmailError.http(status: 400, body: #"{"Error": "unable"}"#).localizedDescription,
+            "The server couldn't complete that request (400)."
+        )
+    }
+
     func testAPartialBulkFailureCountsWhatFailed() {
         XCTAssertEqual(
             CabalmailError.bulkPartialFailure(succeeded: [1, 2], failed: [3]).localizedDescription,
