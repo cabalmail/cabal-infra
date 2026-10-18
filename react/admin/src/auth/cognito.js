@@ -1,6 +1,6 @@
 /**
  * Cognito user-pool client over the JSON API, the way the Apple and Android
- * kits talk to it (docs/1.x/auth-parity-plan.md, "The auth contract").
+ * kits talk to it (the contract is docs/auth.md).
  *
  * Every operation is one POST to https://cognito-idp.<region>.amazonaws.com/
  * with an X-Amz-Target header naming it. Nothing here is signed: these are

@@ -14,6 +14,10 @@ You _could_ use a Cabalmail system along with client-side spam filters, but I re
 
 You also _could_ create a single address on a Cabalmail system and just give that out to everyone like a normal address. But if you do, get ready to take a fresh look at those client-side spam filters.
 
+# Authentication
+
+Users sign in against one Cognito user pool per environment. The webmail and the native clients call Cognito's JSON API directly with the same requests, and the browser extension uses the Hosted UI. Sign-up takes an invitation code (when configured), and a new account can create no addresses until an admin grants it mail domains. Admins can be required to use TOTP, and so can everyone else; the MFA gate's dedicated enrollment client lets a locked-out user set an authenticator up. See [Authentication](./auth.md) for the pool's app clients and triggers, the requests each flow sends, where each client keeps its session, and which client implements what.
+
 # Monitoring
 
 Setting `TF_VAR_MONITORING` to `true` in a GitHub environment adds [monitoring](./monitoring.md) infrastructure. Setting up monitoring is not turn-key. There are many manual steps involved in establishing alert thresholds, communication, configuration, etc. Once established, there are some run books in [the operations/runbooks directory](./operations/runbooks) that you can use as the basis for incident response. These are provided as templates. You should modify them as appropriate for your use cases and requirements.

@@ -41,8 +41,8 @@ for A.
 | Phase | Work item                                                        | Status      |
 | ----- | ---------------------------------------------------------------- | ----------- |
 | A1    | Webmail: Cognito JSON client module + tests                      | Done 2026-10-18 (#2103) |
-| A2    | Webmail: port `App.jsx` flows, drop the dependency               | In review (#2107); checked live 2026-10-18 |
-| A3    | Promote the auth contract below to `docs/auth.md`                | Not started |
+| A2    | Webmail: port `App.jsx` flows, drop the dependency               | Done 2026-10-18 (#2107, #2116) |
+| A3    | Promote the auth contract to `docs/auth.md`                      | Done 2026-10-18 |
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Not started |
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
@@ -99,60 +99,9 @@ no client-side policy beyond what `/config.js` advertises.
 
 ## The auth contract
 
-What every client does, as the webmail implements it today. Phase A3
-moves this section to `docs/auth.md` once A ships; until then this is
-the reference B and C are checked against.
-
-**Configuration** (`/config.js`, from
-`terraform/infra/modules/app/templates/config.js.tftpl`):
-`cognitoConfig.region`, `poolData.UserPoolId`, `poolData.ClientId`,
-`enrollClientId`, `invitation_required`, `sms_enabled`.
-
-**Transport.** `POST https://cognito-idp.<region>.amazonaws.com/`,
-`Content-Type: application/x-amz-json-1.1`,
-`X-Amz-Target: AWSCognitoIdentityProviderService.<Operation>`. Errors
-come back as `{"__type": "...Exception", "message": "..."}`.
-
-**Sign-up** (`SignUp`):
-- `Username`, `Password`, `UserAttributes`: `preferred_username`
-  (= username), `email` (always), `phone_number` only when
-  `sms_enabled`.
-- `ValidationData`: `[{"Name": "invitationCode", "Value": <code>}]`.
-  The `check_invite` pre-sign-up Lambda compares it; a mismatch
-  surfaces as `UserLambdaValidationException` with "Invalid invitation
-  code." Sent as validation data so it never lands on the user record.
-- Outcome, from the response's `CodeDeliveryDetails`:
-  - present: a code went to that medium/destination; show the confirm
-    screen (`ConfirmSignUp`, `ResendConfirmationCode`).
-  - absent: `check_invite` auto-confirmed the account (SMS off); show
-    "Account created. It is pending admin approval."
-- After confirmation the account is pending admin approval either way.
-
-**Sign-in** (`InitiateAuth`, `USER_PASSWORD_AUTH`):
-- Challenges `SOFTWARE_TOKEN_MFA` / `SMS_MFA` answered with
-  `RespondToAuthChallenge`, echoing `Session` and `USERNAME`.
-- The `require_admin_mfa` pre-token-generation trigger can refuse an
-  un-enrolled user ("admin accounts require..."); the webmail then
-  offers the locked-out TOTP setup through `enrollClientId`
-  (`AssociateSoftwareToken` / `VerifySoftwareToken` /
-  `SetUserMFAPreference` on that client's short-lived tokens).
-- After sign-in, two advisory gates, email first, one per sign-in:
-  no verified recovery email (`GetUser` → `email` /
-  `email_verified`; `UpdateUserAttributes`,
-  `GetUserAttributeVerificationCode`, `VerifyUserAttribute`), then no
-  MFA factor (enrollment nudge). A failed metadata read never blocks
-  the sign-in.
-
-**Session.** ID token on API calls; refresh with
-`InitiateAuth` / `REFRESH_TOKEN_AUTH`. Persistence per platform (D2
-for the webmail; Keychain / encrypted store on native).
-
-**Admin.** `cognito:groups` in the ID token payload contains `admin`
-(D3). Re-derived on every token change, including refresh and account
-switch.
-
-**Password reset.** `ForgotPassword` (report the delivery medium from
-`CodeDeliveryDetails`), `ConfirmForgotPassword`.
+Moved to [`docs/auth.md`](../auth.md) in A3 (2026-10-18), which also
+records what each client implements today. B and C are checked against
+it there.
 
 ## Phase A — Webmail
 
@@ -210,8 +159,9 @@ sign-in for an unknown username maps to `isNotAuthorized`.
 
 ### A2 — Port `App.jsx`, remove the dependency
 
-**Status:** In review (#2107), merged to stage only after the batch
-ahead of it was promoted, so A2 soaks and releases on its own. Checked
+**Status:** Done 2026-10-18: #2107, merged to stage only after the
+batch ahead of it was promoted, so A2 soaks and releases on its own,
+and #2116 (below). Checked
 live on 2026-10-18 against the stage pool, with the A2 bundle served at
 the stage origin and signed in as the second test account: sign-up
 with a wrong invitation code, forgot password (code sent, not used), a
@@ -261,13 +211,25 @@ As built:
 - `App.test.jsx` drives the real auth screens against a stubbed
   Cognito: every flow above, plus reload, refusal, idle refresh,
   sign-out and the legacy-key purge. Mutation-checked.
+- Stage and prod serve a React development build (#2115: `app.yml`
+  sets `NODE_ENV` to the environment's name, which Vite honours), so
+  `React.StrictMode` runs mount effects twice there. Once deployed,
+  that showed up as two sessions and two refreshes per reload. #2116
+  guards the bootstrap effect with a ref, and adds a StrictMode test.
+  Until #2115 is fixed, check a webmail build live with
+  `NODE_ENV=stage npx vite build`, not a plain production build.
 
 ### A3 — Promote the contract
 
-**Status:** Not started.
+**Status:** Done 2026-10-18.
 
 Move "The auth contract" to `docs/auth.md`, link it from
-`docs/operations.md`, and leave a pointer here.
+`docs/operations.md`, and leave a pointer here. As built, `docs/auth.md`
+also covers the pool's app clients and triggers, the error mapping,
+where each client keeps its session, and a per-client implementation
+table. The table's gaps are B and C. The sign-up wording "pending admin
+approval" maps to the domain grant: a new account is confirmed at once
+but can create no addresses until an admin grants it mail domains.
 
 ## Phase B — Native sign-up
 
