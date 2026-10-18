@@ -21,6 +21,7 @@ import CabalmailKit
 /// the server so they follow the Cabalmail account to the user's other
 /// devices without any extra plumbing in these views.
 public struct SettingsView: View {
+    @Environment(AppState.self) private var appState
     @State private var selection: SettingsCategory? = SettingsView.initialSelection(on: .current)
 
     public init() {}
@@ -33,10 +34,16 @@ public struct SettingsView: View {
                 detail
             }
         }
+        .onChange(of: appState.isAdmin) { _, isAdmin in
+            // Admin access went away while Users was open.
+            if !isAdmin, selection == .users {
+                selection = Self.initialSelection(on: .current)
+            }
+        }
     }
 
     private var sidebar: some View {
-        List(SettingsCategory.available, selection: $selection) { category in
+        List(SettingsCategory.listed(isAdmin: appState.isAdmin), selection: $selection) { category in
             Label(category.title, systemImage: category.systemImage)
         }
         .navigationTitle("Settings")
@@ -76,7 +83,7 @@ public struct SettingsView: View {
 /// The selectable settings categories, in presentation order.
 enum SettingsCategory: CaseIterable, Identifiable, Hashable {
     case account, reading, composing, rules, flags, actions, notifications
-    case appearance, diagnostics, about
+    case appearance, diagnostics, users, about
 
     var id: Self { self }
 
@@ -92,6 +99,13 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         #endif
     }
 
+    /// The categories to list for this session: `available`, with Users
+    /// only for an administrator. Users is the admin's view of the user
+    /// pool; the server refuses its calls to anyone else regardless.
+    static func listed(isAdmin: Bool) -> [SettingsCategory] {
+        available.filter { $0 != .users || isAdmin }
+    }
+
     var title: String {
         switch self {
         case .account: "Account"
@@ -103,6 +117,7 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         case .notifications: "Notifications"
         case .appearance: "Appearance"
         case .diagnostics: "Diagnostics"
+        case .users: "Users"
         case .about: "About"
         }
     }
@@ -118,6 +133,7 @@ enum SettingsCategory: CaseIterable, Identifiable, Hashable {
         case .notifications: "bell.badge"
         case .appearance: "paintbrush"
         case .diagnostics: "wrench.and.screwdriver"
+        case .users: "person.2"
         case .about: "info.circle"
         }
     }
@@ -144,6 +160,7 @@ private struct SettingsCategoryDetail: View {
             #endif
         case .appearance: AppearanceSettingsView()
         case .diagnostics: DiagnosticsSettingsView()
+        case .users: UsersView()
         case .about: AboutSettingsView()
         }
     }

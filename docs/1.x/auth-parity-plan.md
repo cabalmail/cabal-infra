@@ -48,7 +48,7 @@ for A.
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
 | C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Done 2026-10-18 (#2124, #2126) |
-| C2    | Native: first admin feature — Users (approve, disable, delete)   | Not started |
+| C2    | Native: first admin feature — Users (approve, disable, delete)   | Apple in review; Android next |
 
 Tracking issues: A #1950, B #1951, C #1952.
 
@@ -306,7 +306,7 @@ gain no interface member. `testIdToken(claimsJson)` builds test tokens.
 
 ### C2 — First admin feature: Users
 
-**Status:** Not started.
+**Status:** Apple in review; Android next, as its own PR.
 
 The webmail's Users view on native: list users (`/list_users`),
 approve (`/confirm_user`), enable/disable, delete, and per-user domain
@@ -315,3 +315,31 @@ pairs with B: someone signs up on a phone and an admin approves them
 from theirs. Shown only when `isAdmin`; a 403 from the server is
 treated as the authority. The other admin views (all-user Addresses,
 DMARC, CAA) are later work and out of scope here.
+
+As built (Apple):
+
+- **Where it lives:** a Users category in Settings (the operator's
+  choice, 2026-10-18), listed only while `SessionManager.isAdmin` is
+  true. That flag is read from the token when the session is wired,
+  before it reads as signed in. It's read again on each return to the
+  foreground and after any 403, and cleared at sign-out. Later admin
+  views become sibling categories in `CabalmailUI/Admin/`.
+- **The list:** accounts awaiting confirmation (any Cognito status but
+  `CONFIRMED`, as in the webmail), then confirmed ones. Each row pushes a
+  page with status, sign-in state, created date, mail user ID, Confirm
+  or Enable/Disable, Delete (confirmed in a dialog), and one toggle per
+  configured mail domain. Toggles are optimistic and move back if the
+  server refuses.
+- **Guards:** the admin's own account offers no Disable or Delete. The
+  server refuses self-delete, and self-disable would lock them out.
+  `master`, `dmarc` and `ci-probe`, the accounts `require_admin_mfa`
+  exempts, are hidden. The webmail hides only the first two.
+- **Errors:** a failed action shows in an alert, since the macOS Settings
+  window has no toast host. A 403 shows "Administrators only" and re-reads
+  `isAdmin`.
+- **Not included:** address assignment, which the webmail's Users view
+  also offers. It belongs with the all-user Addresses view.
+- **Replay verdicts:** `docs/request-replay.md` has the five writes.
+  `confirm_user` and `delete_user` are sent once, because a second copy
+  answers 500 for work the first did. `enable_user`, `disable_user` and
+  `set_user_domain_access` are sent again.

@@ -169,6 +169,34 @@ public protocol ApiClient: Sendable {
     /// (server-assigned ids, invalid forwards stripped) and the new version.
     func setRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet
 
+    // MARK: Administration
+    // Admin only: the server answers anyone outside the `admin` group with
+    // 403 `CabalmailError.http`, which the caller treats as the authority
+    // whatever `AuthService.isAdmin()` said (`docs/auth.md`).
+
+    /// Every user in the pool, from `/list_users`.
+    func listUsers() async throws -> [PoolUser]
+
+    /// Confirms a pending sign-up (`/confirm_user`).
+    func confirmUser(_ username: String) async throws
+
+    /// Lets a disabled user sign in again (`/enable_user`).
+    func enableUser(_ username: String) async throws
+
+    /// Stops a user signing in (`/disable_user`).
+    func disableUser(_ username: String) async throws
+
+    /// Deletes a user and their domain grants (`/delete_user`). The server
+    /// refuses the caller's own account with a 400.
+    func deleteUser(_ username: String) async throws
+
+    /// The whole domain allow list, from `/list_user_domain_access`.
+    func listUserDomainAccess() async throws -> [DomainAllowance]
+
+    /// Grants (`allowed`) or revokes a user's access to create addresses on
+    /// `domain`, via `/set_user_domain_access`.
+    func setUserDomainAccess(user: String, domain: String, allowed: Bool) async throws
+
     // MARK: Navigation cursor
     /// Loads the cross-client navigation cursor from `/get_nav_state`, or nil
     /// when none has been saved yet (the Lambda returns `{}`). See `NavState`.

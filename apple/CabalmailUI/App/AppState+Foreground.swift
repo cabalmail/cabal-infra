@@ -25,6 +25,9 @@ extension AppState {
         Task { await prefsCoordinator?.reconcile() }
         // Feeds: fresh items and the offline mutation queue.
         Task { await refreshFeedsOnForeground() }
+        // A token refreshed while away may have gained or lost the admin
+        // group, which decides whether Settings lists Users.
+        Task { await refreshAdminStatus() }
     }
 
     /// The cross-device "pick up where you left off" probe (resume-session
