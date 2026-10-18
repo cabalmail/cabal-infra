@@ -99,7 +99,7 @@ final class MailMutationServiceTests: XCTestCase {
         let world = try await ServiceWorld(FakeImapClient(), fixture: fixture)
         let writer = MailEventRecorder(world.store)
 
-        await world.mutations.setFlag(
+        _ = await world.mutations.setFlag(
             .flagged, added: true, on: [ref(3)], changing: [ref(3)], by: .list(writer, through: world.client)
         ).value
 
@@ -257,7 +257,7 @@ final class MailMutationRemovalTests: XCTestCase {
     func testAPlainMoveCarriesTheUnreadCountToTheDestination() async throws {
         let world = try await ServiceWorld(FakeImapClient(), fixture: fixture)
 
-        await world.mutations.remove(
+        _ = await world.mutations.remove(
             [ref(3)], .move(to: "Archive", markingSeen: false), unread: [ref(3)], by: world.composer
         ).value
 
@@ -282,7 +282,7 @@ final class MailMutationRemovalTests: XCTestCase {
         let whileOut = store.boundedFolderCounts(unread: 2, total: 9, folderPath: "Archive", askedAt: askedAt)
         XCTAssertEqual(whileOut.unread, 3)
         await imap.releaseHeld(.move)
-        await move.value
+        _ = await move.value
 
         XCTAssertEqual(
             store.boundedFolderCounts(unread: 2, total: 9, folderPath: "Archive", askedAt: askedAt).unread, 3,
@@ -293,7 +293,7 @@ final class MailMutationRemovalTests: XCTestCase {
             "asked after: the reply stands"
         )
         store.counts.setFolderCounts(folderPath: "Projects", unread: 4, total: 10)
-        await world.mutations.remove(
+        _ = await world.mutations.remove(
             [ref(2)], .move(to: "Projects", markingSeen: true), unread: [ref(2)], by: world.composer
         ).value
         XCTAssertEqual(
@@ -320,8 +320,8 @@ final class MailMutationRemovalTests: XCTestCase {
         XCTAssertNil(world.unread("Projects"), "no count invented for the destination")
         XCTAssertEqual(world.unread("INBOX"), 4, "the counted source still moves")
         await imap.releaseHeld(.move)
-        await move.value
-        await world.mutations.setFlag(
+        _ = await move.value
+        _ = await world.mutations.setFlag(
             .seen, added: true, on: [ref(7, in: "Lists")], changing: [ref(7, in: "Lists")], by: world.composer
         ).value
 
@@ -383,7 +383,7 @@ final class MailMutationRemovalTests: XCTestCase {
         await imap.scriptMoveResults([.failure(CabalmailError.bulkPartialFailure(succeeded: [3], failed: [2]))])
         let world = try await ServiceWorld(imap, fixture: fixture)
 
-        await world.mutations.remove(
+        _ = await world.mutations.remove(
             [ref(3), ref(2)], .move(to: "Archive", markingSeen: false), unread: [ref(3), ref(2)], by: world.composer
         ).value
 
@@ -400,7 +400,7 @@ final class MailMutationRemovalTests: XCTestCase {
         let purged = ref(3, in: trash)
         let kept = ref(2, in: trash)
 
-        await world.mutations.remove([purged], .purge, unread: [purged], by: world.composer).value
+        _ = await world.mutations.remove([purged], .purge, unread: [purged], by: world.composer).value
         XCTAssertEqual(world.unread(trash), 1)
         await imap.holdNext(.purge)
         let refusedPurge = world.mutations.remove([kept], .purge, unread: [kept], by: world.composer)
@@ -440,7 +440,7 @@ final class MailMutationRemovalTests: XCTestCase {
             folder: "INBOX", uidValidity: fixture.uidValidity, uid: 3, bytes: Data("x".utf8)
         )
 
-        await world.mutations.remove(
+        _ = await world.mutations.remove(
             [ref(3)], .move(to: "Archive", markingSeen: false), unread: [], by: world.composer
         ).value
 

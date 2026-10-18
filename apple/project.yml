@@ -702,6 +702,12 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMacTests
         GENERATE_INFOPLIST_FILE: YES
+        # The three warning groups this bundle is clean of (#1842). It still
+        # carries ~200 actor-isolation and `sending` warnings, so blanket
+        # SWIFT_TREAT_WARNINGS_AS_ERRORS cannot go on yet; promoting the
+        # groups that are already clean is what stops them coming back while
+        # the rest is worked through. Add a group here as it reaches zero.
+        OTHER_SWIFT_FLAGS: "-Werror NoUsage -Werror WeakMutability -Werror UnnecessaryEffectMarker"
         # XcodeGen derives TEST_HOST from the host target's NAME, but
         # CabalmailMac overrides PRODUCT_NAME to "Cabalmail" (the bundle
         # ships as Cabalmail.app), so spell the path out.

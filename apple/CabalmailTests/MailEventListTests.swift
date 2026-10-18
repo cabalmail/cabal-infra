@@ -211,7 +211,7 @@ final class MailEventListTests: XCTestCase {
         var list: MessageListViewModel? = try TestFixtures.makeModel(
             imap: FakeImapClient(), envelopes: [TestFixtures.makeEnvelope(uid: 1)], mailStore: appState.mailStore
         )
-        weak var gone = list
+        weak let gone = list
 
         list = nil
         appState.mailStore.events.post(.removed([ref(1)]), from: nil)

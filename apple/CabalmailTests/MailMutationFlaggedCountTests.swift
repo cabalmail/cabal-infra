@@ -34,7 +34,9 @@ final class MailMutationFlaggedCountTests: XCTestCase {
         let world = try await ServiceWorld(imap, fixture: fixture)
         world.store.counts.setFlaggedCount(folderPath: "INBOX", count: 2)
 
-        await world.mutations.setFlag(.flagged, added: true, on: [ref(3)], changing: [ref(3)], by: world.composer).value
+        _ = await world.mutations.setFlag(
+            .flagged, added: true, on: [ref(3)], changing: [ref(3)], by: world.composer
+        ).value
         XCTAssertEqual(flagged(world, "INBOX"), 3)
         await imap.holdNext(.setFlags)
         let unflag = world.mutations.setFlag(
@@ -43,7 +45,7 @@ final class MailMutationFlaggedCountTests: XCTestCase {
         await imap.awaitHeld(.setFlags)
         XCTAssertEqual(flagged(world, "INBOX"), 2, "moved before the server answers")
         await imap.releaseHeld(.setFlags)
-        await unflag.value
+        _ = await unflag.value
 
         XCTAssertEqual(flagged(world, "INBOX"), 3, "and back on the refusal")
         XCTAssertEqual(world.unread("INBOX"), 5, "a flag moves no unread count")
@@ -62,7 +64,7 @@ final class MailMutationFlaggedCountTests: XCTestCase {
         world.store.counts.setFlaggedCount(folderPath: "INBOX", count: 4)
 
         await imap.releaseHeld(.setFlags)
-        await flag.value
+        _ = await flag.value
 
         XCTAssertEqual(flagged(world, "INBOX"), 4)
     }
@@ -78,13 +80,13 @@ final class MailMutationFlaggedCountTests: XCTestCase {
         let flag = world.mutations.setFlag(.flagged, added: true, on: [ref(3)], changing: [ref(3)], by: world.composer)
         await imap.awaitHeld(.setFlags)
         XCTAssertEqual(flagged(world, "INBOX"), 5, "precondition")
-        await world.mutations.remove(
+        _ = await world.mutations.remove(
             [ref(3)], .move(to: "Archive", markingSeen: true), unread: [], flagged: [ref(3)], by: world.composer
         ).value
         XCTAssertEqual(flagged(world, "INBOX"), 4, "precondition: it left, flagged")
 
         await imap.releaseHeld(.setFlags)
-        await flag.value
+        _ = await flag.value
 
         XCTAssertEqual(flagged(world, "INBOX"), 4, "the moved message's count isn't given back a second time")
     }
@@ -92,8 +94,10 @@ final class MailMutationFlaggedCountTests: XCTestCase {
     func testAFolderWithNoFlaggedCountGetsNone() async throws {
         let world = try await ServiceWorld(FakeImapClient(), fixture: fixture)
 
-        await world.mutations.setFlag(.flagged, added: true, on: [ref(3)], changing: [ref(3)], by: world.composer).value
-        await world.mutations.remove(
+        _ = await world.mutations.setFlag(
+            .flagged, added: true, on: [ref(3)], changing: [ref(3)], by: world.composer
+        ).value
+        _ = await world.mutations.remove(
             [ref(2)], .move(to: "Archive", markingSeen: false), unread: [], flagged: [ref(2)], by: world.composer
         ).value
 
@@ -121,7 +125,7 @@ final class MailMutationFlaggedCountTests: XCTestCase {
             await imap.awaitHeld(.move)
             XCTAssertEqual(flagged(world, "INBOX"), 2, "\(String(describing: failure))")
             await imap.releaseHeld(.move)
-            await removal.value
+            _ = await removal.value
 
             XCTAssertEqual(flagged(world, "INBOX"), expected, "\(String(describing: failure))")
             XCTAssertEqual(flagged(world, "Archive"), 1, "the destination waits for its STATUS")
@@ -142,7 +146,7 @@ final class MailMutationFlaggedCountTests: XCTestCase {
         world.store.counts.setFlaggedCount(folderPath: "INBOX", count: 9)
 
         await imap.releaseHeld(.purge)
-        await removal.value
+        _ = await removal.value
 
         XCTAssertEqual(flagged(world, "INBOX"), 9)
     }
