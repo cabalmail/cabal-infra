@@ -133,8 +133,10 @@ request had been replayed and read that error as "the first copy landed".
 Nothing tells it today. The other Once rows (`/empty_trash`,
 `/rss_subscribe`, `/rss_unsubscribe`, `/rss_new_folder`,
 `/rss_opml_import`) are not candidates: their second copy can do work of its
-own. A late `/rss_unsubscribe` copy clears the caller's read state for the
-feed before it answers 404, which matters after a re-subscribe to that feed.
+own. Of two overlapping `/rss_unsubscribe` copies, the one that answers 404
+has already cleared the caller's read state for the feed, which matters if
+the feed was re-subscribed in between; a copy that arrives after the first
+has finished changes nothing.
 
 ## Reads
 
