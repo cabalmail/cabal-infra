@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { StrictMode } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import App from './App';
@@ -346,6 +347,29 @@ describe('session lifetime', () => {
     await renderSignedOut();
     expect(Object.keys(window.localStorage).filter((k) => k.startsWith('CognitoIdentityServiceProvider.'))).toEqual([]);
     expect(window.localStorage.getItem('theme')).toBe('dark');
+  });
+});
+
+describe('React.StrictMode', () => {
+  // A development build (and `npm run start`) runs every effect twice on
+  // mount. The bootstrap must still build one session and send one refresh:
+  // two sessions would each refresh, and only one of them is the one the
+  // handlers and sign-out reach.
+  it('bootstraps once: one /config.js fetch, one session, one refresh', async () => {
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ username: 'alice', refreshToken: 'refresh-1' }));
+    cognito({ InitiateAuth: [auth(ADMIN_ID, { refreshToken: null })], GetUser: [user()] });
+    const configFetches = () => axios.get.mock.calls.filter(([url]) => url === '/config.js').length;
+    const before = configFetches();
+    render(<StrictMode><App /></StrictMode>);
+
+    await screen.findByTestId('email-view');
+    expect(sentTo('InitiateAuth')).toHaveLength(1);
+    expect(configFetches() - before).toBe(1);
+
+    // The session the app renders is the one sign-out clears.
+    fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    await screen.findByRole('button', { name: 'Sign in' });
+    expect(window.sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   });
 });
 

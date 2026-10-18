@@ -6,7 +6,8 @@
   `global` shim and the `js-cookie` override it needed. Sign-in uses
   `USER_PASSWORD_AUTH` instead of SRP. A session survives a reload but
   not a new tab: only the refresh token is kept, in sessionStorage, and
-  the library's tokens are deleted from localStorage on load, so
+  a reload restores it with a single refresh, even in a development
+  build. The library's tokens are deleted from localStorage on load, so
   everyone signs in once more after the upgrade. A token near expiry is
   refreshed instead of signing the user out after 12 hours. An expired
   MFA challenge now says so and restarts the sign-in, and sign-in no

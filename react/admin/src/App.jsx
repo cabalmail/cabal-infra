@@ -306,7 +306,16 @@ function App() {
   // If the /config.js fetch fails on a first visit (no localStorage),
   // configError gates a blocking error screen below; without it the Login
   // form would render with no Cognito client to submit to.
+  //
+  // Once per app: a development build (React.StrictMode) runs mount
+  // effects twice, and a second pass here would build a second session
+  // that refreshes on its own, leaving two token holders of which only
+  // one is the one handlers and sign-out reach. Refs survive StrictMode's
+  // simulated remount, so the guard holds.
+  const bootstrappedRef = useRef(false);
   useEffect(() => {
+    if (bootstrappedRef.current) return;
+    bootstrappedRef.current = true;
     // The tokens amazon-cognito-identity-js left in localStorage; nothing
     // reads them now, and D2 keeps no token there.
     purgeLibraryStorage();
