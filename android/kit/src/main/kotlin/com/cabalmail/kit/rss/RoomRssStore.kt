@@ -318,6 +318,28 @@ interface RssDao {
     @Query("SELECT * FROM rss_feed_sync WHERE feed_id = :feedId")
     suspend fun syncState(feedId: String): RssFeedSyncRow?
 
+    /** Rows touched, so the caller can insert the row when there is none. */
+    @Query(
+        "UPDATE rss_feed_sync SET since_cursor = :sinceCursor, state_cursor = :stateCursor, " +
+            "last_synced_at = :lastSyncedAt WHERE feed_id = :feedId",
+    )
+    suspend fun updateSyncCursors(
+        feedId: String,
+        sinceCursor: String,
+        stateCursor: String,
+        lastSyncedAt: String,
+    ): Int
+
+    @Query(
+        "UPDATE rss_feed_sync SET older_cursor = :olderCursor, older_exhausted = :olderExhausted " +
+            "WHERE feed_id = :feedId",
+    )
+    suspend fun updateOlderCursor(
+        feedId: String,
+        olderCursor: String,
+        olderExhausted: Boolean,
+    ): Int
+
     @Query("DELETE FROM rss_feed_sync WHERE feed_id = :feedId")
     suspend fun deleteSyncState(feedId: String)
 
@@ -694,6 +716,36 @@ class RoomRssStore(
             stateCursor = state.stateCursor,
         ),
     )
+
+    // The column-scoped writes are an UPDATE rather than an upsert, so that
+    // a sync and a load-older in flight together touch disjoint columns
+    // (#1955). A feed with no row yet has nothing to update, so the insert
+    // falls back to the full-row upsert with this half's values.
+    override suspend fun setSyncCursors(
+        feedId: String,
+        sinceCursor: String,
+        stateCursor: String,
+        lastSyncedAt: String,
+    ) {
+        val updated = dao.updateSyncCursors(feedId, sinceCursor, stateCursor, lastSyncedAt)
+        if (updated == 0) {
+            setSyncState(
+                feedId,
+                FeedSyncState(sinceCursor = sinceCursor, stateCursor = stateCursor, lastSyncedAt = lastSyncedAt),
+            )
+        }
+    }
+
+    override suspend fun setOlderCursor(
+        feedId: String,
+        olderCursor: String,
+        olderExhausted: Boolean,
+    ) {
+        val updated = dao.updateOlderCursor(feedId, olderCursor, olderExhausted)
+        if (updated == 0) {
+            setSyncState(feedId, FeedSyncState(olderCursor = olderCursor, olderExhausted = olderExhausted))
+        }
+    }
 
     // ------------------------------------------------------------ mapping
 

@@ -126,14 +126,14 @@ class FeedsViewModel(
                 val diff = engine.refreshCatalog()
                 load()
                 if (diff.removedDataStoreUuids.isNotEmpty()) onDroppedProfiles(diff.removedDataStoreUuids)
-                val failures = engine.syncAll()
+                val report = engine.syncAll()
                 load()
-                val subs = mutableState.value.subscriptions
-                // One line when every feed failed (offline, say); a single
-                // feed's trouble shows on its own row as health, not here.
-                val first = failures.values.firstOrNull()
-                if (first != null && subs.isNotEmpty() && failures.size == subs.size) {
-                    mutableState.update { it.copy(error = feedUserMessage(first, "Could not refresh feeds")) }
+                // One line when the catalog failed or every feed failed
+                // (offline, say); a single feed's trouble shows on its own
+                // row as health, and a failed queue push is neither (#1954).
+                val blocking = report.catalogFailure ?: report.firstFeedFailure.takeIf { report.everyFeedFailed }
+                if (blocking != null) {
+                    mutableState.update { it.copy(error = feedUserMessage(blocking, "Could not refresh feeds")) }
                 }
                 events.post(FeedEvent.Changed)
             } catch (exception: Exception) {

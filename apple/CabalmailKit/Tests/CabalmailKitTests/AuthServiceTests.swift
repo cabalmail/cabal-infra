@@ -138,6 +138,48 @@ final class AuthServiceTests: XCTestCase {
         }
     }
 
+    /// A 2xx Cognito body that isn't JSON at all comes out as the Kit's own
+    /// error, not Foundation's `NSCocoaErrorDomain` 3840 (#1902).
+    func testUnreadable2xxBodyMapsToDecoding() async throws {
+        for body in [Data(), Data("<html>sign in to this network</html>".utf8)] {
+            let http = RecordingHTTPTransport(responses: [(body, 200)])
+            let service = CognitoAuthService(
+                configuration: makeConfiguration(),
+                transport: http,
+                secureStore: InMemorySecureStore()
+            )
+            do {
+                _ = try await service.signIn(username: "alice", password: "hunter2")
+                XCTFail("Expected the unreadable reply to throw")
+            } catch let error as CabalmailError {
+                XCTAssertEqual(error, .decoding("InitiateAuth returned an unexpected reply"))
+            } catch {
+                XCTFail("Expected a CabalmailError, got \(error)")
+            }
+        }
+    }
+
+    /// The detail names the call and nothing else: Cognito's replies carry
+    /// tokens, so the body never rides along in the error.
+    func testUnreadable2xxErrorDoesNotQuoteTheBody() async throws {
+        let http = RecordingHTTPTransport(responses: [(Data("SECRET-TOKEN-MATERIAL".utf8), 200)])
+        let service = CognitoAuthService(
+            configuration: makeConfiguration(),
+            transport: http,
+            secureStore: InMemorySecureStore()
+        )
+        do {
+            _ = try await service.signIn(username: "alice", password: "hunter2")
+            XCTFail("Expected the unreadable reply to throw")
+        } catch let error as CabalmailError {
+            guard case .decoding(let detail) = error else {
+                return XCTFail("unexpected error \(error)")
+            }
+            XCTAssertFalse(detail.contains("SECRET-TOKEN-MATERIAL"))
+            XCTAssertTrue(error.localizedDescription.contains("Couldn't read the server's reply"))
+        }
+    }
+
     func testLambdaTriggerRejectionStripsWrapperAndDoubledPeriod() async throws {
         let errorType = "com.amazonaws.cognito.identity.model#UserLambdaValidationException"
         let wrapped = "PreTokenGeneration failed with error This account requires "

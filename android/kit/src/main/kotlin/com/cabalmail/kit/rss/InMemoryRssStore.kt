@@ -359,4 +359,24 @@ class InMemoryRssStore(
         feedId: String,
         state: FeedSyncState,
     ) = mutex.withLock { syncStates[feedId] = state }
+
+    override suspend fun setSyncCursors(
+        feedId: String,
+        sinceCursor: String,
+        stateCursor: String,
+        lastSyncedAt: String,
+    ) = mutex.withLock {
+        val current = syncStates[feedId] ?: FeedSyncState()
+        syncStates[feedId] =
+            current.copy(sinceCursor = sinceCursor, stateCursor = stateCursor, lastSyncedAt = lastSyncedAt)
+    }
+
+    override suspend fun setOlderCursor(
+        feedId: String,
+        olderCursor: String,
+        olderExhausted: Boolean,
+    ) = mutex.withLock {
+        val current = syncStates[feedId] ?: FeedSyncState()
+        syncStates[feedId] = current.copy(olderCursor = olderCursor, olderExhausted = olderExhausted)
+    }
 }

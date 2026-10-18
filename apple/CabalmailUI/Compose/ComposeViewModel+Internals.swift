@@ -269,7 +269,7 @@ extension ComposeViewModel {
             onClose()
             return true
         } catch let error as CabalmailError {
-            errorMessage = "Couldn't save draft: \(describe(error))"
+            errorMessage = ComposeErrorText.draftSaveFailure(error)
         } catch {
             errorMessage = "Couldn't save draft: \(error.localizedDescription)"
         }
@@ -413,15 +413,5 @@ extension ComposeViewModel {
             replacedServerDraftUIDs.append(previous)
         }
         serverDraftRef = ref
-    }
-
-    func describe(_ error: CabalmailError) -> String {
-        switch error {
-        case .invalidCredentials: return "Send failed: your credentials were rejected."
-        case .network(let detail): return "Network error: \(detail)"
-        case .authExpired: return "Your session expired; please sign in again."
-        case .maintenance(let message): return message
-        default: return "Send failed: \(error.localizedDescription)"
-        }
     }
 }

@@ -9,6 +9,7 @@ from address_events import notify_containers  # pylint: disable=import-error
 from admin_limits import ( # pylint: disable=import-error
     admin_response_or_none,
     audit_log,
+    cognito_user_exists,
     rate_limit_response_or_none,
 )
 from helper import new_address_response_or_none  # pylint: disable=import-error
@@ -23,7 +24,6 @@ user_pool_id = os.environ['USER_POOL_ID']
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-addresses')
-cognito = boto3.client('cognito-idp')
 
 
 def handler(event, _context):
@@ -60,7 +60,7 @@ def handler(event, _context):
     address = f"{body['username']}@{body['subdomain']}.{body['tld']}"
     try:
         for username in usernames:
-            if not cognito_user_exists(username):
+            if not cognito_user_exists(user_pool_id, username):
                 return {
                     'statusCode': 400,
                     'body': json.dumps({'Error': f'User "{username}" does not exist'})
@@ -120,15 +120,6 @@ def exists_response(address):
             'message': sentence
         })
     }
-
-
-def cognito_user_exists(username):
-    '''Returns True if the username exists in the Cognito user pool'''
-    try:
-        cognito.admin_get_user(UserPoolId=user_pool_id, Username=username)
-        return True
-    except cognito.exceptions.UserNotFoundException:
-        return False
 
 
 def record_address(usernames, body, address):

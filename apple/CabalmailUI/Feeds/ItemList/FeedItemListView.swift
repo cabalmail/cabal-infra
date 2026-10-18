@@ -146,10 +146,13 @@ struct FeedItemListView: View {
         Button {
             appState.compose.open(seed: ReplyBuilder.newDraft(), from: commandWindowID)
         } label: {
-            Image(systemName: "square.and.pencil")
-                .accessibilityLabel("New Message")
+            // Titled for the same reason the mail list's Compose is: this
+            // bar is the feed twin of the one an image-only button vanished
+            // from when it folded into the overflow (#1787).
+            Label("New Message", systemImage: "square.and.pencil")
         }
         .keyboardShortcut("n", modifiers: .command)
+        .accessibilityIdentifier("feeds.compose")
     }
 
     private func refreshButton(_ model: FeedItemListViewModel) -> some View {

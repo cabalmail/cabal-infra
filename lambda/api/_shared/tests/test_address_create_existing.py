@@ -348,7 +348,7 @@ class _AdminCase(_Case):
             'notify_containers': lambda: self.notified.append(True),
             'user_authorized_for_domain': lambda *_a: True,
             'publish_address_dns_records': lambda *a: self.published.append(a),
-            'cognito_user_exists': lambda _u: True,
+            'cognito_user_exists': lambda *_a: True,
             'admin_response_or_none': lambda _e: None,
             'rate_limit_response_or_none': lambda *_a: None,
             'audit_log': lambda *a: self.audits.append(a[3]),

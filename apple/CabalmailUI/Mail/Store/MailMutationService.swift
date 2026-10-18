@@ -350,11 +350,22 @@ final class MailMutationService {
     /// re-render read. The snapshot is rewritten rather than dropped:
     /// dropped, a folder not on screen had no saved list until it was next
     /// opened online, so offline it showed no messages (#1850). Returns how
-    /// many messages the server flipped; throws the server's error for the
-    /// caller to show.
+    /// many messages the server flipped, or nil when the reply didn't say;
+    /// throws the server's error for the caller to show.
     @discardableResult
-    func markFolderRead(_ folderPath: String, through client: CabalmailClient) async throws -> Int {
-        let flipped = try await client.imapClient.markFolderRead(folder: folderPath)
+    func markFolderRead(_ folderPath: String, through client: CabalmailClient) async throws -> Int? {
+        let flipped: Int?
+        do {
+            flipped = try await client.imapClient.markFolderRead(folder: folderPath)
+        } catch CabalmailError.decoding {
+            // The Lambda flips the flags before it answers, so a 200 whose
+            // body won't decode is a write that landed with only its count
+            // lost (#1903). Throwing here used to skip every after-effect,
+            // leaving the folder's rows and badge unread although the server
+            // had marked them read. The count is the only casualty, and it
+            // goes no further than this return value.
+            flipped = nil
+        }
         try? await client.envelopeCache.markAllSeen(folder: folderPath)
         guard acceptsAnswer(from: client) else { return flipped }
         if let total = counts.folderTotalCounts[folderPath] {

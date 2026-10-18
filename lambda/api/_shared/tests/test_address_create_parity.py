@@ -201,7 +201,7 @@ class _CreateCase(unittest.TestCase):
                 'table': self.admin_table,
                 'notify_containers': lambda: None,
                 'user_authorized_for_domain': lambda *_a: True,
-                'cognito_user_exists': lambda _u: True,
+                'cognito_user_exists': lambda *_a: True,
                 'admin_response_or_none': lambda _e: None,
                 'rate_limit_response_or_none': lambda *_a: None,
                 'audit_log': lambda *_a: None,

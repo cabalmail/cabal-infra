@@ -47,6 +47,7 @@ public actor EnvelopeCache {
         self.directory = directory
         self.fileManager = fileManager
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        Self.removeLegacySnapshots(in: directory, using: fileManager)
     }
 
     deinit {
@@ -250,12 +251,28 @@ public actor EnvelopeCache {
         if !envelopes.isEmpty { emit(.upserted(envelopes: envelopes, folder: folder)) }
     }
 
+    private static let fileSuffix = ".envelopes.json"
+
     private func fileURL(for folder: String) -> URL {
-        // Path-separator characters would nest into real subdirectories on
-        // disk — collapse them into a single hash-safe filename.
-        let safe = folder
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ".", with: "_")
-        return directory.appendingPathComponent("\(safe).envelopes.json")
+        // One path component per folder, and a different one for every
+        // distinct folder: the old collapse of `/` and `.` into `_` gave
+        // `a/b` and `a_b` the same file (#1871, `FolderCacheName`).
+        directory.appendingPathComponent(
+            FolderCacheName.component(for: folder) + Self.fileSuffix
+        )
+    }
+
+    /// Drops snapshots written under the pre-#1871 names, once, at open.
+    ///
+    /// They cannot be renamed: the old name does not say which folder wrote
+    /// it, which is the defect. A snapshot is rebuilt from the server on the
+    /// next online visit, so dropping is the whole migration.
+    private static func removeLegacySnapshots(in directory: URL, using fileManager: FileManager) {
+        let names = (try? fileManager.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names where name.hasSuffix(fileSuffix) {
+            let base = String(name.dropLast(fileSuffix.count))
+            guard !FolderCacheName.isCurrent(base: base) else { continue }
+            try? fileManager.removeItem(at: directory.appendingPathComponent(name))
+        }
     }
 }

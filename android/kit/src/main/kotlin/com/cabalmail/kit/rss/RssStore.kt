@@ -150,6 +150,26 @@ interface RssStore {
         feedId: String,
         state: FeedSyncState,
     )
+
+    /**
+     * The half of the row a sync owns. A "Load older items" can run while a
+     * sync is in flight, and each used to write the whole row back from
+     * what it read when it started, so whichever finished second put the
+     * other's cursor back (#1955). Each writes only its own fields now.
+     */
+    suspend fun setSyncCursors(
+        feedId: String,
+        sinceCursor: String,
+        stateCursor: String,
+        lastSyncedAt: String,
+    )
+
+    /** The half a load-older owns, and the sync's own first page. */
+    suspend fun setOlderCursor(
+        feedId: String,
+        olderCursor: String,
+        olderExhausted: Boolean,
+    )
 }
 
 /**
