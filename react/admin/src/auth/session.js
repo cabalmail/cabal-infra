@@ -32,6 +32,22 @@ function defaultStorage() {
 }
 
 /**
+ * Whether a reload left a session to restore, read synchronously so the
+ * first render can wait for the restore instead of showing the sign-in
+ * form.
+ *
+ * @param {Storage|null} [storage] - defaults to sessionStorage.
+ * @returns {boolean}
+ */
+export function hasStoredSession(storage = defaultStorage()) {
+  try {
+    return !!(storage && storage.getItem(SESSION_STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Cognito refused the refresh outright: the token expired, was revoked,
  * or the user was disabled or deleted, or a pool trigger refused to issue
  * tokens. Throttling and server errors are not refusals; the session is

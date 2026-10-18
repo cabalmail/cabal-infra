@@ -3,7 +3,7 @@ import UsernameField from '../Login/UsernameField';
 
 /**
  * Forgot-password screen per §3: single username field submits a Cognito
- * `forgotPassword` request. On success (controlled by `submitted` prop),
+ * `ForgotPassword` request. On success (controlled by `submitted` prop),
  * swap the form for a check-mark success state with "Back to sign in" and
  * "Enter reset code" actions. Flow continues in ResetPassword/.
  */
@@ -14,8 +14,8 @@ function ForgotPassword({
   onBackToSignIn,
   submitted,
   onProceed,
-  // Where Cognito actually sent the reset code, from the forgotPassword
-  // callback's CodeDeliveryDetails. Recovery is email-first now (identity
+  // Where Cognito actually sent the reset code, from the ForgotPassword
+  // reply's CodeDeliveryDetails. Recovery is email-first now (identity
   // plan Phase 1): users with a verified email get the code there; others
   // fall through to SMS.
   deliveryMedium = null,

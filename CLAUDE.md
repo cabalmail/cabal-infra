@@ -223,9 +223,9 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 ### React App (`react/admin/`)
 
 - **React 18** with function components and hooks (only `ErrorBoundary` remains class-based), Vite build tooling, Vitest for tests
-- **Auth**: Amazon Cognito (`amazon-cognito-identity-js`) — signup, login, JWT token management
+- **Auth**: Amazon Cognito over its JSON API, through the first-party module in `src/auth/` (no AWS SDK) — signup, `USER_PASSWORD_AUTH` sign-in with TOTP/SMS challenges, refresh, the recovery-email and TOTP-setup calls. The auth contract every client follows is in `docs/1.x/auth-parity-plan.md`
 - **API**: Axios-based `ApiClient` class, all calls include Cognito JWT in Authorization header
-- **State**: Component-level state with `localStorage` persistence (no Redux for app state). Auth tokens are the deliberate exception: they live in a module-level variable in `App.jsx` and must never be written to `localStorage`
+- **State**: Component-level state with `localStorage` persistence (no Redux for app state). Auth tokens are the deliberate exception: the session holder (`src/auth/session.js`) keeps the ID and access tokens in memory and only the refresh token and username in `sessionStorage`, so a reload stays signed in and a new tab signs in again. No token is ever written to `localStorage`; on load the app deletes the keys `amazon-cognito-identity-js` used to leave there
 - **Contexts**: `AuthContext` (token/api_url/host/domains), `AppMessageContext` (toast notifications)
 - **Email**: Rich text compose with TipTap (`@tiptap/react`). Received HTML is rendered in a sandboxed iframe with no `allow-scripts` (see `Email/ReaderBody.jsx`), which is what neutralizes scripts — there is no library HTML sanitizer. Do not add `allow-scripts` to that sandbox
 - **Key views**: Email (inbox/folders/compose), Addresses (list/request/revoke), Folders (manage), Login/SignUp

@@ -3,12 +3,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react';
 import axios from 'axios';
 import ApiClient from './ApiClient';
-import {
-  CognitoUser,
-  CognitoUserPool,
-  CognitoUserAttribute,
-  AuthenticationDetails
-} from 'amazon-cognito-identity-js';
 
 // Lazy-loaded view components
 const Email = React.lazy(() => import('./Email'));
@@ -60,14 +54,22 @@ import { DATE, DESC } from './constants';
 import { clearListCaches } from './utils/listCache';
 import { viewWhenLoggedOut } from './authViews';
 import { signUpErrorMessage } from './SignUp/signUpError';
+import {
+  clientsFromConfig,
+  createSession,
+  hasStoredSession,
+  purgeLibraryStorage,
+  decodeJwtPayload,
+  isMfaEnrollmentRequired,
+  isNotAuthorized,
+  isLimitExceeded,
+} from './auth';
 import './App.css';
 
-// Module-level token storage (never persisted to localStorage)
-let _token = null;
-let _expires = Math.floor(Date.now() / 1000) - 1;
-
-// Globals
-let UserPool = null;
+// How often a signed-in app checks its tokens. The session holder
+// refreshes them five minutes before they expire, so an idle tab keeps a
+// usable token without waiting for a focus or a render.
+const SESSION_CHECK_MS = 60 * 1000;
 
 function loadSavedState() {
   const defaults = {
@@ -90,7 +92,18 @@ function loadSavedState() {
     monitoring: false,
   };
   const saved = JSON.parse(window.localStorage.getItem('state'));
-  return saved ? { ...defaults, ...saved, password: null, inviteCode: null } : defaults;
+  if (!saved) return defaults;
+  // Whether anyone is signed in is the session's to say (src/auth): a
+  // reload restores it from sessionStorage, and a new tab starts signed
+  // out whatever the last tab left in this bag.
+  return {
+    ...defaults,
+    ...saved,
+    password: null,
+    inviteCode: null,
+    loggedIn: false,
+    view: viewWhenLoggedOut(saved.view || defaults.view, false),
+  };
 }
 
 function persistState(state) {
@@ -108,21 +121,33 @@ function persistState(state) {
  */
 function App() {
   const [state, setAppState] = useState(loadSavedState);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [message, setMessageText] = useState(null);
   const [error, setError] = useState(false);
   const [hideMessage, setHideMessage] = useState(true);
   const [configError, setConfigError] = useState(false);
   const hideTimerRef = useRef(null);
 
+  // Cognito clients and the session holder (src/auth), built once
+  // /config.js names the pool. The session keeps the ID and access tokens
+  // in memory and only the refresh token in sessionStorage (auth parity
+  // plan, D2). Handlers read the ref; rendering reads sessionSnap, which
+  // the session updates on every sign-in, refresh and sign-out.
+  const authRef = useRef(null);
+  const [sessionSnap, setSessionSnap] = useState(null);
+  const token = sessionSnap ? sessionSnap.idToken : null;
+  const isAdmin = !!(sessionSnap && sessionSnap.isAdmin);
+  // True from the first render while a reload's stored session is being
+  // refreshed, so a placeholder shows instead of the sign-in form.
+  const [restoring, setRestoring] = useState(hasStoredSession);
+
   // ApiClient for preference hydration. Only usable once login has populated
-  // `api_url` and the module-level `_token`. Re-created when those inputs
-  // change so useTheme picks up the fresh token.
+  // `api_url` and the session has a token. Re-created when those inputs
+  // change so useTheme picks up a refreshed token.
   const prefsApi = useMemo(() => (
-    state.loggedIn && state.api_url && _token
-      ? new ApiClient(state.api_url, _token, state.imap_host)
+    state.loggedIn && state.api_url && token
+      ? new ApiClient(state.api_url, token, state.imap_host)
       : null
-  ), [state.loggedIn, state.api_url, state.imap_host]);
+  ), [state.loggedIn, state.api_url, state.imap_host, token]);
   const prefs = useTheme(prefsApi);
   // Display name used by the /send Lambda as the From header's display name.
   const displayNamePref = useDisplayName(prefsApi);
@@ -163,16 +188,15 @@ function App() {
   const [signupDelivery, setSignupDelivery] = useState(null);
   // Where the password-reset code went ('email' | 'phone'), same source.
   const [forgotDelivery, setForgotDelivery] = useState(null);
-  // Pending second-factor login: the CognitoUser mid-challenge (kept in a
-  // ref - it is a stateful SDK object, not render state) and which
-  // challenge Cognito issued ('totp' | 'sms').
-  const pendingMfaUserRef = useRef(null);
+  // Pending second-factor login: the challenge Cognito issued (its
+  // Session and the user it resolved; memory-only, so a reload restarts
+  // the sign-in) and which kind it is ('totp' | 'sms').
+  const pendingMfaRef = useRef(null);
   const [mfaChallengeType, setMfaChallengeType] = useState('totp');
-  // Locked-out TOTP setup (#768): the CognitoUser authenticated through
-  // the enrollment app client (a stateful SDK object, so a ref) and the
-  // pending TOTP secret. The secret deliberately lives outside the
-  // persisted state bag so it never reaches localStorage.
-  const mfaSetupUserRef = useRef(null);
+  // Locked-out TOTP setup (#768): the access token from signing in
+  // through the enrollment app client, and the pending TOTP secret. Both
+  // live outside the persisted state bag so neither reaches localStorage.
+  const mfaSetupRef = useRef(null);
   const [mfaSetupSecret, setMfaSetupSecret] = useState(null);
   const [mfaSetupBusy, setMfaSetupBusy] = useState(false);
   // Post-login email gate: null when passed/skipped, else
@@ -208,10 +232,16 @@ function App() {
     });
   }, []);
 
+  // With a session, make sure its tokens are good: idToken() refreshes
+  // them when they are within five minutes of expiring. A refresh that
+  // fails for want of a network is retried at the next check; one Cognito
+  // refuses ends the session, and the next check, finding none, falls
+  // through to sign the app out.
   const checkSession = useCallback(() => {
-    if (_expires >= Math.floor(Date.now() / 1000)) return;
-    if (_token !== null) {
-      _token = null;
+    const auth = authRef.current;
+    if (auth && auth.session.current()) {
+      auth.session.idToken().catch(() => {});
+      return;
     }
     setAppState(prev => {
       const updates = {};
@@ -275,9 +305,11 @@ function App() {
   //
   // If the /config.js fetch fails on a first visit (no localStorage),
   // configError gates a blocking error screen below; without it the Login
-  // form would render with a null UserPool and silently swallow submits.
-  // Returning visits keep working from the loadSavedState snapshot.
+  // form would render with no Cognito client to submit to.
   useEffect(() => {
+    // The tokens amazon-cognito-identity-js left in localStorage; nothing
+    // reads them now, and D2 keeps no token there.
+    purgeLibraryStorage();
     axios.get('/config.js').then(({ data }) => {
       const {
         control_domain,
@@ -287,7 +319,11 @@ function App() {
         sms_enabled,
         monitoring,
       } = data;
-      UserPool = new CognitoUserPool(cognitoConfig.poolData);
+      const clients = clientsFromConfig(cognitoConfig);
+      const session = createSession({ client: clients.client });
+      // Subscribed before anything can sign in, and for the app's life.
+      session.subscribe(setSessionSnap);
+      authRef.current = { ...clients, session };
       setState({
         poolData: cognitoConfig.poolData,
         // Absent from a pre-#768 /config.js; the locked-out MFA setup
@@ -306,21 +342,28 @@ function App() {
         sms_enabled: sms_enabled !== false,
         monitoring: monitoring === true
       });
-      const cognitoUser = UserPool.getCurrentUser();
-      if (cognitoUser) {
-        cognitoUser.getSession((err, session) => {
-          if (err || !session || !session.isValid()) return;
-          _token = session.getIdToken().getJwtToken();
-          _expires = session.getIdToken().getExpiration();
-          const payload = JSON.parse(atob(_token.split('.')[1]));
-          const groups = payload['cognito:groups'] || [];
-          setIsAdmin(groups.includes('admin'));
-          setState({ loggedIn: true, view: "Email" });
-        });
-      }
+      if (!restoring) return;
+      // A reload in this tab: trade the stored refresh token for fresh
+      // tokens. Signed in as before on success; on a refusal (null) or
+      // with Cognito out of reach, the sign-in form, the stored token
+      // kept in the second case for the next reload.
+      session.restore().then((snap) => {
+        if (snap) {
+          setState({
+            loggedIn: true,
+            view: "Email",
+            ...(snap.username ? { userName: snap.username } : {}),
+          });
+        }
+        setRestoring(false);
+      }, (err) => {
+        console.error('[auth] could not restore the session', err);
+        setRestoring(false);
+      });
     }).catch((err) => {
       console.error('Failed to load runtime config from /config.js', err);
       setConfigError(true);
+      setRestoring(false);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -329,6 +372,14 @@ function App() {
     window.addEventListener("focus", checkSession);
     return () => window.removeEventListener("focus", checkSession);
   }, [checkSession]);
+
+  // ...and on a timer while signed in, so a tab nobody touches refreshes
+  // its tokens before they expire rather than on the first click after.
+  useEffect(() => {
+    if (!state.loggedIn) return undefined;
+    const id = setInterval(checkSession, SESSION_CHECK_MS);
+    return () => clearInterval(id);
+  }, [state.loggedIn, checkSession]);
 
   // Cross-cutting About navigation. AuthShell's footer dispatches this
   // event so pre-login screens can route to About without threading an
@@ -360,207 +411,164 @@ function App() {
     }
   }, [state.loggedIn, state.view, isAdmin, setState]);
 
+  // The Cognito clients, or a banner when there are none: /config.js
+  // hasn't arrived yet, or (on a returning visit, which still renders
+  // the form from the saved state bag) it failed to load.
+  const requireAuth = useCallback(() => {
+    if (authRef.current) return authRef.current;
+    setMessage(
+      configError
+        ? "Cabalmail couldn't load its configuration. Please refresh the page."
+        : "Cabalmail is still loading. Please try again in a moment.",
+      true
+    );
+    return null;
+  }, [configError, setMessage]);
+
   const doRegister = useCallback((e) => {
     e.preventDefault();
-    const attributes = [
-      new CognitoUserAttribute({
-        Name: 'preferred_username',
-        Value: state.userName
-      }),
+    const auth = requireAuth();
+    if (!auth) return;
+    auth.client.signUp({
+      username: state.userName,
+      password: state.password,
       // Recovery email (identity plan Phase 1). Always collected; the
       // pool auto-verifies it, so Cognito emails a code either at signup
       // (SMS off - email is the only channel) or via the post-login
       // VerifyEmail gate (SMS on - the signup code goes to the phone).
-      new CognitoUserAttribute({
-        Name: 'email',
-        Value: state.email
-      }),
-    ];
-    // Phone number is only collected when the pool is wired for SMS
-    // (a 10DLC campaign registration id is configured). See issue #712
-    // and terraform/infra/modules/user_pool/main.tf.
-    if (state.sms_enabled && state.phone) {
-      attributes.push(new CognitoUserAttribute({
-        Name: 'phone_number',
-        Value: state.phone
-      }));
-    }
-    // Shared-secret invitation code, validated by the check_invite
-    // Cognito pre-signup Lambda. Passed via validationData so it never
-    // lands on the user record. Key must match the Python handler.
-    const validationData = [new CognitoUserAttribute({
-      Name: 'invitationCode',
-      Value: state.inviteCode || ''
-    })];
-    UserPool.signUp(
-      state.userName,
-      state.password,
-      attributes,
-      validationData,
-      (err, result) => {
-        if (!err) {
-          // Let Cognito say where the confirmation code went rather than
-          // assuming. No delivery details means no code was sent at all:
-          // with SMS off, the check_invite pre-signup trigger auto-confirms
-          // the account (issue #712), so there is nothing to verify here -
-          // email verification happens at first sign-in instead.
-          const details = result && result.codeDeliveryDetails;
-          if (!details) {
-            setState({ view: "Login", inviteCode: null });
-            setMessage(
-              "Account created. It is pending admin approval; you'll be notified when it is ready.",
-              false
-            );
-            return;
-          }
-          const medium = details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
-          setSignupDelivery({
-            medium,
-            destination: details.Destination || null,
-          });
-          setState({ view: "Verify", inviteCode: null });
-          setMessage(`Check your ${medium} for a verification code.`, false);
-        } else {
-          setState({ view: "SignUp" });
-          setMessage(signUpErrorMessage(err), true);
-        }
+      email: state.email,
+      // Phone number is only collected when the pool is wired for SMS
+      // (a 10DLC campaign registration id is configured). See issue #712
+      // and terraform/infra/modules/user_pool/main.tf.
+      phone: state.sms_enabled ? state.phone : null,
+      // Shared-secret invitation code, validated by the check_invite
+      // Cognito pre-signup Lambda. The client sends it as validation
+      // data so it never lands on the user record.
+      invitationCode: state.inviteCode,
+    }).then(({ codeDelivery }) => {
+      // Let Cognito say where the confirmation code went rather than
+      // assuming. No delivery details means no code was sent at all:
+      // with SMS off, the check_invite pre-signup trigger auto-confirms
+      // the account (issue #712), so there is nothing to verify here -
+      // email verification happens at first sign-in instead.
+      if (!codeDelivery) {
+        setState({ view: "Login", inviteCode: null });
+        setMessage(
+          "Account created. It is pending admin approval; you'll be notified when it is ready.",
+          false
+        );
+        return;
       }
-    );
-  }, [state.userName, state.password, state.email, state.phone, state.inviteCode, state.sms_enabled, setState, setMessage]);
+      setSignupDelivery(codeDelivery);
+      setState({ view: "Verify", inviteCode: null });
+      setMessage(`Check your ${codeDelivery.medium} for a verification code.`, false);
+    }, (err) => {
+      setState({ view: "SignUp" });
+      setMessage(signUpErrorMessage(err), true);
+    });
+  }, [state.userName, state.password, state.email, state.phone, state.inviteCode, state.sms_enabled, requireAuth, setState, setMessage]);
 
   const doVerify = useCallback((e) => {
     e.preventDefault();
-    const cognitoUser = new CognitoUser({
-      Username: state.userName,
-      Pool: UserPool
+    const auth = requireAuth();
+    if (!auth) return;
+    auth.client.confirmSignUp(state.userName, state.verificationCode).then(() => {
+      signupResend.reset();
+      const which = signupDelivery && signupDelivery.medium === 'email' ? 'Email' : 'Phone';
+      setState({ view: "Login", verificationCode: null });
+      setMessage(`${which} verified. Your account is pending admin approval.`, false);
+    }, () => {
+      setMessage("Verification failed. Please check your code and try again.", true);
     });
-    cognitoUser.confirmRegistration(state.verificationCode, true, (err, _result) => {
-      if (!err) {
-        signupResend.reset();
-        const which = signupDelivery && signupDelivery.medium === 'email' ? 'Email' : 'Phone';
-        setState({ view: "Login", verificationCode: null });
-        setMessage(`${which} verified. Your account is pending admin approval.`, false);
-      } else {
-        setMessage("Verification failed. Please check your code and try again.", true);
-      }
-    });
-  }, [state.userName, state.verificationCode, signupDelivery, setState, setMessage, signupResend]);
+  }, [state.userName, state.verificationCode, signupDelivery, requireAuth, setState, setMessage, signupResend]);
 
   const doResendVerification = useCallback(() => {
     if (signupResend.locked || signupResendInFlight || !state.userName) return;
+    const auth = requireAuth();
+    if (!auth) return;
     setSignupResendInFlight(true);
-    const cognitoUser = new CognitoUser({
-      Username: state.userName,
-      Pool: UserPool
-    });
-    cognitoUser.resendConfirmationCode((err, result) => {
+    auth.client.resendConfirmationCode(state.userName).then((delivery) => {
       setSignupResendInFlight(false);
-      if (!err) {
-        const details = result && result.CodeDeliveryDetails;
-        const medium = details && details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
-        setMessage(`A new verification code has been sent to your ${medium}.`, false);
-        return;
-      }
+      const medium = (delivery && delivery.medium) || 'phone';
+      setMessage(`A new verification code has been sent to your ${medium}.`, false);
+    }, (err) => {
+      setSignupResendInFlight(false);
       // Cognito hit its per-user resend limit. Mirror the lockout in
       // local state so the UI stops offering Resend until the window
       // passes; the message echoes Cognito rather than inventing a
       // schedule.
-      if (err.code === 'LimitExceededException' || err.name === 'LimitExceededException') {
+      if (isLimitExceeded(err)) {
         signupResend.recordLimitHit();
         setMessage("Too many resend attempts. Please try again later.", true);
       } else {
         setMessage("Could not resend code. Please try again later.", true);
       }
     });
-  }, [state.userName, signupResend, signupResendInFlight, setMessage]);
+  }, [state.userName, signupResend, signupResendInFlight, requireAuth, setMessage]);
 
   const doForgotPassword = useCallback((e) => {
     e.preventDefault();
-    const cognitoUser = new CognitoUser({
-      Username: state.userName,
-      Pool: UserPool
-    });
+    const auth = requireAuth();
+    if (!auth) return;
     // Recovery is email-first now (identity plan Phase 1); read where
     // Cognito actually sent the code instead of hardcoding "phone".
-    const sentTo = (data) => {
-      const details = data && data.CodeDeliveryDetails;
-      const medium = details && details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
+    auth.client.forgotPassword(state.userName).then((delivery) => {
+      const medium = (delivery && delivery.medium) || 'phone';
       setForgotDelivery(medium);
       setForgotPasswordSent(true);
       setMessage(`A reset code has been sent to your ${medium}.`, false);
-    };
-    cognitoUser.forgotPassword({
-      onSuccess: sentTo,
-      onFailure: () => {
-        setMessage("Failed to send reset code. Please try again.", true);
-      },
-      inputVerificationCode: sentTo
+    }, () => {
+      setMessage("Failed to send reset code. Please try again.", true);
     });
-  }, [state.userName, setMessage]);
+  }, [state.userName, requireAuth, setMessage]);
 
   const doResendResetCode = useCallback(() => {
     if (resetResend.locked || resetResendInFlight || !state.userName) return;
+    const auth = requireAuth();
+    if (!auth) return;
     setResetResendInFlight(true);
-    const cognitoUser = new CognitoUser({
-      Username: state.userName,
-      Pool: UserPool
-    });
-    const sentTo = (data) => {
-      const details = data && data.CodeDeliveryDetails;
-      const medium = details && details.DeliveryMedium === 'EMAIL' ? 'email' : 'phone';
+    auth.client.forgotPassword(state.userName).then((delivery) => {
+      const medium = (delivery && delivery.medium) || 'phone';
       setForgotDelivery(medium);
       setResetResendInFlight(false);
       setMessage(`A new reset code has been sent to your ${medium}.`, false);
-    };
-    cognitoUser.forgotPassword({
-      onSuccess: sentTo,
-      onFailure: (err) => {
-        setResetResendInFlight(false);
-        if (err && (err.code === 'LimitExceededException' || err.name === 'LimitExceededException')) {
-          resetResend.recordLimitHit();
-          setMessage("Too many resend attempts. Please try again later.", true);
-        } else {
-          setMessage("Could not resend code. Please try again later.", true);
-        }
-      },
-      inputVerificationCode: sentTo
+    }, (err) => {
+      setResetResendInFlight(false);
+      if (isLimitExceeded(err)) {
+        resetResend.recordLimitHit();
+        setMessage("Too many resend attempts. Please try again later.", true);
+      } else {
+        setMessage("Could not resend code. Please try again later.", true);
+      }
     });
-  }, [state.userName, resetResend, resetResendInFlight, setMessage]);
+  }, [state.userName, resetResend, resetResendInFlight, requireAuth, setMessage]);
 
   const doResetPassword = useCallback((e) => {
     e.preventDefault();
-    const cognitoUser = new CognitoUser({
-      Username: state.userName,
-      Pool: UserPool
+    const auth = requireAuth();
+    if (!auth) return;
+    auth.client.confirmForgotPassword(state.userName, state.verificationCode, state.password).then(() => {
+      resetResend.reset();
+      setState({ view: "Login", verificationCode: null, password: null });
+      setMessage("Password reset successful. You can now log in.", false);
+    }, () => {
+      setMessage("Password reset failed. Please check your code and try again.", true);
     });
-    cognitoUser.confirmPassword(state.verificationCode, state.password, {
-      onSuccess: () => {
-        resetResend.reset();
-        setState({ view: "Login", verificationCode: null, password: null });
-        setMessage("Password reset successful. You can now log in.", false);
-      },
-      onFailure: () => {
-        setMessage("Password reset failed. Please check your code and try again.", true);
-      }
-    });
-  }, [state.userName, state.verificationCode, state.password, setState, setMessage, resetResend]);
+  }, [state.userName, state.verificationCode, state.password, requireAuth, setState, setMessage, resetResend]);
 
-  // Run a callback against the signed-in CognitoUser with a fresh
-  // session attached. The SDK requires getSession before any
-  // user-attribute or MFA API call.
-  const withCurrentUser = useCallback((fn, onUnavailable) => {
-    const cognitoUser = UserPool && UserPool.getCurrentUser();
-    if (!cognitoUser) {
+  // Run a callback with the signed-in user's access token, refreshed
+  // first if it is close to expiring. The user-attribute and MFA
+  // operations authenticate with it.
+  const withAccessToken = useCallback((fn, onUnavailable) => {
+    const auth = authRef.current;
+    if (!auth) {
       if (onUnavailable) onUnavailable();
       return;
     }
-    cognitoUser.getSession((err, session) => {
-      if (err || !session || !session.isValid()) {
-        if (onUnavailable) onUnavailable();
-        return;
-      }
-      fn(cognitoUser);
-    });
+    auth.session.accessToken().then(
+      (accessToken) => fn(auth.client, accessToken),
+      () => { if (onUnavailable) onUnavailable(); }
+    );
   }, []);
 
   // Shared tail of every successful authentication (password-only or
@@ -572,118 +580,107 @@ function App() {
   // a metadata-read failure must never block an otherwise-good login.
   // mfaVerified skips the enrollment probe when the login itself just
   // answered a TOTP challenge - that user is enrolled by definition.
-  const finishLogin = useCallback((data, user, mfaVerified = false) => {
+  const finishLogin = useCallback((tokens, username, mfaVerified = false) => {
     // A login does not always follow an explicit logout (session expiry
     // lands on the login form directly), so stale cached lists from a
     // previous account must be dropped here, not just in doLogout.
     clearListCaches();
-    _token = data.getIdToken().getJwtToken();
-    _expires = data.getIdToken().getExpiration();
-    const payload = JSON.parse(atob(_token.split('.')[1]));
-    const groups = payload['cognito:groups'] || [];
-    setIsAdmin(groups.includes('admin'));
-    pendingMfaUserRef.current = null;
-    user.getUserAttributes((err, attrs) => {
+    const auth = authRef.current;
+    auth.session.establish(tokens, decodeJwtPayload(tokens.idToken)['cognito:username'] || username);
+    pendingMfaRef.current = null;
+    // One GetUser answers both gates: the attributes and the MFA list.
+    auth.client.getUser(tokens.accessToken).then((user) => {
       let next = { loggedIn: true, view: "Email" };
-      if (!err && attrs) {
-        const byName = {};
-        attrs.forEach((a) => { byName[a.getName()] = a.getValue(); });
-        if (!byName.email) {
-          setEmailGate({ mode: 'add', address: null });
-          next = { loggedIn: true, view: "VerifyEmail", email: null };
-        } else if (byName.email_verified !== 'true') {
-          setEmailGate({ mode: 'verify', address: byName.email });
-          next = { loggedIn: true, view: "VerifyEmail", verificationCode: null };
-        }
+      const { email, email_verified: emailVerified } = user.attributes;
+      if (!email) {
+        setEmailGate({ mode: 'add', address: null });
+        next = { loggedIn: true, view: "VerifyEmail", email: null };
+      } else if (emailVerified !== 'true') {
+        setEmailGate({ mode: 'verify', address: email });
+        next = { loggedIn: true, view: "VerifyEmail", verificationCode: null };
+      } else if (!mfaVerified && !user.mfaSettings.includes('SOFTWARE_TOKEN_MFA')) {
+        next = { loggedIn: true, view: "EnrollMfa" };
       }
-      if (mfaVerified || next.view !== "Email") {
-        setState(next);
-        setMessage("Login succeeded", false);
-        return;
-      }
-      user.getUserData((mfaErr, userData) => {
-        const enrolled = !mfaErr &&
-          ((userData && userData.UserMFASettingList) || []).includes('SOFTWARE_TOKEN_MFA');
-        // Fail open on a read error: nudging is not worth blocking a
-        // login over.
-        setState(mfaErr || enrolled
-          ? next
-          : { loggedIn: true, view: "EnrollMfa" });
-        setMessage("Login succeeded", false);
-      }, { bypassCache: true });
+      setState(next);
+      setMessage("Login succeeded", false);
+    }, () => {
+      // Fail open: nudging is not worth blocking a login over.
+      setState({ loggedIn: true, view: "Email" });
+      setMessage("Login succeeded", false);
     });
   }, [setState, setMessage]);
 
   const doLogin = useCallback((e) => {
     e.preventDefault();
-    const user = new CognitoUser({
-      Username: state.userName,
-      Pool: UserPool
-    });
-    const creds = new AuthenticationDetails({
-      Username: state.userName,
-      Password: state.password
-    });
-    user.authenticateUser(creds, {
-      onSuccess: data => finishLogin(data, user),
-      onFailure: (err) => {
-        _token = null;
-        _expires = Math.floor(new Date() / 1000) - 1;
-        // The require_admin_mfa pre-token-generation trigger (enforce
-        // mode) rejects any un-enrolled account. Route to the
-        // self-service setup flow (#768) when the enrollment client is
-        // configured; otherwise surface an actionable banner.
-        const mfaBlocked = err && /require.*multi-factor|admin accounts require/i.test(err.message || '');
-        if (mfaBlocked && state.enroll_client_id) {
-          setMfaSetupSecret(null);
-          setState({ loggedIn: false, view: "MfaSetup" });
-          return;
-        }
-        setState({ loggedIn: false, view: "Login" });
-        setMessage(
-          mfaBlocked
-            ? "This account requires multi-factor authentication. Contact the operator to restore access."
-            : "Login failed",
-          true
-        );
-      },
-      // Second-factor challenges (identity plan Phase 1). The CognitoUser
-      // carries the challenge session, so it is parked in a ref until the
-      // MfaChallenge screen submits the code.
-      totpRequired: () => {
-        pendingMfaUserRef.current = user;
-        setMfaChallengeType('totp');
+    const auth = requireAuth();
+    if (!auth) return;
+    const username = state.userName;
+    auth.client.signIn(username, state.password).then((result) => {
+      if (result.status === 'mfa') {
+        // Second-factor challenge (identity plan Phase 1). The challenge
+        // waits in a ref until the MfaChallenge screen submits the code.
+        pendingMfaRef.current = result.challenge;
+        setMfaChallengeType(result.mfa);
         setState({ view: "MfaChallenge", verificationCode: null });
-      },
-      mfaRequired: () => {
-        pendingMfaUserRef.current = user;
-        setMfaChallengeType('sms');
-        setState({ view: "MfaChallenge", verificationCode: null });
+        return;
       }
+      finishLogin(result.tokens, username);
+    }, (err) => {
+      auth.session.clear();
+      // The require_admin_mfa pre-token-generation trigger (enforce
+      // mode) rejects any un-enrolled account. Route to the
+      // self-service setup flow (#768) when the enrollment client is
+      // configured; otherwise surface an actionable banner.
+      const mfaBlocked = isMfaEnrollmentRequired(err);
+      if (mfaBlocked && state.enroll_client_id) {
+        setMfaSetupSecret(null);
+        setState({ loggedIn: false, view: "MfaSetup" });
+        return;
+      }
+      setState({ loggedIn: false, view: "Login" });
+      setMessage(
+        mfaBlocked
+          ? "This account requires multi-factor authentication. Contact the operator to restore access."
+          : "Login failed",
+        true
+      );
     });
-  }, [state.userName, state.password, state.enroll_client_id, finishLogin, setState, setMessage]);
+  }, [state.userName, state.password, state.enroll_client_id, requireAuth, finishLogin, setState, setMessage]);
 
   const doSubmitMfaCode = useCallback((e) => {
     e.preventDefault();
-    const user = pendingMfaUserRef.current;
-    if (!user) {
-      // The challenge session lives only in memory; a reload mid-challenge
+    const challenge = pendingMfaRef.current;
+    if (!challenge) {
+      // The challenge lives only in memory; a reload mid-challenge
       // loses it and the login must restart.
       setState({ view: "Login", verificationCode: null });
       setMessage("Your sign-in session expired. Please log in again.", true);
       return;
     }
-    user.sendMFACode(
-      state.verificationCode,
-      {
-        onSuccess: (data) => finishLogin(data, user, true),
-        onFailure: () => {
-          setMessage("That code did not match. Please try again.", true);
-        }
-      },
-      mfaChallengeType === 'totp' ? 'SOFTWARE_TOKEN_MFA' : 'SMS_MFA'
-    );
-  }, [state.verificationCode, mfaChallengeType, finishLogin, setState, setMessage]);
+    const auth = requireAuth();
+    if (!auth) return;
+    auth.client.respondToMfaChallenge(challenge, state.verificationCode).then((result) => {
+      if (result.status !== 'signed-in') {
+        // A second challenge after the first: nothing this pool asks.
+        pendingMfaRef.current = null;
+        setState({ view: "Login", verificationCode: null });
+        setMessage("Login failed", true);
+        return;
+      }
+      finishLogin(result.tokens, challenge.username, true);
+    }, (err) => {
+      // Cognito keeps a challenge answerable for a few minutes and a few
+      // wrong codes; past either it refuses the session itself, and the
+      // sign-in has to start over.
+      if (isNotAuthorized(err)) {
+        pendingMfaRef.current = null;
+        setState({ view: "Login", verificationCode: null });
+        setMessage("Your sign-in session expired. Please log in again.", true);
+        return;
+      }
+      setMessage("That code did not match. Please try again.", true);
+    });
+  }, [state.verificationCode, requireAuth, finishLogin, setState, setMessage]);
 
   // --- Locked-out TOTP setup handlers (#768) ---
   //
@@ -692,102 +689,79 @@ function App() {
   // re-authenticate through the dedicated enrollment app client
   // (enrollClientId from /config.js), which the gate passes for
   // factorless users only, then run the same associate/verify/prefer
-  // sequence as the Security view against that short-lived session.
+  // sequence as the Security view with that client's short-lived access
+  // token. The token stays in memory and is never part of the session.
 
   const beginMfaSetup = useCallback(() => {
-    if (!state.poolData || !state.enroll_client_id || !state.userName || !state.password) {
+    const auth = authRef.current;
+    if (!auth || !auth.enrollClient || !state.userName || !state.password) {
       // The password never survives a reload (persistState strips it),
       // so a revisit of this view has to restart from Login.
       setState({ view: "Login" });
       setMessage("Please enter your password again to continue.", true);
       return;
     }
-    const pool = new CognitoUserPool({
-      UserPoolId: state.poolData.UserPoolId,
-      ClientId: state.enroll_client_id,
-    });
-    const user = new CognitoUser({ Username: state.userName, Pool: pool });
-    const creds = new AuthenticationDetails({
-      Username: state.userName,
-      Password: state.password,
-    });
-    // Only an already-enrolled account draws a second-factor challenge
-    // here; normal sign-in is the right path for it.
-    const alreadyEnrolled = () => {
+    const { enrollClient } = auth;
+    const failed = () => {
       setMfaSetupBusy(false);
-      setState({ view: "Login" });
-      setMessage("This account already has an authenticator. Sign in normally.", true);
+      setMessage("Could not start two-factor setup. Please try again.", true);
     };
     setMfaSetupBusy(true);
-    user.authenticateUser(creds, {
-      onSuccess: () => {
-        user.associateSoftwareToken({
-          associateSecretCode: (secret) => {
-            setMfaSetupBusy(false);
-            mfaSetupUserRef.current = user;
-            setMfaSetupSecret(secret);
-            setState({ verificationCode: null });
-          },
-          onFailure: () => {
-            setMfaSetupBusy(false);
-            setMessage("Could not start two-factor setup. Please try again.", true);
-          },
-        });
-      },
-      onFailure: () => {
+    enrollClient.signIn(state.userName, state.password).then((result) => {
+      if (result.status !== 'signed-in') {
+        // Only an already-enrolled account draws a second-factor
+        // challenge here; normal sign-in is the right path for it.
         setMfaSetupBusy(false);
-        setMessage("Could not start two-factor setup. Please try again.", true);
-      },
-      totpRequired: alreadyEnrolled,
-      mfaRequired: alreadyEnrolled,
-    });
-  }, [state.poolData, state.enroll_client_id, state.userName, state.password, setState, setMessage]);
+        setState({ view: "Login" });
+        setMessage("This account already has an authenticator. Sign in normally.", true);
+        return;
+      }
+      const { accessToken } = result.tokens;
+      enrollClient.associateSoftwareToken(accessToken).then((secret) => {
+        setMfaSetupBusy(false);
+        mfaSetupRef.current = { accessToken };
+        setMfaSetupSecret(secret);
+        setState({ verificationCode: null });
+      }, failed);
+    }, failed);
+  }, [state.userName, state.password, setState, setMessage]);
 
   const doConfirmMfaSetup = useCallback((e) => {
     e.preventDefault();
-    const user = mfaSetupUserRef.current;
-    if (!user) {
-      // The enrollment session lives only in memory; a reload mid-setup
+    const setup = mfaSetupRef.current;
+    const auth = authRef.current;
+    if (!setup || !auth || !auth.enrollClient) {
+      // The enrollment token lives only in memory; a reload mid-setup
       // loses it and the flow must restart.
       setMfaSetupSecret(null);
       setState({ view: "Login", verificationCode: null });
       setMessage("Your setup session expired. Please log in again.", true);
       return;
     }
+    const { enrollClient } = auth;
     setMfaSetupBusy(true);
-    user.verifySoftwareToken(state.verificationCode, 'Cabalmail', {
-      onSuccess: () => {
-        user.setUserMfaPreference(
-          null,
-          { PreferredMfa: true, Enabled: true },
-          (err) => {
-            setMfaSetupBusy(false);
-            if (err) {
-              setMessage("Could not turn on two-factor authentication. Please try again.", true);
-              return;
-            }
-            // Drop the enrollment-client session; the normal sign-in
-            // (which now issues a TOTP challenge) is what counts.
-            mfaSetupUserRef.current = null;
-            user.signOut();
-            setMfaSetupSecret(null);
-            setState({ view: "Login", verificationCode: null });
-            setMessage("Two-factor authentication is on. Sign in again with a code from your app.", false);
-          }
-        );
-      },
-      onFailure: () => {
+    enrollClient.verifySoftwareToken(setup.accessToken, state.verificationCode, 'Cabalmail').then(() => {
+      enrollClient.setSoftwareTokenMfa(setup.accessToken, true).then(() => {
         setMfaSetupBusy(false);
-        setMessage("That code did not match. Check your authenticator app and try again.", true);
-      },
+        // Drop the enrollment token; the normal sign-in (which now
+        // issues a TOTP challenge) is what counts.
+        mfaSetupRef.current = null;
+        setMfaSetupSecret(null);
+        setState({ view: "Login", verificationCode: null });
+        setMessage("Two-factor authentication is on. Sign in again with a code from your app.", false);
+      }, () => {
+        setMfaSetupBusy(false);
+        setMessage("Could not turn on two-factor authentication. Please try again.", true);
+      });
+    }, () => {
+      setMfaSetupBusy(false);
+      setMessage("That code did not match. Check your authenticator app and try again.", true);
     });
   }, [state.verificationCode, setState, setMessage]);
 
   const cancelMfaSetup = useCallback((e) => {
     e.preventDefault();
-    const user = mfaSetupUserRef.current;
-    if (user) user.signOut();
-    mfaSetupUserRef.current = null;
+    mfaSetupRef.current = null;
     setMfaSetupSecret(null);
     setMfaSetupBusy(false);
     setState({ view: "Login", verificationCode: null });
@@ -796,66 +770,56 @@ function App() {
   // --- VerifyEmail gate handlers (identity plan Phase 1) ---
 
   // "add" mode: save the address. The pool auto-verifies email, so
-  // updateAttributes makes Cognito send the verification code itself.
+  // UpdateUserAttributes makes Cognito send the verification code itself.
   const doSaveRecoveryEmail = useCallback((e) => {
     e.preventDefault();
     const address = state.email;
     if (!address) return;
-    withCurrentUser((user) => {
-      const attr = new CognitoUserAttribute({ Name: 'email', Value: address });
-      user.updateAttributes([attr], (err) => {
-        if (err) {
-          setMessage("Could not save that address. Please try again.", true);
-          return;
-        }
+    withAccessToken((client, accessToken) => {
+      client.updateUserAttributes(accessToken, { email: address }).then(() => {
         setEmailGate({ mode: 'verify', address });
         setState({ verificationCode: null });
         setMessage(`A verification code has been sent to ${address}.`, false);
+      }, () => {
+        setMessage("Could not save that address. Please try again.", true);
       });
     }, () => setMessage("Your session expired. Please log in again.", true));
-  }, [state.email, withCurrentUser, setState, setMessage]);
+  }, [state.email, withAccessToken, setState, setMessage]);
 
   const doSendEmailCode = useCallback(() => {
     if (emailSendInFlight) return;
     setEmailSendInFlight(true);
-    withCurrentUser((user) => {
-      user.getAttributeVerificationCode('email', {
-        inputVerificationCode: () => {
-          setEmailSendInFlight(false);
-          setMessage("A verification code has been sent to your email.", false);
-        },
-        onFailure: (err) => {
-          setEmailSendInFlight(false);
-          const limited = err && (err.code === 'LimitExceededException' || err.name === 'LimitExceededException');
-          setMessage(
-            limited
-              ? "Too many attempts. Please try again later."
-              : "Could not send a code. Please try again later.",
-            true
-          );
-        }
+    withAccessToken((client, accessToken) => {
+      client.getUserAttributeVerificationCode(accessToken, 'email').then(() => {
+        setEmailSendInFlight(false);
+        setMessage("A verification code has been sent to your email.", false);
+      }, (err) => {
+        setEmailSendInFlight(false);
+        setMessage(
+          isLimitExceeded(err)
+            ? "Too many attempts. Please try again later."
+            : "Could not send a code. Please try again later.",
+          true
+        );
       });
     }, () => {
       setEmailSendInFlight(false);
       setMessage("Your session expired. Please log in again.", true);
     });
-  }, [emailSendInFlight, withCurrentUser, setMessage]);
+  }, [emailSendInFlight, withAccessToken, setMessage]);
 
   const doVerifyEmailCode = useCallback((e) => {
     e.preventDefault();
-    withCurrentUser((user) => {
-      user.verifyAttribute('email', state.verificationCode, {
-        onSuccess: () => {
-          setEmailGate(null);
-          setState({ view: "Email", verificationCode: null });
-          setMessage("Email verified. It can now be used for account recovery.", false);
-        },
-        onFailure: () => {
-          setMessage("Verification failed. Please check your code and try again.", true);
-        }
+    withAccessToken((client, accessToken) => {
+      client.verifyUserAttribute(accessToken, 'email', state.verificationCode).then(() => {
+        setEmailGate(null);
+        setState({ view: "Email", verificationCode: null });
+        setMessage("Email verified. It can now be used for account recovery.", false);
+      }, () => {
+        setMessage("Verification failed. Please check your code and try again.", true);
       });
     }, () => setMessage("Your session expired. Please log in again.", true));
-  }, [state.verificationCode, withCurrentUser, setState, setMessage]);
+  }, [state.verificationCode, withAccessToken, setState, setMessage]);
 
   const skipEmailGate = useCallback((e) => {
     e.preventDefault();
@@ -864,54 +828,40 @@ function App() {
   }, [setState]);
 
   // TOTP enrollment surface for the Security view. Thin wrappers so the
-  // Cognito SDK stays in App (where UserPool lives) and the view can be
-  // tested with a mock.
+  // Cognito calls stay in App (where the client and session live) and the
+  // view can be tested with a mock.
   const mfaApi = useMemo(() => ({
-    getStatus: (cb) => withCurrentUser(
-      (user) => user.getUserData((err, data) => {
-        if (err) { cb(err); return; }
-        cb(null, (data.UserMFASettingList || []).includes('SOFTWARE_TOKEN_MFA'));
-      }, { bypassCache: true }),
-      () => cb(new Error('no session'))
-    ),
-    beginEnroll: (callbacks) => withCurrentUser(
-      (user) => user.associateSoftwareToken(callbacks),
-      () => callbacks.onFailure(new Error('no session'))
-    ),
-    confirmEnroll: (code, callbacks) => withCurrentUser(
-      (user) => user.verifySoftwareToken(code, 'Cabalmail', {
-        onSuccess: () => {
-          user.setUserMfaPreference(
-            null,
-            { PreferredMfa: true, Enabled: true },
-            (err) => err ? callbacks.onFailure(err) : callbacks.onSuccess()
-          );
-        },
-        onFailure: callbacks.onFailure,
-      }),
-      () => callbacks.onFailure(new Error('no session'))
-    ),
-    disable: (cb) => withCurrentUser(
-      (user) => user.setUserMfaPreference(
-        null,
-        { PreferredMfa: false, Enabled: false },
-        cb
+    getStatus: (cb) => withAccessToken(
+      (client, accessToken) => client.getUser(accessToken).then(
+        (user) => cb(null, user.mfaSettings.includes('SOFTWARE_TOKEN_MFA')),
+        (err) => cb(err)
       ),
       () => cb(new Error('no session'))
     ),
-  }), [withCurrentUser]);
+    beginEnroll: (callbacks) => withAccessToken(
+      (client, accessToken) => client.associateSoftwareToken(accessToken).then(
+        (secret) => callbacks.associateSecretCode(secret),
+        callbacks.onFailure
+      ),
+      () => callbacks.onFailure(new Error('no session'))
+    ),
+    confirmEnroll: (code, callbacks) => withAccessToken(
+      (client, accessToken) => client.verifySoftwareToken(accessToken, code, 'Cabalmail')
+        .then(() => client.setSoftwareTokenMfa(accessToken, true))
+        .then(() => callbacks.onSuccess(), callbacks.onFailure),
+      () => callbacks.onFailure(new Error('no session'))
+    ),
+    disable: (cb) => withAccessToken(
+      (client, accessToken) => client.setSoftwareTokenMfa(accessToken, false).then(() => cb(null), cb),
+      () => cb(new Error('no session'))
+    ),
+  }), [withAccessToken]);
 
   const doLogout = useCallback((e) => {
     e.preventDefault();
-    _token = null;
-    _expires = Math.floor(new Date() / 1000) - 1;
-    if (UserPool) {
-      const cognitoUser = UserPool.getCurrentUser();
-      if (cognitoUser) cognitoUser.signOut();
-    }
+    if (authRef.current) authRef.current.session.clear();
     clearListCaches();
-    setIsAdmin(false);
-    pendingMfaUserRef.current = null;
+    pendingMfaRef.current = null;
     setEmailGate(null);
     setSignupDelivery(null);
     setState({ loggedIn: false, userName: null, password: null, view: "Login" });
@@ -940,6 +890,9 @@ function App() {
           </p>
         </AuthShell>
       );
+    }
+    if (restoring) {
+      return <div className="loading">Loading...</div>;
     }
     switch (state.view) {
       case "About":
@@ -1004,9 +957,9 @@ function App() {
           />
         );
       case "VerifyEmail":
-        // The gate is memory-only; a reload lands here with no gate
-        // context. The mount-time session restore redirects to Email, so
-        // just render nothing for that frame.
+        // The gate is memory-only and a reload starts from a logged-out
+        // view (loadSavedState), so this can't be reached without one;
+        // render nothing rather than a gate with no context.
         if (!emailGate) return null;
         return (
           <VerifyEmail
@@ -1114,7 +1067,7 @@ function App() {
         return (
           <ErrorBoundary name="Email">
             <Email
-              token={_token}
+              token={token}
               api_url={state.api_url}
               host={state.imap_host}
               smtp_host={`smtp-out.${state.control_domain}`}
@@ -1158,7 +1111,7 @@ function App() {
   }
 
   const authValue = {
-    token: _token,
+    token,
     api_url: state.api_url,
     host: state.imap_host,
     smtp_host: `smtp-out.${state.control_domain}`,
