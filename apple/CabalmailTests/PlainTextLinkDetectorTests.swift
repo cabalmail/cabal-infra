@@ -107,11 +107,10 @@ final class PlainTextLinkDetectorTests: XCTestCase {
     /// or that carried only the URL, would still linkify — so every other
     /// test here would still pass.
     func testADetectedLinkCarriesBothTheURLAndTheUnderline() throws {
-        let linkKey = AttributeScopes.FoundationAttributes.LinkAttribute.self
         let underlineKey = AttributeScopes.SwiftUIAttributes.UnderlineStyleAttribute.self
         let scanned = PlainTextLinkDetector.scan("See https://example.com/underline-1018 now.")
-        let run = try XCTUnwrap(scanned.attributed.runs.first { $0.attributes[linkKey] != nil })
-        XCTAssertEqual(run.attributes[linkKey]?.absoluteString, "https://example.com/underline-1018")
+        let run = try XCTUnwrap(scanned.attributed.runs.first { link(of: $0) != nil })
+        XCTAssertEqual(link(of: run)?.absoluteString, "https://example.com/underline-1018")
         XCTAssertEqual(run.attributes[underlineKey], .single)
         XCTAssertEqual(
             String(scanned.attributed[run.range].characters),
