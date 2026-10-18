@@ -2,9 +2,10 @@ import Foundation
 import CabalmailKit
 
 /// The one record of the account's mail writes that are in flight, and of
-/// the removals the server has just confirmed: what keeps a refresh from
-/// undoing a write made anywhere, and what a folder's STATUS may still be
-/// missing.
+/// the removals and flag writes the server has just taken: what keeps a
+/// refresh from undoing a write made anywhere, what a folder's STATUS may
+/// still be missing, and which of two writes to one flag the counts stand
+/// on.
 ///
 /// Every write to messages is bracketed here, by the mutation service
 /// (`MailMutationService`) for every list, reader and reply, and by a list
@@ -52,6 +53,20 @@ final class MessageShields {
     /// Flag writes that ended, per folder, with when and which way: a
     /// STATUS asked before one ended may not count it yet (#1880).
     private var endedFlagWrites: [EndedFlagWrite] = []
+
+    /// The flag states the server has taken since, per message and flag,
+    /// with when: a write still out over one of these is the older claim on
+    /// that flag, so taking its count back would move the count away from
+    /// where the server now stands (#1974). Entries age out after
+    /// `confirmedRemovalWindow`, longer than any request can be in flight.
+    private var committedFlagWrites: [FlagKey: ContinuousClock.Instant] = [:]
+
+    /// One message's one flag: what two writes have to share to be claims
+    /// on the same state.
+    private struct FlagKey: Hashable {
+        let ref: MessageRef
+        let flag: Flag
+    }
 
     private struct EndedFlagWrite {
         let folder: String
@@ -172,6 +187,19 @@ final class MessageShields {
         for ref in refs { confirmedRemovals[ref] = now }
     }
 
+    /// Record that the server took a write of `flag` on `refs`: it holds
+    /// that flag state for them now, whoever asked for it.
+    func recordCommittedFlagWrites(
+        _ refs: some Sequence<MessageRef>,
+        flag: Flag,
+        at now: ContinuousClock.Instant = .now
+    ) {
+        let refs = Array(refs)
+        guard !refs.isEmpty else { return }
+        committedFlagWrites = committedFlagWrites.filter { now - $0.value < Self.confirmedRemovalWindow }
+        for ref in refs { committedFlagWrites[FlagKey(ref: ref, flag: flag)] = now }
+    }
+
     /// Forget a folder's confirmed removals: a changed UIDVALIDITY starts the
     /// UID space over, so the old numbers say nothing about the new ones.
     func clearConfirmedRemovals(folderPath: String) {
@@ -189,6 +217,15 @@ final class MessageShields {
     func isRemoving(_ ref: MessageRef) -> Bool { removals[ref] != nil }
 
     func isWritingFlags(_ ref: MessageRef) -> Bool { flagWrites[ref] != nil }
+
+    /// Whether the server took a write of `flag` on `ref` after `instant` --
+    /// that is, while a write issued then was still out. The later write is
+    /// what the folder's count stands on, so the older one's take-back is
+    /// not its to make (#1974).
+    func flagWriteCommitted(on ref: MessageRef, flag: Flag, after instant: ContinuousClock.Instant) -> Bool {
+        guard let committedAt = committedFlagWrites[FlagKey(ref: ref, flag: flag)] else { return false }
+        return committedAt > instant
+    }
 
     /// True while a removal out of `folderPath` is in flight: a STATUS of
     /// that folder may still count the message.
@@ -270,6 +307,7 @@ final class MessageShields {
         removals = [:]
         flagWrites = [:]
         endedFlagWrites = []
+        committedFlagWrites = [:]
         arrivals = [:]
         endedArrivals = []
     }

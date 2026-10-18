@@ -128,6 +128,9 @@ final class MailMutationService {
         guard acceptsAnswer(from: client) else {
             return Task { FlagOutcome(failed: Set(refs), message: nil) }
         }
+        // When this write began: a write to the same flag that the server
+        // takes after this is the newer claim on it (#1974).
+        let begunAt = ContinuousClock.now
         shields.beginFlagWrite(refs, flag: flag, added: added)
         post(.flagsChanged(refs, flag: flag, added: added), by: writer)
         let moves = CountMoves(counts: counts, folders: changing.map(\.folder))
@@ -151,12 +154,21 @@ final class MailMutationService {
                 }
             }
             let reverted = refs.filter { failed.contains($0) && changing.contains($0) }
+            if acceptsAnswer(from: client) {
+                shields.recordCommittedFlagWrites(refs.filter { !failed.contains($0) }, flag: flag)
+            }
             if !reverted.isEmpty, acceptsAnswer(from: client) {
                 post(.flagsChanged(reverted, flag: flag, added: !added), by: writer)
                 // A message removed since (in flight, or confirmed gone) took
                 // its count with it; giving the flag's count back too would
-                // count it twice.
-                let stillThere = reverted.filter { !shields.isRemoving($0) && shields.confirmedRemovals[$0] == nil }
+                // count it twice. So did a write to the same flag the server
+                // took while this one was out: the count stands where that
+                // write left it, and this take-back would move it off the
+                // server's state rather than back to it (#1974).
+                let stillThere = reverted.filter {
+                    !shields.isRemoving($0) && shields.confirmedRemovals[$0] == nil
+                        && !shields.flagWriteCommitted(on: $0, flag: flag, after: begunAt)
+                }
                 moves.move(flag, added: !added, for: stillThere)
             }
             return FlagOutcome(failed: failed, message: message)
