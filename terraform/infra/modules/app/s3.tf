@@ -189,33 +189,38 @@ resource "aws_s3_object" "node_config" {
 
 # Bucket for app cache.
 #
-# Versioning is intentionally off: every object here is a regenerable
-# derivative (cached .eml bodies, attachment staging, DMARC reports,
-# config.js) and the lifecycle rule below expires all of them after two
-# days, so retaining noncurrent versions would add cost with nothing to
-# recover. CKV_AWS_21 / AWS-0090 are suppressed for this bucket alone -
-# the durable buckets (modules/s3, modules/front_door) do version.
+# Versioning is intentionally off: every object here is a short-lived or
+# regenerable derivative (cached .eml bodies and attachment parts,
+# outbound attachment staging, queued Sent copies, BIMI renders, archived
+# DMARC and CAA report artifacts) and the lifecycle rule below expires all
+# of them after two days, so retaining noncurrent versions would add cost
+# with nothing to recover. CKV_AWS_21 / AWS-0090 are suppressed for this
+# bucket alone - the durable buckets (modules/s3, modules/front_door) do
+# version.
 resource "aws_s3_bucket" "cache" {
   #checkov:skip=CKV_AWS_21:Transient cache - all objects expire after two days (lifecycle rule below); versioning would only retain regenerable derivatives.
   bucket = "cache.${var.control_domain}"
 }
 
-# Expire objects after two days.
+# Expire every object two days after it is written.
+#
+# Both rules use an empty filter, which applies them to the whole bucket.
+# Keys begin with a username ({user}/{folder}/{uid}/...) or a fixed prefix
+# (outbound/, sent-pending/, bimi/, dmarc/, caa/), so the whole bucket is
+# the only scope that covers all of them. Lifecycle filters only include,
+# so a longer-lived prefix would need its own bucket rather than an
+# exception here.
 #
 # The second rule reclaims storage from multipart uploads that never
-# completed - the attachment-staging PUTs (presigned, from the admin
-# client) and Lambda-side uploads both use multipart above boto3's
-# threshold, and orphaned parts are billed while invisible in an object
-# listing. Seven days matches the two access-log buckets
-# (modules/s3_access_logs, modules/elb). It carries no filter on purpose:
-# the abort applies bucket-wide.
+# completed - Lambda-side uploads (boto3's upload_fileobj) switch to
+# multipart above its threshold, and orphaned parts are billed while
+# invisible in an object listing. Seven days matches the two access-log
+# buckets (modules/s3_access_logs, modules/elb).
 resource "aws_s3_bucket_lifecycle_configuration" "expire_attachments" {
   bucket = aws_s3_bucket.cache.bucket
   rule {
     id = "expire_attachments"
-    filter {
-      prefix = "/"
-    }
+    filter {}
     expiration {
       days = 2
     }

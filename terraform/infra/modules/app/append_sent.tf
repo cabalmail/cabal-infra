@@ -7,7 +7,10 @@
 # this consumer writes the copy to the user's Sent folder when IMAP is
 # available. During a roll get_imap_client raises, the job stays queued, and SQS
 # redelivers it until the new IMAP container is serving; after maxReceiveCount it
-# lands in the DLQ.
+# lands in the DLQ. The staged copy expires with the rest of the cache bucket
+# two days after the send (modules/app/s3.tf), so a job in the DLQ needs
+# redriving within that window; after it the staged copy is gone and the job
+# cannot append.
 
 # -- Queues --------------------------------------------------
 
