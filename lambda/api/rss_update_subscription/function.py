@@ -9,11 +9,16 @@ Settings are stored here and APPLIED on the client (open Q5 in the
 requirements): the shared feed row is never touched. notifications_enabled
 also maintains the sparse notify_feed_id attribute that the phase 8
 fan-out queries (present only while notifications are on).
+
+The write applies only to a subscription that still exists when it lands
+(rss_api.update_subscription_row); otherwise the answer is 404
+unknown_subscription.
 '''
 from rss_api import (ApiError, ITEM_FILTERS, MAX_TITLE_LENGTH, OPEN_MODES,  # pylint: disable=import-error
                      ORDERING_MODES, REMOTE_CONTENT_MODES, ROOT_FOLDER, STYLING_MODES,
                      body_of, feeds, folder_key, folders, get_subscription, guarded, ok,
-                     serialize_subscription, subscriptions, username)
+                     serialize_subscription, unknown_subscription,
+                     update_subscription_row, username)
 
 ENUMS = {
     'ordering_mode': ORDERING_MODES,
@@ -36,12 +41,13 @@ def handler(event, _context):
     expression = 'SET ' + ', '.join(sets) if sets else ''
     if removes:
         expression += ' REMOVE ' + ', '.join(removes)
-    kwargs = {'Key': {'user': user, 'subscription_id': sub['subscription_id']},
-              'UpdateExpression': expression.strip(),
-              'ReturnValues': 'ALL_NEW'}
+    kwargs = {'UpdateExpression': expression.strip(), 'ReturnValues': 'ALL_NEW'}
     if values:
         kwargs['ExpressionAttributeValues'] = values
-    updated = subscriptions.update_item(**kwargs)['Attributes']
+    response = update_subscription_row(user, sub['subscription_id'], **kwargs)
+    if response is None:
+        raise unknown_subscription()
+    updated = response['Attributes']
     feed = feeds.get_item(Key={'feed_id': sub['feed_id']}).get('Item')
     return ok({'subscription': serialize_subscription(updated, feed)})
 

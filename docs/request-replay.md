@@ -117,13 +117,13 @@ the transport sends a second copy; "Once" means it doesn't.
 | `POST /push_deregister` | `deregisterPushDevice` | Deletes a row already gone, which the Lambda answers as success. | Again | `push_deregister/function.py:4`, `:44` |
 | `POST /push_envelope` | `fetchPushEnvelope` | A read sent as POST: read-only IMAP, a cache fill. | Again | `push_envelope/function.py:107` |
 | `POST /rss_subscribe` | `subscribe` | Usually finds the subscription and answers `existing`, but a copy that overlaps a slow first one can add a second subscription. | Once | `_shared/rss_subscribe_core.py:196-204` |
-| `POST /rss_unsubscribe` | `unsubscribe` | After the first has finished: 404 `unknown_subscription` for an unsubscribe that worked. A copy that overlaps the first: the row's delete is conditional, so whichever copy's delete removes the row detaches the subscriber and answers 200, and the other answers 404. | Once | `rss_unsubscribe/function.py` (`handler`, `delete_subscription`); `_shared/rss_api.py:176-178` |
-| `PUT /rss_update_subscription` | `updateSubscription` | The same SET and REMOVE on the same row. | Again | `rss_update_subscription/function.py:28-46` |
+| `POST /rss_unsubscribe` | `unsubscribe` | After the first has finished: 404 `unknown_subscription` for an unsubscribe that worked. A copy that overlaps the first: the row's delete is conditional, so whichever copy's delete removes the row detaches the subscriber and answers 200, and the other answers 404. | Once | `rss_unsubscribe/function.py` (`handler`, `delete_subscription`); `_shared/rss_api.py` (`get_subscription`) |
+| `PUT /rss_update_subscription` | `updateSubscription` | The same SET and REMOVE on the same row. | Again | `rss_update_subscription/function.py` (`handler`) |
 | `POST /rss_new_folder` | `newFolder` | Makes a second folder with the same name and a new id. | Once | `rss_new_folder/function.py:25`, `:33` |
 | `PUT /rss_update_folder` | `updateFolder` | The same SET and REMOVE on the same row. | Again | `rss_update_folder/function.py:15-56` |
 | `POST /rss_delete_folder` | `deleteFolder` | The folder is gone: 404 `unknown_folder`. | Once | `rss_delete_folder/function.py:22` |
 | `POST /rss_set_item_state` | `setItemState` | Writes the same flags. | Again | `rss_set_item_state/function.py:20-40` |
-| `POST /rss_mark_all_read` | `markAllRead` | Carries the tap-time watermark, so it writes nothing new. | Again | `rss_mark_all_read/function.py:39-44` |
+| `POST /rss_mark_all_read` | `markAllRead` | Carries the tap-time watermark, so it writes nothing new. | Again | `rss_mark_all_read/function.py` (`handler`) |
 | `POST /rss_opml_import` | `importOpml` | Finds everything the first copy imported and reports "0 created", and a copy that overlaps the first can duplicate folders and feeds. | Once | `rss_opml_import/function.py:41-93` |
 
 The rows marked Once whose second copy only answers a misleading error

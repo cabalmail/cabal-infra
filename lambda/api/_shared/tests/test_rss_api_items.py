@@ -199,6 +199,16 @@ class ListItems(unittest.TestCase):
         self.assertEqual(call(self.mod, params={'cursor': '!!'})[1]['code'], 'invalid_cursor')
         self.assertEqual(call(self.mod, params={'subscription_id': 'zzz'})[0], 404)
 
+    def test_row_without_feed_id_is_not_a_subscription(self):
+        seed(self.tables, n=2)
+        self.tables['cabal-rss-subscription'].rows[(USER, 'bare')] = {
+            'user': USER, 'subscription_id': 'bare', 'folder_id': '~root'}
+        status, body = call(self.mod, params={})
+        self.assertEqual(status, 200)
+        self.assertEqual({i['subscription_id'] for i in body['items']}, {'sub-f1'})
+        status, body = call(self.mod, params={'subscription_id': 'bare'})
+        self.assertEqual((status, body['code']), (404, 'unknown_subscription'))
+
 
 class GetItem(unittest.TestCase):
 
@@ -307,6 +317,81 @@ class MarkAllRead(unittest.TestCase):
             status, body = call(mod, body={'subscription_id': 'sub-f1', 'watermark': bad})
             self.assertEqual((status, body['code']), (400, 'invalid_watermark'))
         self.assertNotIn('read_watermark', tables['cabal-rss-subscription'].rows[(USER, 'sub-f1')])
+
+    def test_marks_only_subscriptions_that_still_exist(self):
+        # sub-f2 is removed after the handler lists it and before it
+        # writes: it is skipped, and its state is left as it was.
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_mark_all_read')
+        seed(tables, 'f1', 1)
+        seed(tables, 'f2', 1)
+        subs, state = tables['cabal-rss-subscription'], tables['cabal-rss-user-item-state']
+        sk = '2024-01-01T00:00:00+00:00#i1'
+        state.rows[(f'{USER}#f2', sk)] = {'user_feed': f'{USER}#f2', 'sort_key': sk, 'is_read': False}
+        listed = mod.list_subscriptions
+
+        def list_then_remove_f2(user):
+            rows = listed(user)
+            del subs.rows[(user, 'sub-f2')]
+            return rows
+        mod.list_subscriptions = list_then_remove_f2
+        status, body = call(mod, body={})
+        self.assertEqual((status, body['subscriptions'], body['flipped']), (200, 1, 0))
+        self.assertIn('read_watermark', subs.rows[(USER, 'sub-f1')])
+        self.assertNotIn((USER, 'sub-f2'), subs.rows)
+        self.assertFalse(state.rows[(f'{USER}#f2', sk)]['is_read'])
+
+    def test_single_subscription_removed_before_write_is_skipped(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_mark_all_read')
+        seed(tables, 'f1', 1)
+        subs = tables['cabal-rss-subscription']
+        read = mod.get_subscription
+
+        def read_then_remove(user, subscription_id):
+            row = read(user, subscription_id)
+            del subs.rows[(user, subscription_id)]
+            return row
+        mod.get_subscription = read_then_remove
+        status, body = call(mod, body={'subscription_id': 'sub-f1'})
+        self.assertEqual((status, body['subscriptions'], body['flipped']), (200, 0, 0))
+        self.assertEqual(subs.rows, {})
+
+    def test_flips_only_state_rows_that_still_exist(self):
+        # The explicit-unread row is removed after the handler finds it and
+        # before it writes: nothing is written.
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_mark_all_read')
+        seed(tables, 'f1', 1)
+        state = tables['cabal-rss-user-item-state']
+        sk = '2024-01-01T00:00:00+00:00#i1'
+        state.rows[(f'{USER}#f1', sk)] = {'user_feed': f'{USER}#f1', 'sort_key': sk, 'is_read': False}
+
+        class StateRemovedAfterQuery:  # pylint: disable=too-few-public-methods
+            '''The state table, with each queried row gone before the write.'''
+            update_item = staticmethod(state.update_item)
+
+            def query(self, **kwargs):
+                response = state.query(**kwargs)
+                for row in response['Items']:
+                    del state.rows[(row['user_feed'], row['sort_key'])]
+                return response
+        mod.state = StateRemovedAfterQuery()
+        status, body = call(mod, body={'subscription_id': 'sub-f1'})
+        self.assertEqual((status, body['subscriptions'], body['flipped']), (200, 1, 0))
+        self.assertEqual(state.rows, {})
+
+    def test_row_without_feed_id_is_not_a_subscription(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_mark_all_read')
+        seed(tables, 'f1', 1)
+        subs = tables['cabal-rss-subscription']
+        subs.rows[(USER, 'bare')] = {'user': USER, 'subscription_id': 'bare', 'folder_id': '~root'}
+        status, body = call(mod, body={})
+        self.assertEqual((status, body['subscriptions']), (200, 1))
+        self.assertNotIn('read_watermark', subs.rows[(USER, 'bare')])
+        status, body = call(mod, body={'subscription_id': 'bare'})
+        self.assertEqual((status, body['code']), (404, 'unknown_subscription'))
 
 
 if __name__ == '__main__':
