@@ -40,7 +40,7 @@ for A.
 
 | Phase | Work item                                                        | Status      |
 | ----- | ---------------------------------------------------------------- | ----------- |
-| A1    | Webmail: Cognito JSON client module + tests                      | Done        |
+| A1    | Webmail: Cognito JSON client module + tests                      | Done 2026-10-18 (#2103) |
 | A2    | Webmail: port `App.jsx` flows, drop the dependency               | Not started |
 | A3    | Promote the auth contract below to `docs/auth.md`                | Not started |
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Not started |
@@ -158,7 +158,7 @@ switch.
 
 ### A1 — Cognito JSON client module
 
-**Status:** Done. Nothing imports it yet; A2 wires it in.
+**Status:** Done 2026-10-18 (#2103). Nothing imports it yet; A2 wires it in.
 
 A module under `react/admin/src/auth/` exposing promise-returning
 functions for every operation in the contract, plus a token holder that
