@@ -22,6 +22,8 @@ import com.cabalmail.kit.models.RssSubscription
 import com.cabalmail.kit.models.RssSubscriptionUpdate
 import com.cabalmail.kit.models.RssSyncPage
 import com.cabalmail.kit.models.RssUnsubscribeResult
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -55,6 +57,10 @@ class RssSyncEngineTest {
         var pushFailure: Throwable? = null
         var markAllReadWatermark = "server-w"
 
+        /** Parks the next item sync inside its network call, mid-run. */
+        var syncGate: CompletableDeferred<Unit>? = null
+        val syncStarted = CompletableDeferred<Unit>()
+
         override suspend fun listSubscriptions() = catalog
 
         override suspend fun listItems(
@@ -74,6 +80,10 @@ class RssSyncEngineTest {
             limit: Int,
         ): RssSyncPage {
             syncCalls += since
+            syncGate?.let { gate ->
+                syncStarted.complete(Unit)
+                gate.await()
+            }
             return syncPages.removeFirstOrNull() ?: error("unscripted sync page")
         }
 
@@ -378,6 +388,69 @@ class RssSyncEngineTest {
             client.syncPages += RssSyncPage()
             val failures = engine.syncAll()
             assertEquals(setOf("s2"), failures.keys)
+        }
+
+    /**
+     * #1955: a sync read the whole sync-state row when it started and wrote
+     * the whole thing back when it finished, as did a "Load older items",
+     * so whichever landed second put the other's cursor back and the feed's
+     * next load re-fetched the page it already had. Each write is
+     * column-scoped now, driven here as a real overlap: the sync is parked
+     * inside its network call while the load runs to completion.
+     */
+    @Test
+    fun `a load older finishing inside a sync keeps its own cursor`() =
+        runTest {
+            val client = FakeRssClient()
+            val store = InMemoryRssStore()
+            store.upsertSubscription(s1)
+            store.setSyncState("f1", FeedSyncState(sinceCursor = "since-0", olderCursor = "older-1"))
+            client.syncGate = CompletableDeferred()
+            client.syncPages += RssSyncPage(nextSince = "since-1", hasMore = false)
+            client.listPages += RssItemsPage(items = listOf(item(9)), nextCursor = "older-2")
+            val engine = engine(client, store)
+
+            val sync = launch { engine.syncItems(s1) }
+            client.syncStarted.await()
+
+            assertEquals(1, engine.loadOlder(s1))
+            assertEquals("older-2", store.syncState("f1").olderCursor)
+
+            client.syncGate?.complete(Unit)
+            sync.join()
+
+            assertEquals("older-2", store.syncState("f1").olderCursor, "the sync must not put older-1 back")
+            assertEquals("since-1", store.syncState("f1").sinceCursor, "the sync still writes its own half")
+            assertEquals(listOf<String?>("older-1"), client.listCalls, "one older page fetched, not two")
+        }
+
+    /**
+     * The end-of-history variant of the same clobber: a load that exhausted
+     * the feed must keep `olderExhausted` true across a sync that read it
+     * as false, or the footer comes back and brings nothing in.
+     */
+    @Test
+    fun `a sync does not revive an exhausted older cursor`() =
+        runTest {
+            val client = FakeRssClient()
+            val store = InMemoryRssStore()
+            store.upsertSubscription(s1)
+            store.setSyncState("f1", FeedSyncState(sinceCursor = "since-0", olderCursor = "older-1"))
+            client.syncGate = CompletableDeferred()
+            client.syncPages += RssSyncPage(nextSince = "since-1", hasMore = false)
+            client.listPages += RssItemsPage(items = listOf(item(9)), nextCursor = null)
+            val engine = engine(client, store)
+
+            val sync = launch { engine.syncItems(s1) }
+            client.syncStarted.await()
+            engine.loadOlder(s1)
+            assertTrue(store.syncState("f1").olderExhausted)
+
+            client.syncGate?.complete(Unit)
+            sync.join()
+
+            assertTrue(store.syncState("f1").olderExhausted, "the footer must stay away")
+            assertEquals(0, engine.loadOlder(s1), "an exhausted feed loads nothing")
         }
 
     @Test
