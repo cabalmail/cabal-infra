@@ -54,9 +54,22 @@ public protocol AuthService: Sendable {
     /// Throws if no challenge is pending or the code is rejected; a wrong
     /// code leaves the challenge session usable for a retry.
     func submitMfaCode(_ code: String) async throws
-    func signUp(username: String, password: String, email: String?, phone: String?) async throws
+    /// Creates an account (`docs/auth.md`, "Sign-up"). `email` is the
+    /// recovery address, always collected; pass `phone` (E.164) only when
+    /// the configuration's `smsEnabled`. A refused invitation code throws
+    /// `.invalidInvitationCode`; a refused username throws `.server` with
+    /// `check_invite`'s own sentence.
+    func signUp(
+        username: String,
+        password: String,
+        email: String,
+        phone: String?,
+        invitationCode: String?
+    ) async throws -> SignUpResult
     func confirmSignUp(username: String, code: String) async throws
-    func resendConfirmationCode(username: String) async throws
+    /// Where the new code went; nil when Cognito's reply doesn't say.
+    @discardableResult
+    func resendConfirmationCode(username: String) async throws -> CodeDelivery?
     func forgotPassword(username: String) async throws
     func confirmForgotPassword(username: String, code: String, newPassword: String) async throws
     func signOut() async throws
@@ -184,13 +197,14 @@ public actor CognitoAuthService: AuthService {
     public func signUp(
         username: String,
         password: String,
-        email: String?,
-        phone: String?
-    ) async throws {
-        var attributes: [[String: String]] = []
-        if let email, !email.isEmpty {
-            attributes.append(["Name": "email", "Value": email])
-        }
+        email: String,
+        phone: String?,
+        invitationCode: String?
+    ) async throws -> SignUpResult {
+        var attributes = [
+            ["Name": "preferred_username", "Value": username],
+            ["Name": "email", "Value": email],
+        ]
         if let phone, !phone.isEmpty {
             attributes.append(["Name": "phone_number", "Value": phone])
         }
@@ -199,8 +213,15 @@ public actor CognitoAuthService: AuthService {
             "Username": username,
             "Password": password,
             "UserAttributes": attributes,
+            // Validation data, so check_invite can read the code without it
+            // being stored on the user; sent empty when there is none.
+            "ValidationData": [["Name": "invitationCode", "Value": invitationCode ?? ""]],
         ]
-        _ = try await call("SignUp", body: body)
+        do {
+            return SignUpResult(reply: try await call("SignUp", body: body))
+        } catch let error as CabalmailError where error.isInvitationCodeRefusal {
+            throw CabalmailError.invalidInvitationCode
+        }
     }
 
     public func confirmSignUp(username: String, code: String) async throws {
@@ -212,12 +233,14 @@ public actor CognitoAuthService: AuthService {
         _ = try await call("ConfirmSignUp", body: body)
     }
 
-    public func resendConfirmationCode(username: String) async throws {
+    @discardableResult
+    public func resendConfirmationCode(username: String) async throws -> CodeDelivery? {
         let body: [String: Any] = [
             "ClientId": configuration.cognito.clientId,
             "Username": username,
         ]
-        _ = try await call("ResendConfirmationCode", body: body)
+        let reply = try await call("ResendConfirmationCode", body: body)
+        return CodeDelivery(details: reply["CodeDeliveryDetails"])
     }
 
     public func forgotPassword(username: String) async throws {

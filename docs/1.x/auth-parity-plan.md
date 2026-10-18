@@ -43,7 +43,7 @@ for A.
 | A1    | Webmail: Cognito JSON client module + tests                      | Done 2026-10-18 (#2103) |
 | A2    | Webmail: port `App.jsx` flows, drop the dependency               | Done 2026-10-18 (#2107, #2116) |
 | A3    | Promote the auth contract to `docs/auth.md`                      | Done 2026-10-18 |
-| B1    | Native kits: sign-up contract fixes (Apple + Android)            | Not started |
+| B1    | Native kits: sign-up contract fixes (Apple + Android)            | Apple in review; Android next |
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
@@ -236,7 +236,7 @@ but can create no addresses until an admin grants it mail domains.
 
 ### B1 — Kit contract fixes (Apple and Android)
 
-**Status:** Not started.
+**Status:** Apple in review; Android next, as its own PR.
 
 Both `signUp` implementations (`AuthService.swift`,
 `CognitoAuthService.kt`) need: `preferred_username`; an
@@ -248,6 +248,23 @@ and `sms_enabled` so the screens can hide the invitation and phone
 fields when they are not needed. Kit tests on each side pin the
 request body against the contract. Protocol changes update every
 conformer, including the shared test doubles.
+
+As built (Apple): `signUp(username:password:email:phone:invitationCode:)`
+returns a `SignUpResult`: `.confirmationCodeSent(CodeDelivery)` (medium
+and masked destination) or `.confirmed` (`check_invite` confirmed the
+account itself). `email` is no longer optional, since the contract
+always collects it. A refused invitation code throws
+`CabalmailError.invalidInvitationCode`. A refused username stays
+`.server(code: "UserLambdaValidationException", ...)` with the trigger's
+sentence, which the sign-in form already shows as written. Other
+Cognito refusals (`UsernameExistsException`, `InvalidPasswordException`)
+pass through as `.server`, so B2 words them.
+`resendConfirmationCode` returns the new code's `CodeDelivery`.
+`Configuration` reads `invitationRequired` and `smsEnabled` with the
+webmail's defaults (a literal `true`, and anything but `false`). A
+malformed or missing flag never fails the file, so a cached copy saved
+before the keys still loads. The new types are in
+`CabalmailKit/Auth/SignUp.swift`.
 
 ### B2 / B3 — Sign-up screens
 
