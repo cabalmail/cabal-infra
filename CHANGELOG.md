@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.34.1] - 2026-10-18
+
+### Changed
+- **Release-dashboard check order.** The in-flight release PR's checks table
+  lists running, queued, and failing checks first and sinks passed and skipped
+  ones to the bottom, so what is still unfinished is visible without scrolling
+  past the long tail of settled checks.
+
 ## [1.34.0] - 2026-10-18
 
 ### Added
