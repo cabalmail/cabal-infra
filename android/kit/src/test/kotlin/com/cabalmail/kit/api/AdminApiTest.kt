@@ -3,7 +3,9 @@ package com.cabalmail.kit.api
 import com.cabalmail.kit.CabalmailException
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.AuthTokens
+import com.cabalmail.kit.auth.CodeDelivery
 import com.cabalmail.kit.auth.SignInResult
+import com.cabalmail.kit.auth.SignUpResult
 import com.cabalmail.kit.models.DomainAllowance
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -45,16 +47,17 @@ class AdminApiTest {
         override suspend fun signUp(
             username: String,
             password: String,
-            email: String?,
+            email: String,
             phone: String?,
-        ) = Unit
+            invitationCode: String?,
+        ): SignUpResult = SignUpResult.Confirmed
 
         override suspend fun confirmSignUp(
             username: String,
             code: String,
         ) = Unit
 
-        override suspend fun resendConfirmationCode(username: String) = Unit
+        override suspend fun resendConfirmationCode(username: String): CodeDelivery? = null
 
         override suspend fun forgotPassword(username: String) = Unit
 

@@ -1,5 +1,7 @@
 package com.cabalmail.kit.auth
 
+import com.cabalmail.kit.CabalmailException
+
 /** Which second factor Cognito is asking for mid-sign-in. */
 enum class MfaMethod(
     val challengeName: String,
@@ -55,19 +57,28 @@ interface AuthService {
      */
     suspend fun submitMfaCode(code: String)
 
+    /**
+     * Creates an account (`docs/auth.md`, "Sign-up"). [email] is the
+     * recovery address, always collected; pass [phone] (E.164) only when
+     * the config's `smsEnabled`. A refused invitation code throws
+     * [CabalmailException.InvalidInvitationCode]; a refused username throws
+     * [CabalmailException.ServerError] with `check_invite`'s own sentence.
+     */
     suspend fun signUp(
         username: String,
         password: String,
-        email: String?,
+        email: String,
         phone: String?,
-    )
+        invitationCode: String?,
+    ): SignUpResult
 
     suspend fun confirmSignUp(
         username: String,
         code: String,
     )
 
-    suspend fun resendConfirmationCode(username: String)
+    /** Where the new code went; null when Cognito's reply doesn't say. */
+    suspend fun resendConfirmationCode(username: String): CodeDelivery?
 
     suspend fun forgotPassword(username: String)
 

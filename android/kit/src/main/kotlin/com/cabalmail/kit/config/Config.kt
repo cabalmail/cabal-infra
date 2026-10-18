@@ -1,7 +1,16 @@
 package com.cabalmail.kit.config
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 
 /**
  * Runtime configuration fetched from `https://{control_domain}/config.json`.
@@ -19,6 +28,21 @@ data class Config(
     val domains: List<MailDomain> = emptyList(),
     val invokeUrl: String,
     @SerialName("cognitoConfig") val cognito: CognitoConfig,
+    /**
+     * `invitation_required`: the pool's `check_invite` trigger wants an
+     * invitation code, so sign-up asks for one.
+     */
+    @Serializable(with = TrueOnlyWhenTrue::class)
+    @SerialName("invitation_required")
+    val invitationRequired: Boolean = false,
+    /**
+     * `sms_enabled`: the pool can send texts, so sign-up collects a phone
+     * number and a code may arrive by SMS. True when the key is missing, so a
+     * file older than it keeps the phone field.
+     */
+    @Serializable(with = FalseOnlyWhenFalse::class)
+    @SerialName("sms_enabled")
+    val smsEnabled: Boolean = true,
 ) {
     /** Base URL of the Lambda API (API Gateway invoke URL). */
     val apiUrl: String get() = invokeUrl
@@ -78,3 +102,33 @@ data class CognitoPool(
     @SerialName("UserPoolId") val userPoolId: String,
     @SerialName("ClientId") val clientId: String,
 )
+
+/**
+ * Reads a sign-up flag as the webmail reads it (`App.jsx`, `docs/auth.md`
+ * "Client configuration"): [literal] only when the file holds exactly that
+ * JSON boolean, else the other value. A missing key takes the property's
+ * default, which is the same answer; a malformed one never fails the file.
+ */
+internal abstract class LiteralFlagSerializer(
+    private val literal: Boolean,
+) : KSerializer<Boolean> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("com.cabalmail.kit.config.LiteralFlag.$literal", PrimitiveKind.BOOLEAN)
+
+    override fun deserialize(decoder: Decoder): Boolean {
+        val element = (decoder as? JsonDecoder)?.decodeJsonElement() ?: return decoder.decodeBoolean()
+        val value = (element as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull
+        return if (value == literal) literal else !literal
+    }
+
+    override fun serialize(
+        encoder: Encoder,
+        value: Boolean,
+    ) = encoder.encodeBoolean(value)
+}
+
+/** `invitation_required`: true only for a literal `true`. */
+internal object TrueOnlyWhenTrue : LiteralFlagSerializer(true)
+
+/** `sms_enabled`: false only for a literal `false`. */
+internal object FalseOnlyWhenFalse : LiteralFlagSerializer(false)

@@ -13,6 +13,13 @@ sealed class CabalmailException(
 
     class InvalidCredentials : CabalmailException("Invalid username or password")
 
+    /**
+     * Sign-up's invitation code was refused by the pool's `check_invite`
+     * trigger. The message is `docs/auth.md`'s wording, so every client says
+     * the same thing.
+     */
+    class InvalidInvitationCode : CabalmailException("Invalid invitation code.")
+
     class AuthExpired : CabalmailException("Session expired; sign in again")
 
     class ServerError(
