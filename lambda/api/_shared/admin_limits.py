@@ -1,5 +1,5 @@
 '''Admin-endpoint preamble: group authorization, rate limiting, audit logging,
-and request-body parsing.
+request-body parsing, and the Cognito user-existence check.
 
 Phase 5 of docs/0.10.x/application-surface-hardening-plan.md. Deliberately
 depends on only boto3 (provided by the Lambda runtime) and the standard
@@ -20,6 +20,7 @@ RATE_LIMIT_WINDOW_SECONDS = 60
 
 _ddb = boto3.resource('dynamodb')
 _rate_limit_table = _ddb.Table(RATE_LIMIT_TABLE)
+_cognito = boto3.client('cognito-idp')
 
 
 def is_admin(groups_claim):
@@ -69,6 +70,21 @@ def parse_json_object_body(event):
             'body': json.dumps({'status': 'Invalid input: request body is not valid JSON'})
         }
     return body, None
+
+
+def cognito_user_exists(user_pool_id, username):
+    '''Returns True if the username exists in the Cognito user pool.
+
+    `user_pool_id` is a parameter rather than an env read here because the
+    three handlers that ask this question resolve USER_POOL_ID at import,
+    where a missing one is meant to fail the cold start; the other
+    admin_limits importers have no such variable to read.
+    '''
+    try:
+        _cognito.admin_get_user(UserPoolId=user_pool_id, Username=username)
+        return True
+    except _cognito.exceptions.UserNotFoundException:
+        return False
 
 
 def audit_log(caller, action, target, outcome):

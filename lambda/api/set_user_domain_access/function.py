@@ -15,6 +15,7 @@ import boto3  # pylint: disable=import-error
 from admin_limits import ( # pylint: disable=import-error
     admin_response_or_none,
     audit_log,
+    cognito_user_exists,
     rate_limit_response_or_none,
 )
 
@@ -23,7 +24,6 @@ user_pool_id = os.environ['USER_POOL_ID']
 
 ddb = boto3.resource('dynamodb')
 table = ddb.Table('cabal-user-domain-access')
-cognito = boto3.client('cognito-idp')
 
 
 def handler(event, _context):
@@ -57,7 +57,7 @@ def handler(event, _context):
             'statusCode': 400,
             'body': json.dumps({'Error': f'Unknown domain "{domain}"'})
         }
-    if not cognito_user_exists(username):
+    if not cognito_user_exists(user_pool_id, username):
         return {
             'statusCode': 400,
             'body': json.dumps({'Error': f'User "{username}" does not exist'})
@@ -83,12 +83,3 @@ def handler(event, _context):
             'allowed': allowed
         })
     }
-
-
-def cognito_user_exists(username):
-    '''Returns True if the username exists in the Cognito user pool.'''
-    try:
-        cognito.admin_get_user(UserPoolId=user_pool_id, Username=username)
-        return True
-    except cognito.exceptions.UserNotFoundException:
-        return False
