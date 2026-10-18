@@ -107,6 +107,14 @@ final class FolderWindowLoader {
         // A folder whose count moved may hold rows below the window again.
         didSet { if totalMessages != oldValue { hasMore = true } }
     }
+    /// What the list believed the folder held when a reload cleared
+    /// `totalMessages` to zero (a hard reload, or leaving a search), until
+    /// the refresh it started answers. A STATUS that may predate a removal
+    /// is bounded by what the list believes, and bounding against that zero
+    /// showed - and saved for the next offline launch - a folder total of
+    /// zero (#1977). Nil when the total is a count rather than a reload's
+    /// placeholder.
+    var totalBeforeReset: UInt32?
     /// The All pill's count until a STATUS answers this session: the folder
     /// total last saved. Kept apart from `totalMessages`, which also sizes
     /// the list, where a total nothing can load offline would draw
@@ -273,13 +281,14 @@ final class FolderWindowLoader {
         let serverMessages = UInt32(max(0, status.messages ?? 0))
         var messages = serverMessages
         if mayPredateRemoval {
-            messages = min(messages, totalMessages)
+            messages = min(messages, totalBeforeReset ?? totalMessages)
         }
         // A changed folder size shifts every absolute index, so a staged
         // bottom page is no longer aligned (`performLoadWindow` also checks
         // its stamp, for the gap between a write and the STATUS showing it).
         if messages != totalMessages { invalidateBottomPrefetch() }
         totalMessages = messages
+        totalBeforeReset = nil
         savedMessageCount = nil
         if mayPredateRemoval {
             mailStore.takeStatus(
@@ -306,6 +315,9 @@ final class FolderWindowLoader {
     /// a change made elsewhere (`WindowAnchor`). Clamped at zero.
     func adjustTotal(by delta: Int) {
         totalMessages = UInt32(max(0, Int(totalMessages) + delta))
+        // A removal made while a reload is in flight moves the bound the
+        // reply will be held to, as it moves the total itself.
+        if let base = totalBeforeReset { totalBeforeReset = UInt32(max(0, Int(base) + delta)) }
         if let anchor = alignment.anchor {
             alignment.anchor?.total = UInt32(max(0, Int(anchor.total) + delta))
         }

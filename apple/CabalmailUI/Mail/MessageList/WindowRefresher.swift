@@ -66,6 +66,7 @@ struct WindowRefresher {
         guard let probe = await probeBeforeReset() else { return nil }
         try? await window.client.envelopeCache.invalidate(folder: window.folder.path)
         window.envelopes.removeAll()
+        window.totalBeforeReset = window.totalMessages
         window.totalMessages = 0
         window.savedMessageCount = nil
         window.hasMore = true
