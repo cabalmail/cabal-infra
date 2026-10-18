@@ -151,7 +151,7 @@ extension View {
             ),
             presenting: model.actionError
         ) { _ in
-            Button("OK", role: .cancel) {}
+            Button("OK") {}
         } message: { error in
             Text(error.message)
         }
