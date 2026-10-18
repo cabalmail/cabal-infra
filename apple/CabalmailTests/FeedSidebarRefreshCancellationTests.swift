@@ -107,7 +107,7 @@ final class FeedSidebarRefreshCancellationTests: XCTestCase {
         let rss = try XCTUnwrap(rss)
         await rss.holdNext(.catalog)
         let first = Task { await model.refresh() }
-        try await waitUntil { await rss.isHolding(.catalog) }
+        try await waitUntilOnMainActor { await rss.isHolding(.catalog) }
         first.cancel()
         await first.value
         XCTAssertTrue(model.needsRefresh)
@@ -132,7 +132,7 @@ final class FeedSidebarRefreshCancellationTests: XCTestCase {
         let rss = try XCTUnwrap(rss)
         await rss.holdNext(.catalog)
         let live = Task { await model.refresh() }
-        try await waitUntil { await rss.isHolding(.catalog) }
+        try await waitUntilOnMainActor { await rss.isHolding(.catalog) }
         let next = Task { await model.refreshIfNeeded() }
         try await waitUntilOnMainActor { self.model.waitingRefreshCount == 1 }
 
@@ -197,7 +197,7 @@ final class FeedSidebarRefreshCancellationTests: XCTestCase {
         let rss = try XCTUnwrap(rss)
         await rss.holdNext(call)
         let refreshTask = Task { await model.refresh() }
-        try await waitUntil { await rss.isHolding(call) }
+        try await waitUntilOnMainActor { await rss.isHolding(call) }
         refreshTask.cancel()
         await rss.releaseHeld(call)
         await refreshTask.value

@@ -89,10 +89,10 @@ final class FeedItemListSyncCancellationTests: XCTestCase {
         let rss = try XCTUnwrap(rss)
         await rss.holdNext(.items)
         let sync = Task { await model.sync() }
-        try await waitUntil { await rss.isHolding(.items) }
+        try await waitUntilOnMainActor { await rss.isHolding(.items) }
         // The other feed's sync ends with its cursors, which the store announces.
         let store = try XCTUnwrap(store)
-        try await waitUntil {
+        try await waitUntilOnMainActor {
             let synced = [try await store.syncState(feedId: "f"), try await store.syncState(feedId: "g")]
             return synced.contains { !$0.lastSyncedAt.isEmpty }
         }
@@ -141,7 +141,7 @@ final class FeedItemListSyncCancellationTests: XCTestCase {
         let rss = try XCTUnwrap(rss)
         await rss.holdNext(.items)
         let sync = Task { await model.sync() }
-        try await waitUntil { await rss.isHolding(.items) }
+        try await waitUntilOnMainActor { await rss.isHolding(.items) }
         XCTAssertTrue(model.isSyncing)
         sync.cancel()
         await rss.releaseHeld(.items)

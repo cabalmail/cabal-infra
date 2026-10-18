@@ -122,7 +122,7 @@ final class MailMutationServiceTests: XCTestCase {
         let world = try await ServiceWorld(imap, fixture: fixture)
 
         world.store.markAnswered(ref(3), client: world.client)
-        try await waitUntil { await !imap.flagCalls.isEmpty }
+        try await waitUntilOnMainActor { await !imap.flagCalls.isEmpty }
         try await waitUntilOnMainActor { !world.store.shields.isWritingFlags(ref(3)) }
         world.store.markAnswered(ref(4), client: nil)
 
