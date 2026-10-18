@@ -382,10 +382,20 @@ extension MessageListView {
                 Button {
                     presentCompose(seed: ReplyBuilder.newDraft())
                 } label: {
-                    Image(systemName: "square.and.pencil")
-                        .accessibilityLabel("New Message")
+                    // A `Label`, not a bare `Image`: the bar draws it
+                    // icon-only either way, but what folds into the system
+                    // overflow is a MENU ROW, and a row with no title draws
+                    // nothing — the button is then neither in the bar nor in
+                    // the overflow, which is how Compose became unreachable
+                    // beside an open addresses inspector (#1787). An
+                    // `accessibilityLabel` does not answer for the title: it
+                    // is read by VoiceOver, not drawn.
+                    Label("New Message", systemImage: "square.and.pencil")
                 }
                 .keyboardShortcut("n", modifiers: .command)
+                // Named explicitly: an icon-only button took its identifier
+                // from the SF Symbol, and a titled one has none.
+                .accessibilityIdentifier("list.compose")
             }
             // Compose is the list's one frequent action: on an iPhone Duo's
             // vertical bar it must survive the overflow that the outer
