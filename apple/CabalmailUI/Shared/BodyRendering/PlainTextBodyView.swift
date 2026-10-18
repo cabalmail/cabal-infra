@@ -33,11 +33,21 @@ enum PlainTextLinkDetector {
                 let stringRange = Range(match.range, in: plain),
                 let range = Range(stringRange, in: attributed)
             else { continue }
-            attributed[range].link = url
-            attributed[range].underlineStyle = .single
+            attributed[range].mergeAttributes(linkStyle(url))
             labels[url] = String(plain[stringRange])
         }
         return PlainTextLinks(attributed: attributed, labels: labels)
+    }
+
+    /// The link and its styling as one container. Assigning `.link` and
+    /// `.underlineStyle` directly forms key paths into `AttributeScopes`,
+    /// which are not Sendable (#1842); the attribute keys reach the same
+    /// values without forming one.
+    private static func linkStyle(_ url: URL) -> AttributeContainer {
+        var container = AttributeContainer()
+        container[AttributeScopes.FoundationAttributes.LinkAttribute.self] = url
+        container[AttributeScopes.SwiftUIAttributes.UnderlineStyleAttribute.self] = .single
+        return container
     }
 
     /// Builds the menu target for a link the user activated in a plain-text
