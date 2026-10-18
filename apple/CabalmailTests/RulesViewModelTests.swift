@@ -281,6 +281,104 @@ final class RulesViewModelTests: XCTestCase {
     }
 }
 
+// MARK: - #1903: a committed write whose reply is unreadable
+
+/// A write the server commits before it answers: `/set_rules`'s reply can
+/// be lost without the save being lost, and the editor must not report a
+/// failure or keep a stale `version` when that happens (#1903).
+@MainActor
+final class RulesCommittedSaveTests: XCTestCase {
+    private func makeModel(_ backend: FakeRulesBackend) -> RulesViewModel {
+        let model = RulesViewModel(backend: backend)
+        model.saveDebounce = .milliseconds(1)
+        return model
+    }
+
+    private func waitForSaves(
+        _ backend: FakeRulesBackend, _ count: Int,
+        file: StaticString = #filePath, line: UInt = #line
+    ) async {
+        for _ in 0..<200 where backend.savedSets.count < count {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(backend.savedSets.count, count, file: file, line: line)
+    }
+
+    private func sampleRule(name: String = "Receipts") -> Rule {
+        Rule(
+            name: name,
+            conditions: [Rule.Condition(field: .subject, value: "invoice")],
+            action: .move,
+            moveFolder: "Receipts"
+        )
+    }
+
+    /// `/set_rules` commits before it answers, so a 200 whose body won't
+    /// decode is a save that landed. Reporting it as a failure left
+    /// `version` behind the server's and the next save's 409 then told the
+    /// user another device had edited their rules; the editor re-reads the
+    /// committed set instead (#1903).
+    func testUnreadableSaveReplyReReadsInsteadOfFailing() async {
+        let backend = FakeRulesBackend()
+        backend.ruleSet = RuleSet(rules: [sampleRule()], version: 2)
+        let model = makeModel(backend)
+        await model.load()
+        let fetchesAfterLoad = backend.fetchCount
+
+        backend.saveError = CabalmailError.decoding("set_rules returned an unexpected reply")
+        // What the server holds once it has committed the PUT whose reply
+        // was lost: its own next version, and the set as it stored it.
+        backend.ruleSet = RuleSet(rules: [sampleRule(name: "Mine")], version: 3)
+        var edited = model.rules[0]
+        edited.name = "Mine"
+        model.update(edited)
+        await waitForSaves(backend, 1)
+        for _ in 0..<200 where model.saveState != .saved {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        XCTAssertEqual(model.saveState, .saved)
+        XCTAssertFalse(model.conflict)
+        XCTAssertEqual(backend.fetchCount, fetchesAfterLoad + 1, "the committed set is re-read")
+        XCTAssertEqual(model.version, 3)
+        XCTAssertEqual(model.rules.map(\.name), ["Mine"])
+
+        // The consequence the issue names: the next save quotes the
+        // server's version, so it is not answered with a 409.
+        backend.saveError = nil
+        var again = model.rules[0]
+        again.name = "Mine again"
+        model.update(again)
+        await waitForSaves(backend, 2)
+        XCTAssertEqual(backend.savedSets.last?.expectedVersion, 3)
+    }
+
+    /// A re-read that fails leaves the save in the error state it would
+    /// have had: the editor says so rather than claiming a save it cannot
+    /// confirm.
+    func testUnreadableSaveReplyWithAFailedReReadStillErrors() async {
+        let backend = FakeRulesBackend()
+        backend.ruleSet = RuleSet(rules: [sampleRule()], version: 2)
+        let model = makeModel(backend)
+        await model.load()
+
+        backend.saveError = CabalmailError.decoding("set_rules returned an unexpected reply")
+        backend.fetchError = CabalmailError.network("offline")
+        var edited = model.rules[0]
+        edited.name = "Mine"
+        model.update(edited)
+        await waitForSaves(backend, 1)
+        for _ in 0..<200 where model.saveState == .saving {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        guard case .error = model.saveState else {
+            return XCTFail("expected the failed re-read to surface, got \(model.saveState)")
+        }
+        XCTAssertFalse(model.conflict)
+    }
+}
+
 // MARK: - #1328: a cancelled load is not a load failure
 
 /// The push-transition cancellation (#1328) and what the loader owes it: on

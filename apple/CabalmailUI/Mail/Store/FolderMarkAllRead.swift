@@ -8,10 +8,11 @@ import CabalmailKit
 /// (`MailMutationService.markFolderRead`), so they can't drift between them.
 @MainActor
 enum FolderMarkAllRead {
-    /// Returns how many messages the server flipped. Throws the transport or
-    /// Lambda error for the caller to surface in its own `errorMessage`.
+    /// Returns how many messages the server flipped, or nil when the reply
+    /// didn't say (#1903). Throws the transport or Lambda error for the
+    /// caller to surface in its own `errorMessage`.
     @discardableResult
-    static func perform(folderPath: String, client: CabalmailClient, mailStore: MailSessionStore) async throws -> Int {
+    static func perform(folderPath: String, client: CabalmailClient, mailStore: MailSessionStore) async throws -> Int? {
         try await mailStore.mutations.markFolderRead(folderPath, through: client)
     }
 }
