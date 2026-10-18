@@ -219,7 +219,7 @@ extension ComposeViewModel {
             replySourceFolder: replySourceFolder,
             replySourceUid: replySourceUid
         )
-        try? await draftStore.save(snapshot)
+        await draftStore.autosave(snapshot)
     }
 
     /// True when the compose buffer carries anything worth keeping — the

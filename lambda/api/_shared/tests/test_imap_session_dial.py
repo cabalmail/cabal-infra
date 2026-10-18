@@ -151,5 +151,48 @@ class InternalPathTest(unittest.TestCase):
         ])
 
 
+class LoginNameGuardTest(unittest.TestCase):
+    '''The API logs in only for names in the form sign-up produces: all
+    lowercase, with no master separator. Any other name is refused before
+    anything is dialled.'''
+
+    def setUp(self):
+        _install_fake_imapclient()
+        self.session = _import_imap_session(INTERNAL)
+        self.dialled = []
+        real_dial = self.session.dial_imap
+
+        def recording_dial(host, timeout=None):
+            self.dialled.append(host)
+            return real_dial(host, timeout)
+        self.session.dial_imap = recording_dial
+
+    def test_names_the_sign_up_rule_allows_log_in(self):
+        for name in ('alice', 'bob-smith', '2fast', 'a1c'):
+            client = self.session.open_imap_client(
+                PUBLIC_HOST, name, 'INBOX', False, 'mpw')
+            self.assertIn(('login', f'{name}*admin'), client.calls)
+
+    def test_the_admin_created_service_accounts_log_in(self):
+        for name in ('ci-probe', 'dmarc', 'master'):
+            client = self.session.open_imap_client(
+                PUBLIC_HOST, name, 'INBOX', False, 'mpw')
+            self.assertIn(('login', f'{name}*admin'), client.calls)
+
+    def test_a_name_outside_that_form_is_refused_before_dialling(self):
+        for name in ('Alice', 'ALICE', 'aLice', 'alice*admin', '*', ''):
+            with self.assertRaises(self.session.ImapLoginNameError, msg=name):
+                self.session.open_imap_client(
+                    PUBLIC_HOST, name, 'INBOX', False, 'mpw')
+        self.assertEqual(self.dialled, [])
+
+    def test_the_pooled_path_is_guarded_too(self):
+        self.session.POOL_ENABLED = True
+        with self.assertRaises(self.session.ImapLoginNameError):
+            self.session.open_imap_client(
+                PUBLIC_HOST, 'Alice', 'INBOX', False, 'mpw')
+        self.assertEqual(self.dialled, [])
+
+
 if __name__ == '__main__':
     unittest.main()

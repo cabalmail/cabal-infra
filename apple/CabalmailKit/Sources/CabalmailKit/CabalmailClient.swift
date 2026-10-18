@@ -46,6 +46,12 @@ public actor CabalmailClient {
     /// here, and `SendQueue` subscribes to drain the outbox on reconnect.
     public nonisolated let reachability: Reachability?
     nonisolated let sendQueue: SendQueue?
+    /// The task that hands `sendQueue` the reachability stream. `bind` starts
+    /// the queue's own observer and returns, so this ends almost at once;
+    /// `shutdown()` cancels it anyway, and its `sendQueue.stop()` is what ends
+    /// the feed (a `bind` that runs after `stop()` installs nothing). Nil when
+    /// the client doesn't observe reachability.
+    private nonisolated let sendQueueBinding: Task<Void, Never>?
     #endif
 
     /// The task feeding `spotlightIndexer` from the envelope cache's change
@@ -94,6 +100,7 @@ public actor CabalmailClient {
         #if canImport(Network)
         self.reachability = nil
         self.sendQueue = nil
+        self.sendQueueBinding = nil
         #endif
     }
 
@@ -225,10 +232,11 @@ public actor CabalmailClient {
                 try await Self.submit(message, api: api, imapHost: imapHost, smtpHost: smtpHost)
             }
             self.sendQueue = queue
-            Task { await queue.bind(reachability: reach.changes()) }
+            self.sendQueueBinding = Task { await queue.bind(reachability: reach.changes()) }
         } else {
             self.reachability = nil
             self.sendQueue = nil
+            self.sendQueueBinding = nil
         }
     }
     #endif
@@ -244,6 +252,7 @@ public actor CabalmailClient {
         isShutDown = true
         spotlightBinding?.cancel()
         #if canImport(Network)
+        sendQueueBinding?.cancel()
         await sendQueue?.stop()
         #endif
     }
@@ -291,21 +300,7 @@ public actor CabalmailClient {
         sentFolder: String = "Sent",
         discardingDraft: DraftServerRef? = nil
     ) async throws -> SendOutcome {
-        let messageID = message.messageId ?? "<\(UUID().uuidString)@\(message.from.host)>"
-        let stamped = OutgoingMessage(
-            from: message.from,
-            to: message.to,
-            cc: message.cc,
-            bcc: message.bcc,
-            subject: message.subject,
-            textBody: message.textBody,
-            htmlBody: message.htmlBody,
-            inReplyTo: message.inReplyTo,
-            references: message.references,
-            attachments: message.attachments,
-            extraHeaders: message.extraHeaders,
-            messageId: messageID
-        )
+        let stamped = message.stampingMessageId()
         do {
             try await Self.submit(
                 stamped,
@@ -350,21 +345,7 @@ public actor CabalmailClient {
         _ message: OutgoingMessage,
         replacing prior: DraftServerRef? = nil
     ) async throws -> DraftServerRef? {
-        let messageID = message.messageId ?? "<\(UUID().uuidString)@\(message.from.host)>"
-        let stamped = OutgoingMessage(
-            from: message.from,
-            to: message.to,
-            cc: message.cc,
-            bcc: message.bcc,
-            subject: message.subject,
-            textBody: message.textBody,
-            htmlBody: message.htmlBody,
-            inReplyTo: message.inReplyTo,
-            references: message.references,
-            attachments: message.attachments,
-            extraHeaders: message.extraHeaders,
-            messageId: messageID
-        )
+        let stamped = message.stampingMessageId()
         let response = try await Self.submitDraft(
             stamped,
             api: apiClient,

@@ -150,7 +150,8 @@ public protocol ApiClient: Sendable {
     /// Persists the Apple client's preferences via `/set_preferences`, wrapped
     /// in an `{"app": {...}}` envelope so the Lambda merges only that map and
     /// never disturbs the display name or the web client's fields. The client
-    /// always sends its complete set; the server replaces the whole `app` map.
+    /// always sends its complete set, and the server merges it key by key, so
+    /// a key this client doesn't know survives its save.
     func saveAppPreferences(_ prefs: [String: String]) async throws
 
     // MARK: Mail rules

@@ -1250,9 +1250,13 @@ among them the sign-in form (`SignInErrorText`), the composer
   `.decoding`, which for `/fetch_bimi` is a lookup the cache retries
   rather than a cached "no logo".
 - **No answer: `.network`.** `URLSessionHTTPTransport` turns every
-  `URLError` but the caller's own cancel into `.network`, retrying a
-  dropped connection, a timeout or a cancel nobody asked for once first.
-  A reply that isn't HTTP at all is `.transport`.
+  `URLError` but the caller's own cancel into `.network`. A dropped
+  connection, a timeout or a cancel nobody asked for is retried once first
+  when a second copy of the request is safe to send: every GET, the
+  presigned S3 requests, and the writes and Cognito operations
+  `RequestReplayPolicy` lists. Any other write is sent once, since its
+  first copy may have landed. [request-replay.md](request-replay.md) has
+  the table. A reply that isn't HTTP at all is `.transport`.
 - **The caller gave up: `.cancelled`.** Only when the request's own task
   was cancelled, as when SwiftUI tears down a view's `.task`. Callers that
   stay quiet on a cancel read `Task.isCancelled` rather than matching
@@ -1267,7 +1271,14 @@ outbox and retry" (`CabalmailClient.shouldQueue`). Any other error is
 thrown to the composer, which stays open and shows it. A message already
 in the outbox is retried by `SendQueue`, whatever the error, until
 `Outbox.maxAttempts` (a `.sendInFlight` answer doesn't spend an attempt),
-then marked failed and offered back to the user (`FailedSendBanner`).
+then marked failed and offered back to the user (`FailedSendBanner`). A
+queued message the server accepted is not sent again by the queue that
+sent it, even if its outbox file can't be deleted: that queue logs the
+failure once and retries only the deletion, `Backoff.base` apart. The
+guard lives in that queue's memory, so a new queue over the same outbox
+(after a relaunch, for one) sends such a file again, and the server's
+600-second Message-ID dedupe is what keeps a prompt resend from delivering
+a second copy.
 
 ### Storage: Keychain for secrets, on-disk Codable for mirrors
 
@@ -1394,7 +1405,10 @@ non-npm-managed vendored dep ever appears.
 `CabalmailKit.DraftStore` persists drafts as Codable JSON under the app
 support directory, keyed by UUID. `ComposeViewModel` autosaves every 5 s
 while the sheet is open, so a mid-compose app kill is recoverable — this
-local copy is the live editing buffer and the crash-recovery story.
+local copy is the live editing buffer and the crash-recovery story. A local
+save that fails is logged when it starts failing and when it recovers, not
+on every tick (`DraftStore.autosave(_:)`); the composer shows nothing,
+since the server copy keeps saving on its own schedule.
 
 Drafts also sync across devices through the `/save_draft` Lambda, which
 owns a server-side lifecycle on the top-level `Drafts` mailbox. Server
@@ -1571,7 +1585,8 @@ application-level rejections (auth failure, malformed recipient,
 permanent SMTP 5xx) throw immediately so the compose sheet can correct
 them. `SendQueue` drains the outbox when `NWPathMonitor` reports
 reachability or on an explicit user kick, with `maxAttempts = 10` before
-an entry is dropped so a permanently bad recipient can't spin forever.
+an entry is marked failed and kept for the user, so a permanently bad
+recipient can't spin forever.
 One JSON file per entry under app support, same layout as `DraftStore`.
 
 ### MetricKit is opt-in

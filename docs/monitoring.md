@@ -214,7 +214,7 @@ Expected output: `{"status":"ok","reconciled":6,"failed":0,"extras":[],"checks":
 | `aws-backup`           | Every 1 day       | 6 h   | `backup_heartbeat` Lambda (EventBridge `JOB_COMPLETED`).        |
 | `dmarc-ingest`         | Every 6 hours     | 2 h   | `process_dmarc` Lambda.                                         |
 | `ecs-reconfigure`      | Every 30 minutes  | 30 m  | `reconfigure.sh` loop in mail-tier containers.                  |
-| `cognito-user-sync`    | Every 30 days     | 7 d   | `assign_osid` post-confirmation Lambda. Fires only on user signup. |
+| `cognito-user-sync`    | Every 30 days     | 7 d   | `assign_osid` post-confirmation Lambda, on sign-up and on password reset. |
 | `quarterly-review`     | Every 90 days     | 14 d  | Manual operator ping (see step 15).                             |
 
 Consumers cache the ping URL at cold start (Lambdas) or task start (mail-tier containers). After step 13 populates the SSM values, force the consumers to pick them up:

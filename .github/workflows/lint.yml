@@ -282,6 +282,11 @@ jobs:
       # AdminCreateUser (Terraform's aws_cognito_user) is exempt. Pure stdlib;
       # kept under scripts/tests so build-counter.sh does not ship it.
       run: python3 -m unittest discover -s scripts/tests -p "test_check_invite.py"
+    - name: unittest-assign-osid
+      # The post-confirmation trigger: only a sign-up takes a uid; a confirmed
+      # password reset leaves it alone. Pure stdlib (boto3 is faked); kept
+      # under scripts/tests so build-counter.sh does not ship it.
+      run: python3 -m unittest discover -s scripts/tests -p "test_assign_osid.py"
     - name: unittest-rules-compiler
       # Golden-file + injection-corpus tests for the procmail rule compiler
       # (docs/1.x/user-mail-rules-plan.md, Phase 2). Pure stdlib; the same
@@ -293,6 +298,12 @@ jobs:
       # drain (docs/1.x/rules-composition-and-custom-flags-plan.md, decision
       # 5 erratum). Pure stdlib; the IMAP client is injected.
       run: python3 -m unittest discover -s docker/shared/test/append-drain -p "test_*.py"
+    - name: unittest-sync-users
+      # The Cognito -> OS account sync: each user is checked and
+      # provisioned on its own, and one it cannot create is skipped and
+      # logged. Runs the real script against PATH stubs (bash, jq and sort
+      # are real), so it needs no root or image.
+      run: python3 -m unittest discover -s docker/shared/test/sync-users -p "test_*.py"
 
   # ---------------------------------------------------------------------------
   # Swift. swiftlint --strict and the platform-conditionals ratchet, the same

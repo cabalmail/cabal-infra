@@ -105,8 +105,23 @@ def dial_imap(host, timeout=None):
     return IMAPClient(host=host, use_uid=True, ssl=True, timeout=timeout)
 
 
+class ImapLoginNameError(ValueError):
+    '''Raised, before any connection, for a username outside the form the
+    API logs in with.'''
+
+
+def check_login_name(user):
+    '''Refuses, before anything is dialled, a username that is not all
+    lowercase or that contains the master separator (*). Account names take
+    that form under the sign-up rule (lambda/counter/check_invite), so every
+    name it allows passes, and so do the admin-created service accounts.'''
+    if not user or user != user.lower() or '*' in user:
+        raise ImapLoginNameError('This account name cannot be used for mail.')
+
+
 def _new_imap_client(host, user, mpw, timeout=None):
     '''Connects and authenticates a fresh master-user IMAP session.'''
+    check_login_name(user)
     client = dial_imap(host, timeout)
     client.login(f"{user}*admin", mpw)
     return client

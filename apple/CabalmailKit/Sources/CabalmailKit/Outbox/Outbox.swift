@@ -92,12 +92,17 @@ public actor Outbox {
     ///
     /// A file that can't be decoded is quarantined, not deleted; one
     /// written by a newer build (a higher schema version) is skipped and
-    /// left in place.
+    /// left in place. A missing directory is an empty outbox; any other
+    /// failure to read the directory throws, so the queue can say so
+    /// rather than treat queued mail as gone.
     public func list() throws -> [Entry] {
-        guard let urls = try? fileManager.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: [.contentModificationDateKey]
-        ) else {
+        let urls: [URL]
+        do {
+            urls = try fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.contentModificationDateKey]
+            )
+        } catch CocoaError.fileReadNoSuchFile {
             return []
         }
         var entries: [Entry] = []

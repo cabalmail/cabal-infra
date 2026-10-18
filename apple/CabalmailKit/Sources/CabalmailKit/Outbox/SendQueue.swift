@@ -26,6 +26,8 @@ import Foundation
 /// 5. An entry that hits `Outbox.maxAttempts` stays in the outbox marked
 ///    `failedAt`. The queue stops retrying it, and the app surfaces it
 ///    (via `Outbox.changes()`) for the user to retry or discard.
+/// 6. A delivered entry whose file can't be removed is never sent again by
+///    this queue: later drains retry only the removal, `Backoff.base` apart.
 ///
 /// The queue is main-actor-agnostic: the drain pass runs on its own task
 /// so UI doesn't hitch behind a slow retry. Callbacks fire back to the
@@ -82,6 +84,13 @@ public actor SendQueue {
     private var drainGeneration = 0
     /// Set by `stop()`, for good: a stopped queue drains nothing again.
     private var stopped = false
+    /// Entries the sender delivered whose outbox file couldn't be removed,
+    /// with when the last removal failed. Drains skip these when sending and
+    /// retry the removal instead. Kept in this queue's memory only, so a new
+    /// queue over the same outbox (after a relaunch, for one) sends a file
+    /// still there again, and the server's 600-second Message-ID dedupe is
+    /// what keeps a prompt resend from delivering a second copy.
+    private var delivered: [UUID: Date] = [:]
 
     public init(
         outbox: Outbox,
@@ -188,8 +197,14 @@ public actor SendQueue {
 
     private func drain() async {
         let current = now()
-        let entries = ((try? await outbox.list()) ?? []).filter { entry in
-            guard !entry.isFailed else { return false }
+        let listed = await listedEntries(for: "drain")
+        // Taken before the removals below: one that succeeds clears its id
+        // from `delivered`, but the listing above still holds its entry.
+        let held = Set(delivered.keys)
+        await retryRemovals(present: listed.map { Set($0.map(\.id)) }, at: current)
+        guard let listed else { return }
+        let entries = listed.filter { entry in
+            guard !entry.isFailed, !held.contains(entry.id), delivered[entry.id] == nil else { return false }
             guard let due = dueDate(for: entry) else { return true }
             return due <= current
         }
@@ -205,8 +220,9 @@ public actor SendQueue {
     /// so a deferred retry happens even if reachability never changes.
     private func scheduleRetry(generation: Int) async {
         guard generation == drainGeneration, drainTask == nil else { return }
-        let entries = (try? await outbox.list()) ?? []
-        let due = entries.filter { !$0.isFailed }.compactMap { dueDate(for: $0) }.min()
+        let entries = await listedEntries(for: "retry timer") ?? []
+        let sends = entries.filter { !$0.isFailed && delivered[$0.id] == nil }.compactMap { dueDate(for: $0) }
+        let due = (sends + delivered.values.map { removalDue($0) }).min()
         // Re-check after the await: a stop() or a new drain may have run.
         guard generation == drainGeneration, drainTask == nil else { return }
         retryTask?.cancel()
@@ -230,6 +246,58 @@ public actor SendQueue {
         return scheduled
     }
 
+    /// The outbox's entries, or nil, logged, when the directory can't be
+    /// read: queued mail then waits for the next kick rather than vanishing
+    /// from view without a word.
+    private func listedEntries(for purpose: String) async -> [Outbox.Entry]? {
+        do {
+            return try await outbox.list()
+        } catch {
+            CabalmailLog.error("SendQueue", "couldn't list the outbox for the \(purpose): \(error)")
+            return nil
+        }
+    }
+
+    /// When a delivered entry's removal, last failed at `failure`, may be
+    /// tried again.
+    private func removalDue(_ failure: Date) -> Date {
+        failure.addingTimeInterval(backoff.base)
+    }
+
+    /// Retries the removals that have come due, and forgets delivered ids
+    /// whose file has gone some other way (a discard, a sign-out's wipe).
+    /// Runs even when the outbox couldn't be listed (`present` nil), so a
+    /// removal that is due can't keep the retry timer at zero delay.
+    private func retryRemovals(present: Set<UUID>?, at current: Date) async {
+        if let present {
+            delivered = delivered.filter { present.contains($0.key) }
+        }
+        for (id, failure) in delivered where removalDue(failure) <= current {
+            if Task.isCancelled { return }
+            await removeDelivered(id)
+        }
+    }
+
+    /// Removes a delivered entry's file. A failure keeps the id in
+    /// `delivered`, so the entry is not sent again; only the first failure
+    /// is logged, at error level, and a later success says so.
+    private func removeDelivered(_ id: UUID) async {
+        do {
+            try await outbox.remove(id: id)
+            if delivered.removeValue(forKey: id) != nil {
+                CabalmailLog.info("SendQueue", "removed delivered message \(id) from the outbox")
+            }
+        } catch {
+            let isFirst = delivered.updateValue(now(), forKey: id) == nil
+            guard isFirst else { return }
+            CabalmailLog.error(
+                "SendQueue",
+                "sent \(id) but couldn't remove it from the outbox; "
+                    + "this queue won't send it again: \(error)"
+            )
+        }
+    }
+
     private func retryTimerFired(generation: Int) {
         guard generation == drainGeneration else { return }
         retryTask = nil
@@ -242,8 +310,8 @@ public actor SendQueue {
         entry.lastAttemptAt = now()
         do {
             try await sender(entry.message)
-            try? await outbox.remove(id: entry.id)
             CabalmailLog.info("SendQueue", "sent queued message \(entry.id)")
+            await removeDelivered(entry.id)
         } catch CabalmailError.sendInFlight {
             guard !stopped else { return }
             // The API still holds a dedupe claim on this message's Message-Id

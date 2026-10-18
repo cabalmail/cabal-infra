@@ -64,6 +64,21 @@ describe('SignUp', () => {
     expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
   });
 
+  it('keeps submit disabled for a username with no letter', () => {
+    const { rerender } = render(withAuth(
+      <SignUp {...defaultProps} {...validProps} username="12345" inviteCode="" />
+    ));
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: validProps.password },
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    rerender(withAuth(
+      <SignUp {...defaultProps} {...validProps} username="12345a" inviteCode="" />
+    ));
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
+  });
+
   it('renders the email field even when SMS is off', () => {
     render(withAuth(<SignUp {...defaultProps} />, { sms_enabled: false }));
     expect(screen.getByLabelText('Email address')).toBeInTheDocument();

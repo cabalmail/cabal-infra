@@ -5,6 +5,8 @@
 **Recommendation:** Session. One Android session, run outside the Apple clients rearchitecture project (which has closed), carries the backlog end to end: about ten small Android-only PRs, one batch of decisions, no server change. The Android legs other plans hand here run later as one short session each, after their Apple leg ships, not as a standing project.
 **Size:** M for the backlog session. The later legs add about XL in total (two L, three M, one S), spread over months *(inferred)*.
 **Priority:** Now for PR 1, Next for the rest. PR 1 stops Android's feed reader mode running script from the article, the twin of #1911, and should ship in the same release as hardening-web-and-writes.md's Apple fix. The rest is low-impact bugs and one feature. It all runs on Ubuntu CI and touches no Apple file, so it can go at the maintainer's review pace beside the Duo work.
+
+> **Erratum (2026-10-17):** PR 1 no longer ships in the same release as the Apple fix. The maintainer chose on 2026-10-17 to ship hardening-web-and-writes.md's PR 2 (#2056) without waiting for PR 1, which has not started; PR 1 ships in a later release. Its priority stays Now.
 **Depends on:** hardening-web-and-writes.md (its decisions 2 and 3 set the design PR 1 mirrors). Decision only, not order: platform-conditionals.md decision 1 (the blank-rule default). Later legs: flags-and-cross-media.md, feed-bulk-actions.md, account-isolation.md (its decision 4 and PR A live), shared-load-error-state.md (its decisions 2 and 3), sqlite-mail-store.md (only if decision 5 here adds a leg).
 **Unblocks:** nothing outside this plan. PR 9's first real Room migration is what the later feed legs build on.
 **Duo groundwork:** None. This is the Android client; it lays nothing down for the iPhone Duo, and duo-support.md plans nothing foldable on Android.
@@ -17,7 +19,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Work item | Status |
 | --- | --- |
 | Decisions 1 to 6 | Unanswered (2026-10-15) |
-| PR 1. Reader mode runs no script (Android twin of #1911) | Not started (2026-10-15); its Apple twin, hardening PR 2 (#2056), is on `stage`, not yet released |
+| PR 1. Reader mode runs no script (Android twin of #1911) | Not started (2026-10-15); its Apple twin, hardening PR 2 (#2056), is on `stage`, not yet released, and ships without this PR (the maintainer, 2026-10-17) |
 | PR 2. #1954: report feed, catalog and queue failures apart | Not started (2026-10-15) |
 | PR 3 (only if decision 4 is Yes). A test harness for the feed database | Not started (2026-10-15) |
 | PR 4. #1955: each sync-state write records only its own columns | Not started (2026-10-15) |
@@ -109,7 +111,9 @@ Order: the reader-mode fix first, then bugs, then the Room work. PRs 2, 3 and 4 
 - Verify: on the Mini's emulator, an article whose body holds `<img src=x onerror="document.title='js-ran'">` (#1911's recipe) in reader mode; then images, links and toggling back.
 - Risk: low. A flag left off would break the live page visibly; the toggle-back check catches it. Ship it in the same release as hardening's PR 2.
 
-**Status:** Not started (2026-10-15). Its Apple twin, hardening-web-and-writes.md PR 2 (#2056, `5046716`, "Apple: feed reader mode runs no script from the article"), is merged to `stage` and not yet released; the hardening plan wanted both in one release. #1911 stays open until the hardening session's stage check. Hardening decisions 2 (same view) and 3 (drop video players) were taken on their recommended answers: Apple's reader rendering loads with page JavaScript off and leads with a content security policy refusing script, plugins and frames, Readability drops every video player, and a link tapped in the reader leaves it only once its page commits.
+  > **Erratum (2026-10-17):** Hardening's PR 2 ships without this PR, by the maintainer's choice on 2026-10-17 (see the erratum under Priority).
+
+**Status:** Not started (2026-10-15). Its Apple twin, hardening-web-and-writes.md PR 2 (#2056, `5046716`, "Apple: feed reader mode runs no script from the article"), is merged to `stage` and not yet released; the hardening plan wanted both in one release, and on 2026-10-17 the maintainer chose to ship it without this PR. #1911 was closed on 2026-10-17 after the hardening session's stage check. Hardening decisions 2 (same view) and 3 (drop video players) were taken on their recommended answers: Apple's reader rendering loads with page JavaScript off and leads with a content security policy refusing script, plugins and frames, Readability drops every video player, and a link tapped in the reader leaves it only once its page commits.
 
 **PR 2. #1954: report feed, catalog and queue failures apart.**
 - Scope: `syncAll` returns a report (catalog failure, pending failure, per-feed failures), modelled on `apple/CabalmailKit/Sources/CabalmailKit/RSS/RssSyncReport.swift`. `FeedsViewModel.refresh` shows the catalog failure, or the first failed feed's message only when every feed failed, as `apple/CabalmailUI/Feeds/Sidebar/FeedSidebarViewModel.swift:124-125` does. `FeedManagementViewModel.kt:246` keeps ignoring it. Optional: drop the second catalog fetch if the report carries the catalog diff.
@@ -169,6 +173,8 @@ Order: the reader-mode fix first, then bugs, then the Room work. PRs 2, 3 and 4 
 **Status:** Not started (2026-10-15).
 
 **Releases.** PR 1 rides with hardening-web-and-writes.md's PR 2. PRs 2 to 7 ride the next promotions. PR 8 and PR 9 never share a release, so a sign-out regression and a migration regression stay apart. PRs 9 and 10 go in one release with no other Android structural change, and its soak adds PR 9's upgrade check. Each issue needs its verification before promotion; ask the tester or a second agent to reproduce #1954, #1955 and the reader-mode twin first. Each Android merge to stage queues a `gate-stage` Play upload approval (`android.yml:129`), so batch merges where possible.
+
+> **Erratum (2026-10-17):** PR 1 does not ride with hardening's PR 2: the maintainer chose to ship that without it (see the erratum under Priority). PR 1 rides the first promotion after it merges.
 
 **Hotspots**, all Android, owned by this session while it runs: `RssSyncEngine.kt`, `RssStore.kt`, `RoomRssStore.kt`, `InMemoryRssStore.kt` (PRs 2, 3, 4, 8, 9); `ArticleWebView.kt` and `BodyFormatting.kt` (PR 1); `Rss.kt` and `ApiClient.kt` (PR 9); `FeedItemListViewModel.kt`, `FeedItemListScreen.kt`, the preferences files (PR 10); `CabalmailNavHost.kt` (PR 6); `AppContainer.kt`, `SignInViewModel.kt` (PR 8). The later legs edit the same files, so they start after this session's PRs merge. No Apple file, Lambda or Terraform.
 

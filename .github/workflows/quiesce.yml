@@ -83,10 +83,10 @@ jobs:
     environment: ${{ inputs.environment }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      # Same env-var path as infra.yml: shell-special characters survive
-      # unmangled, and quiesce must not blank the invite code that the
-      # check_invite Lambda enforces.
-      TF_VAR_invitation_code: ${{ vars.TF_VAR_INVITATION_CODE }}
+      # Same env-var path and secret-first lookup as infra.yml:
+      # shell-special characters survive unmangled, and quiesce must not
+      # blank the invite code that the check_invite Lambda enforces.
+      TF_VAR_invitation_code: ${{ secrets.TF_VAR_INVITATION_CODE || vars.TF_VAR_INVITATION_CODE }}
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

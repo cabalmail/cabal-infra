@@ -18,16 +18,31 @@ import type {
   SuggestModel,
   SuggestOutcome,
 } from '@cabalmail/extension-shared/content/controller';
+import { failureMessage, isRefusal } from '@cabalmail/extension-shared/messaging/messages';
+
+type Failure = { stage: 'create' | 'confirm'; message?: string };
 
 type ActiveUi =
   | { kind: 'none' }
   | { kind: 'suggest'; anchor: HTMLElement; model: SuggestModel; resolve: (o: SuggestOutcome) => void }
   | { kind: 'adopt'; anchor: HTMLElement; address: string; resolve: (c: 'create' | 'dismiss') => void }
   | { kind: 'guard'; address: string; resolve: (c: 'create-and-submit' | 'submit-anyway' | 'cancel') => void }
-  | { kind: 'confirm-failed'; anchor: HTMLElement; resolve: (c: 'retry' | 'submit-anyway' | 'cancel') => void };
+  | {
+      kind: 'confirm-failed';
+      anchor: HTMLElement;
+      failure: Failure;
+      resolve: (c: 'retry' | 'submit-anyway' | 'cancel') => void;
+    }
+  | { kind: 'refused'; address: string; message: string; resolve: (c: 'edit') => void };
 
 const active = signal<ActiveUi>({ kind: 'none' });
 const notice = signal<string | null>(null);
+/**
+ * A create the adopt banner asked for came back refused or failed. Its own
+ * signal, not `active`: it is passive, and the single active slot belongs
+ * to whatever the user is being asked next.
+ */
+const problem = signal<{ anchor: HTMLElement; message: string } | null>(null);
 
 const font = {
   fontFamily: 'var(--cm-font)',
@@ -98,6 +113,8 @@ function SuggestPopover(props: {
   const [comment, setComment] = useState(model.defaultComment);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A refusal is not worth retrying with the same name; a fresh one is shown.
+  const [refused, setRefused] = useState(false);
 
   const address = useMemo(
     () => `${generated.local}@${generated.subdomain}.${apex}`,
@@ -115,6 +132,7 @@ function SuggestPopover(props: {
   const commit = async () => {
     setBusy(true);
     setError(null);
+    setRefused(false);
     try {
       const committed = await model.commit({
         local: generated.local,
@@ -124,7 +142,13 @@ function SuggestPopover(props: {
       });
       props.resolve({ kind: 'used', address: committed });
     } catch (err) {
-      setError(`Couldn't create the address: ${String(err)}`);
+      if (isRefusal(err)) {
+        setRefused(true);
+        setGenerated(model.generate(apex));
+        setError(`${failureMessage(err)} Here is a different one.`);
+      } else {
+        setError(`Couldn't create the address: ${failureMessage(err)}`);
+      }
       setBusy(false);
     }
   };
@@ -177,7 +201,7 @@ function SuggestPopover(props: {
           Cancel
         </button>
         <button style={primaryButton} disabled={busy} onClick={commit}>
-          {busy ? 'Creating…' : error ? 'Retry' : 'Use this address'}
+          {busy ? 'Creating…' : error && !refused ? 'Retry' : 'Use this address'}
         </button>
       </div>
     </div>
@@ -251,15 +275,27 @@ function GuardModal(props: {
 
 function ConfirmFailedBanner(props: {
   anchor: HTMLElement;
+  failure: Failure;
   resolve: (c: 'retry' | 'submit-anyway' | 'cancel') => void;
 }) {
   const position = useAnchor(props.anchor);
+  const creating = props.failure.stage === 'create';
   return (
-    <div style={{ ...card, ...position }} role="alertdialog" aria-label="Address not finalized">
+    <div
+      style={{ ...card, ...position }}
+      role="alertdialog"
+      aria-label={creating ? 'Address not created' : 'Address not finalized'}
+    >
       <div style={{ marginBottom: '8px' }}>
-        Couldn't finalize your Cabalmail address (it will be cleaned up
-        automatically in 24h). Submit anyway?
+        {creating
+          ? "Couldn't create your Cabalmail address, so this site won't be able to email you there. Submit anyway?"
+          : "Couldn't finalize your Cabalmail address (it will be cleaned up automatically in 24h). Submit anyway?"}
       </div>
+      {props.failure.message && (
+        <div style={{ marginBottom: '8px', color: 'var(--cm-muted)', fontSize: '13px' }}>
+          {props.failure.message}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: '8px' }}>
         <button style={primaryButton} onClick={() => props.resolve('retry')}>
           Retry
@@ -275,15 +311,64 @@ function ConfirmFailedBanner(props: {
   );
 }
 
+function RefusedModal(props: { address: string; message: string; resolve: (c: 'edit') => void }) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: '0',
+        background: 'var(--cm-scrim)',
+        zIndex: '2147483647',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      role="alertdialog"
+      aria-label="Address can't be used"
+    >
+      <div style={{ ...card, position: 'static', maxWidth: '380px' }}>
+        <div style={{ fontWeight: '600', marginBottom: '8px' }}>Can't use this address</div>
+        <div style={{ marginBottom: '8px' }}>{props.message}</div>
+        <div style={{ marginBottom: '12px' }}>
+          The form wasn't sent, so the site never saw{' '}
+          <code style={{ fontFamily: 'monospace' }}>{props.address}</code>.
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button style={primaryButton} onClick={() => props.resolve('edit')}>
+            Edit address
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreateProblem(props: { anchor: HTMLElement; message: string }) {
+  const position = useAnchor(props.anchor);
+  return (
+    <div style={{ ...card, ...position }} role="alert">
+      <div style={{ marginBottom: '8px' }}>{props.message}</div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button style={buttonStyle} onClick={() => (problem.value = null)}>
+          OK
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function OverlayRoot() {
   const ui = active.value;
   const note = notice.value;
+  const trouble = problem.value;
   return (
     <div>
       {ui.kind === 'suggest' && <SuggestPopover {...ui} />}
       {ui.kind === 'adopt' && <AdoptBanner {...ui} />}
       {ui.kind === 'guard' && <GuardModal {...ui} />}
       {ui.kind === 'confirm-failed' && <ConfirmFailedBanner {...ui} />}
+      {ui.kind === 'refused' && <RefusedModal {...ui} />}
+      {trouble && ui.kind === 'none' && <CreateProblem {...trouble} />}
       {note && (
         <div style={{ ...card, position: 'fixed', bottom: '16px', right: '16px' }}>{note}</div>
       )}
@@ -318,8 +403,26 @@ export function createOverlay(): OverlayPort {
       settle((resolve) => ({ kind: 'adopt', anchor, address, resolve })),
     showSubmitGuardModal: (address) =>
       settle((resolve) => ({ kind: 'guard', address, resolve })),
-    showConfirmFailedBanner: (anchor) =>
-      settle((resolve) => ({ kind: 'confirm-failed', anchor, resolve })),
+    showConfirmFailedBanner: (anchor, failure) =>
+      settle((resolve) => ({
+        kind: 'confirm-failed',
+        anchor,
+        failure: failure ?? { stage: 'confirm' },
+        resolve,
+      })),
+    showCreateRefused: (address, message) =>
+      settle((resolve) => ({ kind: 'refused', address, message, resolve })),
+    showCreateProblem: (anchor, message) => {
+      problem.value = { anchor, message };
+      // Typing again is a new attempt; the note is about the old one.
+      anchor.addEventListener(
+        'input',
+        () => {
+          if (problem.value?.anchor === anchor) problem.value = null;
+        },
+        { once: true },
+      );
+    },
     showAmbiguousBadge: (anchor, onOpen) => {
       // A small clickable mark at the field's right edge, in the field's own
       // coordinate space via absolute positioning over the page (Shadow DOM,

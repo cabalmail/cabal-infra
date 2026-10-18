@@ -37,6 +37,10 @@ resource "aws_cognito_user_pool_client" "mfa_enroll" {
   user_pool_id        = aws_cognito_user_pool.users.id
   explicit_auth_flows = ["USER_PASSWORD_AUTH"]
 
+  # The enrollment flow writes no attributes; the shared list (main.tf)
+  # keeps this client from granting more than cabal_admin_client does.
+  write_attributes = local.user_write_attributes
+
   access_token_validity  = 5
   id_token_validity      = 5
   refresh_token_validity = 60 # Cognito's floor

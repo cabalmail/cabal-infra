@@ -66,6 +66,28 @@ public struct OutgoingMessage: Sendable, Codable, Hashable {
         self.extraHeaders = extraHeaders
         self.messageId = messageId
     }
+
+    /// This message with a Message-ID: its own when it has one, otherwise a
+    /// random one on the sender's host. `CabalmailClient` stamps every send
+    /// and draft save with it, so the copy the server stores and the copy an
+    /// outbox entry replays carry the same identity.
+    public func stampingMessageId() -> OutgoingMessage {
+        if messageId != nil { return self }
+        return OutgoingMessage(
+            from: from,
+            to: to,
+            cc: cc,
+            bcc: bcc,
+            subject: subject,
+            textBody: textBody,
+            htmlBody: htmlBody,
+            inReplyTo: inReplyTo,
+            references: references,
+            attachments: attachments,
+            extraHeaders: extraHeaders,
+            messageId: "<\(UUID().uuidString)@\(from.host)>"
+        )
+    }
 }
 
 public struct Attachment: Sendable, Codable, Hashable {
