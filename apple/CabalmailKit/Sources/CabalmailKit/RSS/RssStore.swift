@@ -139,8 +139,13 @@ public actor RssStore {
     /// after the clear; the file is the one the next account's store opens
     /// (#1937).
     public func retire() throws {
+        // The close is what a retire is for, so it happens even when the
+        // clear throws (a busy lock, a full disk, a damaged search index):
+        // a store left open is one that late sync can still write into,
+        // which is the state the retire exists to prevent (#1957). The
+        // error still reaches the caller.
+        defer { database.close() }
         try clear()
-        database.close()
     }
 
     // MARK: - Per-subscription web storage
