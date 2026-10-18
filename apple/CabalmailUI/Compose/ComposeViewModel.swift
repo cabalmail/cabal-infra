@@ -458,7 +458,7 @@ final class ComposeViewModel {
         } catch let failure as RichTextEditorController.CallFailure {
             noteBodyConversionFailed(failure)
         } catch let error as CabalmailError {
-            errorMessage = describe(error)
+            errorMessage = ComposeErrorText.sendFailure(error)
         } catch {
             errorMessage = error.localizedDescription
         }
