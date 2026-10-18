@@ -48,7 +48,7 @@ for A.
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
 | C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Done 2026-10-18 (#2124, #2126) |
-| C2    | Native: first admin feature — Users (approve, disable, delete)   | Apple in review; Android next |
+| C2    | Native: first admin feature — Users (approve, disable, delete)   | Done 2026-10-18 (#2127, #2128) |
 
 Tracking issues: A #1950, B #1951, C #1952.
 
@@ -306,7 +306,7 @@ gain no interface member. `testIdToken(claimsJson)` builds test tokens.
 
 ### C2 — First admin feature: Users
 
-**Status:** Apple in review; Android next, as its own PR.
+**Status:** Done 2026-10-18: Apple #2127, Android #2128.
 
 The webmail's Users view on native: list users (`/list_users`),
 approve (`/confirm_user`), enable/disable, delete, and per-user domain
@@ -343,3 +343,20 @@ As built (Apple):
   `confirm_user` and `delete_user` are sent once, because a second copy
   answers 500 for work the first did. `enable_user`, `disable_user` and
   `set_user_domain_access` are sent again.
+
+As built (Android, #2128): the same screens and guards, in `ui/admin/`.
+
+- **Where it lives:** a `USERS` settings category, listed by
+  `SettingsCategory.listed(isAdmin)`. `UsersScreen` is Settings' Users
+  pane, and `UserDetailScreen` sits on a `users/{username}` route that
+  shares the pane's view model, the way the rules editor does.
+- **The admin flag:** `SettingsUiState.isAdmin` is read when
+  `SettingsViewModel` starts and again each time Settings enters
+  composition.
+- **The 403 path:** a 403 sets the Users state's `accessDenied`, and the
+  settings route re-reads the flag.
+- **Errors:** failed actions are typed errors that the screens word as
+  snackbars from `strings.xml`.
+- **Android has no request-replay table** like the Apple kit's. The
+  client's own retry is the one 401 replay every call gets. Whatever OkHttp
+  does on a failed connection applies to these writes as to every other.
