@@ -40,7 +40,7 @@ for A.
 
 | Phase | Work item                                                        | Status      |
 | ----- | ---------------------------------------------------------------- | ----------- |
-| A1    | Webmail: Cognito JSON client module + tests                      | Not started; blocked on D2 |
+| A1    | Webmail: Cognito JSON client module + tests                      | Done 2026-10-18 (#2103) |
 | A2    | Webmail: port `App.jsx` flows, drop the dependency               | Not started |
 | A3    | Promote the auth contract below to `docs/auth.md`                | Not started |
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Not started |
@@ -65,27 +65,26 @@ no client uses it. SRP's advantage (the password never leaves the
 browser) is small next to TLS to Cognito, and implementing SRP by hand
 is the one piece of this work that would justify keeping a library.
 
-**D2 — Webmail session persistence. OPEN; blocks A1.** `CLAUDE.md`
-says auth tokens live in a module-level variable in `App.jsx` and are
-never written to `localStorage`. That is true of `_token`, but the
-library itself persists the ID, access and refresh tokens to
-`localStorage` (`CognitoIdentityServiceProvider.<clientId>.*` keys,
-since `App.jsx` passes no `Storage` in `poolData`), and the reload
-restore at `App.jsx:309` (`getCurrentUser()` + `getSession`) depends on
-it: a reload within the refresh token's 7 days lands signed in. The
-port has to pick a behaviour on purpose:
+**D2 — Webmail session persistence: `sessionStorage`.** Decided by
+the operator 2026-10-18. The refresh token and the username go to
+`sessionStorage`; the ID and access tokens stay in memory; nothing
+goes to `localStorage`. A reload stays signed in by refreshing; a new
+tab, or a tab closed and reopened, signs in again (with TOTP).
 
-- (a) Keep the refresh token in `localStorage`, written explicitly by
-  our module, and correct the `CLAUDE.md` rule to say so. Same UX as
-  today.
-- (b) `sessionStorage`. Survives a reload, not a closed tab or a new
-  tab. Smaller exposure window; new tabs sign in again.
-- (c) Memory only. Every reload signs in again (with TOTP).
-
-Recommendation: (b). The webmail is the secondary client, and a new
-tab asking for a sign-in is a modest cost for not keeping a 7-day
-credential in long-lived storage. Whatever is chosen, the `CLAUDE.md`
-sentence is rewritten in the same PR to describe it.
+Why it had to be decided: `CLAUDE.md` says auth tokens live in a
+module-level variable in `App.jsx` and are never written to
+`localStorage`. That is true of `_token`, but the library itself
+persists the ID, access and refresh tokens to `localStorage`
+(`CognitoIdentityServiceProvider.<clientId>.*` keys, since `App.jsx`
+passes no `Storage` in `poolData`), and the reload restore at
+`App.jsx:309` (`getCurrentUser()` + `getSession`) depends on it: a
+reload within the refresh token's 7 days lands signed in. The
+alternatives were keeping the refresh token in `localStorage` (today's
+UX, with the `CLAUDE.md` rule corrected) and memory only (every reload
+signs in again). `sessionStorage` was chosen because the webmail is
+the secondary client, and a new tab asking for a sign-in is a modest
+cost for not keeping a 7-day credential in long-lived storage. A2
+rewrites the `CLAUDE.md` sentence to describe it.
 
 **D3 — Native admin recognition is a UI hint only.** Clients read the
 ID token's `cognito:groups` claim the way the webmail does
@@ -159,7 +158,7 @@ switch.
 
 ### A1 — Cognito JSON client module
 
-**Status:** Not started; blocked on D2.
+**Status:** Done 2026-10-18 (#2103). Nothing imports it yet; A2 wires it in.
 
 A module under `react/admin/src/auth/` exposing promise-returning
 functions for every operation in the contract, plus a token holder that
@@ -168,13 +167,57 @@ Vitest tests against a stubbed `fetch` for each operation's request
 shape and each documented error mapping (invalid invitation code, wrong
 MFA code, `NotAuthorizedException`, the `require_admin_mfa` refusal).
 
+As built (`index.js` re-exports all of it):
+
+- `cognito.js`: `clientsFromConfig(cognitoConfig)` returns the main
+  client and the enrollment client (null when `/config.js` has no
+  `enrollClientId`). Each client has `signUp`, `confirmSignUp`,
+  `resendConfirmationCode`, `signIn`, `respondToMfaChallenge`,
+  `refresh`, `forgotPassword`, `confirmForgotPassword`, `getUser` (the
+  attributes and the MFA list in one call), `updateUserAttributes`,
+  `getUserAttributeVerificationCode`, `verifyUserAttribute`,
+  `associateSoftwareToken`, `verifySoftwareToken` and
+  `setSoftwareTokenMfa`. `signIn` resolves to `{status: 'signed-in',
+  tokens}` or `{status: 'mfa', mfa: 'totp' | 'sms', challenge}`; the
+  challenge is a plain value, so A2 keeps it in a ref where the
+  library kept a `CognitoUser`. Code deliveries come back as `{medium:
+  'email' | 'phone', destination}`.
+- `session.js`: `createSession({client})` with `establish(tokens,
+  username)` after a sign-in, `restore()` on load, `idToken()` /
+  `accessToken()` (each refreshes when the token has under five
+  minutes left), `current()` for render-time reads, `clear()` and
+  `subscribe(listener)`. A refresh Cognito refuses (any 4xx but
+  throttling) ends the session with `SessionExpired`. A network
+  failure or a 5xx keeps the session for the next try. A refresh still
+  in flight across a sign-out or an account switch is discarded rather
+  than written back.
+- `errors.js`: `CognitoError` carries the exception name in both
+  `code` and `name`, as the library's errors did, so
+  `signUpErrorMessage` and the `LimitExceededException` checks in
+  `App.jsx` work unchanged. Predicates: `isInvalidInvitationCode`,
+  `isMfaEnrollmentRequired`, `isCodeMismatch`, `isNotAuthorized`,
+  `isLimitExceeded`, `isSignInRequired`.
+- `jwt.js`: `isAdminToken(idToken)` matches the `admin` group as a
+  whole element, as `admin_limits.is_admin` does. `decodeJwtPayload`
+  decodes base64url and UTF-8. `App.jsx`'s `atob` read does neither: it
+  can throw on a claim holding `~`, `?` or `>`, and it garbles
+  non-ASCII text.
+
+Checked live against the stage pool on 2026-10-18 (no account
+created): a sign-up with a wrong invitation code maps to
+`isInvalidInvitationCode` and `signUpErrorMessage` words it, and a
+sign-in for an unknown username maps to `isNotAuthorized`.
+
 ### A2 — Port `App.jsx`, remove the dependency
 
 **Status:** Not started.
 
 Replace every `CognitoUser` / `CognitoUserPool` / `CognitoUserAttribute`
 use in `App.jsx` with the A1 module. Behaviour is unchanged apart from
-D1 and D2. Today's `checkSession` signs the user out when the 12-hour
+D1 and D2. On load, also remove the library's leftover
+`CognitoIdentityServiceProvider.*` keys from `localStorage`: a user
+signed in before the port still has a 7-day refresh token there, and
+D2 says none stays. Today's `checkSession` signs the user out when the 12-hour
 ID token expires; the port refreshes instead, which is what the native
 clients do. Remove `amazon-cognito-identity-js` from `package.json`
 and the lockfile, rewrite the `CLAUDE.md` token-storage sentence, and
