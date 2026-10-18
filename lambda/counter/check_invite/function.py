@@ -23,7 +23,9 @@ login, so it has to be a name those can all take as it is. A self-service
 username must have the shape the sign-up screens ask for (3-32 lowercase
 letters, digits and hyphens, no leading or trailing hyphen), must contain
 a letter (a login name is never all digits), and must not be a name the
-mail images' own accounts, groups or sendmail aliases already use. No
+mail images' own accounts, groups or sendmail aliases already use. It also
+names the user's top-level prefix in the cache bucket ({username}/...), so
+it must not be one of the fixed prefixes the API keeps there. No
 underscore: generate-config.sh names the alias for an address shared by
 several users by joining their usernames with `_`.
 
@@ -47,7 +49,7 @@ ADMIN_CREATE = 'PreSignUp_AdminCreateUser'
 # The sign-up screens' rule (react/admin/src/SignUp/index.jsx usernameValid).
 USERNAME_SHAPE = re.compile(r'[a-z0-9][a-z0-9-]{1,30}[a-z0-9]')
 
-# Names a self-service user may not take. Three sources, kept in this order
+# Names a self-service user may not take. Four sources, kept in this order
 # so a reviewer can diff each against where it comes from:
 #   1. the left-hand sides of docker/shared/aliases.static, plus root;
 #   2. accounts and groups the amazonlinux:2023 mail images ship (the base
@@ -57,7 +59,12 @@ USERNAME_SHAPE = re.compile(r'[a-z0-9][a-z0-9-]{1,30}[a-z0-9]')
 #   3. the Terraform-created service users (modules/app/*_user.tf), listed
 #      so they stay reserved in a pool that has not created them yet, and
 #      admin, the Dovecot master user the API logs in through
-#      ({user}*admin).
+#      ({user}*admin);
+#   4. top-level key prefixes the API uses in the cache bucket
+#      (cache.<control_domain>), which keys user data {username}/...:
+#      outbound (upload_url), sent-pending (send, append_sent), bimi
+#      (fetch_bimi) and caa (process_dmarc); process_dmarc's other
+#      prefix, dmarc, is in group 3.
 # Names outside USERNAME_SHAPE (ssh_keys, ...) need no entry.
 RESERVED_USERNAMES = frozenset('''
     mailer-daemon postmaster bin daemon adm lp sync shutdown halt mail news
@@ -74,6 +81,8 @@ RESERVED_USERNAMES = frozenset('''
     opendmarc polkitd chrony
 
     master dmarc ci-probe admin
+
+    outbound sent-pending bimi caa
 '''.split())
 RESERVED_PREFIXES = ('systemd-',)
 
