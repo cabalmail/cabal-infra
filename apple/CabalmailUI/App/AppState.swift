@@ -32,6 +32,11 @@ public final class AppState {
     public var navCoordinator: NavStateCoordinator? { sessionManager.navCoordinator }
     /// Syncs app `Preferences` to the server for the signed-in account.
     public var prefsCoordinator: PreferencesSyncCoordinator? { sessionManager.prefsCoordinator }
+    /// Whether the signed-in user is an administrator (a display hint;
+    /// `SessionManager.isAdmin`).
+    var isAdmin: Bool { sessionManager.isAdmin }
+    /// Re-reads `isAdmin`, after the server refused an admin call.
+    func refreshAdminStatus() async { await sessionManager.refreshAdminStatus() }
     /// The last control domain and username signed in, persisted.
     var controlDomain: String { sessionManager.controlDomain }
     var lastUsername: String { sessionManager.lastUsername }

@@ -113,6 +113,11 @@ the transport sends a second copy; "Once" means it doesn't.
 | `PUT /set_preferences` | `updateDisplayName`, `saveAppPreferences` | Writes the same values per key. | Again | `set_preferences/function.py:278-281`, `:317-339` |
 | `PUT /set_nav_state` | `saveNavState` | Replaces the cursor with the same cursor; only the timestamp moves. | Again | `set_nav_state/function.py:184` |
 | `PUT /set_rules` | `setRules` | The version moved on: 409 "Rules changed on another device; reload." for the save the first copy made. | Once | `set_rules/function.py:311-316`, `:347-353` |
+| `PUT /confirm_user` | `confirmUser` | The account is confirmed: Cognito refuses to confirm it again, and the Lambda answers 500 for the confirm the first copy made. | Once | `confirm_user/function.py:17`; `_shared/admin_limits.py` (`admin_user_action_response`) |
+| `PUT /enable_user` | `enableUser` | Enables an enabled user, which Cognito accepts; 200. | Again | `enable_user/function.py:17` |
+| `PUT /disable_user` | `disableUser` | Disables a disabled user, which Cognito accepts; 200. | Again | `disable_user/function.py:17` |
+| `DELETE /delete_user` | `deleteUser` | The user is gone: Cognito finds no such user, and the Lambda answers 500 for the delete the first copy made. | Once | `delete_user/function.py:39` |
+| `PUT /set_user_domain_access` | `setUserDomainAccess` | Writes the same grant row, or deletes one already gone; same end state. | Again | `set_user_domain_access/function.py:67`, `:69` |
 | `POST /push_register` | `registerPushDevice` | The same upsert. | Again | `push_register/function.py:201` |
 | `POST /push_deregister` | `deregisterPushDevice` | Deletes a row already gone, which the Lambda answers as success. | Again | `push_deregister/function.py:4`, `:44` |
 | `POST /push_envelope` | `fetchPushEnvelope` | A read sent as POST: read-only IMAP, a cache fill. | Again | `push_envelope/function.py:107` |
@@ -127,8 +132,8 @@ the transport sends a second copy; "Once" means it doesn't.
 | `POST /rss_opml_import` | `importOpml` | Finds everything the first copy imported and reports "0 created", and a copy that overlaps the first can duplicate folders and feeds. | Once | `rss_opml_import/function.py:41-93` |
 
 The rows marked Once whose second copy only answers a misleading error
-(`/new_folder`, `/delete_folder`, `/revoke`, `/set_rules`,
-`/rss_delete_folder`) could be sent again if the call site learned that its
+(`/new_folder`, `/delete_folder`, `/revoke`, `/set_rules`, `/confirm_user`,
+`/delete_user`, `/rss_delete_folder`) could be sent again if the call site learned that its
 request had been replayed and read that error as "the first copy landed".
 Nothing tells it today. The other Once rows (`/empty_trash`,
 `/rss_subscribe`, `/rss_unsubscribe`, `/rss_new_folder`,
@@ -140,7 +145,8 @@ has finished changes nothing.
 
 ## Reads
 
-Every GET is sent again: `/list`, `/list_my_domains`, `/fetch_bimi`,
+Every GET is sent again: `/list`, `/list_my_domains`, `/list_users`,
+`/list_user_domain_access`, `/fetch_bimi`,
 `/list_folders`, `/folder_status`, `/list_messages`, `/list_envelopes`,
 `/search_envelopes`, `/fetch_message`, `/list_attachments`,
 `/fetch_attachment`, `/fetch_inline_image`, `/get_preferences`,

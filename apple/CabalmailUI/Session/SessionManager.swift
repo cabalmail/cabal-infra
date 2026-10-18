@@ -67,6 +67,14 @@ public final class SessionManager {
     /// on sign-in / restore, cleared on sign-out.
     public private(set) var prefsCoordinator: PreferencesSyncCoordinator?
 
+    /// Whether the session's user is an administrator, as their ID token
+    /// says (`CabalmailClient.isAdmin()`). A hint for what to show, the
+    /// Users settings, never for what to allow: the server checks every
+    /// admin call itself. Read when the session is wired and on each return
+    /// to the foreground, so a refresh that granted or removed the group
+    /// shows up; false while signed out.
+    public private(set) var isAdmin = false
+
     /// Announced by the Kit when this install's credentials stop working
     /// (issue #1703). Process-scoped rather than per-session: it is handed to
     /// every client `make(...)` builds, so a signal from a client that is
@@ -321,6 +329,7 @@ extension SessionManager {
         // A deliberate sign-out is its own explanation; `handleSessionExpiry`
         // re-sets this after calling through here.
         signedOutReason = nil
+        isAdmin = false
         // Before the reset, so a count this session's work fetches from here
         // on is dropped rather than written back over it (#1848).
         if let client { teardownGate.markEnded(client) }
@@ -343,6 +352,18 @@ extension SessionManager {
         // After every state write: what the client still runs on its own
         // stops, and nothing about the session changes while it does.
         await client.shutdown()
+    }
+
+    /// Re-reads `isAdmin` from the session's current tokens: on each return
+    /// to the foreground, and when the server answers an admin call with 403.
+    func refreshAdminStatus() async {
+        guard let client else {
+            isAdmin = false
+            return
+        }
+        let value = await client.isAdmin()
+        // A sign-out or account switch while the read was out wins.
+        if self.client === client { isAdmin = value }
     }
 
     /// Shared tail of `signIn` and `restoreIfPossible`: installs the client,
@@ -371,6 +392,9 @@ extension SessionManager {
             Task { await coordinator.start() }
         }
         observeSessionInvalidation()
+        // Before the status flips, so the first Settings render already
+        // knows whether to list Users. A keychain read, not a request.
+        isAdmin = await newClient.isAdmin()
         self.status = .signedIn
         pollers.startInboxBadgePolling(requestAuthorization: sessionEnvironment.hooks.requestBadgeAuthorization)
         owner.requestContactsAccess()
