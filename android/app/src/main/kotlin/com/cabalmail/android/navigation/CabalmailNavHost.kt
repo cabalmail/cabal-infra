@@ -331,6 +331,7 @@ fun CabalmailNavHost(
                     // Composed after the launch destination so its navigation
                     // lands on top of the launch view, not under it.
                     val resumeMessage = stringResource(R.string.resume_prompt)
+                    val resumeMessageIn = stringResource(R.string.resume_prompt_in)
                     val resumeAction = stringResource(R.string.resume_action)
                     LaunchedEffect(Unit) {
                         val cursor = container.navCursor.restoreOnce() ?: return@LaunchedEffect
@@ -343,9 +344,16 @@ fun CabalmailNavHost(
                             )
                         if (!offer) return@LaunchedEffect
                         cursor.state.updatedAt?.let { container.navCursor.markOffered(it) }
+                        // Say where Resume lands: the folder, or the feed
+                        // behind the item (#1931). An unresolvable feed
+                        // keeps the unnamed sentence.
+                        val destination =
+                            ResumeDestination.name(cursor.state, container.rssStore) { feedId, sortKey ->
+                                runCatching { container.requireApi().getItem(feedId, sortKey) }.getOrNull()
+                            }
                         val result =
                             snackbarHostState.showSnackbar(
-                                message = resumeMessage,
+                                message = destination?.let { resumeMessageIn.format(it) } ?: resumeMessage,
                                 actionLabel = resumeAction,
                                 withDismissAction = true,
                                 duration = SnackbarDuration.Indefinite,
