@@ -1124,8 +1124,10 @@ function renderStats(){
   const prVal=m.pr?('#'+m.pr.number):'—';
   const prNote=m.pr?(m.pr.checks_state==='SUCCESS'?'checks green':(m.pr.checks_state==='FAILURE'||m.pr.checks_state==='ERROR')?'checks failing':'checks running'):'no release PR';
   const wait=(m.waiting||[]).length;
+  const held=((m.pending||{}).issues||[]).length, heldCut=!!(m.pending||{}).truncated;
   document.getElementById('stats').innerHTML=
     `<div class="stat"><div class="n">${(m.fragments||[]).length}</div><div class="l">pending fragments</div></div>`+
+    `<div class="stat${held?' alert':''}"><div class="n">${held}${heldCut?'+':''}</div><div class="l">issues holding promote</div></div>`+
     `<div class="stat"><div class="n">${esc(prVal)}</div><div class="l">release PR · ${esc(prNote)}</div></div>`+
     `<div class="stat${wait?' alert':''}"><div class="n">${wait}</div><div class="l">runs awaiting approval</div></div>`+
     `<div class="stat"><div class="n">${esc(m.last&&m.last.version?m.last.version:'—')}</div><div class="l">last release · ${esc(lp?lp.word:'none found')}</div></div>`;
