@@ -142,6 +142,7 @@ extension MessageListViewModel {
         // "type to search" state.
         guard let window else { return }
         window.envelopes.removeAll()
+        window.totalBeforeReset = window.totalMessages
         window.totalMessages = 0
         window.savedMessageCount = nil
         window.hasMore = true
