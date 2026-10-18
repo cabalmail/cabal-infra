@@ -81,24 +81,6 @@
         }
       },
       "idiom": "watch"
-    },
-    {
-      "appearances": [
-        {
-          "appearance": "contrast",
-          "value": "high"
-        }
-      ],
-      "color": {
-        "color-space": "srgb",
-        "components": {
-          "alpha": "0.120",
-          "blue": "0xFB",
-          "green": "0x88",
-          "red": "0xC7"
-        }
-      },
-      "idiom": "watch"
     }
   ],
   "info": {
