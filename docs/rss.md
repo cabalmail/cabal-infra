@@ -154,6 +154,14 @@ The two day-grouped ordering modes are applied client-side from the
 counts are not served; clients count from their local cache using the
 watermark and per-item state above.
 
+`/rss_update_subscription`, `/rss_mark_all_read` and `/rss_delete_folder`
+change a subscription only if it still exists when they write. When the
+write finds it gone, `/rss_update_subscription` answers 404
+`unknown_subscription`, as it does for any subscription the caller does
+not have, and the other two skip it and leave it out of their counts.
+Mark-all-read likewise flips only the explicit unread marks that still
+exist when it writes.
+
 ## Operator notes
 
 - **Seeding or reviving a feed by hand**: a feed row needs `feed_id`,

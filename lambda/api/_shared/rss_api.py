@@ -24,6 +24,7 @@ import os
 from decimal import Decimal
 import boto3  # pylint: disable=import-error
 from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
+from botocore.exceptions import ClientError  # pylint: disable=import-error
 
 FEED_TABLE = 'cabal-rss-feed'
 ITEM_TABLE = 'cabal-rss-item'
@@ -169,26 +170,60 @@ def page_size(params):
 
 # -- Lookups -------------------------------------------------------------------
 
+def is_subscription(row):
+    '''Whether a row of the subscription table is a subscription: one that
+    carries feed_id. rss_subscribe_core.create_subscription writes it, and
+    every later write to the row requires it (update_subscription_row).'''
+    return bool(row) and 'feed_id' in row
+
+
+def unknown_subscription():
+    '''The 404 for a subscription the caller does not have.'''
+    return ApiError(404, 'unknown_subscription', 'No such subscription.')
+
+
 def get_subscription(user, subscription_id):
     '''The caller's subscription row, or ApiError 404.'''
     if not subscription_id:
         raise ApiError(400, 'missing_subscription', 'subscription_id is required.')
     row = subscriptions.get_item(Key={'user': user, 'subscription_id': subscription_id}).get('Item')
-    if not row:
-        raise ApiError(404, 'unknown_subscription', 'No such subscription.')
+    if not is_subscription(row):
+        raise unknown_subscription()
     return row
 
 
 def list_subscriptions(user):
-    '''Every subscription row of the caller.'''
+    '''Every subscription row of the caller (rows that are not
+    subscriptions, per is_subscription, are left out).'''
     rows = []
     kwargs = {'KeyConditionExpression': Key('user').eq(user)}
     while True:
         response = subscriptions.query(**kwargs)
-        rows.extend(response.get('Items', []))
+        rows.extend(row for row in response.get('Items', []) if is_subscription(row))
         if 'LastEvaluatedKey' not in response:
             return rows
         kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+
+
+def update_existing(table, attribute, **kwargs):
+    '''table.update_item(**kwargs), applied only to a row that exists and
+    carries `attribute`; it never creates a row. Returns the response, or
+    None when there is no such row. kwargs carry no ConditionExpression of
+    their own: this one is the whole condition.'''
+    try:
+        return table.update_item(ConditionExpression=f'attribute_exists({attribute})', **kwargs)
+    except ClientError as err:
+        if err.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            return None
+        raise
+
+
+def update_subscription_row(user, subscription_id, **kwargs):
+    '''update_existing on the caller's subscription row: the response, or
+    None when the row is not a subscription (is_subscription) by the time
+    it is written.'''
+    return update_existing(subscriptions, 'feed_id',
+                           Key={'user': user, 'subscription_id': subscription_id}, **kwargs)
 
 
 def list_folders(user):

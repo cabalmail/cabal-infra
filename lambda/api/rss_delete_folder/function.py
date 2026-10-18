@@ -8,7 +8,7 @@ unsubscribe anything.
 '''
 from rss_api import (ApiError, ROOT_FOLDER, body_of, folder_key, folders,  # pylint: disable=import-error
                      guarded, list_folders, list_subscriptions, ok,
-                     subscriptions, username)
+                     update_subscription_row, username)
 
 
 @guarded
@@ -29,17 +29,20 @@ def handler(event, _context):
 
 
 def reparent_subscriptions(user, folder_id, parent):
-    '''Moves the folder's subscriptions to `parent` (root when empty).'''
+    '''Moves the folder's subscriptions to `parent` (root when empty);
+    returns how many it moved. A subscription gone by the time it is
+    written is skipped.'''
     moved = 0
     for sub in list_subscriptions(user):
         if (sub.get('folder_id') or ROOT_FOLDER) != folder_id:
             continue
-        subscriptions.update_item(
-            Key={'user': user, 'subscription_id': sub['subscription_id']},
+        written = update_subscription_row(
+            user, sub['subscription_id'],
             UpdateExpression='SET folder_id = :folder, folder_key = :fkey',
             ExpressionAttributeValues={':folder': parent or ROOT_FOLDER,
                                        ':fkey': folder_key(parent, sub['subscription_id'])})
-        moved += 1
+        if written is not None:
+            moved += 1
     return moved
 
 

@@ -10,13 +10,17 @@ queued offline is earlier than its replay - clamped to now, or now when the
 client sends none. A watermark never moves backwards. Items the caller had
 explicitly marked unread up to the watermark are flipped, so the result is
 what the button promises - nothing unread left that the user had seen.
+
+Only rows that still exist when written are changed: a subscription whose
+watermark write finds it gone is skipped (not counted, its state
+untouched), and a state row gone by its write is not counted as flipped.
 '''
 from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Attr, Key  # pylint: disable=import-error
 from rss_api import (ROOT_FOLDER, ApiError, body_of,  # pylint: disable=import-error
                      folder_and_descendants, get_subscription, guarded,
-                     list_subscriptions, ok, state, subscriptions, updated_key,
-                     user_feed_key, username)
+                     list_subscriptions, ok, state, update_existing,
+                     update_subscription_row, updated_key, user_feed_key, username)
 
 
 @guarded
@@ -34,14 +38,17 @@ def handler(event, _context):
             wanted = folder_and_descendants(user, body['folder_id'])
             subs = [s for s in subs if (s.get('folder_id') or ROOT_FOLDER) in wanted]
     stamp = now.isoformat()
-    flipped = 0
+    marked = flipped = 0
     for sub in subs:
         if watermark > str(sub.get('read_watermark') or ''):
-            subscriptions.update_item(Key={'user': user, 'subscription_id': sub['subscription_id']},
-                                      UpdateExpression='SET read_watermark = :w',
-                                      ExpressionAttributeValues={':w': watermark})
+            written = update_subscription_row(user, sub['subscription_id'],
+                                              UpdateExpression='SET read_watermark = :w',
+                                              ExpressionAttributeValues={':w': watermark})
+            if written is None:
+                continue
+        marked += 1
         flipped += clear_explicit_unread(user, sub['feed_id'], watermark, stamp)
-    return ok({'subscriptions': len(subs), 'flipped': flipped, 'read_watermark': watermark})
+    return ok({'subscriptions': marked, 'flipped': flipped, 'read_watermark': watermark})
 
 
 def requested_watermark(raw, now):
@@ -64,7 +71,8 @@ def requested_watermark(raw, now):
 def clear_explicit_unread(user, feed_id, watermark, now):
     '''Sets is_read on the caller's rows that explicitly say unread, for
     items published at or before the watermark (the sort key leads with
-    published_at).'''
+    published_at). Returns how many it flipped; a row gone by the time it
+    is written is not written.'''
     key = user_feed_key(user, feed_id)
     kwargs = {'KeyConditionExpression': Key('user_feed').eq(key),
               'FilterExpression': Attr('is_read').eq(False),
@@ -75,12 +83,14 @@ def clear_explicit_unread(user, feed_id, watermark, now):
         for row in response.get('Items', []):
             if row['sort_key'].split('#', 1)[0] > watermark:
                 continue
-            state.update_item(
+            written = update_existing(
+                state, 'sort_key',
                 Key={'user_feed': key, 'sort_key': row['sort_key']},
                 UpdateExpression='SET is_read = :true, updated_at = :now, updated_key = :ukey',
                 ExpressionAttributeValues={':true': True, ':now': now,
                                            ':ukey': updated_key(now, row['sort_key'])})
-            flipped += 1
+            if written is not None:
+                flipped += 1
         if 'LastEvaluatedKey' not in response:
             return flipped
         kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
