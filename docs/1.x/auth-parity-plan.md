@@ -47,7 +47,7 @@ for A.
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
-| C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Apple in review; Android next |
+| C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Done 2026-10-18 (#2124, #2126) |
 | C2    | Native: first admin feature — Users (approve, disable, delete)   | Not started |
 
 Tracking issues: A #1950, B #1951, C #1952.
@@ -277,7 +277,7 @@ scheduled.
 
 ### C1 — `isAdmin` in the kits
 
-**Status:** Apple in review; Android next, as its own PR.
+**Status:** Done 2026-10-18: Apple #2124, Android #2126.
 
 Decode the ID token payload (base64url JSON, no signature check; the
 token came from Cognito over TLS and D3 makes it a hint), expose
@@ -297,6 +297,12 @@ with no new protocol requirement for the test doubles. Nothing in the
 app reads it yet. C2 decides where the admin views appear and reads it
 at session start. `TestFixtures.idToken(claims:)` builds unsigned test
 tokens.
+
+As built (Android, #2126): the same shape in
+`kit/.../auth/IdTokenClaims.kt`. `AuthTokens.isAdmin` is an extension
+property, so the serialized token format is untouched, and
+`AuthService.isAdmin()` is an extension function, so the app's fakes
+gain no interface member. `testIdToken(claimsJson)` builds test tokens.
 
 ### C2 — First admin feature: Users
 

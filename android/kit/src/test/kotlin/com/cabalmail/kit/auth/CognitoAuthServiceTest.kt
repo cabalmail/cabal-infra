@@ -10,6 +10,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -267,6 +268,82 @@ class CognitoAuthServiceTest {
             assertNull(store.username)
             val exception = runCatching { auth.submitMfaCode("123456") }.exceptionOrNull()
             assertTrue(exception is CabalmailException.NotSignedIn)
+        }
+
+    // isAdmin() is read from whatever tokens are stored when it is asked, so
+    // it has to follow every change to them (auth parity plan, C1).
+
+    private val adminIdToken = testIdToken("""{"cognito:username":"alice","cognito:groups":["admin"]}""")
+    private val userIdToken = testIdToken("""{"cognito:username":"alice"}""")
+
+    @Test
+    fun `isAdmin is false when signed out`() {
+        assertFalse(service(CognitoStub()).isAdmin())
+    }
+
+    @Test
+    fun `isAdmin follows sign-in and sign-out`() =
+        runTest {
+            val service = service(CognitoStub(HttpStatusCode.OK to authResult(id = adminIdToken)))
+            service.signIn("alice", "pw")
+            assertTrue(service.isAdmin())
+
+            service.signOut()
+            assertFalse(service.isAdmin())
+        }
+
+    /**
+     * Group membership changes reach a client only in the next token Cognito
+     * issues, so the refresh is where a grant or a removal shows up.
+     */
+    @Test
+    fun `a refresh that grants the group makes the user admin`() =
+        runTest {
+            val store = InMemoryTokenStore()
+            store.tokens =
+                AuthTokens(
+                    idToken = userIdToken,
+                    accessToken = "a",
+                    refreshToken = "keep-me",
+                    expiresAtEpochMillis = 1_000_000L + 60_000L,
+                )
+            val service =
+                service(CognitoStub(HttpStatusCode.OK to authResult(id = adminIdToken, refresh = null)), store)
+            assertFalse(service.isAdmin())
+
+            service.currentIdToken()
+            assertTrue(service.isAdmin())
+        }
+
+    @Test
+    fun `a refresh that removes the group ends admin`() =
+        runTest {
+            val store = InMemoryTokenStore()
+            store.tokens =
+                AuthTokens(
+                    idToken = adminIdToken,
+                    accessToken = "a",
+                    refreshToken = "keep-me",
+                    expiresAtEpochMillis = 1_000_000L + 3_600_000L,
+                )
+            val service = service(CognitoStub(HttpStatusCode.OK to authResult(id = userIdToken, refresh = null)), store)
+            assertTrue(service.isAdmin())
+
+            service.forceRefreshedIdToken()
+            assertFalse(service.isAdmin())
+        }
+
+    @Test
+    fun `isAdmin answers for the account signed in after a switch`() =
+        runTest {
+            val store = InMemoryTokenStore()
+            val admin = service(CognitoStub(HttpStatusCode.OK to authResult(id = adminIdToken)), store)
+            admin.signIn("alice", "pw")
+            admin.signOut()
+            val next = service(CognitoStub(HttpStatusCode.OK to authResult(id = userIdToken)), store)
+            next.signIn("bob", "pw")
+
+            assertFalse(next.isAdmin())
         }
 
     @Test
