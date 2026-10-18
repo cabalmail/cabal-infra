@@ -230,8 +230,39 @@ final class MessageListViewModel {
     /// back on screen; a list already on the poller stays as it is.
     func startWatching() async {
         // The global search surface has no folder to watch.
-        guard let folder else { return }
+        guard let folder, folderIsKeptCurrent else { return }
         mailStore.folderPollers.subscribe(self, to: folder.path, through: client)
+    }
+
+    /// Whether this list's folder earns a poller at all: subscription is
+    /// the user's signal that they want a folder kept current, and the
+    /// banner on an unsubscribed one tells them it is not (#1983). The
+    /// answer comes from `UnsubscribedBannerPolicy`, the same rule that
+    /// decides whether that banner is drawn, so the promise and the
+    /// behaviour cannot drift apart again. An unsubscribed folder still
+    /// refreshes on open, on pull, and from the banner's own Refresh.
+    var folderIsKeptCurrent: Bool {
+        guard let folder else { return false }
+        return !UnsubscribedBannerPolicy.shouldShow(
+            folder: folder, subscribedPaths: mailStore.counts.subscribedFolderPaths
+        )
+    }
+
+    /// Re-applies that rule to an open list when the subscribed set moves
+    /// under it: the folder list landing after the list opened (until it
+    /// does, a stand-in `Folder(path:)` answers for its own flag), or the
+    /// user subscribing or unsubscribing this very folder while looking at
+    /// it. Unlike `stopWatching`, leaving the poller here does not cancel
+    /// the window's own tasks -- the list stays open and usable, it just
+    /// stops being kept current.
+    func updateWatching() async {
+        guard let folder else { return }
+        if folderIsKeptCurrent {
+            mailStore.folderPollers.subscribe(self, to: folder.path, through: client)
+        } else {
+            let stopping = mailStore.folderPollers.unsubscribe(self, from: folder.path, through: client)
+            await stopping?.awaitWatcherStop()
+        }
     }
 
     /// Takes the list off its folder's poller, from the view's `.onDisappear`
