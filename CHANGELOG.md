@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.33.0] - 2026-10-18
+
+### Changed
+- **Cache bucket objects expire two days after they are written.** The
+  lifecycle rule on `cache.<control_domain>` applies to the whole bucket:
+  cached message bodies and attachment parts, staged outbound
+  attachments, queued Sent copies, BIMI renders, and archived DMARC and
+  CAA report files. The DMARC and CAA views keep every report's rows, with
+  the raw file viewable for two days; `docs/caa.md` describes how to keep
+  a readable copy of CAA reports.
+- **Changelog fragments for every change.** The changelog now records
+  engineering history, not only user-facing release notes: every PR must add
+  (or edit) a fragment unless it changes only documentation, enforced by the
+  new `changelog-fragment` check. The `no-changelog` PR label no longer skips
+  the fragment; it only waives the `Apple:`/`Android:` prefix, keeping a
+  non-user-facing client entry out of the tester release notes.
+- **One unsubscribe per feed subscription.** Of two overlapping
+  `/rss_unsubscribe` requests for the same subscription, one removes it and
+  the other answers 404 `unknown_subscription`, as a repeat after the first
+  has finished does.
+- **Subscription changes apply only to existing subscriptions.** When
+  its write finds the subscription gone, `/rss_update_subscription`
+  answers 404 `unknown_subscription`, and `/rss_mark_all_read` and
+  `/rss_delete_folder` skip it and leave it out of their counts.
+  Mark-all-read likewise flips only the unread marks that still exist
+  when it writes.
+- **Sign-up turns away a few more server-held names.** Self-service
+  sign-up also refuses `outbound`, `sent-pending`, `bimi` and `caa`,
+  names the server uses for its own storage. Accounts an administrator
+  creates are exempt, as with the other reserved names.
+
 ## [1.32.0] - 2026-10-18
 
 ### Changed
