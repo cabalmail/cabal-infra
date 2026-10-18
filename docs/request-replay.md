@@ -117,7 +117,7 @@ the transport sends a second copy; "Once" means it doesn't.
 | `POST /push_deregister` | `deregisterPushDevice` | Deletes a row already gone, which the Lambda answers as success. | Again | `push_deregister/function.py:4`, `:44` |
 | `POST /push_envelope` | `fetchPushEnvelope` | A read sent as POST: read-only IMAP, a cache fill. | Again | `push_envelope/function.py:107` |
 | `POST /rss_subscribe` | `subscribe` | Usually finds the subscription and answers `existing`, but a copy that overlaps a slow first one can add a second subscription. | Once | `_shared/rss_subscribe_core.py:196-204` |
-| `POST /rss_unsubscribe` | `unsubscribe` | Usually the subscription is gone: 404 `unknown_subscription` for an unsubscribe that worked. A copy that overlaps a slow first one finds the row too and does the unsubscribe's work a second time. | Once | `rss_unsubscribe/function.py:24-39`, `:57-71`; `_shared/rss_api.py:176-178` |
+| `POST /rss_unsubscribe` | `unsubscribe` | After the first has finished: 404 `unknown_subscription` for an unsubscribe that worked. A copy that overlaps the first: the row's delete is conditional, so whichever copy's delete removes the row detaches the subscriber and answers 200, and the other answers 404. | Once | `rss_unsubscribe/function.py` (`handler`, `delete_subscription`); `_shared/rss_api.py:176-178` |
 | `PUT /rss_update_subscription` | `updateSubscription` | The same SET and REMOVE on the same row. | Again | `rss_update_subscription/function.py:28-46` |
 | `POST /rss_new_folder` | `newFolder` | Makes a second folder with the same name and a new id. | Once | `rss_new_folder/function.py:25`, `:33` |
 | `PUT /rss_update_folder` | `updateFolder` | The same SET and REMOVE on the same row. | Again | `rss_update_folder/function.py:15-56` |
@@ -132,8 +132,9 @@ The rows marked Once whose second copy only answers a misleading error
 request had been replayed and read that error as "the first copy landed".
 Nothing tells it today. The other Once rows (`/empty_trash`,
 `/rss_subscribe`, `/rss_unsubscribe`, `/rss_new_folder`,
-`/rss_opml_import`) are not candidates: their second copy can do the work
-twice.
+`/rss_opml_import`) are not candidates: their second copy can do work of its
+own. A late `/rss_unsubscribe` copy clears the caller's read state for the
+feed before it answers 404, which matters after a re-subscribe to that feed.
 
 ## Reads
 

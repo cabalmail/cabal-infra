@@ -92,9 +92,17 @@ class FakeTable:
         row = self.rows.get(self._key(Key))
         return {'Item': dict(row)} if row is not None else {}
 
-    def delete_item(self, Key=None, **_kw):  # pylint: disable=invalid-name,redefined-outer-name
+    def delete_item(self, Key=None, ConditionExpression=None,  # pylint: disable=invalid-name,redefined-outer-name
+                    ExpressionAttributeValues=None, **_kw):
+        key = self._key(Key)
+        if ConditionExpression:
+            # The one form the handlers use: `name = :value`. A missing row
+            # fails it, as it does in DynamoDB.
+            name, placeholder = (part.strip() for part in ConditionExpression.split('='))
+            if self.rows.get(key, {}).get(name) != ExpressionAttributeValues[placeholder]:
+                raise _conditional_failed('DeleteItem')
         self.deletes.append(dict(Key))
-        self.rows.pop(self._key(Key), None)
+        self.rows.pop(key, None)
         return {}
 
     def update_item(self, Key=None, UpdateExpression='', ExpressionAttributeValues=None,  # pylint: disable=invalid-name,redefined-outer-name,too-many-arguments

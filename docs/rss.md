@@ -134,7 +134,7 @@ all-feeds list has no row of its own, so its sticky pill is the
 | Endpoint | Method | Request | Response |
 |---|---|---|---|
 | `/rss_subscribe` | POST | `{url, folder_id?}` | `{subscription, existing}`. Reuses the shared feed for a known canonical URL; otherwise fetches the document once (autodiscovering the feed a web page advertises), creates the feed, and hands it to the fetcher immediately. Idempotent per user and feed. Codes: `invalid_url`, `not_https`, `unreachable`, `not_a_feed`, `needs_credentials`, `feed_gone`, `publisher_error`, `unknown_folder` (404). |
-| `/rss_unsubscribe` | POST | `{subscription_id}` | `{subscription_id, feed_id, feed_purged}`. Deletes the caller's state for the feed; purges the feed when no subscribers remain. |
+| `/rss_unsubscribe` | POST | `{subscription_id}` | `{subscription_id, feed_id, feed_purged}`. Deletes the caller's state for the feed; purges the feed when no subscribers remain. The subscription's delete is conditional: of two overlapping calls for one subscription, one succeeds and the other answers like a repeat. Code: `unknown_subscription` (404). |
 | `/rss_update_subscription` | PUT | `{subscription_id, custom_title?, folder_id?, ordering_mode?, default_open_mode?, default_styling?, default_remote_content?, default_filter?, notifications_enabled?}` | `{subscription}`. Codes: `invalid_<field>`, `unknown_folder`, `nothing_to_update`. |
 | `/rss_list_subscriptions` | GET | | `{folders, subscriptions}`, each subscription with its `feed` summary. |
 | `/rss_new_folder` | POST | `{name, parent_folder_id?, display_order?}` | `{folder}` |
