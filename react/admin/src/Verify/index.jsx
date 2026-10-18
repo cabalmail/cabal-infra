@@ -11,8 +11,8 @@ function Verify({
   resendInFlight = false,
   resendLocked = false,
   resendLockoutRemaining = 0,
-  // Where Cognito sent the confirmation code. Comes from the signUp
-  // result's codeDeliveryDetails: "phone" when SMS is wired, "email"
+  // Where Cognito sent the confirmation code. Comes from the SignUp
+  // reply's CodeDeliveryDetails: "phone" when SMS is wired, "email"
   // otherwise (issue #712 / identity plan Phase 1). destination is the
   // masked address/number Cognito reports, when available.
   medium = 'phone',

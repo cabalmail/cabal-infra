@@ -41,7 +41,7 @@ for A.
 | Phase | Work item                                                        | Status      |
 | ----- | ---------------------------------------------------------------- | ----------- |
 | A1    | Webmail: Cognito JSON client module + tests                      | Done 2026-10-18 (#2103) |
-| A2    | Webmail: port `App.jsx` flows, drop the dependency               | Not started |
+| A2    | Webmail: port `App.jsx` flows, drop the dependency               | In review (#2107); checked live 2026-10-18 |
 | A3    | Promote the auth contract below to `docs/auth.md`                | Not started |
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Not started |
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
@@ -210,7 +210,19 @@ sign-in for an unknown username maps to `isNotAuthorized`.
 
 ### A2 — Port `App.jsx`, remove the dependency
 
-**Status:** Not started.
+**Status:** In review (#2107), merged to stage only after the batch
+ahead of it was promoted, so A2 soaks and releases on its own. Checked
+live on 2026-10-18 against the stage pool, with the A2 bundle served at
+the stage origin and signed in as the second test account: sign-up
+with a wrong invitation code, forgot password (code sent, not used), a
+wrong password, the TOTP challenge with a wrong and then the right code,
+the Security view, a reload restoring without the sign-in form, a new
+tab starting signed out, the legacy-key purge, an idle tab refreshing
+before expiry (page clock jumped forward), and sign-out. Neither test
+account is an admin, so admin views were checked hidden only. Three
+checks rest on `App.test.jsx` alone: a valid-code sign-up (it would
+leave an account nobody here can delete), locked-out enrollment (both
+test accounts are enrolled), and the admin case.
 
 Replace every `CognitoUser` / `CognitoUserPool` / `CognitoUserAttribute`
 use in `App.jsx` with the A1 module. Behaviour is unchanged apart from
@@ -225,6 +237,30 @@ add a `changed` changelog fragment. Verify on stage as the shared
 tester account: sign-up with and without a valid code, TOTP sign-in,
 locked-out enrollment, forgot password, the email gate, a reload, an
 idle refresh, and admin views appearing for an admin only.
+
+As built:
+
+- Behaviour beyond D1 and D2, all small: an expired MFA challenge
+  (`NotAuthorizedException` on the answer) restarts the sign-in
+  instead of repeating "That code did not match"; a submit before
+  `/config.js` has loaded, or after it failed, gets a banner instead
+  of nothing; a reload shows a placeholder while it restores instead
+  of flashing the sign-in form.
+- `loadSavedState` starts every load signed out on a logged-out view.
+  The `state` bag in `localStorage` is shared by every tab, so its
+  `loggedIn` says nothing about a tab whose session lives in that
+  tab's `sessionStorage`.
+- The token and `isAdmin` come from the session's snapshot
+  (`subscribe`), so they follow every refresh and sign-out. The
+  session check runs on render, on focus and on a one-minute timer,
+  and refreshes through `session.idToken()`.
+- The Security view's `mfaApi` keeps its callback contract, so the
+  view is unchanged.
+- `vite.config.js`'s `define: { global: 'globalThis' }` and the
+  `js-cookie` override existed only for the library and are gone.
+- `App.test.jsx` drives the real auth screens against a stubbed
+  Cognito: every flow above, plus reload, refusal, idle refresh,
+  sign-out and the legacy-key purge. Mutation-checked.
 
 ### A3 — Promote the contract
 
