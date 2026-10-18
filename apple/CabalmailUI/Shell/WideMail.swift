@@ -315,9 +315,15 @@ struct AddressInspectorToolbarItem: ToolbarContent {
 
     private var addressInspectorToggle: some View {
         Button(action: toggle) {
-            Image(systemName: "at")
-                .accessibilityLabel("Addresses")
+            // Titled, so the button survives folding: the system overflow
+            // draws a menu row, and a row with only an image and an
+            // `accessibilityLabel` has nothing to draw (#1787). The bar
+            // itself still shows the icon alone.
+            Label("Addresses", systemImage: "at")
         }
+        // Kept as `at`, the identifier the icon-only button derived from its
+        // SF Symbol; a titled button derives none.
+        .accessibilityIdentifier("at")
     }
 }
 
