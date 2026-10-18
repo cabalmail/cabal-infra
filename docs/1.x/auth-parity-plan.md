@@ -41,7 +41,7 @@ for A.
 | Phase | Work item                                                        | Status      |
 | ----- | ---------------------------------------------------------------- | ----------- |
 | A1    | Webmail: Cognito JSON client module + tests                      | Done 2026-10-18 (#2103) |
-| A2    | Webmail: port `App.jsx` flows, drop the dependency               | In review (draft); stage checks owed |
+| A2    | Webmail: port `App.jsx` flows, drop the dependency               | In review (#2107); checked live 2026-10-18 |
 | A3    | Promote the auth contract below to `docs/auth.md`                | Not started |
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Not started |
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
@@ -210,9 +210,19 @@ sign-in for an unknown username maps to `isNotAuthorized`.
 
 ### A2 — Port `App.jsx`, remove the dependency
 
-**Status:** Implemented; the PR stays a draft until the stage batch
-ahead of it is promoted, so A2 gets its own soak and its own release.
-The stage checks at the end of this section are still owed.
+**Status:** In review (#2107), merged to stage only after the batch
+ahead of it was promoted, so A2 soaks and releases on its own. Checked
+live on 2026-10-18 against the stage pool, with the A2 bundle served at
+the stage origin and signed in as the second test account: sign-up
+with a wrong invitation code, forgot password (code sent, not used), a
+wrong password, the TOTP challenge with a wrong and then the right code,
+the Security view, a reload restoring without the sign-in form, a new
+tab starting signed out, the legacy-key purge, an idle tab refreshing
+before expiry (page clock jumped forward), and sign-out. Neither test
+account is an admin, so admin views were checked hidden only. Three
+checks rest on `App.test.jsx` alone: a valid-code sign-up (it would
+leave an account nobody here can delete), locked-out enrollment (both
+test accounts are enrolled), and the admin case.
 
 Replace every `CognitoUser` / `CognitoUserPool` / `CognitoUserAttribute`
 use in `App.jsx` with the A1 module. Behaviour is unchanged apart from
