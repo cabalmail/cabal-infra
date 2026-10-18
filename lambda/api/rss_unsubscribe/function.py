@@ -9,13 +9,19 @@ then gone until someone subscribes again, at which point it starts fresh.
 Deletion is bounded per call (PURGE_ITEM_LIMIT); a feed larger than that is
 left idle (out of the by_due index, subscriber_count 0) with a log line
 for the operator to sweep.
+
+The subscription row is deleted conditionally, and only the call whose
+delete removes the row it read counts the subscriber off the feed. Of two
+overlapping calls for one subscription, one does the work and the other
+answers 404 unknown_subscription, as a repeat after the first has finished
+does.
 '''
 import os
 from boto3.dynamodb.conditions import Key  # pylint: disable=import-error
 from botocore.exceptions import ClientError  # pylint: disable=import-error
-from rss_api import (CACHE_BUCKET, ITEM_TABLE, body_of, feeds,  # pylint: disable=import-error
-                     get_subscription, guarded, items, ok, s3, state,
-                     subscriptions, user_feed_key, username)
+from rss_api import (CACHE_BUCKET, ITEM_TABLE, ApiError, body_of,  # pylint: disable=import-error
+                     feeds, get_subscription, guarded, items, ok, s3,
+                     state, subscriptions, user_feed_key, username)
 
 PURGE_ITEM_LIMIT = int(os.environ.get('RSS_PURGE_ITEM_LIMIT', '5000'))
 
@@ -30,7 +36,8 @@ def handler(event, _context):
     # finishes the job, whereas the reverse order strands state rows that
     # would resurface on a later re-subscribe (seen on stage 2026-09-09).
     delete_state(user, sub['feed_id'])
-    subscriptions.delete_item(Key={'user': user, 'subscription_id': sub['subscription_id']})
+    if not delete_subscription(user, sub['subscription_id'], sub['feed_id']):
+        raise ApiError(404, 'unknown_subscription', 'No such subscription.')
     remaining = detach_subscriber(sub['feed_id'])
     purged = False
     if remaining is not None and remaining <= 0:
@@ -52,6 +59,22 @@ def delete_state(user, feed_id):
             if 'LastEvaluatedKey' not in response:
                 return
             kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+
+
+def delete_subscription(user, subscription_id, feed_id):
+    '''Deletes the subscription row this call read; False when it is gone.
+    The row must still name the feed the call read (only subscribing writes
+    feed_id), and this delete is what decides which call detaches the
+    subscriber, so subscriber_count moves once per subscription.'''
+    try:
+        subscriptions.delete_item(Key={'user': user, 'subscription_id': subscription_id},
+                                  ConditionExpression='feed_id = :feed',
+                                  ExpressionAttributeValues={':feed': feed_id})
+    except ClientError as err:
+        if err.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            return False
+        raise
+    return True
 
 
 def detach_subscriber(feed_id):
