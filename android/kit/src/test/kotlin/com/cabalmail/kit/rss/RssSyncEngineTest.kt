@@ -53,9 +53,13 @@ class RssSyncEngineTest {
         val markAllReadScopes = mutableListOf<RssItemScope>()
         val pushLog = mutableListOf<String>()
         var pushFailure: Throwable? = null
+        var catalogFailure: Throwable? = null
         var markAllReadWatermark = "server-w"
 
-        override suspend fun listSubscriptions() = catalog
+        override suspend fun listSubscriptions(): RssCatalog {
+            catalogFailure?.let { throw it }
+            return catalog
+        }
 
         override suspend fun listItems(
             scope: RssItemScope,
@@ -363,21 +367,113 @@ class RssSyncEngineTest {
             client.syncPages += RssSyncPage()
             val engine = engine(client, store).apply { concurrency = 1 }
 
-            assertTrue(engine.syncAll().isEmpty())
+            assertTrue(engine.syncAll().isClean)
             assertEquals(1, store.itemCount("f1"))
             assertEquals(1, store.itemCount("f2"))
 
             client.catalog = RssCatalog(subscriptions = listOf(s1))
             client.syncPages += RssSyncPage()
-            assertTrue(engine.syncAll().isEmpty())
+            assertTrue(engine.syncAll().isClean)
             assertEquals(0, store.itemCount("f2"))
             assertEquals(1, store.itemCount("f1"))
 
             // A feed whose page is unscripted fails on its own; the run still completes.
             client.catalog = RssCatalog(subscriptions = listOf(s1, s2))
             client.syncPages += RssSyncPage()
-            val failures = engine.syncAll()
-            assertEquals(setOf("s2"), failures.keys)
+            val report = engine.syncAll()
+            assertEquals(setOf("s2"), report.feedFailures.keys)
+            assertEquals(listOf("s1", "s2"), report.subscriptionIds)
+            assertNull(report.pendingFailure)
+        }
+
+    /**
+     * #1954: catalog, per-feed and queue failures shared one map keyed by
+     * subscription id, and the feed list compared that map's size against
+     * the subscription count. The three arms below are the ones the
+     * verification measured; each is the report answering for itself.
+     */
+    @Test
+    fun `a failed queue push is not counted as a failed feed`() =
+        runTest {
+            val client = FakeRssClient()
+            val store = InMemoryRssStore()
+            client.catalog = RssCatalog(subscriptions = listOf(s1, s2))
+            store.upsertItems(listOf(item(1)))
+            client.listPages += RssItemsPage(items = listOf(item(1)), nextCursor = null)
+            client.syncPages += RssSyncPage()
+            val engine = engine(client, store).apply { concurrency = 1 }
+            engine.refreshCatalog()
+            client.pushFailure = IOException("offline")
+            engine.setRead(item(1), true)
+            assertEquals(1, store.pendingCount())
+
+            // One of two feeds synced; s2's page is unscripted, so it fails.
+            val report = engine.syncAll()
+
+            assertEquals(setOf("s2"), report.feedFailures.keys)
+            assertFalse(report.everyFeedFailed, "s1 synced; the error line must stay away")
+            assertTrue(report.pendingFailure is IOException)
+        }
+
+    @Test
+    fun `a single feed user's failed queue push leaves every feed succeeding`() =
+        runTest {
+            val client = FakeRssClient()
+            val store = InMemoryRssStore()
+            client.catalog = RssCatalog(subscriptions = listOf(s1))
+            store.upsertItems(listOf(item(1)))
+            client.listPages += RssItemsPage(items = listOf(item(1)), nextCursor = null)
+            client.syncPages += RssSyncPage()
+            val engine = engine(client, store).apply { concurrency = 1 }
+            engine.refreshCatalog()
+            client.pushFailure = IOException("offline")
+            engine.setRead(item(1), true)
+
+            val report = engine.syncAll()
+
+            assertTrue(report.feedFailures.isEmpty())
+            assertFalse(report.everyFeedFailed)
+            assertNull(report.firstFeedFailure)
+            assertTrue(report.pendingFailure is IOException)
+        }
+
+    @Test
+    fun `every feed failing still reads as every feed failing when the queue push fails too`() =
+        runTest {
+            val client = FakeRssClient()
+            val store = InMemoryRssStore()
+            client.catalog = RssCatalog(subscriptions = listOf(s1, s2))
+            store.upsertItems(listOf(item(1)))
+            val engine = engine(client, store).apply { concurrency = 1 }
+            engine.refreshCatalog()
+            client.pushFailure = IOException("offline")
+            engine.setRead(item(1), true)
+
+            // No pages scripted at all, so both feeds fail.
+            val report = engine.syncAll()
+
+            assertEquals(setOf("s1", "s2"), report.feedFailures.keys)
+            assertTrue(report.everyFeedFailed)
+            assertEquals(report.feedFailures["s1"], report.firstFeedFailure)
+            assertTrue(report.pendingFailure is IOException)
+        }
+
+    @Test
+    fun `a catalog failure inside sync all is reported as one`() =
+        runTest {
+            val client = FakeRssClient()
+            val store = InMemoryRssStore()
+            client.catalog = RssCatalog(subscriptions = listOf(s1))
+            val engine = engine(client, store)
+            engine.refreshCatalog()
+            client.catalogFailure = IOException("offline")
+
+            val report = engine.syncAll()
+
+            assertTrue(report.catalogFailure is IOException)
+            assertTrue(report.feedFailures.isEmpty())
+            assertTrue(report.subscriptionIds.isEmpty())
+            assertFalse(report.everyFeedFailed)
         }
 
     @Test
