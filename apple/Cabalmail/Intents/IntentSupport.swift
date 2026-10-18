@@ -93,8 +93,13 @@ extension ForegroundContinuableIntent {
         do {
             let copied = try await requestToContinueInForeground(
                 IntentDialog("I created \(address). Continue in Cabalmail to copy it?")
-            ) {
-                await IntentClipboard.copy(address)
+            ) { @Sendable in
+                // `@Sendable` because the continuation crosses into
+                // `requestToContinueInForeground`, which is nonisolated: the
+                // closure captures only the address, and the parameter type
+                // keeps the body on the main actor either way (#1842). The
+                // copy itself is synchronous.
+                IntentClipboard.copy(address)
             }
             guard copied else {
                 return .result(value: address, dialog: Self.createdNotCopiedDialog(address))

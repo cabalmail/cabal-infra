@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import CabalmailUI
 
@@ -91,5 +92,24 @@ final class PlainTextLinkDetectorTests: XCTestCase {
     func testMenuTargetRejectsAnExecutableScheme() {
         let url = URL(string: "javascript:alert(1)")!
         XCTAssertNil(PlainTextLinkDetector.menuTarget(for: url, labels: [:]))
+    }
+
+    /// Both attributes a detected link carries, read through their keys. The
+    /// detector builds them as one `AttributeContainer` (#1842), and a
+    /// container that replaced the run's attributes instead of merging them,
+    /// or that carried only the URL, would still linkify — so every other
+    /// test here would still pass.
+    func testADetectedLinkCarriesBothTheURLAndTheUnderline() throws {
+        let linkKey = AttributeScopes.FoundationAttributes.LinkAttribute.self
+        let underlineKey = AttributeScopes.SwiftUIAttributes.UnderlineStyleAttribute.self
+        let scanned = PlainTextLinkDetector.scan("See https://example.com/underline-1018 now.")
+        let run = try XCTUnwrap(scanned.attributed.runs.first { $0.attributes[linkKey] != nil })
+        XCTAssertEqual(run.attributes[linkKey]?.absoluteString, "https://example.com/underline-1018")
+        XCTAssertEqual(run.attributes[underlineKey], .single)
+        XCTAssertEqual(
+            String(scanned.attributed[run.range].characters),
+            "https://example.com/underline-1018",
+            "the run the attributes land on is the URL's own text"
+        )
     }
 }
