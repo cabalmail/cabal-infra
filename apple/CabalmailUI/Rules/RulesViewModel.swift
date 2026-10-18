@@ -267,6 +267,13 @@ final class RulesViewModel {
                 rules = saved.rules.map { $0.normalizingLegacyContinue() }
             }
             saveState = .saved
+        } catch CabalmailError.decoding {
+            // `/set_rules` commits before it answers, so a 200 whose body
+            // won't decode is a save that landed with its reply lost.
+            // Reporting it as a failed save left `version` behind the
+            // server's, and the next save's 409 then told the user another
+            // device had edited their rules (#1903). Re-read instead.
+            await resyncAfterUnreadableSave(snapshot)
         } catch is RuleSetConflictError {
             conflict = true
             saveState = .idle
@@ -277,6 +284,26 @@ final class RulesViewModel {
         if pendingSave {
             pendingSave = false
             scheduleSave()
+        }
+    }
+
+    /// Re-reads the set after a save whose reply was unreadable. The PUT
+    /// committed, so the server's version is the one the next save has to
+    /// quote, and its canonical set (re-minted ids, stripped forwards) is
+    /// the one to show — but only if nothing was edited mid-flight, the
+    /// same guard the readable path uses. A re-read that fails leaves the
+    /// save in the error state it would have had, with `version` stale:
+    /// the next save's 409 is then a real race the Reload alert resolves.
+    private func resyncAfterUnreadableSave(_ snapshot: [Rule]) async {
+        do {
+            let saved = try await backend.fetchRules()
+            version = saved.version
+            if rules == snapshot {
+                rules = saved.rules.map { $0.normalizingLegacyContinue() }
+            }
+            saveState = .saved
+        } catch {
+            saveState = .error(error.localizedDescription)
         }
     }
 }

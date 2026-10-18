@@ -57,6 +57,29 @@ final class FolderMarkAllReadTests: XCTestCase {
         XCTAssertEqual(appState.mailStore.listRefreshTick, ticks, "nothing changed, so nothing to reload")
     }
 
+    /// The Lambda flips the flags before it answers, so a 200 whose body
+    /// won't decode is a write that landed with only its count lost: the
+    /// after-effects still run, and nothing is reported as a failure
+    /// (#1903). Throwing here left the folder's badge and rows unread
+    /// although the server had already marked them read.
+    func testAnUnreadableReplyStillAppliesTheAfterEffects() async throws {
+        let imap = FakeImapClient()
+        await imap.scriptMarkFolderReadResults([
+            .failure(CabalmailError.decoding("mark_folder_read returned an unexpected reply")),
+        ])
+        let appState = AppState()
+        appState.mailStore.counts.setFolderCounts(folderPath: "Projects", unread: 12, total: 80)
+        let model = FolderListViewModel(client: try TestFixtures.makeClient(imap: imap), mailStore: appState.mailStore)
+        let ticks = appState.mailStore.listRefreshTick
+
+        await model.markAllRead(folderPath: "Projects")
+
+        XCTAssertNil(model.errorMessage, "the write committed; only its count was lost")
+        XCTAssertEqual(appState.mailStore.counts.folderUnreadCounts["Projects"], 0)
+        XCTAssertEqual(appState.mailStore.counts.folderTotalCounts["Projects"], 80)
+        XCTAssertEqual(appState.mailStore.listRefreshTick, ticks + 1, "the visible list re-renders read state")
+    }
+
     /// A folder marked from the sidebar while another is on screen keeps
     /// its saved list, every row read, so a list opened on it offline shows
     /// its messages (#1850). The snapshot used to be deleted, and nothing
