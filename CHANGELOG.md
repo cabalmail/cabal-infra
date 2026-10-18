@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.32.0] - 2026-10-18
+
+### Changed
+- **Mail API checks the account name before it connects.** The API now
+  refuses, before connecting to the mail server, an account name that is
+  not all lowercase or that contains `*`. Every name the sign-up screen
+  allows passes.
+- **Usernames checked when an account is created.** The sign-up trigger
+  now holds every self-service sign-up to the rule the sign-up screen
+  shows (3 to 32 lowercase letters, numbers and hyphens, not starting or
+  ending with a hyphen), requires at least one letter, and turns away
+  names the mail servers reserve for their own accounts and aliases.
+  Accounts an administrator creates are exempt, as with the invitation
+  code. The web app's sign-up screen now shows why a name was refused.
+- **Sturdier mail account sync.** The sync that creates each user's
+  account on the IMAP and outbound mail servers now checks every name and
+  user id before it creates anything, provisions each user on its own,
+  and logs any user it skips.
+
+### Fixed
+- **Admin address creation for an address already in use.** The admin
+  create-address request now answers an address that already exists, in any
+  letter case, with a message that points to assigning it instead, and
+  creates new addresses in lower case, as the ordinary create has since
+  1.31.2.
+- Apple: **No second send of a delivered queued message.** When a message
+  waiting in the outbox went out but its outbox copy couldn't be deleted,
+  the app could send it again on a later retry; it now retries only the
+  deletion. A relaunch or a new session still sends a copy left on disk
+  once more, and the server's ten-minute duplicate check catches it when it
+  comes soon after. An outbox that can't be read, and a draft whose copy on
+  this device can't be saved, are now reported in the Debug Log instead of
+  passing silently.
+- Apple: **No "already exists" after a dropped connection.** When the
+  connection drops mid-request, the app now sends a second copy only of a
+  request that is safe to repeat. Creating or deleting a folder, revoking
+  an address, saving mail rules, adding or removing a feed or feed folder
+  and importing OPML are sent once, so a change that went through no
+  longer comes back as "already exists" or "changed on another device";
+  the dropped connection reads as a network error instead. Emptying the
+  Trash is sent once too, so a late second copy can't delete mail that
+  reached the Trash after you confirmed. Archiving, moving, flagging,
+  sending and signing in keep their quiet retry.
+- Apple: **Clearer message when an address can't be created.** The browser
+  extension (in Chrome, and the Safari extension the Apple apps embed) now
+  shows the server's reason when it can't create an address, instead of raw
+  server output. When the server refuses a typed address, a sign-up form the
+  extension is holding waits until the address is changed; when the server
+  can't be reached, the extension says so and offers Retry or Submit anyway
+  rather than sending the form silently. An address that is already yours in
+  another letter case is recognised rather than offered, and an address you
+  submitted after a failed confirmation is no longer removed when the page
+  closes.
+- **Password reset keeps access to your mail.** Confirming a password reset
+  also ran the step that gives a new account its system user id, so it could
+  give an existing account a new id and leave its stored mail owned by the
+  old one. A password reset no longer runs that step.
+- **Release-dashboard hold no longer tripped by issue mentions in prose.**
+  The Promote gate's fix-claim scan allowed any 30 characters between the
+  fix verb and the `#N` refs, so a docs-only PR describing an issue's
+  lifecycle ("#1911 closed on 2026-10-17, with #2060 and #2061 filed from
+  it") held promotion as if it carried an unretested fix for the issues it
+  merely filed. The scan now requires the refs to follow the verb directly,
+  allowing only filler words ("for", "issue", a colon) in between; bare
+  mentions, dates, and parentheticals no longer count as claims.
+
+### Security
+- **Users can change only the account details the apps set.** The sign-in
+  clients the apps and the browser extension use now accept only email,
+  phone number and preferred username from users, at sign-up and
+  afterwards, which is all the apps' sign-up and email-verification
+  screens send; the rest of an account record is set by the system or an
+  administrator.
+- **Invitation code kept as an environment secret.** The deploy and
+  quiesce workflows now read `TF_VAR_INVITATION_CODE` from an environment
+  secret, and fall back to the environment variable of the same name only
+  while no secret exists. Operators should move the code to a secret and
+  delete the variable.
+
 ## [1.31.3] - 2026-10-17
 
 ### Fixed
