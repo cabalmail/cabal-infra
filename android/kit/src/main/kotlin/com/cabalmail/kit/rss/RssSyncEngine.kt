@@ -89,6 +89,10 @@ class RssSyncEngine(
                     olderCursor = page.nextCursor.orEmpty(),
                     olderExhausted = page.nextCursor == null,
                 )
+            // The first page is the one time a sync owns the older cursor —
+            // the feed had none. Written here rather than at the end so a
+            // load-older starting during the rest of the run wins (#1955).
+            store.setOlderCursor(subscription.feedId, state.olderCursor, state.olderExhausted)
         }
         var pages = 0
         var since = if (state.sinceCursor == SENTINEL_CURSOR) "" else state.sinceCursor
@@ -111,7 +115,9 @@ class RssSyncEngine(
             if (!page.hasMore) break
         }
         state = state.copy(stateCursor = stateCursor, lastSyncedAt = RssRules.isoNow())
-        store.setSyncState(subscription.feedId, state)
+        // Only the half this run owns: a "Load older items" may have moved
+        // the older cursor since the row was read at :71 (#1955).
+        store.setSyncCursors(subscription.feedId, state.sinceCursor, state.stateCursor, state.lastSyncedAt)
         return received
     }
 
@@ -131,10 +137,8 @@ class RssSyncEngine(
                 cursor = state.olderCursor.ifEmpty { null },
             )
         store.upsertItems(page.items)
-        store.setSyncState(
-            subscription.feedId,
-            state.copy(olderCursor = page.nextCursor.orEmpty(), olderExhausted = page.nextCursor == null),
-        )
+        // Only the older half: a sync running alongside owns the rest.
+        store.setOlderCursor(subscription.feedId, page.nextCursor.orEmpty(), page.nextCursor == null)
         return page.items.size
     }
 
