@@ -63,7 +63,12 @@ These reports follow the DMARC-report pipeline: the scheduled `process_dmarc`
 Lambda recognizes messages addressed to `caa-reports`, archives the raw
 message to S3 (`caa/` prefix in the cache bucket), records it in the
 `cabal-caa-reports` DynamoDB table, and the admin site's **CAA** view (admin
-group only) lists them with the raw message viewable and downloadable.
+group only) lists them with the raw message viewable and downloadable. The
+cache bucket expires every object two days after it is written, so the raw
+message is viewable there for two days; the report's row stays. To keep a
+readable copy of every report, assign a personal mailbox to `caa-reports`
+(see the operational notes below); the original also stays in the system
+mailbox's `INBOX.Processed` folder.
 
 Unlike DMARC aggregate reports, which arrive daily from every major receiving
 provider, CAA violation reports are expected to *never* arrive: a CA sends one

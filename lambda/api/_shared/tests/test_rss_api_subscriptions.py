@@ -30,6 +30,30 @@ def call(module, **kw):
     return response['statusCode'], json.loads(response['body'])
 
 
+def overlapping(module, body, between=None):
+    '''Two copies of one /rss_unsubscribe request, both past their read of
+    the subscription before either deletes it: the first copy's state
+    cleanup (its next step) runs the second copy to completion, then
+    `between` if given. Returns [second copy's (status, body), first copy's
+    (status, body)].'''
+    real = module.delete_state
+    started, inner = [], []
+
+    def interleaved(user, feed_id):
+        if not started:
+            started.append(True)
+            inner.append(call(module, body=body))
+            if between:
+                between()
+        return real(user, feed_id)
+    module.delete_state = interleaved
+    try:
+        outer = call(module, body=body)
+    finally:
+        module.delete_state = real
+    return [inner[0], outer]
+
+
 class Subscribe(unittest.TestCase):
 
     def setUp(self):
@@ -227,6 +251,75 @@ class Unsubscribe(unittest.TestCase):
         self.assertEqual(len(tables['cabal-rss-item'].rows), 1)
         self.assertEqual(call(mod, body={'subscription_id': 's1'})[0], 404)
 
+    def test_overlapping_calls_detach_one_subscriber(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_unsubscribe')
+        tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'subscriber_count': 2, 'due_shard': 'active'}
+        tables['cabal-rss-subscription'].rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1'}
+        tables['cabal-rss-subscription'].rows[('bob', 's2')] = {'user': 'bob', 'subscription_id': 's2', 'feed_id': 'f1'}
+        tables['cabal-rss-item'].rows[('f1', 'a#1')] = {'feed_id': 'f1', 'sort_key': 'a#1'}
+        results = overlapping(mod, {'subscription_id': 's1'})
+        self.assertEqual(sorted(status for status, _ in results), [200, 404])
+        done = next(body for status, body in results if status == 200)
+        gone = next(body for status, body in results if status == 404)
+        self.assertFalse(done['feed_purged'])
+        self.assertEqual(gone['code'], 'unknown_subscription')
+        self.assertEqual(tables['cabal-rss-feed'].rows[('f1',)]['subscriber_count'], 1)
+        self.assertEqual(len(tables['cabal-rss-item'].rows), 1)
+        self.assertIn(('bob', 's2'), tables['cabal-rss-subscription'].rows)
+        self.assertNotIn((USER, 's1'), tables['cabal-rss-subscription'].rows)
+
+    def test_overlapping_calls_on_last_subscriber_report_one_purge(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_unsubscribe')
+        tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'subscriber_count': 1, 'due_shard': 'active'}
+        tables['cabal-rss-subscription'].rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1'}
+        tables['cabal-rss-item'].rows[('f1', 'a#1')] = {'feed_id': 'f1', 'sort_key': 'a#1'}
+        results = overlapping(mod, {'subscription_id': 's1'})
+        self.assertEqual(sorted(status for status, _ in results), [200, 404])
+        self.assertTrue(next(body for status, body in results if status == 200)['feed_purged'])
+        self.assertEqual(tables['cabal-rss-feed'].rows, {})
+        self.assertEqual(tables['cabal-rss-item'].rows, {})
+
+    def test_overlapping_calls_with_settings_write_detach_one_subscriber(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_unsubscribe')
+        subs = tables['cabal-rss-subscription']
+        tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'subscriber_count': 3, 'due_shard': 'active'}
+        subs.rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1'}
+        subs.rows[('bob', 's2')] = {'user': 'bob', 'subscription_id': 's2', 'feed_id': 'f1'}
+        subs.rows[('carol', 's3')] = {'user': 'carol', 'subscription_id': 's3', 'feed_id': 'f1'}
+        tables['cabal-rss-item'].rows[('f1', 'a#1')] = {'feed_id': 'f1', 'sort_key': 'a#1'}
+
+        def settings_write():
+            # A rename whose read came before the first delete lands after it.
+            subs.update_item(Key={'user': USER, 'subscription_id': 's1'},
+                             UpdateExpression='SET custom_title = :t',
+                             ExpressionAttributeValues={':t': 'Renamed'})
+        results = overlapping(mod, {'subscription_id': 's1'}, between=settings_write)
+        self.assertEqual(sorted(status for status, _ in results), [200, 404])
+        self.assertEqual(tables['cabal-rss-feed'].rows[('f1',)]['subscriber_count'], 2)
+        self.assertEqual(len(tables['cabal-rss-item'].rows), 1)
+        self.assertIn(('bob', 's2'), subs.rows)
+        self.assertIn(('carol', 's3'), subs.rows)
+
+    def test_row_gone_at_delete_leaves_feed_alone(self):
+        # The read returns the row, but it is gone by the time the delete runs.
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_unsubscribe')
+        tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'subscriber_count': 1, 'due_shard': 'active'}
+        tables['cabal-rss-subscription'].rows[('bob', 's2')] = {'user': 'bob', 'subscription_id': 's2', 'feed_id': 'f1'}
+        tables['cabal-rss-item'].rows[('f1', 'a#1')] = {'feed_id': 'f1', 'sort_key': 'a#1'}
+        real = mod.get_subscription
+        mod.get_subscription = lambda _user, _sid: {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1'}
+        try:
+            status, body = call(mod, body={'subscription_id': 's1'})
+        finally:
+            mod.get_subscription = real
+        self.assertEqual((status, body.get('code')), (404, 'unknown_subscription'))
+        self.assertEqual(tables['cabal-rss-feed'].rows[('f1',)]['subscriber_count'], 1)
+        self.assertEqual(len(tables['cabal-rss-item'].rows), 1)
+
 
 class UpdateSubscription(unittest.TestCase):
 
@@ -266,6 +359,50 @@ class UpdateSubscription(unittest.TestCase):
         self.assertEqual(tables['cabal-rss-subscription'].rows[(USER, 's1')]['default_filter'], 'favorite')
         self.assertEqual(call(mod, body={'subscription_id': 's1', 'default_filter': 'flagged'})[1]['code'],
                          'invalid_default_filter')
+
+    def test_applies_only_to_a_subscription_that_still_exists(self):
+        # The row is removed after the handler reads it and before it
+        # writes: the handler answers 404 and writes nothing.
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_update_subscription')
+        subs = tables['cabal-rss-subscription']
+        tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'title': 'T', 'due_shard': 'active'}
+        subs.rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1'}
+        read = mod.get_subscription
+
+        def read_then_remove(user, subscription_id):
+            row = read(user, subscription_id)
+            del subs.rows[(user, subscription_id)]
+            return row
+        mod.get_subscription = read_then_remove
+        status, body = call(mod, body={'subscription_id': 's1', 'notifications_enabled': True,
+                                       'custom_title': 'Mine'})
+        self.assertEqual((status, body['code']), (404, 'unknown_subscription'))
+        self.assertEqual(subs.rows, {})
+
+    def test_row_without_feed_id_is_unknown(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_update_subscription')
+        subs = tables['cabal-rss-subscription']
+        subs.rows[(USER, 'bare')] = {'user': USER, 'subscription_id': 'bare', 'custom_title': 'Old'}
+        status, body = call(mod, body={'subscription_id': 'bare', 'custom_title': 'New'})
+        self.assertEqual((status, body['code']), (404, 'unknown_subscription'))
+        self.assertEqual(subs.rows[(USER, 'bare')]['custom_title'], 'Old')
+
+    def test_other_write_failures_still_fail(self):
+        tables = fx.reset_tables()
+        mod = fx.load_handler('rss_update_subscription')
+        subs = tables['cabal-rss-subscription']
+        subs.rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1'}
+
+        def throttled(**_kwargs):
+            raise fx.ClientError({'Error': {'Code': 'ProvisionedThroughputExceededException'}}, 'UpdateItem')
+        subs.update_item = throttled
+        try:
+            status, _ = call(mod, body={'subscription_id': 's1', 'custom_title': 'Mine'})
+        finally:
+            del subs.update_item
+        self.assertEqual(status, 500)
 
 
 class Folders(unittest.TestCase):
@@ -324,6 +461,43 @@ class Folders(unittest.TestCase):
         _, deleted = call(dele, body={'folder_id': top_id})
         self.assertEqual(tables['cabal-rss-subscription'].rows[(USER, 's1')]['folder_id'], '~root')
         self.assertEqual(tables['cabal-rss-folder'].rows, {})
+
+    def test_list_skips_row_without_feed_id(self):
+        tables = fx.reset_tables()
+        lst = fx.load_handler('rss_list_subscriptions')
+        tables['cabal-rss-feed'].rows[('f1',)] = {'feed_id': 'f1', 'title': 'T', 'due_shard': 'active'}
+        subs = tables['cabal-rss-subscription']
+        subs.rows[(USER, 's1')] = {'user': USER, 'subscription_id': 's1', 'feed_id': 'f1',
+                                   'folder_id': '~root', 'folder_key': '~root#s1'}
+        subs.rows[(USER, 'bare')] = {'user': USER, 'subscription_id': 'bare', 'custom_title': 'x'}
+        status, listing = call(lst)
+        self.assertEqual(status, 200)
+        self.assertEqual([s['subscription_id'] for s in listing['subscriptions']], ['s1'])
+
+    def test_delete_folder_moves_only_subscriptions_that_still_exist(self):
+        tables = fx.reset_tables()
+        new, dele = (fx.load_handler(n) for n in ('rss_new_folder', 'rss_delete_folder'))
+        _, made = call(new, body={'name': 'F'})
+        folder_id = made['folder']['folder_id']
+        subs = tables['cabal-rss-subscription']
+        for sid in ('s1', 's2'):
+            subs.rows[(USER, sid)] = {'user': USER, 'subscription_id': sid, 'feed_id': 'f1',
+                                      'folder_id': folder_id, 'folder_key': f'{folder_id}#{sid}'}
+        # A row in the folder without feed_id is not a subscription.
+        subs.rows[(USER, 'bare')] = {'user': USER, 'subscription_id': 'bare',
+                                     'folder_id': folder_id, 'folder_key': f'{folder_id}#bare'}
+        listed = dele.list_subscriptions
+
+        def list_then_remove_s2(user):
+            rows = listed(user)
+            del subs.rows[(user, 's2')]
+            return rows
+        dele.list_subscriptions = list_then_remove_s2
+        status, body = call(dele, body={'folder_id': folder_id})
+        self.assertEqual((status, body['moved_subscriptions']), (200, 1))
+        self.assertEqual(subs.rows[(USER, 's1')]['folder_id'], '~root')
+        self.assertNotIn((USER, 's2'), subs.rows)
+        self.assertEqual(subs.rows[(USER, 'bare')]['folder_id'], folder_id)
 
 
 if __name__ == '__main__':

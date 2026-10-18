@@ -4,8 +4,9 @@ name: Android changelog
 # Require an `Android:`-prefixed changelog fragment when a PR changes the shipped
 # Android client sources, so the change reaches the Play Console release notes
 # (play-release-notes.py builds those from the Android-scoped headlines only).
-# Opt out for non-user-facing Android work with the `no-changelog` PR label. See
-# CLAUDE.md and changelog.d/README.md.
+# For non-user-facing Android work the `no-changelog` PR label waives the prefix
+# (keeping the entry out of the tester notes); the fragment itself is still
+# required by changelog.yml. See CLAUDE.md and changelog.d/README.md.
 #
 # Its own workflow - not a job in lint.yml - specifically so it can trigger on
 # `labeled`/`unlabeled`: applying the opt-out label must re-run the check to

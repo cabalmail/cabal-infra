@@ -14,6 +14,25 @@ renumbered by hand. A fragment is a standalone file, so concurrent work never
 touches `CHANGELOG.md` and never needs to know the target version: at release
 time every pending fragment rolls into the new section automatically.
 
+## Which changes need a fragment
+
+Every pull request needs a fragment unless it changes only documentation
+(Markdown files, anything under `docs/`, or the LICENSE). The changelog is
+the engineering record of the system, not just user-facing release notes:
+refactors, test and CI work, and infrastructure changes are recorded too.
+This is enforced by the `changelog-fragment` check
+(`.github/workflows/changelog.yml` running
+`.github/scripts/check-changelog-fragment.sh`). Two structural exemptions:
+release PRs (`stage` -> `main`, whose fragments are already collated into
+`CHANGELOG.md`) and dependabot PRs (dependency bumps are recorded by the
+lockfile diff).
+
+One fragment per change, not per PR: a PR that iterates on an unreleased
+change edits that change's existing fragment in place rather than adding a
+second file (the edit satisfies the check). Do not narrate churn: a bug
+introduced and fixed within the same unreleased cycle, or a trial backed out
+before release, nets no entry of its own.
+
 ## Adding an entry
 
 Create a file named `<slug>.<category>.md`:
@@ -35,9 +54,7 @@ Example - `changelog.d/send-idempotency.added.md`:
       failure, so a retried send reports success without re-delivering.
 
 Do **not** edit `CHANGELOG.md` directly for unreleased work, and do not create
-an `## [Unreleased]` section - the collator owns the top of that file. Record
-only what shipped to users: no fragment for a bug introduced and fixed within
-the same unreleased cycle, or a latent bug fixed before exposure.
+an `## [Unreleased]` section - the collator owns the top of that file.
 
 ## Apple client entries
 
@@ -57,8 +74,12 @@ prefix silently disappears from the notes testers see.
 
 A PR that touches the Apple client sources fails the
 `.github/workflows/apple-changelog.yml` check unless it adds such a fragment.
-For a genuinely non-user-facing Apple change (refactor, test-only, CI,
-xcodegen), apply the `no-changelog` label to the PR to opt out.
+The `Apple:` prefix exists only to route the entry into the tester notes, so
+for a genuinely non-user-facing Apple change (refactor, test-only, CI,
+xcodegen) apply the `no-changelog` label: it waives the prefix, keeping the
+entry out of the TestFlight notes. The label does not waive the fragment
+itself - write it unprefixed to satisfy the repo-wide `changelog-fragment`
+check.
 
 ## Android client entries
 
@@ -86,7 +107,8 @@ headlines, not bodies.
 
 A PR that touches the Android client sources fails the
 `.github/workflows/android-changelog.yml` check unless it adds such a
-fragment; opt out with the `no-changelog` label as for Apple.
+fragment; as for Apple, the `no-changelog` label waives only the `Android:`
+prefix, and the unprefixed fragment is still required.
 
 ## Releasing
 

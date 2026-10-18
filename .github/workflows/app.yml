@@ -620,6 +620,15 @@ jobs:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
 
+    - name: setup-python
+      # Pin the interpreter to the Lambda runtime (python3.13 in
+      # terraform/infra/modules/app) rather than whatever the runner image
+      # ships: the build scripts pip-install the zips' dependencies with it,
+      # and an image bump must not change what gets packaged.
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      with:
+        python-version: '3.13'
+
     - name: pylint
       # push_dispatch/apns.py is the one handler-sibling module shipped in a
       # zip; the */function.py glob misses it, so name it explicitly.
@@ -725,6 +734,15 @@ jobs:
       with:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: setup-python
+      # Pin the interpreter to the Lambda runtime (python3.13 in
+      # terraform/infra/modules/app) rather than whatever the runner image
+      # ships: the build scripts pip-install the zips' dependencies with it,
+      # and an image bump must not change what gets packaged.
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      with:
+        python-version: '3.13'
 
     - name: pylint
       run: pip install pylint && pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py

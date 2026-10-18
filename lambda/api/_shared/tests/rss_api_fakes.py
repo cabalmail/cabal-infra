@@ -8,6 +8,7 @@ Not a test module itself (no test_ prefix).'''
 import importlib.util
 import json
 import os
+import re
 import sys
 import types
 
@@ -92,9 +93,17 @@ class FakeTable:
         row = self.rows.get(self._key(Key))
         return {'Item': dict(row)} if row is not None else {}
 
-    def delete_item(self, Key=None, **_kw):  # pylint: disable=invalid-name,redefined-outer-name
+    def delete_item(self, Key=None, ConditionExpression=None,  # pylint: disable=invalid-name,redefined-outer-name
+                    ExpressionAttributeValues=None, **_kw):
+        key = self._key(Key)
+        if ConditionExpression:
+            # The one form the handlers use: `name = :value`. A missing row
+            # fails it, as it does in DynamoDB.
+            name, placeholder = (part.strip() for part in ConditionExpression.split('='))
+            if self.rows.get(key, {}).get(name) != ExpressionAttributeValues[placeholder]:
+                raise _conditional_failed('DeleteItem')
         self.deletes.append(dict(Key))
-        self.rows.pop(self._key(Key), None)
+        self.rows.pop(key, None)
         return {}
 
     def update_item(self, Key=None, UpdateExpression='', ExpressionAttributeValues=None,  # pylint: disable=invalid-name,redefined-outer-name,too-many-arguments
@@ -102,11 +111,11 @@ class FakeTable:
         self.updates.append({'Key': dict(Key), 'UpdateExpression': UpdateExpression,
                              'ExpressionAttributeValues': ExpressionAttributeValues or {}})
         key = self._key(Key)
-        if ConditionExpression and 'attribute_exists' in ConditionExpression and key not in self.rows:
+        names = ExpressionAttributeNames or {}
+        if not _exists_holds(self.rows.get(key), ConditionExpression, names):
             raise _conditional_failed('UpdateItem')
         row = self.rows.setdefault(key, dict(Key))
         values = ExpressionAttributeValues or {}
-        names = ExpressionAttributeNames or {}
         for clause, body in _clauses(UpdateExpression):
             for part in _split_top(body):
                 _apply(row, clause, part.strip(), values, names)
@@ -150,6 +159,19 @@ class FakeTable:
             def delete_item(self, Key=None):  # pylint: disable=invalid-name,redefined-outer-name
                 table.delete_item(Key=Key)
         return _Writer()
+
+
+_ATTRIBUTE_EXISTS = re.compile(r'attribute_exists\(\s*([^)\s]+)\s*\)')
+
+
+def _exists_holds(row, condition, names):
+    '''Whether every attribute_exists(<name>) term of `condition` holds for
+    `row` (None when there is no row, which fails any such term). Only those
+    terms are evaluated, all as if joined by AND.'''
+    for name in _ATTRIBUTE_EXISTS.findall(condition or ''):
+        if row is None or names.get(name, name) not in row:
+            return False
+    return True
 
 
 def _apply(row, clause, part, values, names):

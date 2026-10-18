@@ -1,0 +1,49 @@
+---
+name: Changelog fragment
+
+# Require a changelog fragment on every PR that changes anything beyond
+# documentation. The changelog records engineering history, not only
+# user-facing release notes, so refactors, CI, and infrastructure changes get
+# fragments too - unprefixed, which keeps them out of the tester-notes
+# pipelines (set-testflight-notes.py and play-release-notes.py read only the
+# Apple:/Android:-prefixed entries). The `no-changelog` label does not opt out
+# of this check: it only waives the client prefix in the apple-changelog /
+# android-changelog gates. See CLAUDE.md and changelog.d/README.md.
+#
+# Its own workflow, like the client changelog gates, so it stays cheap and
+# independent of the heavy per-area scanners. It runs on every PR with no
+# path filter: the script decides the documentation-only exemption from the
+# PR diff itself (plus the release-PR and dependabot exemptions) and reports
+# a definite pass/fail rather than a skip.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+# Supersede in-flight runs when the PR is updated; keyed on the PR number so
+# concurrent PRs don't cancel each other.
+concurrency:
+  group: changelog-fragment-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changelog-fragment:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        # Full history so the script can diff the PR range (base...head) and
+        # read the fragment files added on the branch.
+        fetch-depth: 0
+    - name: require-fragment
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+      run: ./.github/scripts/check-changelog-fragment.sh
