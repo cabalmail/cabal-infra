@@ -243,8 +243,9 @@ public final class SessionManager {
             // expired one triggers a silent refresh; an expired / revoked
             // refresh throws `.authExpired` (Cognito's
             // `NotAuthorizedException`). A refresh that can't reach Cognito,
-            // or that Cognito throttles, passes, so cached mail is readable
-            // offline.
+            // that Cognito throttles, or that something in the network path
+            // answers for with a reply we can't read, passes, so cached mail
+            // is readable offline.
             try await OfflineLaunch.validateStoredSession(newClient.authService)
             // A sign-out meanwhile is waiting for this restore to finish:
             // end the session it asked to end rather than wire it (#1827).
