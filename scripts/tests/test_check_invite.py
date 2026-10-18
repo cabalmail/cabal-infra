@@ -91,7 +91,8 @@ class AutoConfirmTests(unittest.TestCase):
 
 class UsernameRuleTests(unittest.TestCase):
     '''Self-service usernames: the sign-up screens' shape, at least one
-    letter, and none of the names the mail images or aliases already use.'''
+    letter, none of the names the mail images or aliases already use, and
+    none of the cache bucket's top-level key prefixes.'''
     CODE = 'open-sesame'
 
     def assert_rejected(self, name):
@@ -115,6 +116,12 @@ class UsernameRuleTests(unittest.TestCase):
         for name in ('root', 'mail', 'dovecot', 'dovenull', 'nobody', 'users',
                      'wheel', 'opendkim', 'systemd-network', 'postmaster',
                      'support', 'master', 'ci-probe', 'admin'):
+            self.assert_rejected(name)
+
+    def test_top_level_cache_bucket_prefixes_are_reserved(self):
+        # The cache bucket keys each user's objects under {username}/, so a
+        # username never equals one of the fixed prefixes beside them.
+        for name in ('outbound', 'sent-pending', 'bimi', 'dmarc', 'caa'):
             self.assert_rejected(name)
 
     def test_names_outside_the_signup_shape_are_rejected(self):
