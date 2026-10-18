@@ -370,7 +370,12 @@ def shape_open_pr(node):
                            "status": "completed" if state in ("success", "failure", "error") else "in_progress",
                            "conclusion": state,
                            "url": ctx.get("targetUrl") or ""})
-    checks.sort(key=lambda c: c["name"].lower())
+    # Unfinished and failing checks first, so what still needs watching sits
+    # above the long tail of passes and skips (the same buckets checkPill
+    # renders as "pass" and "skipped").
+    checks.sort(key=lambda c: (c["status"] == "completed"
+                               and c["conclusion"] in ("success", "skipped", "neutral"),
+                               c["name"].lower()))
     return {"number": node["number"], "title": node["title"], "url": node["url"],
             "sha": commit.get("oid"),
             "mergeable": node.get("mergeable"),
