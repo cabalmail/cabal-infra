@@ -5,6 +5,119 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.34.0] - 2026-10-18
+
+### Added
+- **Release-dashboard hold count tile.** A stat tile beside "pending
+  fragments" counts the issues holding Promote, outlined in amber while the
+  count is nonzero, with a trailing `+` when the fix-PR scan hit its page cap
+  and the hold list may be incomplete.
+- **Webmail Cognito JSON client.** `react/admin/src/auth/` speaks
+  Cognito's JSON API directly, the way the Apple and Android kits do,
+  ahead of dropping `amazon-cognito-identity-js` (end of support
+  2027-03-01). It covers every operation the webmail uses: sign-up and
+  confirmation, password sign-in with TOTP or SMS challenges, refresh,
+  password reset, the recovery-email attributes and TOTP setup. It also
+  includes a session holder that keeps only the refresh token, in
+  sessionStorage, and refreshes single-flight. Its ID-token decoding
+  handles base64url and UTF-8, which the `atob` read in `App.jsx`
+  mishandles: it can throw on a claim holding `~`, `?` or `>`, and garbles
+  non-ASCII text. Nothing calls the module yet; the sign-in screens move
+  onto it in a follow-up.
+
+### Changed
+- **Cognito user-existence check named once.** `assign_address`,
+  `new_address_admin` and `set_user_domain_access` each carried a private
+  `cognito_user_exists()` and its own `cognito-idp` client; the check now
+  lives in `admin_limits.py` beside the other admin-handler guards, taking
+  the caller's user-pool id as an argument so every import-time environment
+  read stays where it was.
+- **Release-dashboard hold list as a table.** The issues holding Promote are
+  listed in a table with Issue, Description, Labels, and PR columns, in place
+  of a bulleted list that ran the number, title, label pills, and fix PRs
+  together on one line.
+
+### Fixed
+- Apple: **New Message reachable beside the addresses inspector.** On an iPad
+  the list column's navigation bar folds what it cannot seat into the system
+  `•••` overflow, which draws a menu row per item — and a button labelled with
+  an icon alone had no row to draw, so New Message and the `@` toggle were
+  neither in the bar nor in the overflow once the inspector squeezed the
+  column. They are titled now, and fold into the overflow like the More menu
+  beside them.
+- **Unassignable watch high-contrast colour entries.** Every generated colour
+  set carried a `(watch idiom, contrast high)` entry, and actool has no slot
+  for that pair: the entry never drew anything and cost one "unassigned
+  child" warning per colour set — 66 of them — on every build of
+  CabalmailKit, on every platform. The generator no longer emits it; the
+  watch still gets the dark value it has always drawn.
+- Apple: **One offline cache file per folder.** The envelope and body caches
+  named a folder's files by replacing `/` and `.` with `_`, so a nested
+  folder and a flat sibling spelled the same way — `a/b` and `a_b` — shared
+  one file: each folder's snapshot replaced the other's, leaving neither with
+  a usable offline copy of itself. Names now carry a digest of the exact
+  folder path, and the files written under the old names are dropped once, at
+  open, since which folder they belong to is not knowable.
+- Apple: **A failed draft save no longer says a send failed.** Saving a
+  draft to the server reported "Couldn't save draft: Send failed: …" on
+  every failure but an offline one, an expired session or a maintenance
+  window — the compose surface wrote the reason with the send's lead baked
+  in, and the save path prefixed its own on top. The leads sit with their
+  operation now, so a failed save reads "Couldn't save draft: The server
+  couldn't complete that request (500)." and a failed send is unchanged.
+- Apple: **A sign-in reply the network answered for.** A 2xx from Cognito
+  whose body isn't JSON — an empty body, or a hotel or café sign-in page
+  answering for it — threw Foundation's error out of the Kit, so it showed
+  as "The data couldn't be read because it isn't in the correct format."
+  and a cold launch dropped to the sign-in form even though the session on
+  disk was fine. It now reads as "Couldn't read the server's reply." and,
+  like a refresh that never reached Cognito, leaves the stored session
+  alone for the first call made back on a real network.
+- Apple: **A rule save or Mark All as Read the server did keep.** Both
+  endpoints commit before they answer, so a 200 whose body the client
+  can't read is a write that landed — but a rule save reported a failure
+  and left its version behind the server's, so the next save's 409 said
+  the rules had been changed on another device, and Mark All as Read kept
+  the folder's unread badge and rows although every message had been
+  marked read. The rule editor re-reads the committed set instead, and the
+  folder's after-effects run with only the flipped count lost.
+- Apple: **A refused request says what the server said.** Most of the mail
+  API refuses a request as `{"Error": "<sentence>"}`, and the clients read
+  only the `status` and `message` keys — so a reserved subdomain, an
+  unknown domain, an empty local part or revoking someone else's address
+  all read "The server couldn't complete that request (400)." instead of
+  the reason. The sentence under that key is used now for a 4xx; a 500
+  stays generic, since four handlers put raw exception text there.
+- Android: **The resume prompt names where it goes.** The cross-device
+  offer read "Pick up where you left off?" for every cursor, so accepting
+  it could drop you into a feed article you had never opened with nothing
+  beforehand to say so. It now names the mail folder, or the feed the
+  item belongs to (its title when the feed is one this install doesn't
+  know yet), and keeps the old sentence when neither resolves.
+- Android: **Feed error line counts only feeds.** One sync pass reported
+  catalog, per-feed and offline-queue failures in a single map keyed by
+  subscription id, and the feed list showed its "Could not refresh feeds"
+  line when that map was as big as the subscription list. A failed queue
+  push therefore counted as a failed feed: the line appeared while a feed
+  had synced fine, or stayed away when every feed had failed. The pass
+  returns an `RssSyncReport` with the three kinds apart, as the Apple kit
+  does.
+- Android: **Load older survives an overlapping sync.** A feed's sync and
+  its "Load older items" each read the whole sync-state row when they
+  started and wrote the whole thing back when they finished, so whichever
+  landed second put the other's cursor back: the next load re-fetched the
+  page it already had, and a feed loaded to the end of its history got its
+  footer back with nothing behind it. Each write now touches only the
+  cursors it owns.
+- Apple: **An unsubscribed folder open on screen is left alone.** Its
+  banner says the folder "is not kept up-to-date automatically", but the
+  list went on the folder's poller like any other — a status check every
+  30 seconds and a refresh every 60 for as long as it was open.
+  Subscription decides both now, from the one rule the banner is drawn
+  from: an unsubscribed folder refreshes when you open it, when you pull,
+  and when you tap the banner's Refresh, and subscribing or unsubscribing
+  it while you are looking at it takes effect there and then.
+
 ## [1.33.0] - 2026-10-18
 
 ### Changed
