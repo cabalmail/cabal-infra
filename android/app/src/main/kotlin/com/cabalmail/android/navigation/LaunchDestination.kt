@@ -5,6 +5,7 @@ import com.cabalmail.android.ui.feeds.FeedRoutes
 import com.cabalmail.kit.models.NavState
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemScope
+import com.cabalmail.kit.rss.RssStore
 
 /** One navigation the launch restore performs, in order. */
 data class LaunchRoute(
@@ -131,5 +132,43 @@ object HandoffPosition {
     fun fraction(cursor: NavState): Float? {
         cursor.msgFraction?.let { return it.toFloat().coerceIn(0f, 1f) }
         return cursor.msgAnchor?.let(com.cabalmail.android.reading.ReadingAnchor::fraction)
+    }
+}
+
+/**
+ * What the cross-device prompt names as its destination (#1931), so the
+ * offer says where Resume will land instead of "Pick up where you left
+ * off?" for every cursor alike.
+ *
+ * A mail cursor names its folder the way every other folder surface on
+ * Android does — the path as the server spells it, since that is what the
+ * folder list and the list's title bar show. A feed cursor names the feed
+ * the item belongs to, falling back to the item's own title; when neither
+ * resolves (the item is gone, or the fetch failed) the caller keeps the
+ * unnamed sentence rather than inventing a destination.
+ *
+ * The item is read from the store first and fetched second, the same
+ * ladder the tap itself follows, so resolving the name also warms the item
+ * Resume will open.
+ */
+object ResumeDestination {
+    suspend fun name(
+        cursor: NavState,
+        store: RssStore,
+        fetchItem: suspend (feedId: String, sortKey: String) -> RssItem?,
+    ): String? {
+        if (!cursor.isFeed) return cursor.folder?.takeIf { it.isNotBlank() }
+        val (feedId, sortKey) = cursor.rssItem?.let(FeedRoutes::splitItemId) ?: return null
+        val item =
+            runCatching { store.item(feedId, sortKey) }.getOrNull()
+                ?: fetchItem(feedId, sortKey)?.also {
+                    runCatching { store.upsertItems(listOf(it)) }
+                }
+                ?: return null
+        val feedTitle =
+            item.subscriptionId
+                .takeIf { it.isNotEmpty() }
+                ?.let { id -> runCatching { store.subscription(id) }.getOrNull()?.displayTitle }
+        return feedTitle?.takeIf { it.isNotBlank() } ?: item.title.takeIf { it.isNotBlank() }
     }
 }

@@ -110,6 +110,8 @@
 
     <!-- Resume cursor -->
     <string name="resume_prompt">Pick up where you left off?</string>
+    <!-- %1$s is the destination: a mail folder, or the feed being read. -->
+    <string name="resume_prompt_in">Pick up where you left off in %1$s?</string>
     <string name="resume_action">Resume</string>
 
     <!-- Compose -->
