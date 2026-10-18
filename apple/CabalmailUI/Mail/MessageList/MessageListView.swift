@@ -521,6 +521,14 @@ extension MessageListView {
             hasAppeared = true
             applyPendingRestoreWhenReady()
         }
+        // The subscribed set moving under an open list decides whether it
+        // is kept current (#1983): the folder list landing after the list
+        // opened, or this folder being subscribed or unsubscribed while it
+        // is on screen.
+        .onChange(of: appState.mailStore.counts.subscribedFolderPaths) {
+            let model = model
+            Task { await model?.updateWatching() }
+        }
         .onDisappear {
             // Take the list off its folder's poller when it drops off-screen;
             // the last list off a folder stops its watcher and tick. The view
