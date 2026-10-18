@@ -43,7 +43,6 @@ These are required for every environment.
 | `TF_VAR_EMAIL` | `your_email@example.com` | Operator contact address. |
 | `TF_VAR_ENVIRONMENT` | `production` | Passed into Terraform as the environment name. |
 | `TF_VAR_IMAP_SCALE` | `{ min = 1, max = 1, des = 1, size = \\"t3.small\\" }` | ECS IMAP tier autoscaling parameters. Quotes must be escaped. |
-| `TF_VAR_INVITATION_CODE` | `shared-signup-secret` | Optional. When set, signups require this code. Leave unset or empty to keep signups open. |
 | `TF_VAR_ENFORCE_ADMIN_MFA` | `false` | Optional. When `true`, the `require_admin_mfa` pre-token-generation trigger refuses sign-in tokens to admin-group members with no enrolled MFA factor. Default `false` (audit mode, log-only). Flip only after every admin has enrolled TOTP. |
 | `TF_VAR_ENFORCE_USER_MFA` | `false` | Optional. Same gate for all non-admin users (a dedicated enrollment app client lets locked-out users enroll self-service). Default `false`. Flip only after the user population has enrolled TOTP. |
 | `TF_VAR_MAIL_DOMAINS` | `[\\"example.com\\",\\"example.org\\"]` | Mail address namespaces. No apex addressing -- see architecture notes. Quotes must be escaped. |
@@ -53,6 +52,14 @@ These are required for every environment.
 | `TF_VAR_SMTPOUT_SCALE` | `{ min = 1, max = 1, des = 1, size = \\"t2.micro\\" }` | ECS SMTP-OUT tier autoscaling parameters. Quotes must be escaped. |
 
 Note that quotation marks must be escaped with a single backslash. (If you're reading this document in raw markdown, you'll see double backslashes.)
+
+### Invitation code
+
+Set this as an environment **secret**, not a variable, on each environment that should gate signups: it is a credential.
+
+| Secret | Example | Notes |
+| --- | --- | --- |
+| `TF_VAR_INVITATION_CODE` | `shared-signup-secret` | Optional. When set, signups require this code. Leave unset to keep signups open. The deploy and quiesce workflows fall back to an environment variable of the same name while no secret exists; once the secret is in place, delete the variable. |
 
 ### Quiesce
 
