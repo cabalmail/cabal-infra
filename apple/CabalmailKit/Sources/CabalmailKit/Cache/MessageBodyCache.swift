@@ -17,6 +17,7 @@ public actor MessageBodyCache {
         self.capacityBytes = capacityBytes
         self.fileManager = fileManager
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        Self.removeLegacyFolders(in: directory, using: fileManager)
     }
 
     public func fetch(folder: String, uidValidity: UInt32, uid: UInt32) -> Data? {
@@ -70,10 +71,19 @@ public actor MessageBodyCache {
     }
 
     private func folderURL(folder: String) -> URL {
-        let safe = folder
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ".", with: "_")
-        return directory.appendingPathComponent(safe)
+        // One directory per folder, and a different one for every distinct
+        // folder — see `FolderCacheName` and #1871.
+        directory.appendingPathComponent(FolderCacheName.component(for: folder))
+    }
+
+    /// Drops body directories written under the pre-#1871 names, once, at
+    /// open. Same reasoning as `EnvelopeCache`: the old name is ambiguous,
+    /// and a body is refetched on demand.
+    static func removeLegacyFolders(in directory: URL, using fileManager: FileManager) {
+        let names = (try? fileManager.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names where !FolderCacheName.isCurrent(base: name) {
+            try? fileManager.removeItem(at: directory.appendingPathComponent(name))
+        }
     }
 
     private struct CacheEntry {
