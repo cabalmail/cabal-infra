@@ -144,20 +144,19 @@ class RssSyncEngine(
 
     /**
      * Catalog, then every subscription, [concurrency] at a time; then the
-     * pending queue. Per-feed failures are collected under the subscription
-     * id, not fatal; a catalog failure (`"catalog"`) ends the run, and a
-     * drain failure is reported as `"pending"`. Empty means a clean run.
+     * pending queue. Per-feed failures are not fatal; a catalog failure
+     * ends the run. The three kinds are reported separately so a caller
+     * can tell "every feed failed" from "one push failed" (#1954).
      */
-    suspend fun syncAll(): Map<String, Throwable> {
-        val failures = LinkedHashMap<String, Throwable>()
+    suspend fun syncAll(): RssSyncReport {
         try {
             refreshCatalog()
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
-            failures["catalog"] = exception
-            return failures
+            return RssSyncReport(catalogFailure = exception)
         }
         val subs = runCatching { store.subscriptions() }.getOrDefault(emptyList())
+        val feedFailures = LinkedHashMap<String, Throwable>()
         val gate = Semaphore(concurrency)
         coroutineScope {
             subs
@@ -175,15 +174,20 @@ class RssSyncEngine(
                     }
                 }.awaitAll()
                 .filterNotNull()
-                .forEach { (id, error) -> failures[id] = error }
+                .forEach { (id, error) -> feedFailures[id] = error }
         }
+        var pendingFailure: Throwable? = null
         try {
             drainPending()
         } catch (exception: Exception) {
             if (exception is CancellationException) throw exception
-            failures["pending"] = exception
+            pendingFailure = exception
         }
-        return failures
+        return RssSyncReport(
+            subscriptionIds = subs.map { it.subscriptionId },
+            feedFailures = feedFailures,
+            pendingFailure = pendingFailure,
+        )
     }
 
     // --------------------------------------------------- pending mutations

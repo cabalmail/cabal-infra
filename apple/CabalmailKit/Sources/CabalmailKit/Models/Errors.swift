@@ -89,10 +89,12 @@ extension CabalmailError: LocalizedError {
         case .server(let code, let message):
             // The API explains itself in the body ("That message is no
             // longer in Drafts"); prefer that sentence over the status code.
-            return Self.serverExplanation(message) ?? "The server couldn't complete that request (\(code))."
+            return Self.serverExplanation(message, status: Int(code))
+                ?? "The server couldn't complete that request (\(code))."
         case .http(let status, let body):
             // The same sentence `.server` gives for a numeric code.
-            return Self.serverExplanation(body) ?? "The server couldn't complete that request (\(status))."
+            return Self.serverExplanation(body, status: status)
+                ?? "The server couldn't complete that request (\(status))."
         case .maintenance(let message):
             // Already client-facing copy, carried for exactly this purpose.
             return message
@@ -109,11 +111,19 @@ extension CabalmailError: LocalizedError {
     /// errors use `{"message": "<sentence>"}`. A one-word marker (`unable`,
     /// `partial`) is machine state, not an explanation, so it's rejected —
     /// the caller falls back to the status code.
-    static func serverExplanation(_ body: String) -> String? {
+    ///
+    /// Most mail-side handlers refuse a request as `{"Error": "<sentence>"}`
+    /// instead (`/new`, `/revoke`, `/set_rules`, …), and that sentence is
+    /// read only for a 4xx: four handlers put `str(err)` under the same key
+    /// in their 500, which is internal exception text and not for a user
+    /// (#1918). An unknown status is treated as a 500, since a body that
+    /// cannot be placed is the case this guards.
+    static func serverExplanation(_ body: String, status: Int?) -> String? {
         guard let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
-        let candidate = (json["status"] as? String) ?? (json["message"] as? String)
+        let refusal = (400...499).contains(status ?? 500) ? json["Error"] as? String : nil
+        let candidate = (json["status"] as? String) ?? (json["message"] as? String) ?? refusal
         guard let text = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
               text.contains(" ")
         else { return nil }
