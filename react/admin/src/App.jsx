@@ -59,6 +59,7 @@ import './tokens.css';
 import { DATE, DESC } from './constants';
 import { clearListCaches } from './utils/listCache';
 import { viewWhenLoggedOut } from './authViews';
+import { signUpErrorMessage } from './SignUp/signUpError';
 import './App.css';
 
 // Module-level token storage (never persisted to localStorage)
@@ -421,10 +422,7 @@ function App() {
           setMessage(`Check your ${medium} for a verification code.`, false);
         } else {
           setState({ view: "SignUp" });
-          const msg = /invitation code/i.test(err.message || '')
-            ? "Invalid invitation code."
-            : "Registration failed.";
-          setMessage(msg, true);
+          setMessage(signUpErrorMessage(err), true);
         }
       }
     );
