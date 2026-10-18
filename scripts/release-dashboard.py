@@ -842,9 +842,8 @@ PAGE = r"""<!DOCTYPE html>
   .banner{border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:13px}
   .banner.err{background:color-mix(in srgb,var(--critical) 12%,transparent); border:1px solid color-mix(in srgb,var(--critical) 40%,transparent); color:var(--critical)}
   .banner.warn{background:color-mix(in srgb,var(--warning) 13%,transparent); border:1px solid color-mix(in srgb,var(--warning) 50%,transparent); color:var(--ink)}
-  .banner ul{margin:8px 0 0; padding-left:20px}
-  .banner li{margin:0 0 4px}
-  .banner li:last-child{margin-bottom:0}
+  .banner table{margin-top:10px}
+  .pills{display:flex; flex-wrap:wrap; gap:4px}
   .stats{display:flex; gap:10px; flex-wrap:wrap; margin:18px 0 18px}
   .stat{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; min-width:150px}
   .stat .n{font-size:22px; font-weight:650; letter-spacing:-0.02em}
@@ -1197,9 +1196,15 @@ function renderFlight(){
     const canPromote=frags.length>0 && !pend.length;
     const holdWhy=pend.length?`Held — ${pend.length} open issue${pend.length!==1?'s have':' has'} unreleased fixes on stage (see above)`:'No pending fragments — nothing to release';
     const btn=(spec)=>`<button class="abtn go big" type="button" ${canPromote?`onclick="askPromote('${spec}')"`:`disabled title="${esc(holdWhy)}"`}>${spec[0].toUpperCase()+spec.slice(1)}${nxt?` → ${esc(nxt[spec])}`:''}</button>`;
-    const gateHtml=(pend.length?`<div class="banner warn"><b>Promote is held.</b> Stage carries merged fixes for ${pend.length} open issue${pend.length!==1?'s':''} the tester hasn't signed off on; releasing now would ship ${pend.length!==1?'them':'it'} to prod unretested. The hold clears when the issue${pend.length!==1?'s close':' closes'} (the retest pass does this).<ul>`+
-        pend.map(i=>`<li><a href="${esc(i.url)}" target="_blank" rel="noopener">#${i.number}</a> ${esc(i.title)} ${(i.labels||[]).map(l=>`<span class="pill warn">${esc(l)}</span>`).join(' ')} — fix merged in ${(i.prs||[]).map(p=>`<a href="${esc(p.url)}" target="_blank" rel="noopener">PR #${p.number}</a>`).join(', ')}</li>`).join('')+
-        `</ul></div>`:'')+
+    const gateHtml=(pend.length?`<div class="banner warn"><b>Promote is held.</b> Stage carries merged fixes for ${pend.length} open issue${pend.length!==1?'s':''} the tester hasn't signed off on; releasing now would ship ${pend.length!==1?'them':'it'} to prod unretested. The hold clears when the issue${pend.length!==1?'s close':' closes'} (the retest pass does this).
+      <table><thead><tr><th>Issue</th><th>Description</th><th>Labels</th><th>PR</th></tr></thead><tbody>`+
+        pend.map(i=>`<tr>
+          <td class="num"><a href="${esc(i.url)}" target="_blank" rel="noopener">#${i.number}</a></td>
+          <td>${esc(i.title)}</td>
+          <td>${(i.labels||[]).length?`<div class="pills">${i.labels.map(l=>`<span class="pill warn">${esc(l)}</span>`).join('')}</div>`:'<span class="none">—</span>'}</td>
+          <td class="num">${(i.prs||[]).map(p=>`<a href="${esc(p.url)}" target="_blank" rel="noopener">#${p.number}</a>`).join(', ')}</td>
+        </tr>`).join('')+
+        `</tbody></table></div>`:'')+
       ((m.pending||{}).truncated?`<div class="banner warn">The fix-PR scan hit its page cap, so the hold list may be incomplete — check the triage dashboard before promoting.</div>`:'');
     inner=`<h2>Release in flight <span class="pill ${pend.length?'warn':'neutral'}">${pend.length?'promote held — issues awaiting close':'none — next release preview'}</span></h2>`+gateHtml+fragHtml+
       `<div class="promoterow">${btn('patch')}${btn('minor')}${btn('major')}<span class="hint">${nxt?`latest tag ${esc(nxt.latest)} · `:''}runs promote.sh in the dashboard's private stage clone: collate → commit → push stage → open the stage→main PR</span></div>`+
