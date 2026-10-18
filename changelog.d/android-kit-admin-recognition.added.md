@@ -4,4 +4,4 @@
   `admin` group. It matches the group as a whole name, as the Apple kit
   and the server do, and computes the answer from the stored tokens on
   every call, so it follows a refresh, a sign-out and an account switch.
-  Nothing in the app reads it yet.
+  Settings reads it to list Users for administrators.

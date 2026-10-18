@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.notifications.PushRegistrar
+import com.cabalmail.kit.auth.isAdmin
 import com.cabalmail.kit.models.Address
 import com.cabalmail.kit.settings.AppPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +22,12 @@ data class SettingsUiState(
     val controlDomain: String? = null,
     /** Owned addresses for the Default From picker; null until loaded. */
     val addresses: List<Address>? = null,
+    /**
+     * Whether the signed-in user is an administrator, as their ID token says
+     * ([com.cabalmail.kit.auth.isAdmin]). A hint for what to show, the Users
+     * category, never for what to allow: the server checks every admin call.
+     */
+    val isAdmin: Boolean = false,
 )
 
 /**
@@ -44,6 +51,7 @@ class SettingsViewModel(
                 it.copy(
                     username = runCatching { container.requireAuth().currentUsername() }.getOrNull(),
                     controlDomain = container.configService.controlDomain.value,
+                    isAdmin = readIsAdmin(),
                 )
             }
             val repository = runCatching { container.requireAddressRepository() }.getOrNull() ?: return@launch
@@ -53,6 +61,20 @@ class SettingsViewModel(
             }
         }
     }
+
+    /**
+     * Re-reads [SettingsUiState.isAdmin] from the session's current tokens:
+     * each time Settings is shown (a refresh may have granted or removed the
+     * group), and when the server answers an admin call with 403.
+     */
+    fun refreshAdminStatus() {
+        viewModelScope.launch {
+            val isAdmin = readIsAdmin()
+            mutableState.update { it.copy(isAdmin = isAdmin) }
+        }
+    }
+
+    private suspend fun readIsAdmin(): Boolean = runCatching { container.requireAuth().isAdmin() }.getOrDefault(false)
 
     fun update(transform: (AppPreferences) -> AppPreferences) {
         viewModelScope.launch { container.preferences.update(transform) }
