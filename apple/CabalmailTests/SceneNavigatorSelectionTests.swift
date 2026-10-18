@@ -12,16 +12,16 @@ final class SceneNavigatorSelectionTests: XCTestCase {
     private var defaults: UserDefaults!
     private var store: ResumeSessionStore!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         suiteName = "SceneNavigatorSelectionTests.\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
         store = ResumeSessionStore(defaults: defaults)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         defaults.removePersistentDomain(forName: suiteName)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private let inbox = Folder(path: "INBOX", attributes: ["\\HasNoChildren"], isSubscribed: true)

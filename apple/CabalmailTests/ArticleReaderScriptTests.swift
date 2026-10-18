@@ -92,18 +92,18 @@ final class ArticleReaderDocumentScriptTests: XCTestCase {
     private var window: NSWindow!
     private var loads: LoadWatcher!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 600),
                           styleMask: [.borderless], backing: .buffered, defer: false)
         loads = LoadWatcher()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         window.contentView = nil
         window = nil
         loads = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testTheReaderDocumentRunsNothingFromTheArticle() async throws {
