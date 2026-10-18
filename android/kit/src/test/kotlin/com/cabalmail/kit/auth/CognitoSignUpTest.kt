@@ -116,14 +116,19 @@ class CognitoSignUpTest {
             assertEquals(nameValues("invitationCode" to ""), stub.bodies.single()["ValidationData"])
         }
 
+    /**
+     * Neither contact is required by the kit: a deployment can sign up an
+     * account with only a phone, so Cabalmail can be someone's only email.
+     */
     @Test
-    fun `a phone is sent only when given`() =
+    fun `email and phone are sent only when given`() =
         runTest {
-            val stub = CognitoStub(confirmedReply, confirmedReply)
+            val stub = CognitoStub(confirmedReply, confirmedReply, confirmedReply)
             val auth = service(stub)
 
             auth.signUp("alice", "pw", "alice@example.net", "+15555550123", null)
-            auth.signUp("bob", "pw", "bob@example.net", "", null)
+            auth.signUp("bob", "pw", null, "+15555550124", null)
+            auth.signUp("carol", "pw", "", "", null)
 
             assertEquals(
                 nameValues(
@@ -134,9 +139,10 @@ class CognitoSignUpTest {
                 stub.bodies[0]["UserAttributes"],
             )
             assertEquals(
-                nameValues("preferred_username" to "bob", "email" to "bob@example.net"),
+                nameValues("preferred_username" to "bob", "phone_number" to "+15555550124"),
                 stub.bodies[1]["UserAttributes"],
             )
+            assertEquals(nameValues("preferred_username" to "carol"), stub.bodies[2]["UserAttributes"])
         }
 
     // SignUp reply

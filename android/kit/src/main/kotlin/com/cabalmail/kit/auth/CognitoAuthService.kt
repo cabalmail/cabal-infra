@@ -117,7 +117,7 @@ class CognitoAuthService(
     override suspend fun signUp(
         username: String,
         password: String,
-        email: String,
+        email: String?,
         phone: String?,
         invitationCode: String?,
     ): SignUpResult {
@@ -128,7 +128,9 @@ class CognitoAuthService(
                 put("Password", password)
                 putJsonArray("UserAttributes") {
                     add(nameValue("preferred_username", username))
-                    add(nameValue("email", email))
+                    if (!email.isNullOrEmpty()) {
+                        add(nameValue("email", email))
+                    }
                     if (!phone.isNullOrEmpty()) {
                         add(nameValue("phone_number", phone))
                     }

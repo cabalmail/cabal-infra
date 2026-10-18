@@ -45,7 +45,7 @@ class RulesApiTest {
         override suspend fun signUp(
             username: String,
             password: String,
-            email: String,
+            email: String?,
             phone: String?,
             invitationCode: String?,
         ): SignUpResult = SignUpResult.Confirmed

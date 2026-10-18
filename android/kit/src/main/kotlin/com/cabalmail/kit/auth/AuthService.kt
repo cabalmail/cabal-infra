@@ -58,16 +58,17 @@ interface AuthService {
     suspend fun submitMfaCode(code: String)
 
     /**
-     * Creates an account (`docs/auth.md`, "Sign-up"). [email] is the
-     * recovery address, always collected; pass [phone] (E.164) only when
-     * the config's `smsEnabled`. A refused invitation code throws
+     * Creates an account (`docs/auth.md`, "Sign-up"). [email] (the recovery
+     * address) and [phone] (E.164, only when the config's `smsEnabled`) are
+     * each sent only when given; which a deployment asks for is the sign-up
+     * screen's call. A refused invitation code throws
      * [CabalmailException.InvalidInvitationCode]; a refused username throws
      * [CabalmailException.ServerError] with `check_invite`'s own sentence.
      */
     suspend fun signUp(
         username: String,
         password: String,
-        email: String,
+        email: String?,
         phone: String?,
         invitationCode: String?,
     ): SignUpResult
