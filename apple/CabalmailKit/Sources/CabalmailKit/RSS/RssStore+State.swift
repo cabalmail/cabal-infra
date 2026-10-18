@@ -41,19 +41,38 @@ extension RssStore {
         }
     }
 
-    /// Marks an item read or unread locally and queues the change.
+    /// Marks an item read or unread locally and queues the change. One
+    /// transaction, for the reason `markAllRead` is: a flag flipped here
+    /// with no push queued reads as read on this device and unread on the
+    /// server, and the state sync only delivers rows the server changed,
+    /// so nothing reconciles it (#1956).
     public func setRead(feedId: String, sortKey: String, _ isRead: Bool) throws {
-        try database.run("UPDATE items SET is_read = ?, state_is_explicit = 1 WHERE feed_id = ? AND sort_key = ?",
-                   [.init(isRead), .init(feedId), .init(sortKey)])
-        try enqueue(kind: .read, feedId: feedId, sortKey: sortKey, value: isRead)
+        try database.exec("BEGIN")
+        do {
+            try database.run("UPDATE items SET is_read = ?, state_is_explicit = 1 WHERE feed_id = ? AND sort_key = ?",
+                       [.init(isRead), .init(feedId), .init(sortKey)])
+            try enqueue(kind: .read, feedId: feedId, sortKey: sortKey, value: isRead)
+            try database.exec("COMMIT")
+        } catch {
+            try? database.exec("ROLLBACK")
+            throw error
+        }
         emit(.items(["\(feedId)#\(sortKey)"]))
     }
 
-    /// Favorites or unfavorites an item locally and queues the change.
+    /// Favorites or unfavorites an item locally and queues the change, in
+    /// one transaction for the same reason `setRead` is (#1956).
     public func setFavorite(feedId: String, sortKey: String, _ isFavorite: Bool) throws {
-        try database.run("UPDATE items SET is_favorite = ? WHERE feed_id = ? AND sort_key = ?",
-                   [.init(isFavorite), .init(feedId), .init(sortKey)])
-        try enqueue(kind: .favorite, feedId: feedId, sortKey: sortKey, value: isFavorite)
+        try database.exec("BEGIN")
+        do {
+            try database.run("UPDATE items SET is_favorite = ? WHERE feed_id = ? AND sort_key = ?",
+                       [.init(isFavorite), .init(feedId), .init(sortKey)])
+            try enqueue(kind: .favorite, feedId: feedId, sortKey: sortKey, value: isFavorite)
+            try database.exec("COMMIT")
+        } catch {
+            try? database.exec("ROLLBACK")
+            throw error
+        }
         emit(.items(["\(feedId)#\(sortKey)"]))
     }
 
