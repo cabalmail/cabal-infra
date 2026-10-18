@@ -63,11 +63,19 @@ function auth(idToken = PLAIN_ID, { expiresIn = 43200, refreshToken = 'refresh-1
   });
 }
 
-function user({ email = 'alice@example.com', verified = true, mfa = ['SOFTWARE_TOKEN_MFA'] } = {}) {
+function user({
+  email = 'alice@example.com', verified = true, phoneVerified = null, mfa = ['SOFTWARE_TOKEN_MFA'],
+} = {}) {
   const attributes = email ? [
     { Name: 'email', Value: email },
     { Name: 'email_verified', Value: verified ? 'true' : 'false' },
   ] : [];
+  if (phoneVerified !== null) {
+    attributes.push(
+      { Name: 'phone_number', Value: '+15555550123' },
+      { Name: 'phone_number_verified', Value: phoneVerified ? 'true' : 'false' },
+    );
+  }
   return reply(200, { Username: 'alice', UserAttributes: attributes, UserMFASettingList: mfa });
 }
 
@@ -83,6 +91,8 @@ const MFA_REFUSAL = cognitoError(400, 'UserLambdaValidationException',
 
 let routes;
 let calls;
+// What /config.js serves; a test that needs SMS on swaps it before render.
+let config;
 
 function cognito(replies) {
   routes = {};
@@ -99,8 +109,9 @@ beforeEach(() => {
   window.sessionStorage.clear();
   calls = [];
   routes = {};
+  config = CONFIG;
   axios.get.mockImplementation((url) => (
-    url === '/config.js' ? Promise.resolve({ data: CONFIG }) : Promise.resolve({ data: {} })
+    url === '/config.js' ? Promise.resolve({ data: config }) : Promise.resolve({ data: {} })
   ));
   vi.stubGlobal('fetch', vi.fn(async (url, init) => {
     const op = init.headers['X-Amz-Target'].split('.').pop();
@@ -221,6 +232,40 @@ describe('sign-in', () => {
 
     await screen.findByTestId('email-view');
     expect(sentTo('VerifyUserAttribute')[0]).toEqual({ AccessToken: 'access-1', AttributeName: 'email', Code: '424242' });
+  });
+
+  // docs/auth.md, "After sign-in": with SMS on, a verified phone recovers
+  // the account, so an email-less account is not asked to add one.
+  it('does not ask a phone-verified account to add an email when SMS is on', async () => {
+    config = { ...CONFIG, sms_enabled: true };
+    cognito({ InitiateAuth: [auth()], GetUser: [user({ email: null, phoneVerified: true })] });
+    await renderSignedOut();
+    await signIn();
+    await screen.findByTestId('email-view');
+    expect(screen.queryByText('Add a recovery email.')).toBeNull();
+  });
+
+  it('asks a phone-verified account to add an email when SMS is off', async () => {
+    cognito({ InitiateAuth: [auth()], GetUser: [user({ email: null, phoneVerified: true })] });
+    await renderSignedOut();
+    await signIn();
+    await screen.findByText('Add a recovery email.');
+  });
+
+  it('asks to add an email when SMS is on but the phone is unverified', async () => {
+    config = { ...CONFIG, sms_enabled: true };
+    cognito({ InitiateAuth: [auth()], GetUser: [user({ email: null, phoneVerified: false })] });
+    await renderSignedOut();
+    await signIn();
+    await screen.findByText('Add a recovery email.');
+  });
+
+  it('still asks to verify an email the user gave, whatever the phone', async () => {
+    config = { ...CONFIG, sms_enabled: true };
+    cognito({ InitiateAuth: [auth()], GetUser: [user({ verified: false, phoneVerified: true })] });
+    await renderSignedOut();
+    await signIn();
+    await screen.findByText('Verify your email.');
   });
 
   it('nudges an account with no second factor to enroll', async () => {
@@ -415,6 +460,30 @@ describe('sign-up', () => {
     expect(sentTo('SignUp')[0].UserAttributes).toEqual([
       { Name: 'preferred_username', Value: 'newbie' },
       { Name: 'email', Value: 'newbie@example.com' },
+    ]);
+  });
+
+  it('signs up with a phone and no email when SMS is on', async () => {
+    config = { ...CONFIG, sms_enabled: true };
+    cognito({
+      SignUp: [reply(200, { UserConfirmed: false, CodeDeliveryDetails: { DeliveryMedium: 'SMS', Destination: '+*******0123' } })],
+    });
+    await renderSignedOut();
+    fireEvent.click(screen.getAllByText('Create an account')[0]);
+    await screen.findByLabelText('Phone number');
+    const set = (label, name, value) => fireEvent.change(screen.getByLabelText(label), { target: { name, value } });
+    set('Username', 'userName', 'newbie');
+    set('Phone number', 'phone', '+15555550123');
+    set('Invitation code', 'inviteCode', 'right');
+    set('Password', 'password', 'Long-enough-pw1');
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'Long-enough-pw1' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+    await screen.findByText('Check your phone for a verification code.');
+    expect(sentTo('SignUp')[0].UserAttributes).toEqual([
+      { Name: 'preferred_username', Value: 'newbie' },
+      { Name: 'phone_number', Value: '+15555550123' },
     ]);
   });
 

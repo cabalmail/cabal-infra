@@ -155,6 +155,27 @@ describe('SignUp', () => {
     expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
   });
 
+  // With SMS on the phone verifies and recovers the account, so the
+  // recovery email is optional: Cabalmail can be someone's only email.
+  it('submits without an email when SMS is on', () => {
+    const onSubmit = vi.fn(e => e.preventDefault());
+    render(withAuth(<SignUp {...defaultProps} {...validProps} email="" inviteCode="" onSubmit={onSubmit} />));
+    fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: validProps.password },
+    });
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the email optional when SMS is on', () => {
+    render(withAuth(<SignUp {...defaultProps} />));
+    expect(screen.getByLabelText('Email address').required).toBe(false);
+    expect(screen.getByText('Optional, for recovery')).toBeInTheDocument();
+    expect(screen.getByLabelText('Phone number').required).toBe(true);
+  });
+
   it('keeps submit disabled when invitation code is empty and required', () => {
     render(withAuth(
       <SignUp
@@ -175,6 +196,24 @@ describe('SignUp', () => {
       render(withAuth(<SignUp {...defaultProps} />, { sms_enabled: false }));
       expect(screen.queryByLabelText('Phone number')).toBeNull();
       expect(screen.queryByRole('checkbox')).toBeNull();
+    });
+
+    // The email is the only channel that can verify or recover the account.
+    it('requires the email when SMS is off', () => {
+      const { rerender } = render(withAuth(
+        <SignUp {...defaultProps} {...validProps} email="" phone="" inviteCode="" />,
+        { sms_enabled: false }
+      ));
+      fireEvent.change(screen.getByLabelText('Confirm password'), {
+        target: { value: validProps.password },
+      });
+      expect(screen.getByLabelText('Email address').required).toBe(true);
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+      rerender(withAuth(
+        <SignUp {...defaultProps} {...validProps} phone="" inviteCode="" />,
+        { sms_enabled: false }
+      ));
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
     });
 
     it('submits without a phone number or consent when SMS is off', () => {

@@ -442,10 +442,11 @@ function App() {
     auth.client.signUp({
       username: state.userName,
       password: state.password,
-      // Recovery email (identity plan Phase 1). Always collected; the
-      // pool auto-verifies it, so Cognito emails a code either at signup
-      // (SMS off - email is the only channel) or via the post-login
-      // VerifyEmail gate (SMS on - the signup code goes to the phone).
+      // Recovery email (docs/auth.md, "Sign-up"): required with SMS off,
+      // optional with SMS on, and not sent when left empty. The pool
+      // auto-verifies it, so Cognito emails a code either at signup (SMS
+      // off - email is the only channel) or via the post-login VerifyEmail
+      // gate (SMS on - the signup code goes to the phone).
       email: state.email,
       // Phone number is only collected when the pool is wired for SMS
       // (a 10DLC campaign registration id is configured). See issue #712
@@ -602,10 +603,15 @@ function App() {
     auth.client.getUser(tokens.accessToken).then((user) => {
       let next = { loggedIn: true, view: "Email" };
       const { email, email_verified: emailVerified } = user.attributes;
-      if (!email) {
+      // With SMS on, a verified phone already recovers the account, so an
+      // account without an email is not asked to add one; one that gave an
+      // email is still asked to verify it (docs/auth.md, "After sign-in").
+      const phoneRecovers = state.sms_enabled
+        && user.attributes.phone_number_verified === 'true';
+      if (!email && !phoneRecovers) {
         setEmailGate({ mode: 'add', address: null });
         next = { loggedIn: true, view: "VerifyEmail", email: null };
-      } else if (emailVerified !== 'true') {
+      } else if (email && emailVerified !== 'true') {
         setEmailGate({ mode: 'verify', address: email });
         next = { loggedIn: true, view: "VerifyEmail", verificationCode: null };
       } else if (!mfaVerified && !user.mfaSettings.includes('SOFTWARE_TOKEN_MFA')) {
@@ -618,7 +624,7 @@ function App() {
       setState({ loggedIn: true, view: "Email" });
       setMessage("Login succeeded", false);
     });
-  }, [setState, setMessage]);
+  }, [state.sms_enabled, setState, setMessage]);
 
   const doLogin = useCallback((e) => {
     e.preventDefault();

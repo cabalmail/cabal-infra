@@ -60,10 +60,15 @@ function SignUp({
   const usernameValid = /^[a-z0-9-]{3,32}$/.test(username || '') &&
     !/^-/.test(username || '') && !/-$/.test(username || '') &&
     /[a-z]/.test(username || '');
-  // Recovery email is always collected (identity plan Phase 1): it is the
-  // recovery channel that survives a lost or rotated phone, and with SMS
-  // off it is the only verification channel at all.
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || '');
+  // Recovery email (docs/auth.md, "Sign-up"). With SMS on it is optional:
+  // the phone, required then, verifies and recovers the account, so
+  // Cabalmail can be someone's only email. With SMS off it is required,
+  // because it is the only channel that can verify or recover the account
+  // at all. Whatever is typed must still look like an address.
+  const emailGiven = (email || '').length > 0;
+  const emailValid = emailGiven
+    ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    : sms_enabled;
   // When SMS is off (no 10DLC campaign registration id is configured on the
   // pool), the phone field is not rendered and its value is not required.
   // See issue #712 and docs/sms-10dlc.md.
@@ -92,7 +97,7 @@ function SignUp({
       <h1 className="auth__title">Create your Cabalmail account.</h1>
       <p className="auth__subtitle">
         {sms_enabled
-          ? "Pick a username and password. Your email and phone number are used only for verification and recovery."
+          ? "Pick a username and password. Your phone number, and your email if you add one, are used only for verification and recovery."
           : "Pick a username and password. Your email is used only for verification and recovery."}
       </p>
       <form className="auth__form" onSubmit={handleSubmit} noValidate>
@@ -108,18 +113,20 @@ function SignUp({
         <EmailField
           value={email}
           onChange={onEmailChange}
-          hint="For verification and recovery"
+          hint={sms_enabled ? 'Optional, for recovery' : 'For verification and recovery'}
+          required={!sms_enabled}
         >
           <p className="auth__field-help">
-            An existing address outside Cabalmail, so you can recover access
-            if you lose your phone.
+            {sms_enabled
+              ? 'Optional. An address outside Cabalmail lets you recover access if you lose your phone.'
+              : 'An existing address outside Cabalmail, so you can recover access if you forget your password.'}
           </p>
         </EmailField>
         {sms_enabled ? (
           <div className="auth__field">
             <div className="auth__field-header">
               <label className="auth__field-label" htmlFor="phone">Phone number</label>
-              <span className="auth__field-hint">For recovery only</span>
+              <span className="auth__field-hint">For verification and recovery</span>
             </div>
             <input
               id="phone"

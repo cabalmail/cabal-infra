@@ -35,7 +35,7 @@ Clients read the pool's coordinates at runtime from `/config.js` on the control 
 | `cognitoConfig.enrollClientId` | The enrollment client for the locked-out TOTP setup. Empty in a file older than that feature: fall back to a plain message. |
 | `cognitoConfig.extensionClientId`, `.hostedUiDomain` | The extension's client and the Hosted UI domain. |
 | `invitation_required` | Show the invitation-code field at sign-up. |
-| `sms_enabled` | Collect a phone number at sign-up (with consent) and expect SMS codes. Treat a missing key as `true`, so an older file keeps the phone field. |
+| `sms_enabled` | Require a phone number at sign-up (with consent), make the recovery email optional, and expect SMS codes. When it is off, require the email instead (see [Sign-up](#sign-up)). Treat a missing key as `true`, so an older file keeps the phone field. |
 
 ## Transport and errors
 
@@ -59,10 +59,19 @@ An error is a non-2xx with `{"__type": "<Exception>", "message": "..."}`. `__typ
 `SignUp` with:
 
 - `ClientId`, `Username`, `Password`.
-- `UserAttributes`: `preferred_username` (the username), `email` (the recovery address, always collected), and `phone_number` (E.164) only when `sms_enabled`.
+- `UserAttributes`: `preferred_username` (the username), plus the contacts below. Leave out a contact the user left empty rather than sending an empty value.
 - `ValidationData`: `[{"Name": "invitationCode", "Value": <code>}]`. Send it, empty, even when no code is required. It travels as validation data so `check_invite` can read it without it being stored on the user record.
 
-The reply says what happens next:
+Which contacts the form asks for depends on `sms_enabled`, so that Cabalmail can be someone's only email service:
+
+| | `phone_number` (E.164) | `email` (recovery address) |
+| --- | --- | --- |
+| SMS on | Required, with SMS consent. It receives the confirmation code and recovers the account. | Optional. If given, it is verified after the first sign-in and becomes the first recovery channel. |
+| SMS off | Not collected: the pool cannot text. | Required. It is the only channel that can verify or recover the account. |
+
+The form says the email should be an address outside Cabalmail, since a mailbox you are locked out of can't receive its own reset code. A phone-only account recovers by SMS alone, so a SIM swap could reset its password. Its second factor still stands after a reset, which is why the authenticator suggestion (see [After sign-in](#after-sign-in)) matters most for those accounts. The requirement is the clients' to enforce; `check_invite` checks only the invitation code and the username.
+
+The `SignUp` reply says what happens next:
 
 - **`CodeDeliveryDetails` present:** Cognito sent a confirmation code to that medium and destination (masked). Ask for it and send `ConfirmSignUp` (`ClientId`, `Username`, `ConfirmationCode`), offering `ResendConfirmationCode` (`ClientId`, `Username`).
 - **`CodeDeliveryDetails` absent:** `check_invite` already confirmed the account (SMS off). There is nothing to enter.
@@ -96,7 +105,7 @@ The enrollment tokens live five minutes. They stay in memory for the setup and a
 
 Two advisory checks follow a successful sign-in, at most one per sign-in, email first. One `GetUser` (the access token) answers both:
 
-- **No `email`, or `email_verified` not `"true"`:** offer to add or verify a recovery address. Adding one is `UpdateUserAttributes`, which makes Cognito send a code because the pool auto-verifies email. A new code is `GetUserAttributeVerificationCode`; the code itself goes to `VerifyUserAttribute`, all for `AttributeName: email`. The user can skip.
+- **An `email` whose `email_verified` is not `"true"`:** offer to verify it. **No `email`:** offer to add one, unless `sms_enabled` and `phone_number_verified` is `"true"`, in which case the phone already recovers the account and nothing is asked. Adding one is `UpdateUserAttributes`, which makes Cognito send a code because the pool auto-verifies email. A new code is `GetUserAttributeVerificationCode`; the code itself goes to `VerifyUserAttribute`, all for `AttributeName: email`. The user can skip.
 - **`UserMFASettingList` lacks `SOFTWARE_TOKEN_MFA`:** suggest setting up an authenticator. Skip this when the sign-in itself just answered a TOTP challenge.
 
 A failed `GetUser` never blocks the sign-in.

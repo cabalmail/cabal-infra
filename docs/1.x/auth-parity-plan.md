@@ -97,6 +97,20 @@ the operator 2026-10-07: an invitation code, then admin approval of the
 new account. Native sign-up matches the webmail exactly; no new gate,
 no client-side policy beyond what `/config.js` advertises.
 
+**D5 — Contacts at sign-up: a phone with SMS, an email without.**
+Decided by the operator 2026-10-18, so that Cabalmail can be someone's
+only email service. With `sms_enabled`, the phone (with SMS consent) is
+required and the recovery email is optional. Without it, the email is
+required, since it is then the only channel that can verify or recover
+the account. After sign-in, an account with no email is asked to add
+one unless SMS is on and its phone is verified; an email the user gave
+is always offered for verification. The cost is that a phone-only
+account recovers by SMS alone, so a SIM swap could reset its password;
+the authenticator suggestion is its defence. The webmail implements it
+(the PR that recorded this decision), and `docs/auth.md` carries the
+rule. B1's kits take both contacts as optional, so the rule lives in
+the screens.
+
 ## The auth contract
 
 Moved to [`docs/auth.md`](../auth.md) in A3 (2026-10-18), which also
@@ -255,18 +269,21 @@ conformer, including the shared test doubles.
 
 A "Create account" entry on each sign-in screen, using the control
 domain already typed there. Screens: sign-up form (username, password,
-recovery email, invitation code when required, phone when
-`sms_enabled`), confirm-code with resend, and the pending-approval
-result. Apple and Android land as separate PRs, Apple first.
+invitation code when required, and the contacts D5 sets: with
+`sms_enabled` a required phone with consent and an optional recovery
+email, otherwise a required recovery email), confirm-code with resend,
+and the pending-approval result. Apple and Android land as separate
+PRs, Apple first.
 
 ### B4 — Recovery-email gate
 
 **Status:** Not started.
 
 Neither native client checks for a verified recovery email after
-sign-in. A natively created account (B2/B3) with SMS on would never be
-asked to verify its email, so this lands with or right after B2/B3.
-Same advisory rules as the webmail.
+sign-in. A natively created account (B2/B3) with SMS on that gave an
+email would never be asked to verify it, so this lands with or right
+after B2/B3. Same advisory rules as the webmail, which D5 sets: no ask
+to add an email when SMS is on and the phone is verified.
 
 Locked-out TOTP enrollment through `enrollClientId` is the remaining
 native gap. Android's config already carries the field. It only
