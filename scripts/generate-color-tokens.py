@@ -128,10 +128,12 @@ def colorset(rgb_by_key, alpha):
         entry(rgb_by_key["light-hc"], hc=True),
         entry(rgb_by_key["dark"], dark=True),
         entry(rgb_by_key["dark-hc"], dark=True, hc=True),
-        # watchOS has no light appearance and draws on black: the dark value
-        # is the only one, and its high-contrast variant rides along.
+        # watchOS has no light appearance and draws on black, so the dark
+        # value is the only one. No high-contrast variant: actool has no
+        # (watch, contrast high) slot, so such an entry is never assigned -
+        # it draws nothing and costs one "unassigned child" warning per
+        # colour set on every build of the Kit.
         entry(rgb_by_key["dark"], idiom="watch"),
-        entry(rgb_by_key["dark-hc"], idiom="watch", hc=True),
     ]
     return {"colors": colors, "info": {"author": "generate-color-tokens", "version": 1}}
 
