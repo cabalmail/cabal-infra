@@ -342,11 +342,12 @@ function App() {
         sms_enabled: sms_enabled !== false,
         monitoring: monitoring === true
       });
+      // `restoring` is the first render's value; this effect runs once.
       if (!restoring) return;
       // A reload in this tab: trade the stored refresh token for fresh
-      // tokens. Signed in as before on success; on a refusal (null) or
-      // with Cognito out of reach, the sign-in form, the stored token
-      // kept in the second case for the next reload.
+      // tokens. On success the app is signed in as before. On a refusal
+      // (null) or with Cognito out of reach it shows the sign-in form,
+      // and in the second case keeps the stored token for the next reload.
       session.restore().then((snap) => {
         if (snap) {
           setState({
