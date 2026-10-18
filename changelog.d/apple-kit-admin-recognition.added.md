@@ -4,5 +4,5 @@
   matched as a whole name, the way the server does, in the array form
   Cognito issues and the string forms API Gateway renders. It is
   computed from the stored tokens on every call, so it follows a
-  refresh, a sign-out and an account switch. Nothing in the app reads it
-  yet; the native admin views build on it.
+  refresh, a sign-out and an account switch. Settings reads it to list
+  Users for administrators.

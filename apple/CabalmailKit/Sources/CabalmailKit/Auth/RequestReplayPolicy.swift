@@ -49,6 +49,11 @@ enum RequestReplayPolicy {
         // Folders and addresses.
         "subscribe_folder", "unsubscribe_folder",
         "new", "suspend_address", "reinstate_address", "set_favorite",
+        // Administration. Enabling an enabled user, disabling a disabled
+        // one and writing or deleting the same grant all succeed with the
+        // same end state. Not /confirm_user or /delete_user: their second
+        // copy answers an error for the work the first did.
+        "enable_user", "disable_user", "set_user_domain_access",
         // Settings and push.
         "set_preferences", "set_nav_state",
         "push_register", "push_deregister", "push_envelope",

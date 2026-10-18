@@ -56,7 +56,7 @@ enum RequestReplayRows {
         }
     }
 
-    static let api: [ApiRow] = mailWrites + accountWrites + feedWrites + reads
+    static let api: [ApiRow] = mailWrites + accountWrites + adminWrites + feedWrites + reads
 
     private static let mailWrites: [ApiRow] = [
         ApiRow("set_flag", .sentAgain) {
@@ -131,6 +131,16 @@ enum RequestReplayRows {
         },
     ]
 
+    private static let adminWrites: [ApiRow] = [
+        ApiRow("confirm_user", .sentOnce) { try await $0.confirmUser("u") },
+        ApiRow("enable_user", .sentAgain) { try await $0.enableUser("u") },
+        ApiRow("disable_user", .sentAgain) { try await $0.disableUser("u") },
+        ApiRow("delete_user", .sentOnce) { try await $0.deleteUser("u") },
+        ApiRow("set_user_domain_access", .sentAgain) {
+            try await $0.setUserDomainAccess(user: "u", domain: "cabalmail.example", allowed: true)
+        },
+    ]
+
     private static let feedWrites: [ApiRow] = [
         ApiRow("rss_subscribe", .sentOnce) { _ = try await $0.subscribe(url: "https://x.example/feed", folderId: nil) },
         ApiRow("rss_unsubscribe", .sentOnce) { _ = try await $0.unsubscribe(subscriptionId: "s") },
@@ -153,6 +163,8 @@ enum RequestReplayRows {
     private static let reads: [ApiRow] = [
         ApiRow("list", .sentAgain) { _ = try await $0.listAddresses() },
         ApiRow("list_my_domains", .sentAgain) { _ = try await $0.listMyDomains() },
+        ApiRow("list_users", .sentAgain) { _ = try await $0.listUsers() },
+        ApiRow("list_user_domain_access", .sentAgain) { _ = try await $0.listUserDomainAccess() },
         ApiRow("fetch_bimi", .sentAgain) { _ = try await $0.fetchBimiURL(senderDomain: "example.com") },
         ApiRow("list_folders", .sentAgain) { _ = try await $0.listFolders(host: "h") },
         ApiRow("folder_status", .sentAgain) {
