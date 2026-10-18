@@ -55,8 +55,11 @@ function SignUp({
   const [confirm, setConfirm] = useState('');
   const [smsConsent, setSmsConsent] = useState(false);
   const score = useMemo(() => strengthScore(password), [password]);
+  // The same rule the check_invite pre-sign-up trigger enforces, which also
+  // turns away names the mail servers reserve; its message explains those.
   const usernameValid = /^[a-z0-9-]{3,32}$/.test(username || '') &&
-    !/^-/.test(username || '') && !/-$/.test(username || '');
+    !/^-/.test(username || '') && !/-$/.test(username || '') &&
+    /[a-z]/.test(username || '');
   // Recovery email is always collected (identity plan Phase 1): it is the
   // recovery channel that survives a lost or rotated phone, and with SMS
   // off it is the only verification channel at all.
@@ -99,7 +102,7 @@ function SignUp({
           placeholder="choose-a-username"
         >
           <p className="auth__field-help">
-            3&ndash;32 characters. Lowercase letters, numbers, hyphens.
+            3&ndash;32 characters. Lowercase letters, numbers, hyphens; at least one letter.
           </p>
         </UsernameField>
         <EmailField
