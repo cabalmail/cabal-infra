@@ -47,7 +47,7 @@ public enum SignInResult: Sendable, Equatable {
 /// (see `terraform/infra/modules/user_pool/main.tf`), so the cleartext-flow
 /// JSON API is sufficient. The React app and the Android kit speak the same
 /// JSON API (`react/admin/src/auth/`, `CognitoAuthService.kt`); the contract
-/// they share is in `docs/1.x/auth-parity-plan.md`.
+/// they share is in `docs/auth.md`.
 public protocol AuthService: Sendable {
     func signIn(username: String, password: String) async throws -> SignInResult
     /// Completes a sign-in that `signIn` answered with `.mfaCodeRequired`.
