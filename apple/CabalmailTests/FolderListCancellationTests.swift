@@ -159,7 +159,7 @@ final class FolderListCancellationTests: XCTestCase {
         let wire = world.wire
         await wire.holdNext()
         let firstLoad = Task { await model.loadFolderList() }
-        try await waitUntil { await wire.isHolding }
+        try await waitUntilOnMainActor { await wire.isHolding }
         firstLoad.cancel()
 
         await model.reloadIfCutShort()
@@ -229,7 +229,7 @@ final class FolderListCancellationTests: XCTestCase {
     private func cutShort(_ wire: HeldFolderTransport, _ load: @escaping @MainActor () async -> Void) async throws {
         await wire.holdNext()
         let task = Task { await load() }
-        try await waitUntil { await wire.isHolding }
+        try await waitUntilOnMainActor { await wire.isHolding }
         task.cancel()
         await wire.release()
         await task.value

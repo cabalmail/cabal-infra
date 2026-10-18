@@ -117,7 +117,7 @@ final class SearchReaderFlagSignalTests: XCTestCase {
         MessageDetailView.relayOutcomes(of: reader, to: appState.mailStore)
 
         await reader.load()
-        try await waitUntil { await !imap.flagCalls.isEmpty }
+        try await waitUntilOnMainActor { await !imap.flagCalls.isEmpty }
         try await waitUntilOnMainActor { !events.flagChangeRefs.isEmpty }
 
         XCTAssertEqual(events.flagChangeRefs, [[inbox]])

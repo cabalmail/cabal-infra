@@ -89,7 +89,7 @@ final class MailMutationListTests: XCTestCase {
         let shields = appState.mailStore.shields
 
         let dispose = Task { await first.dispose(first.envelopes[0]) }
-        try await waitUntil { await !imap.moveCalls.isEmpty }
+        try await waitUntilOnMainActor { await !imap.moveCalls.isEmpty }
         var sawItLeaving = false
         while first.rowDisposalPhases[ref(3)] != nil {
             sawItLeaving = true

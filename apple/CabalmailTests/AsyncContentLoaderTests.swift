@@ -115,8 +115,8 @@ final class AsyncContentLoaderTests: XCTestCase {
         let second = Task {
             await loader.load({ await answering.pass(); return "answer" }, failure: { _ in "failed" })
         }
-        try await waitUntil { await failing.isWaiting }
-        try await waitUntil { await answering.isWaiting }
+        try await waitUntilOnMainActor { await failing.isWaiting }
+        try await waitUntilOnMainActor { await answering.isWaiting }
 
         await failing.open()
         await first.value
