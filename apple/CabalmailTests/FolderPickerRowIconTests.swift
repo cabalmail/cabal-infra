@@ -10,6 +10,7 @@ import CabalmailKit
 // uses "doc" for Drafts and "xmark.bin" for Junk. The two sets have always
 // differed; these assertions exist so a future edit to one doesn't silently
 // drift the other.
+@MainActor
 final class FolderPickerRowIconTests: XCTestCase {
 
     func testSystemFoldersKeepTheirIcons() {

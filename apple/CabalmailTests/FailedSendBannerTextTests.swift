@@ -5,6 +5,7 @@ import CabalmailKit
 /// Pins the wording of the failed-send banner (audit F8): a single failure
 /// names the message, several are counted, and an empty subject still reads
 /// as a sentence.
+@MainActor
 final class FailedSendBannerTextTests: XCTestCase {
 
     func testOneFailureNamesTheSubject() {

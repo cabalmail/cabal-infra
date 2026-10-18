@@ -702,11 +702,18 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMacTests
         GENERATE_INFOPLIST_FILE: YES
-        # The three warning groups this bundle is clean of (#1842). It still
-        # carries ~200 actor-isolation and `sending` warnings, so blanket
-        # SWIFT_TREAT_WARNINGS_AS_ERRORS cannot go on yet; promoting the
-        # groups that are already clean is what stops them coming back while
-        # the rest is worked through. Add a group here as it reaches zero.
+        # The warning groups this bundle is clean of (#1842). Add a group here
+        # as it reaches zero - but the actor-isolation sweep could not extend
+        # this line, and both ways of trying were measured on this target:
+        # `-Werror ActorIsolatedCall` is accepted (a bogus name warns
+        # `#UnknownWarningGroup`, this one does not) and still leaves the
+        # diagnostic a warning, and `-warnings-as-errors -Wwarning
+        # SendingRisksDataRace` promotes the `sending` warnings anyway, so the
+        # blanket flag beats a per-group demotion rather than the other way
+        # round. The isolation diagnostics are also ungrouped (no `[#Name]` to
+        # promote). So what finally guards them is blanket
+        # SWIFT_TREAT_WARNINGS_AS_ERRORS, which the remaining 31 `sending
+        # value of non-Sendable type` warnings are the last thing blocking.
         OTHER_SWIFT_FLAGS: "-Werror NoUsage -Werror WeakMutability -Werror UnnecessaryEffectMarker"
         # XcodeGen derives TEST_HOST from the host target's NAME, but
         # CabalmailMac overrides PRODUCT_NAME to "Cabalmail" (the bundle

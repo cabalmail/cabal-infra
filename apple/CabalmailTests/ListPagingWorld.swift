@@ -15,7 +15,7 @@ import CabalmailKit
 /// publishing its counts never reaches the inbox badge of the host app.
 @MainActor
 final class ListPagingWorld {
-    static let folderPath = "Work"
+    nonisolated static let folderPath = "Work"
 
     /// One recorded `envelopes(offset:limit:)` request.
     struct Page: Equatable, CustomStringConvertible {
