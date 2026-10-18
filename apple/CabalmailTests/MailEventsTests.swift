@@ -59,7 +59,7 @@ final class MailEventsTests: XCTestCase {
         let store = AppState().mailStore
         let survivor = MailEventRecorder(store)
         var gone: MailEventRecorder? = MailEventRecorder(store)
-        weak var weakGone = gone
+        weak let weakGone = gone
 
         gone = nil
         store.events.post(.removed([inbox]), from: nil)
@@ -108,11 +108,11 @@ final class MailEventsTests: XCTestCase {
         let recorder = MailEventRecorder(store)
         let writer = try writer(through: FakeImapClient())
 
-        await store.mutations.setFlag(.seen, added: true, on: [inbox], changing: [inbox], by: writer).value
+        _ = await store.mutations.setFlag(.seen, added: true, on: [inbox], changing: [inbox], by: writer).value
         XCTAssertEqual(store.counts.folderUnreadCounts["INBOX"], 2)
-        await store.mutations.setFlag(.flagged, added: true, on: [inbox], changing: [inbox], by: writer).value
+        _ = await store.mutations.setFlag(.flagged, added: true, on: [inbox], changing: [inbox], by: writer).value
         XCTAssertEqual(store.counts.folderUnreadCounts["INBOX"], 2, "a flag other than \\Seen moves no count")
-        await store.mutations.setFlag(
+        _ = await store.mutations.setFlag(
             .seen, added: false, on: [inbox], changing: [inbox], by: .composer(through: writer.client)
         ).value
 
@@ -140,8 +140,8 @@ final class MailEventsTests: XCTestCase {
             [archive], .move(to: "Trash", markingSeen: true), unread: [archive], by: writer
         )
         XCTAssertEqual(store.counts.folderUnreadCounts["Archive"], 0, "the dispose read it")
-        await unreadDispose.value
-        await store.mutations.remove([read], .move(to: "Trash", markingSeen: true), unread: [], by: writer).value
+        _ = await unreadDispose.value
+        _ = await store.mutations.remove([read], .move(to: "Trash", markingSeen: true), unread: [], by: writer).value
 
         XCTAssertEqual(store.counts.folderUnreadCounts["Archive"], 1, "handed back once, for the one it marked read")
         XCTAssertEqual(recorder.events, [

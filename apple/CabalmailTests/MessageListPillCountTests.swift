@@ -44,12 +44,16 @@ final class MessageListPillCountTests: XCTestCase {
         let model = try makeModel()
         let mutations = model.mailStore.mutations
         // The reader's flag toggle goes through the mutation service.
-        await mutations.setFlag(.flagged, added: true, on: [ref(2)], changing: [ref(2)], by: reader(for: model)).value
+        _ = await mutations.setFlag(
+            .flagged, added: true, on: [ref(2)], changing: [ref(2)], by: reader(for: model)
+        ).value
         XCTAssertEqual(model.flagged, 1, "flagging from the reader bumps the Flagged pill")
         // A duplicate for an already-flagged message flips nothing, and must not double-count.
-        await mutations.setFlag(.flagged, added: true, on: [ref(2)], changing: [], by: reader(for: model)).value
+        _ = await mutations.setFlag(.flagged, added: true, on: [ref(2)], changing: [], by: reader(for: model)).value
         XCTAssertEqual(model.flagged, 1)
-        await mutations.setFlag(.flagged, added: false, on: [ref(2)], changing: [ref(2)], by: reader(for: model)).value
+        _ = await mutations.setFlag(
+            .flagged, added: false, on: [ref(2)], changing: [ref(2)], by: reader(for: model)
+        ).value
         XCTAssertEqual(model.flagged, 0)
     }
 
@@ -57,9 +61,9 @@ final class MessageListPillCountTests: XCTestCase {
         let model = try makeModel()
         let mutations = model.mailStore.mutations
         // Mark-as-read on open goes the same way.
-        await mutations.setFlag(.seen, added: true, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
+        _ = await mutations.setFlag(.seen, added: true, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
         XCTAssertEqual(model.unseen, 0, "reading from the reader drops the Unread pill")
-        await mutations.setFlag(.seen, added: false, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
+        _ = await mutations.setFlag(.seen, added: false, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
         XCTAssertEqual(model.unseen, 1)
     }
 
@@ -78,7 +82,7 @@ final class MessageListPillCountTests: XCTestCase {
     func testUnrelatedFlagLeavesPillsAlone() async throws {
         let model = try makeModel()
         model.flagged = 1
-        await model.mailStore.mutations.setFlag(
+        _ = await model.mailStore.mutations.setFlag(
             .answered, added: true, on: [ref(1)], changing: [ref(1)], by: reader(for: model)
         ).value
         XCTAssertEqual(model.unseen, 1)
@@ -126,7 +130,7 @@ final class MessageListPillCountTests: XCTestCase {
         // The reader archives an unread message: the `\Seen` marking rides
         // along with the move server-side, and the removal is all the list
         // hears before the row is gone.
-        await model.mailStore.mutations.remove(
+        _ = await model.mailStore.mutations.remove(
             [ref(1)], .move(to: "Archive", markingSeen: true), unread: [ref(1)], by: reader(for: model)
         ).value
         XCTAssertEqual(
@@ -138,7 +142,7 @@ final class MessageListPillCountTests: XCTestCase {
     func testDisposedReadRowLeavesTheUnreadPill() async throws {
         let model = try makeModel()
         // The reader shows message 2 read, so its removal names no unread.
-        await model.mailStore.mutations.remove(
+        _ = await model.mailStore.mutations.remove(
             [ref(2)], .move(to: "Archive", markingSeen: false), unread: [], by: reader(for: model)
         ).value
         XCTAssertEqual(model.unseen, 1, "the read row was never in the Unread count")
@@ -150,8 +154,8 @@ final class MessageListPillCountTests: XCTestCase {
         // The reader marks the message read, then archives it: by the
         // archive it is read, so only the mark-read moved the count.
         let mutations = model.mailStore.mutations
-        await mutations.setFlag(.seen, added: true, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
-        await mutations.remove(
+        _ = await mutations.setFlag(.seen, added: true, on: [ref(1)], changing: [ref(1)], by: reader(for: model)).value
+        _ = await mutations.remove(
             [ref(1)], .move(to: "Archive", markingSeen: false), unread: [], by: reader(for: model)
         ).value
         XCTAssertEqual(model.unseen, 0, "the departed message must be subtracted exactly once")

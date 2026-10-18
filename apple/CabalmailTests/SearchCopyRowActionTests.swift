@@ -66,7 +66,7 @@ final class SearchCopyRowActionTests: XCTestCase {
         let target = try row(inbox, in: model)
 
         let disposal = Task { await model.dispose(target) }
-        try await waitUntil { await model.rowDisposalPhases[self.inbox] != nil }
+        try await waitUntil { model.rowDisposalPhases[self.inbox] != nil }
         XCTAssertNil(model.rowDisposalPhases[sent], "only the swiped row fades")
         await disposal.value
 
@@ -83,7 +83,7 @@ final class SearchCopyRowActionTests: XCTestCase {
         let model = try await searchModel(imap: imap)
         let target = try row(inbox, in: model)
         let first = Task { await model.dispose(target) }
-        try await waitUntil { await model.pendingRemovedRefs.contains(self.inbox) }
+        try await waitUntil { model.pendingRemovedRefs.contains(self.inbox) }
 
         await model.dispose(try row(sent, in: model))
         await first.value
