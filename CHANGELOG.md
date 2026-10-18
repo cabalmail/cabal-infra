@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.35.1] - 2026-10-18
+
+### Added
+- **Authentication reference.** `docs/auth.md` documents the contract
+  every client follows against the Cognito pool: the app clients and
+  triggers, the request each flow sends, the error mapping, where each
+  client keeps its session, and which client implements what. It
+  replaces the draft contract in the auth parity plan, and records that
+  a new account's "pending admin approval" is the domain grant.
+
+### Fixed
+- Apple: **Feed read and favorite changes queue with the change itself.** The
+  local flag and the push queued for the server committed separately, so a
+  store write that failed in between left the item read (or favorited) on
+  this device with nothing queued — the state sync only delivers rows the
+  server changed, so nothing brought the two back together — or left an
+  older, opposite change queued to be pushed over the latest tap. Both now
+  happen in one transaction, as mark-all-read already did.
+- Apple: **Sign-out closes the feed store even when emptying it fails.** The
+  ending session's store was closed only after its rows were dropped, so a
+  database error at sign-out (a busy lock, a full disk, a damaged search
+  index) left the file open: a feed refresh still running from that session
+  could write the account's feeds back into the file the next account signs
+  in on. The close now happens either way, and the error still reaches the
+  caller.
+- Apple: **Folder total of 0 after a reload during an archive.** A message
+  list that started over — the Refresh command's hard reload, or leaving a
+  search — while one of its own removals was still in flight could show an
+  All count of 0 and save 0 as the folder's total, which the next offline
+  launch read. The reload clears the total until its refresh answers, and a
+  server count that may predate the removal was being held to that cleared
+  value; it is now held to the count the list showed when the reload
+  started.
+- **Webmail ships React's production build.** The webmail on stage and
+  prod was React's development build: `app.yml` set `NODE_ENV` to the
+  environment's name (`prod`, `stage`, `development`) for the build,
+  which Create React App ignored but Vite honours. So every deploy since
+  the Vite migration shipped development React: about 485 KB instead of
+  285 KB, with development-only checks running, and `StrictMode` running
+  every mount effect twice. The build step no longer sets `NODE_ENV`,
+  and `vite build` now fails on any `NODE_ENV` other than `production`
+  instead of shipping a development build.
+
 ## [1.35.0] - 2026-10-18
 
 ### Changed
