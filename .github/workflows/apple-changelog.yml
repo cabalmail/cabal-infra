@@ -4,8 +4,9 @@ name: Apple changelog
 # Require an `Apple:`-prefixed changelog fragment when a PR changes the shipped
 # Apple client sources, so the change reaches the TestFlight "What to Test"
 # notes (set-testflight-notes.py filters those notes to Apple-scoped entries).
-# Opt out for non-user-facing Apple work with the `no-changelog` PR label. See
-# CLAUDE.md and changelog.d/README.md.
+# For non-user-facing Apple work the `no-changelog` PR label waives the prefix
+# (keeping the entry out of the tester notes); the fragment itself is still
+# required by changelog.yml. See CLAUDE.md and changelog.d/README.md.
 #
 # Its own workflow - not a job in lint.yml - specifically so it can trigger on
 # `labeled`/`unlabeled`: applying the opt-out label must re-run the check to
