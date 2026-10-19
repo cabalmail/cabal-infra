@@ -175,7 +175,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+      uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
       with:
         sarif_file: results.sarif
         category: checkov-dns
@@ -222,7 +222,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+      uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
       with:
         sarif_file: terraform/dns/tflint.sarif
         category: tflint-dns
@@ -254,7 +254,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+      uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
       with:
         sarif_file: trivy-dns.sarif
         category: trivy-dns
@@ -485,7 +485,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+      uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
       with:
         sarif_file: results.sarif
         category: checkov-infra
@@ -536,7 +536,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+      uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
       with:
         sarif_file: terraform/infra/tflint.sarif
         category: tflint-infra
@@ -568,7 +568,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+      uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
       with:
         sarif_file: trivy-infra.sarif
         category: trivy-infra
