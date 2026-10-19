@@ -26,6 +26,12 @@ describe('EmailField', () => {
     expect(input.required).toBe(true);
   });
 
+  it('can mark the address optional', () => {
+    // SignUp's address is optional when the pool has SMS.
+    const { container } = render(<EmailField {...baseProps} required={false} />);
+    expect(container.querySelector('input').required).toBe(false);
+  });
+
   it('shapes the input for an address rather than prose', () => {
     const { container } = render(<EmailField {...baseProps} />);
     const input = container.querySelector('input');

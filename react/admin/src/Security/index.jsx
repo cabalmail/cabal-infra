@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import RecoveryEmail from './RecoveryEmail';
 import './Security.css';
 
 /**
  * Account security view (identity plan Phase 1): TOTP two-factor
- * enrollment and management.
+ * enrollment and management, then the recovery email (RecoveryEmail.jsx,
+ * which takes its own `recoveryApi`).
  *
  * The Cognito calls live in App.jsx (where the Cognito client lives)
  * and arrive here as the `mfaApi` prop:
@@ -18,7 +20,7 @@ import './Security.css';
  * app. Confirming also sets the user's MFA preference, so the next
  * login issues a SOFTWARE_TOKEN_MFA challenge.
  */
-function Security({ userName, mfaApi, setMessage }) {
+function Security({ userName, mfaApi, recoveryApi, smsEnabled, setMessage }) {
   // 'loading' | 'off' | 'on' | 'enrolling' | 'error'
   const [status, setStatus] = useState('loading');
   const [secret, setSecret] = useState(null);
@@ -105,7 +107,8 @@ function Security({ userName, mfaApi, setMessage }) {
         <h1 className="security__title">Security</h1>
         <p className="security__subtitle">
           Two-factor authentication protects your mailbox with a code from
-          an authenticator app in addition to your password.
+          an authenticator app in addition to your password. A recovery
+          email gets you back in if you lose your password.
         </p>
       </header>
 
@@ -210,6 +213,8 @@ function Security({ userName, mfaApi, setMessage }) {
           </div>
         )}
       </section>
+
+      <RecoveryEmail recoveryApi={recoveryApi} smsEnabled={smsEnabled} setMessage={setMessage} />
     </div>
   );
 }
