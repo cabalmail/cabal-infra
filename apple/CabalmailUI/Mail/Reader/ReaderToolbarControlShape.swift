@@ -1,4 +1,4 @@
-import SwiftUI
+import Foundation
 
 /// The kind of control a reader toolbar slot draws on macOS.
 ///
@@ -18,42 +18,3 @@ enum ReaderToolbarControlShape {
     /// visible menu indicator — a press target plus a chevron segment.
     case splitButton
 }
-
-#if os(macOS)
-/// One disabled stand-in for a reader toolbar slot, drawn as the kind of
-/// control that will replace it (`EmptyDetailToolbar`,
-/// `EmptyFeedDetailToolbar`).
-///
-/// The menu shapes carry a single inert row rather than no rows at all:
-/// AppKit draws a `Menu` with an empty content block as a plain button,
-/// which is the very footprint these stand-ins exist to avoid. Nothing can
-/// open them — the whole control is disabled — so the row is never seen.
-struct ToolbarStandIn: View {
-    let title: String
-    let symbol: String
-    let shape: ReaderToolbarControlShape
-
-    var body: some View {
-        switch shape {
-        case .button:
-            Button {} label: { face }
-                .disabled(true)
-        case .menu:
-            Menu { placeholderRow } label: { face }
-                .disabled(true)
-        case .splitButton:
-            Menu { placeholderRow } label: { face } primaryAction: {}
-                .menuIndicator(.visible)
-                .disabled(true)
-        }
-    }
-
-    private var face: some View {
-        Label(title, systemImage: symbol)
-    }
-
-    private var placeholderRow: some View {
-        Button {} label: { face }
-    }
-}
-#endif

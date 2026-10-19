@@ -82,28 +82,31 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
     }
 
     func testBothStandInSetsAreBuiltFromThePolicy() throws {
-        let mail = try Self.source("CabalmailUI/Mail/Reader/EmptyDetailToolbar.swift")
+        let mail = try Self.standInBuilder(in: "CabalmailUI/Mail/Reader/EmptyDetailToolbar.swift")
         XCTAssertTrue(mail.contains("ReaderToolbarLayout.macControlShape("))
         XCTAssertTrue(mail.contains("ToolbarStandIn("))
-        let feed = try Self.source("CabalmailUI/Feeds/Reader/EmptyFeedDetailToolbar.swift")
+        let feed = try Self.standInBuilder(in: "CabalmailUI/Feeds/Reader/EmptyFeedDetailToolbar.swift")
         XCTAssertTrue(feed.contains("FeedReaderToolbarLayout.macControlShape("))
         XCTAssertTrue(feed.contains("ToolbarStandIn("))
     }
 
-    func testNeitherStandInSetBuildsEverySlotAsAPlainButton() throws {
-        // The negative control, and the pre-fix spelling: both files used to
-        // build every slot as `Button {} label: { … }.disabled(true)`, which
+    func testNeitherStandInBuilderConstructsAControlItself() throws {
+        // The negative control, and the pre-fix spelling: both builders used
+        // to be `Button {} label: { … }.disabled(true)` for every slot, which
         // is what made the menu-shaped slots too narrow. A revert to it fails
         // here even if the assertions above were scanning the wrong thing.
+        // Scoped to the builder: `ToolbarStandIn` itself does construct a
+        // `Button`, and it lives in one of these two files.
         for path in [
             "CabalmailUI/Mail/Reader/EmptyDetailToolbar.swift",
             "CabalmailUI/Feeds/Reader/EmptyFeedDetailToolbar.swift"
         ] {
-            let body = try Self.source(path)
+            let body = try Self.standInBuilder(in: path)
             XCTAssertFalse(
-                body.contains("Button {} label: {"),
-                "\(path) builds a stand-in as a plain button directly"
+                body.contains("Button {"),
+                "\(path)'s stand-in builder constructs a control itself"
             )
+            XCTAssertFalse(body.contains("Menu {"))
         }
     }
 
@@ -164,6 +167,18 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
             return .button
         }
         return code.contains("primaryAction:") ? .splitButton : .menu
+    }
+
+    /// The body of a stand-in set's `standIn(for:)` builder, sliced to the
+    /// declaration: the shared `ToolbarStandIn` view shares a file with one
+    /// of them and legitimately builds a `Button`.
+    private static func standInBuilder(in path: String) throws -> String {
+        let body = try source(path)
+        guard let start = body.range(of: "    private func standIn(for action:"),
+              let end = body.range(of: "\n    }\n", range: start.upperBound..<body.endIndex) else {
+            throw AnchorGone.declaration("standIn(for:) in \(path)")
+        }
+        return String(body[start.upperBound..<end.lowerBound])
     }
 
     /// The body of a `var <name>: some View { … }` declaration, sliced to the
