@@ -77,7 +77,10 @@ final class AuthServiceRecoveryEmailTests: XCTestCase {
         ])])
         let contacts = try await service.recoveryContacts()
 
-        XCTAssertEqual(contacts, RecoveryContacts(email: "alice@example.net", emailVerified: false, phoneVerified: true))
+        XCTAssertEqual(
+            contacts,
+            RecoveryContacts(email: "alice@example.net", emailVerified: false, phoneVerified: true)
+        )
         let (target, body) = try await sent(http)
         XCTAssertEqual(target, "AWSCognitoIdentityProviderService.GetUser")
         XCTAssertEqual(body as? [String: String], ["AccessToken": "access-1"])
@@ -92,7 +95,10 @@ final class AuthServiceRecoveryEmailTests: XCTestCase {
         let (update, updateBody) = try await sent(http, at: 0)
         XCTAssertEqual(update, "AWSCognitoIdentityProviderService.UpdateUserAttributes")
         XCTAssertEqual(updateBody["AccessToken"] as? String, "access-1")
-        XCTAssertEqual(updateBody["UserAttributes"] as? [[String: String]], [["Name": "email", "Value": "alice@example.net"]])
+        XCTAssertEqual(
+            updateBody["UserAttributes"] as? [[String: String]],
+            [["Name": "email", "Value": "alice@example.net"]]
+        )
 
         let (code, codeBody) = try await sent(http, at: 1)
         XCTAssertEqual(code, "AWSCognitoIdentityProviderService.GetUserAttributeVerificationCode")
