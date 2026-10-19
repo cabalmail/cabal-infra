@@ -245,6 +245,7 @@ module "admin" {
   invitation_required = module.pool.invitation_required
   sms_enabled         = module.pool.sms_enabled
   monitoring          = var.monitoring
+  operator_name       = var.operator_name
 
   # Browser extension (docs/1.x/browser-extension-plan.md): the PKCE app
   # client and the Hosted-UI domain prefix, surfaced through config.js so

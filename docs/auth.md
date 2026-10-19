@@ -35,6 +35,7 @@ Clients read the pool's coordinates at runtime from `/config.js` on the control 
 | `cognitoConfig.enrollClientId` | The enrollment client for the locked-out TOTP setup. Empty in a file older than that feature: fall back to a plain message. |
 | `cognitoConfig.extensionClientId`, `.hostedUiDomain` | The extension's client and the Hosted UI domain. |
 | `invitation_required` | Show the invitation-code field at sign-up. |
+| `operator_name` | The operator's legal name, from the `OPERATOR_NAME` GitHub variable. Sign-up's SMS consent text names the brand as `Cabalmail (<operator_name>)`, as the webmail's does; empty or missing, it names Cabalmail alone. |
 | `sms_enabled` | Require a phone number at sign-up (with consent), make the recovery email optional, and expect SMS codes. When it is off, require the email instead (see [Sign-up](#sign-up)). Treat a missing key as `true`, so an older file keeps the phone field. |
 
 ## Transport and errors

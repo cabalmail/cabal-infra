@@ -151,6 +151,12 @@ variable "sms_enabled" {
   default     = false
 }
 
+variable "operator_name" {
+  type        = string
+  description = "The operator's legal name (root var.operator_name). Plumbed into /config.js and /config.json as operator_name so the native sign-up screens' SMS consent text names the brand the way the webmail's does. Empty when the GitHub variable is unset."
+  default     = ""
+}
+
 variable "monitoring" {
   type        = bool
   description = "Mirror of the top-level var.monitoring. When true, /config.js advertises the monitoring stack so the admin app's Nav can surface Uptime Kuma, Healthchecks, and Grafana entries (which target uptime/heartbeat/metrics.<control-domain>)."

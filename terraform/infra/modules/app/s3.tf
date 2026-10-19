@@ -22,7 +22,8 @@ resource "aws_s3_object" "website_config" {
     control_domain      = var.control_domain,
     invitation_required = var.invitation_required,
     sms_enabled         = var.sms_enabled,
-    monitoring          = var.monitoring
+    monitoring          = var.monitoring,
+    operator_name       = var.operator_name
   })
   etag = md5(templatefile("${path.module}/templates/config.js.tftpl", {
     pool_id             = var.user_pool_id,
@@ -36,7 +37,8 @@ resource "aws_s3_object" "website_config" {
     control_domain      = var.control_domain,
     invitation_required = var.invitation_required,
     sms_enabled         = var.sms_enabled,
-    monitoring          = var.monitoring
+    monitoring          = var.monitoring,
+    operator_name       = var.operator_name
     })
   )
 }
@@ -63,7 +65,8 @@ resource "aws_s3_object" "website_config_json" {
     control_domain      = var.control_domain,
     invitation_required = var.invitation_required,
     sms_enabled         = var.sms_enabled,
-    monitoring          = var.monitoring
+    monitoring          = var.monitoring,
+    operator_name       = var.operator_name
   })
   etag = md5(templatefile("${path.module}/templates/config.js.tftpl", {
     pool_id             = var.user_pool_id,
@@ -77,7 +80,8 @@ resource "aws_s3_object" "website_config_json" {
     control_domain      = var.control_domain,
     invitation_required = var.invitation_required,
     sms_enabled         = var.sms_enabled,
-    monitoring          = var.monitoring
+    monitoring          = var.monitoring,
+    operator_name       = var.operator_name
     })
   )
 }
