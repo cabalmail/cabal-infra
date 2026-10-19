@@ -38,6 +38,7 @@ struct FeedSubscriptionSettingsSheet: View {
                 .confirmationDialog("Unsubscribe from \(subscription.displayTitle)?",
                                     isPresented: $confirmUnsubscribe, titleVisibility: .visible) {
                     Button("Unsubscribe", role: .destructive) { Task { await unsubscribe() } }
+                    Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
                 } message: {
                     Text("Its items and your read and flag marks for it are removed from this account.")
                 }
