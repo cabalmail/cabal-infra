@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,17 +41,19 @@ import com.cabalmail.kit.auth.MfaMethod
 /**
  * Control-domain/username/password sign-in with the TOTP/SMS challenge
  * leg. Capture is three-field like the Apple client's: the server (the
- * control domain, remembered across launches), then the account. Sign-up,
- * confirmation, and forgot-password flows arrive with the full auth UI
- * work; this is the Phase 3 surface that makes the kit auth stack usable
- * on-device.
+ * control domain, remembered across launches), then the account. Create
+ * account hands the typed server to the sign-up flow ([SignUpScreen]);
+ * coming back with a new account fills its username in here.
  */
 @Composable
 fun SignInScreen(
     state: SignInUiState,
     onSignIn: (controlDomain: String, username: String, password: String) -> Unit,
     onSubmitMfaCode: (code: String) -> Unit,
+    onCreateAccount: (controlDomain: String) -> Unit,
     modifier: Modifier = Modifier,
+    createdUsername: String? = null,
+    onCreatedUsernameApplied: () -> Unit = {},
 ) {
     var controlDomain by rememberSaveable { mutableStateOf("") }
     var username by rememberSaveable { mutableStateOf("") }
@@ -62,6 +65,16 @@ fun SignInScreen(
     LaunchedEffect(state.rememberedControlDomain) {
         if (controlDomain.isEmpty()) {
             controlDomain = state.rememberedControlDomain.orEmpty()
+        }
+    }
+
+    // Back from sign-up with a new account: its password is next. Applied
+    // once, so a later rotation doesn't clear a password being typed.
+    LaunchedEffect(createdUsername) {
+        if (createdUsername != null) {
+            username = createdUsername
+            password = ""
+            onCreatedUsernameApplied()
         }
     }
 
@@ -196,6 +209,12 @@ fun SignInScreen(
                         enabled = canSignIn,
                     ) {
                         Text(stringResource(R.string.sign_in))
+                    }
+                    TextButton(
+                        onClick = { onCreateAccount(controlDomain.trim()) },
+                        enabled = !state.busy && controlDomain.isNotBlank(),
+                    ) {
+                        Text(stringResource(R.string.create_account))
                     }
                 }
             }

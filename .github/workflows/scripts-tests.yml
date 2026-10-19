@@ -39,6 +39,7 @@ on:
       # against the webmail's, which the 10DLC registration quotes.
       - 'react/admin/src/SignUp/index.jsx'
       - 'apple/CabalmailUI/Session/SignUp/SignUpModel.swift'
+      - 'android/app/src/main/kotlin/com/cabalmail/android/ui/auth/SignUpRules.kt'
       - '.github/workflows/scripts-tests.yml'
   push:
     branches:
@@ -59,6 +60,7 @@ on:
       # against the webmail's, which the 10DLC registration quotes.
       - 'react/admin/src/SignUp/index.jsx'
       - 'apple/CabalmailUI/Session/SignUp/SignUpModel.swift'
+      - 'android/app/src/main/kotlin/com/cabalmail/android/ui/auth/SignUpRules.kt'
       - '.github/workflows/scripts-tests.yml'
 
 permissions:
