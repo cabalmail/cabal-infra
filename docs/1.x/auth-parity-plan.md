@@ -44,8 +44,8 @@ for A.
 | A2    | Webmail: port `App.jsx` flows, drop the dependency               | Done 2026-10-18 (#2107, #2116) |
 | A3    | Promote the auth contract to `docs/auth.md`                      | Done 2026-10-18 |
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Done 2026-10-18 (#2131, #2133) |
-| B2    | Apple: sign-up, confirm and resend screens                       | In review |
-| B3    | Android: sign-up, confirm and resend screens                     | Not started |
+| B2    | Apple: sign-up, confirm and resend screens                       | Done 2026-10-19 (#2143) |
+| B3    | Android: sign-up, confirm and resend screens                     | In review |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
 | C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Done 2026-10-18 (#2124, #2126) |
 | C2    | Native: first admin feature — Users (approve, disable, delete)   | Done 2026-10-18 (#2127, #2128) |
@@ -297,7 +297,7 @@ updated; the app module has none.
 
 ### B2 / B3 — Sign-up screens
 
-**Status:** B2 (Apple) in review; B3 (Android) next.
+**Status:** B2 (Apple) done 2026-10-19 (#2143); B3 (Android) in review.
 
 A "Create account" entry on each sign-in screen, using the control
 domain already typed there. Screens: sign-up form (username, password,
@@ -333,6 +333,20 @@ Resend for the rest of the screen. The steps draw their buttons through
 `HostPlatform.formActionsInDialogRow` instead of `#if os(...)`; the
 password hint names the character classes of Cognito's default policy,
 which the pool uses. Done returns to sign-in with the username filled in.
+
+As built (Android): the same flow in `app/.../ui/auth/`. `SignUpRules`
+holds the rules, the normalizing, the consent text and the refusal
+sentences as plain functions; `SignUpViewModel` the steps, loading
+`config.json` through `configService.load` as sign-in does and talking
+to Cognito through a `CognitoAuthService` over a token store that keeps
+nothing; `SignUpScreen` one composable per step, laid out like the
+sign-in screen. `SignedOutScreens` swaps sign-in and sign-up: the
+sign-in form's typed server and username are held while sign-up shows
+(a `SaveableStateHolder`), each Create Account opens a fresh flow, and a
+rotation keeps the one in progress. SMS consent is a checkbox, unchecked
+by default, whose whole row toggles it. The kit's `Config` gains
+`operatorName`, read leniently like the flags, and
+`test_sms_consent_text.py` now pins the Android text too.
 
 ### B4 — Recovery-email gate
 

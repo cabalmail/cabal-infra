@@ -25,9 +25,9 @@ import androidx.compose.ui.input.key.type
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cabalmail.android.navigation.CabalmailNavHost
 import com.cabalmail.android.ui.auth.AuthPhase
-import com.cabalmail.android.ui.auth.SignInScreen
 import com.cabalmail.android.ui.auth.SignInUiState
 import com.cabalmail.android.ui.auth.SignInViewModel
+import com.cabalmail.android.ui.auth.SignedOutScreens
 import com.cabalmail.android.ui.theme.CabalmailTheme
 import com.cabalmail.android.ui.theme.resolvesDark
 
@@ -96,7 +96,8 @@ class MainActivity : ComponentActivity() {
                 )
 
             else ->
-                SignInScreen(
+                SignedOutScreens(
+                    container = container,
                     state = state,
                     onSignIn = viewModel::signIn,
                     onSubmitMfaCode = viewModel::submitMfaCode,
