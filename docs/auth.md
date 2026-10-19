@@ -35,6 +35,7 @@ Clients read the pool's coordinates at runtime from `/config.js` on the control 
 | `cognitoConfig.enrollClientId` | The enrollment client for the locked-out TOTP setup. Empty in a file older than that feature: fall back to a plain message. |
 | `cognitoConfig.extensionClientId`, `.hostedUiDomain` | The extension's client and the Hosted UI domain. |
 | `invitation_required` | Show the invitation-code field at sign-up. |
+| `operator_name` | The operator's legal name, from the `OPERATOR_NAME` GitHub variable. Sign-up's SMS consent text names the brand as `Cabalmail (<operator_name>)`, as the webmail's does; empty or missing, it names Cabalmail alone. |
 | `sms_enabled` | Require a phone number at sign-up (with consent), make the recovery email optional, and expect SMS codes. When it is off, require the email instead (see [Sign-up](#sign-up)). Treat a missing key as `true`, so an older file keeps the phone field. |
 
 ## Transport and errors
@@ -147,7 +148,7 @@ Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySo
 | --- | --- | --- | --- | --- |
 | Sign-in, TOTP and SMS challenges | Yes | Yes | Yes | Hosted UI |
 | Refresh | Yes | Yes | Yes | Yes, via the Hosted UI token endpoint |
-| Sign-up, confirm, resend | Yes | Kit only, no UI | Kit only, no UI | No |
+| Sign-up, confirm, resend | Yes | Yes (Create Account on the sign-in form) | Yes (Create Account on the sign-in screen) | No |
 | Forgot and reset password | Yes | Kit only, no UI | Kit only, no UI | No |
 | Recovery-email check | Yes | No | No | No |
 | Recovery email in settings (add, change, verify) | Yes (Security) | No | No | No |
@@ -157,6 +158,6 @@ Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySo
 | Admin recognition | Yes | Yes: Settings lists Users for an admin | Yes: Settings lists Users for an admin | No |
 | Users view (admin) | Yes | Yes (Settings → Users) | Yes (Settings → Users) | No |
 
-The native gaps are planned in [the auth parity plan](./1.x/auth-parity-plan.md): sign-up (B1–B3), the recovery-email check (B4), and the other admin views. The Linux client's sign-in, MFA and refresh are in progress against this contract ([Linux client plan](./1.x/linux-client-plan.md)).
+The native gaps are planned in [the auth parity plan](./1.x/auth-parity-plan.md): the recovery-email check (B4), and the other admin views. The Linux client's sign-in, MFA and refresh are in progress against this contract ([Linux client plan](./1.x/linux-client-plan.md)).
 
 The webmail's implementation is `react/admin/src/auth/`, the Apple kit's is `apple/CabalmailKit/Sources/CabalmailKit/Auth/`, and the Android kit's is `android/kit/src/main/kotlin/com/cabalmail/kit/auth/`. The extension's Hosted UI flow is in `extensions/shared/src/auth/`.

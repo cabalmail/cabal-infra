@@ -601,6 +601,10 @@ jobs:
       # only a fallback for an environment that has not moved it to a
       # secret yet.
       TF_VAR_invitation_code: ${{ secrets.TF_VAR_INVITATION_CODE || vars.TF_VAR_INVITATION_CODE }}
+      # The operator's legal name, for the SMS consent text the native
+      # sign-up screens read from /config.json. Env for the same reason:
+      # a legal name has spaces and may have punctuation.
+      TF_VAR_operator_name: ${{ vars.OPERATOR_NAME }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -772,6 +776,10 @@ jobs:
       # only a fallback for an environment that has not moved it to a
       # secret yet.
       TF_VAR_invitation_code: ${{ secrets.TF_VAR_INVITATION_CODE || vars.TF_VAR_INVITATION_CODE }}
+      # The operator's legal name, for the SMS consent text the native
+      # sign-up screens read from /config.json. Env for the same reason:
+      # a legal name has spaces and may have punctuation.
+      TF_VAR_operator_name: ${{ vars.OPERATOR_NAME }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

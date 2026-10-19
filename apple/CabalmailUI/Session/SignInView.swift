@@ -7,7 +7,8 @@ import CabalmailKit
 /// Capture is three-field: control domain (cached across launches),
 /// username, password. On submit, `AppState.signIn(...)` loads
 /// `/config.json`, constructs a `CabalmailClient`, and authenticates.
-/// Phase 6 replaces this with the real sign-up / reset-password flows.
+/// Create Account swaps the form for the sign-up steps (`SignUpView`)
+/// against the control domain typed here, inside the same chrome.
 struct SignInView: View {
     /// Return-key focus chain: Return advances through the credential
     /// fields and submits from the last one, so sign-in is completable
@@ -27,6 +28,8 @@ struct SignInView: View {
     /// is already in flight (e.g. a paste landing right after the sixth
     /// typed digit).
     @State private var isSubmittingMfa = false
+    /// The sign-up flow while it is showing in place of this form.
+    @State private var signUp: SignUpModel?
 
     /// The pending second factor when Cognito challenged the password
     /// sign-in, nil otherwise. Drives the swap between the credential
@@ -55,7 +58,9 @@ struct SignInView: View {
     }
 
     @ViewBuilder private var currentForm: some View {
-        if let method = mfaMethod {
+        if let signUp {
+            SignUpView(model: signUp, onFinish: finishSignUp)
+        } else if let method = mfaMethod {
             mfaForm(method: method)
         } else {
             credentialForm
@@ -157,6 +162,20 @@ struct SignInView: View {
                     .accessibilityIdentifier("signin.submit")
                     #endif
                 }
+                CreateAccountSection(controlDomain: controlDomain, isSigningIn: appState.status == .signingIn) {
+                    signUp = appState.makeSignUp(controlDomain: controlDomain)
+                }
+        }
+    }
+
+    /// Back from sign-up, filling in the new account's username so the next
+    /// step is its password.
+    private func finishSignUp(username: String?) {
+        signUp = nil
+        if let username {
+            self.username = username
+            password = ""
+            focusedField = .password
         }
     }
 

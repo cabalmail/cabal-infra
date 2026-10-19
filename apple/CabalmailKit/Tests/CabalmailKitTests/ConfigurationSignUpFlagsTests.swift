@@ -42,6 +42,16 @@ final class ConfigurationSignUpFlagsTests: XCTestCase {
         XCTAssertTrue(config.smsEnabled)
     }
 
+    /// The consent text names the operator when the file does; an older
+    /// file, `OPERATOR_NAME` unset or a malformed value leave it out.
+    func testTheOperatorNameIsReadWhenPresent() throws {
+        let named = try Self.decode(flags: #""operator_name": "Example Operator LLC","#)
+        XCTAssertEqual(named.operatorName, "Example Operator LLC")
+        XCTAssertNil(try Self.decode(flags: "").operatorName)
+        XCTAssertNil(try Self.decode(flags: #""operator_name": "  ","#).operatorName)
+        XCTAssertNil(try Self.decode(flags: #""operator_name": 7,"#).operatorName)
+    }
+
     /// `ConfigurationCache` stores the encoded struct, so the flags have to
     /// come back from it.
     func testTheFlagsSurviveTheCacheRoundTrip() throws {
@@ -51,7 +61,8 @@ final class ConfigurationSignUpFlagsTests: XCTestCase {
             invokeUrl: URL(string: "https://api.example.com/prod")!,
             cognito: .init(region: "us-east-1", userPoolId: "p", clientId: "c"),
             invitationRequired: true,
-            smsEnabled: false
+            smsEnabled: false,
+            operatorName: "Example Operator LLC"
         )
         let decoded = try JSONDecoder().decode(Configuration.self, from: JSONEncoder().encode(config))
         XCTAssertEqual(decoded, config)

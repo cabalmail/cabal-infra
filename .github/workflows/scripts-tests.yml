@@ -15,6 +15,9 @@ name: Scripts Tests
 # .github/scripts/** entries are listed one file at a time so only the
 # scripts this suite actually covers trigger it.
 #
+# Another compares the native sign-up's SMS consent text with the webmail's
+# word for word, so those two source files are listed too.
+#
 # The suites are stdlib-only (scripts/apple-release-dashboard.py imports its
 # third-party ASC deps lazily), so no pip install is needed — just a pinned
 # interpreter and git, both provided by the runner.
@@ -32,6 +35,11 @@ on:
       - '.github/scripts/mail-probe.py'
       - 'changelog.d/**'
       - 'design/**'
+      # test_sms_consent_text.py: the native sign-up's SMS consent text
+      # against the webmail's, which the 10DLC registration quotes.
+      - 'react/admin/src/SignUp/index.jsx'
+      - 'apple/CabalmailUI/Session/SignUp/SignUpModel.swift'
+      - 'android/app/src/main/kotlin/com/cabalmail/android/ui/auth/SignUpRules.kt'
       - '.github/workflows/scripts-tests.yml'
   push:
     branches:
@@ -48,6 +56,11 @@ on:
       - '.github/scripts/mail-probe.py'
       - 'changelog.d/**'
       - 'design/**'
+      # test_sms_consent_text.py: the native sign-up's SMS consent text
+      # against the webmail's, which the 10DLC registration quotes.
+      - 'react/admin/src/SignUp/index.jsx'
+      - 'apple/CabalmailUI/Session/SignUp/SignUpModel.swift'
+      - 'android/app/src/main/kotlin/com/cabalmail/android/ui/auth/SignUpRules.kt'
       - '.github/workflows/scripts-tests.yml'
 
 permissions:

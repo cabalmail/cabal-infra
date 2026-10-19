@@ -43,6 +43,14 @@ data class Config(
     @Serializable(with = FalseOnlyWhenFalse::class)
     @SerialName("sms_enabled")
     val smsEnabled: Boolean = true,
+    /**
+     * `operator_name`: the operator's legal name, which sign-up's SMS
+     * consent text names beside the brand. Empty when the file has none (an
+     * older file, or `OPERATOR_NAME` unset) or a value that isn't a string.
+     */
+    @Serializable(with = LenientNameSerializer::class)
+    @SerialName("operator_name")
+    val operatorName: String = "",
 ) {
     /** Base URL of the Lambda API (API Gateway invoke URL). */
     val apiUrl: String get() = invokeUrl
@@ -132,3 +140,26 @@ internal object TrueOnlyWhenTrue : LiteralFlagSerializer(true)
 
 /** `sms_enabled`: false only for a literal `false`. */
 internal object FalseOnlyWhenFalse : LiteralFlagSerializer(false)
+
+/**
+ * `operator_name`: a JSON string, trimmed; anything else (a number, null)
+ * reads as empty rather than failing the file, like the flags above.
+ */
+internal object LenientNameSerializer : KSerializer<String> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("com.cabalmail.kit.config.LenientName", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String {
+        val element = (decoder as? JsonDecoder)?.decodeJsonElement() ?: return decoder.decodeString().trim()
+        return (element as? JsonPrimitive)
+            ?.takeIf { it.isString }
+            ?.content
+            ?.trim()
+            .orEmpty()
+    }
+
+    override fun serialize(
+        encoder: Encoder,
+        value: String,
+    ) = encoder.encodeString(value)
+}

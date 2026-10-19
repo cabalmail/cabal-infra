@@ -44,8 +44,8 @@ for A.
 | A2    | Webmail: port `App.jsx` flows, drop the dependency               | Done 2026-10-18 (#2107, #2116) |
 | A3    | Promote the auth contract to `docs/auth.md`                      | Done 2026-10-18 |
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Done 2026-10-18 (#2131, #2133) |
-| B2    | Apple: sign-up, confirm and resend screens                       | Not started |
-| B3    | Android: sign-up, confirm and resend screens                     | Not started |
+| B2    | Apple: sign-up, confirm and resend screens                       | Done 2026-10-19 (#2143) |
+| B3    | Android: sign-up, confirm and resend screens                     | In review |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
 | C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Done 2026-10-18 (#2124, #2126) |
 | C2    | Native: first admin feature — Users (approve, disable, delete)   | Done 2026-10-18 (#2127, #2128) |
@@ -297,7 +297,7 @@ updated; the app module has none.
 
 ### B2 / B3 — Sign-up screens
 
-**Status:** Not started.
+**Status:** B2 (Apple) done 2026-10-19 (#2143); B3 (Android) in review.
 
 A "Create account" entry on each sign-in screen, using the control
 domain already typed there. Screens: sign-up form (username, password,
@@ -306,6 +306,47 @@ invitation code when required, and the contacts D5 sets: with
 email, otherwise a required recovery email), confirm-code with resend,
 and the pending-approval result. Apple and Android land as separate
 PRs, Apple first.
+
+SMS consent: native sign-up shows the webmail's checkbox text word for
+word, under the existing 10DLC registration with no amendment (decided
+by the operator 2026-10-18). The text names the operator's legal name,
+which the apps read from `config.json`'s `operator_name` (#2139, from
+the `OPERATOR_NAME` GitHub variable); without it the brand is Cabalmail
+alone, as in a webmail build without that variable.
+`scripts/tests/test_sms_consent_text.py` fails if the Apple text drifts
+from the webmail's.
+
+As built (Apple): Create Account on the sign-in form swaps it for the
+sign-up steps inside the same chrome (`CabalmailUI/Session/SignUp/`).
+`SignUpModel` holds the flow: it loads `config.json` through the
+session's loader and talks to Cognito through a bare
+`CognitoAuthService` over an `InMemorySecureStore`, so sign-up builds no
+session client and touches no keychain. It normalizes before sending:
+the username trimmed and lowercased, the phone stripped to E.164 (a
+leading `+` and country code are required), the email and invitation
+code trimmed, and an empty email left out. A disabled Create Account
+always says what is missing. Cognito's refusals get their own sentences
+(`SignUpErrorText`); a `NotAuthorizedException` on confirm means the
+account is already confirmed and counts as created; a rate limit stops
+Resend for the rest of the screen. The steps draw their buttons through
+`AuthFormActions`, which branches on a new
+`HostPlatform.formActionsInDialogRow` instead of `#if os(...)`; the
+password hint names the character classes of Cognito's default policy,
+which the pool uses. Done returns to sign-in with the username filled in.
+
+As built (Android): the same flow in `app/.../ui/auth/`. `SignUpRules`
+holds the rules, the normalizing, the consent text and the refusal
+sentences as plain functions; `SignUpViewModel` the steps, loading
+`config.json` through `configService.load` as sign-in does and talking
+to Cognito through a `CognitoAuthService` over a token store that keeps
+nothing; `SignUpScreen` one composable per step, laid out like the
+sign-in screen. `SignedOutScreens` swaps sign-in and sign-up: the
+sign-in form's typed server and username are held while sign-up shows
+(a `SaveableStateHolder`), each Create Account opens a fresh flow, and a
+rotation keeps the one in progress. SMS consent is a checkbox, unchecked
+by default, whose whole row toggles it. The kit's `Config` gains
+`operatorName`, read leniently like the flags, and
+`test_sms_consent_text.py` now pins the Android text too.
 
 ### B4 — Recovery-email gate
 

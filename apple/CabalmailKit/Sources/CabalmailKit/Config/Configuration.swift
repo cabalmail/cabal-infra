@@ -17,6 +17,10 @@ public struct Configuration: Sendable, Codable, Equatable {
     /// `sms_enabled`: the pool can send texts, so sign-up collects a phone
     /// number and a code may arrive by SMS.
     public let smsEnabled: Bool
+    /// `operator_name`: the operator's legal name, which sign-up's SMS
+    /// consent text names beside the brand. Nil when the file has none (an
+    /// older file, or `OPERATOR_NAME` unset), or an empty one.
+    public let operatorName: String?
 
     public init(
         controlDomain: String,
@@ -24,7 +28,8 @@ public struct Configuration: Sendable, Codable, Equatable {
         invokeUrl: URL,
         cognito: CognitoConfiguration,
         invitationRequired: Bool = false,
-        smsEnabled: Bool = true
+        smsEnabled: Bool = true,
+        operatorName: String? = nil
     ) {
         self.controlDomain = controlDomain
         self.domains = domains
@@ -32,6 +37,7 @@ public struct Configuration: Sendable, Codable, Equatable {
         self.cognito = cognito
         self.invitationRequired = invitationRequired
         self.smsEnabled = smsEnabled
+        self.operatorName = operatorName
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -41,8 +47,12 @@ public struct Configuration: Sendable, Codable, Equatable {
         case cognito = "cognitoConfig"
         case invitationRequired = "invitation_required"
         case smsEnabled = "sms_enabled"
+        case operatorName = "operator_name"
     }
 
+    /// `operator_name` is optional the same way: missing, empty or not a
+    /// string reads as nil.
+    ///
     /// The two flags read as the webmail reads them (`docs/auth.md`, "Client
     /// configuration"): an invitation field only for a literal `true`, and
     /// the phone field kept unless `false`, so a file older than
@@ -57,6 +67,8 @@ public struct Configuration: Sendable, Codable, Equatable {
         cognito = try container.decode(CognitoConfiguration.self, forKey: .cognito)
         invitationRequired = (try? container.decodeIfPresent(Bool.self, forKey: .invitationRequired)) == true
         smsEnabled = (try? container.decodeIfPresent(Bool.self, forKey: .smsEnabled)) != false
+        let name = (try? container.decodeIfPresent(String.self, forKey: .operatorName)) ?? nil
+        operatorName = name.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
     }
 
     /// IMAP hostname derived from the control domain.

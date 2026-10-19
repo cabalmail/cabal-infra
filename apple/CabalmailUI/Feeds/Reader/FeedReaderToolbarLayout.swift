@@ -79,6 +79,21 @@ enum FeedReaderToolbarLayout {
     /// The More menu on the wide bar: the link rows.
     static let moreMenu: [FeedReaderMenuItem] = [.openInBrowser, .shareLink, .copyLink]
 
+    /// Which kind of control the macOS wide bar draws for an action, the
+    /// same rule `ReaderToolbarLayout.macControlShape` states for the mail
+    /// reader and for the same reason: `EmptyFeedDetailToolbar` builds each
+    /// stand-in from its live twin's kind so the slot is the right width
+    /// and nothing shifts when an item opens (#2016). More is a pull-down
+    /// menu (the link rows); every other action is a plain button.
+    static func macControlShape(for action: FeedReaderAction) -> ReaderToolbarControlShape {
+        switch action {
+        case .more:
+            return .menu
+        case .read, .favorite, .readerMode, .remoteContent, .article:
+            return .button
+        }
+    }
+
     /// The macOS empty pane's disabled stand-ins: the wide bar of an item
     /// showing its feed content with an article link, which is its fullest
     /// set, so a button never moves under the pointer when an item opens.

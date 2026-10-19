@@ -1,6 +1,7 @@
 package com.cabalmail.kit.config
 
 import kotlinx.serialization.json.Json
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -43,6 +44,18 @@ class ConfigSignUpFlagsTest {
         val config = decode("")
         assertFalse(config.invitationRequired)
         assertTrue(config.smsEnabled)
+    }
+
+    /**
+     * The consent text names the operator when the file does; an older
+     * file, `OPERATOR_NAME` unset or a malformed value leave it out.
+     */
+    @Test
+    fun `the operator name is read when present`() {
+        assertEquals("Example Operator LLC", decode(""""operator_name": " Example Operator LLC ",""").operatorName)
+        assertEquals("", decode("").operatorName)
+        assertEquals("", decode(""""operator_name": 7,""").operatorName)
+        assertEquals("", decode(""""operator_name": null,""").operatorName)
     }
 
     /** A flag of the wrong type must not cost the user the sign-in form. */

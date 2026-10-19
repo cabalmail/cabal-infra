@@ -10,7 +10,7 @@ Generic mail clients (Thunderbird, Apple Mail, Outlook, …) cannot be connected
 
 ## Accounts and signing in
 
-**Creating an account.** Use the web app's Sign up form. If your operator configured an invitation code, you must enter it. After sign-up, wait for an administrator to approve your account.
+**Creating an account.** Use the web app's Sign up form, or Create Account on the sign-in screen of the Apple or Android apps (enter your server's control domain first). If your operator configured an invitation code, you must enter it. After sign-up, wait for an administrator to approve your account.
 
 **Signing in.** Username and password, then — if you are enrolled in two-factor authentication — a 6-digit code from your authenticator app (the Apple apps submit it automatically when the sixth digit lands). Operators can make two-factor mandatory; when it is, signing in without an enrolled authenticator walks you through enrollment (scan the QR code, confirm the first code) before you can proceed. You can also enroll voluntarily from the web app.
 

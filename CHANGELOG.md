@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.38.0] - 2026-10-19
+
+### Added
+- Android: **Create an account in the app.** Create Account on the
+  sign-in screen signs up on the server whose control domain is typed
+  there. Where the server can send texts it asks for a phone number,
+  with the same SMS consent as the web sign-up, and the recovery email
+  is optional; where it can't, the recovery email is required. It asks
+  for the invitation code when the server requires one. Next comes the
+  code sent to the phone or email, with a way to send a new one. The
+  new account can sign in at once, and creates addresses once an
+  administrator approves it; back on the sign-in screen its username is
+  already filled in.
+- Apple: **Create an account from the app.** Create Account on the
+  sign-in screen signs up on the server whose control domain is typed
+  there. Where the server can send texts it asks for a phone number,
+  with the same SMS consent as the web sign-up, and the recovery email
+  is optional; where it can't, the recovery email is required. It asks
+  for the invitation code when the server requires one. Next comes the
+  code sent to the phone or email, with a way to send a new one. The
+  new account can sign in at once, and creates addresses once an
+  administrator approves it. Back on the sign-in screen the username is
+  already filled in.
+- **Operator name in the client configuration.** `/config.js` and
+  `/config.json` now carry `operator_name`, filled from the
+  `OPERATOR_NAME` GitHub variable through a new `operator_name`
+  Terraform variable, so the native apps' sign-up screens can name the
+  operator in their SMS consent text the way the webmail's does. Empty
+  when the variable is unset.
+
+### Fixed
+- Apple: **Mac reader toolbar no longer jumps when a message opens.** The
+  greyed stand-ins the reader shows while nothing is open are now drawn as
+  the same kind of control as the buttons they stand in for — a pull-down
+  menu for Reply, split buttons for dispose, Mark as read and Flag, a menu
+  for the feed reader's More — so the slots are the right width and the
+  buttons light up where they already were.
+- **Flaky outbox drain test.** `testAMessageEnqueuedDuringADrainIsSentByTheSameDrain`
+  asserted the outbox was empty as soon as the second message's send had
+  started, but the drain removes an entry only once its send returns, so a
+  slow simulator could catch it in between; the visionOS leg of a stage
+  run did. It now waits for the outbox to empty, and still fails if the
+  mid-drain kick is dropped.
+
 ## [1.37.0] - 2026-10-19
 
 ### Changed

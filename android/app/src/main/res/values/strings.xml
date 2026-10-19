@@ -7,6 +7,7 @@
     <string name="username_label">Username</string>
     <string name="password_label">Password</string>
     <string name="sign_in">Sign In</string>
+    <string name="create_account">Create Account</string>
     <string name="sign_out">Sign Out</string>
     <string name="mfa_prompt_totp">Enter the code from your authenticator app.</string>
     <string name="mfa_prompt_sms">Enter the code we just texted you.</string>
