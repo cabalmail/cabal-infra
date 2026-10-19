@@ -16,17 +16,17 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
 
     /// Where each live macOS toolbar control is declared.
     private static let declarations: [ReaderToolbarAction: (file: String, name: String)] = [
-        .reply:         ("CabalmailUI/Mail/Reader/MessageDetailView+Toolbar.swift", "replyButton"),
-        .editDraft:     ("CabalmailUI/Mail/Reader/MessageDetailView+Toolbar.swift", "editDraftButton"),
+        .reply: ("CabalmailUI/Mail/Reader/MessageDetailView+Toolbar.swift", "replyButton"),
+        .editDraft: ("CabalmailUI/Mail/Reader/MessageDetailView+Toolbar.swift", "editDraftButton"),
         .remoteContent: ("CabalmailUI/Mail/Reader/MessageDetailView+Toolbar.swift", "remoteContentButton"),
-        .readerMode:    ("CabalmailUI/Mail/Reader/MessageDetailView+Toolbar.swift", "readerModeButton"),
-        .dispose:       ("CabalmailUI/Mail/Reader/MessageDetailView+DisposeOptions.swift", "disposeButton"),
-        .toggleRead:    ("CabalmailUI/Mail/Reader/MessageDetailView+SeenOptions.swift", "seenButton"),
-        .move:          ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "moveButton"),
-        .plainText:     ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "plainTextButton"),
-        .viewSource:    ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "viewSourceButton"),
-        .viewHeaders:   ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "viewHeadersButton"),
-        .printMessage:  ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "printButton")
+        .readerMode: ("CabalmailUI/Mail/Reader/MessageDetailView+Toolbar.swift", "readerModeButton"),
+        .dispose: ("CabalmailUI/Mail/Reader/MessageDetailView+DisposeOptions.swift", "disposeButton"),
+        .toggleRead: ("CabalmailUI/Mail/Reader/MessageDetailView+SeenOptions.swift", "seenButton"),
+        .move: ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "moveButton"),
+        .plainText: ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "plainTextButton"),
+        .viewSource: ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "viewSourceButton"),
+        .viewHeaders: ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "viewHeadersButton"),
+        .printMessage: ("CabalmailUI/Mail/Reader/MessageDetailView+MacToolbar.swift", "printButton")
     ]
 
     func testEveryMacSlotHasADeclarationToRead() throws {

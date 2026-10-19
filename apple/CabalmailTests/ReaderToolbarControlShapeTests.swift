@@ -91,4 +91,3 @@ final class ReaderToolbarControlShapeTests: XCTestCase {
         ReaderToolbarLayout.macControlShape(for: action, flagMenuHasRows: flagMenuHasRows)
     }
 }
-
