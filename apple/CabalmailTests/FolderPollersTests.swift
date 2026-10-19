@@ -212,7 +212,7 @@ final class FolderPollersTests: XCTestCase {
 
     func testAPollerWhoseListsWentAwayStopsAtItsNextTickWithoutAStatus() async throws {
         var list: RecordingPollSubscriber? = RecordingPollSubscriber()
-        weak var probe = list
+        weak let probe = list
         pollers.subscribe(try XCTUnwrap(list), to: Self.work, through: client)
         let poller = try workPoller()
         try await awaitStreams(1)

@@ -125,7 +125,6 @@ final class StatusBoundEdgeTests: XCTestCase {
 
     /// The first badge poll of a session has nothing to be bounded against.
     func testTheFirstBadgePollTakesItsAnswer() async throws {
-        let imap = FakeImapClient()
         let appState = AppState()
         let store = appState.mailStore
         defer { store.counts.setInboxUnread(0) }

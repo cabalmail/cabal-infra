@@ -73,6 +73,9 @@ enum ContactsPickerAffordance: Equatable, CaseIterable {
 /// Opens the system privacy pane where Contacts access is granted. Split
 /// from the view so the platform fork stays in one place.
 enum ContactsPrivacySettings {
+    /// Main-actor because both arms call a main-actor API — `UIApplication`
+    /// on iOS, `NSWorkspace` on macOS — and every caller is a view (#1842).
+    @MainActor
     static func open() {
         #if os(macOS)
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts")

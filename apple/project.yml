@@ -702,6 +702,16 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMacTests
         GENERATE_INFOPLIST_FILE: YES
+        # This bundle compiles with zero warnings and keeps it that way
+        # (#1842): a concurrency warning here is a real isolation question
+        # about a test, and 248 of them accumulated unnoticed because
+        # nothing failed on one. It replaces the per-group `-Werror` list
+        # tranche 1 added, which only covered the three groups the bundle
+        # was clean of then; the isolation diagnostics are ungrouped (no
+        # `[#Name]` to promote), so blanket promotion is the only thing
+        # that can guard them. Adding a warning-emitting test now fails the
+        # build rather than growing the backlog.
+        SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         # XcodeGen derives TEST_HOST from the host target's NAME, but
         # CabalmailMac overrides PRODUCT_NAME to "Cabalmail" (the bundle
         # ships as Cabalmail.app), so spell the path out.

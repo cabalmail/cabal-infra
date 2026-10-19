@@ -22,6 +22,7 @@ import SwiftUI
 // refresh button take width off the text: the sentence is laid out narrower
 // than the column, and a limit measured against the bare label reads as
 // generous when it is in fact truncating.
+@MainActor
 final class UnsubscribedBannerLineLimitTests: XCTestCase {
 
     /// The banner's ideal height at `width`, which is the quantity

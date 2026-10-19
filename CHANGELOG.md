@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.36.0] - 2026-10-19
+
+### Added
+- **Admin recognition in the Android kit.** `IdTokenClaims` reads the
+  ID token's `cognito:groups` claim, and `AuthService.isAdmin()` (an
+  extension function) reports whether the signed-in user is in the
+  `admin` group. It matches the group as a whole name, as the Apple kit
+  and the server do, and computes the answer from the stored tokens on
+  every call, so it follows a refresh, a sign-out and an account switch.
+  Settings reads it to list Users for administrators.
+- Android: **Users settings for administrators.** An administrator's
+  Settings now lists Users. It shows accounts awaiting confirmation and
+  confirmed ones, each with a page to confirm the account, enable or
+  disable its sign-in, delete it, and choose the mail domains it may
+  create addresses on. Your own account can't be disabled or deleted
+  there, and the accounts the system itself signs in as are hidden. The
+  category appears only when your sign-in token names the admin group,
+  and the server refuses these actions to anyone else.
+- **Admin recognition in the Apple kit.** `IdTokenClaims` reads the ID
+  token's `cognito:groups` claim, and `AuthService.isAdmin()` reports
+  whether the signed-in user is in the `admin` group. The group is
+  matched as a whole name, the way the server does, in the array form
+  Cognito issues and the string forms API Gateway renders. It is
+  computed from the stored tokens on every call, so it follows a
+  refresh, a sign-out and an account switch. Settings reads it to list
+  Users for administrators.
+- Apple: **Users settings for administrators.** An administrator's
+  Settings now lists Users. It shows accounts awaiting confirmation and
+  confirmed ones, each with a page to confirm the account, enable or
+  disable its sign-in, delete it, and choose the mail domains it may
+  create addresses on. Your own account can't be disabled or deleted
+  there, and the accounts the system itself signs in as are hidden. The
+  category appears only when your sign-in token names the admin group,
+  and the server refuses these actions to anyone else.
+
+### Changed
+- **Concurrency warnings cleared in the Apple app targets.** The iOS build's
+  last six — the intent that hops to the foreground to finish a clipboard
+  copy, the Contacts privacy-settings opener, and the plain-text link
+  detector's attribute writes — are gone, so an `iOS` build of the app is
+  warning-free. No behaviour changes: the continuation still runs on the
+  main actor, the settings pane still opens from the same affordance, and a
+  detected link still carries its URL and underline.
+- **Concurrency-warning sweep of the macOS app-layer test bundle, now
+  warning-free and held there.** The 39 warnings that needed no judgement are
+  gone — discarded `MailMutationService` outcomes, three never-mutated
+  `weak var`s, two unnecessary `await`s and an unused binding — and so are
+  the 178 actor-isolation ones: a `@MainActor` test class's `setUp`/`tearDown`
+  now overrides the `async throws` hooks, which can carry the class's
+  isolation where the synchronous ones cannot, and three classes that measure
+  main-actor view code gained the annotation. The last 31, all `sending value
+  of non-Sendable type`, were one shape — a poll closure handed to a
+  nonisolated helper from a main-actor test — and now poll on the main actor
+  instead. With the count at zero the bundle builds with
+  `SWIFT_TREAT_WARNINGS_AS_ERRORS`, which replaces the three per-group
+  promotions and guards the ungrouped isolation diagnostics those could not:
+  a warning-emitting test now fails the build rather than growing a backlog
+  nothing failed on.
+
 ## [1.35.1] - 2026-10-18
 
 ### Added

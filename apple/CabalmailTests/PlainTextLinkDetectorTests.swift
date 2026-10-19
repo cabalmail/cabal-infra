@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import CabalmailUI
 
@@ -6,12 +7,19 @@ import XCTest
 /// path had the full reader link menu.
 final class PlainTextLinkDetectorTests: XCTestCase {
 
+    /// `run.link` reads the attribute through a key path into
+    /// `AttributeScopes`, which is not Sendable (#1842); the attribute key
+    /// reads the same value without forming one.
+    private func link(of run: AttributedString.Runs.Run) -> URL? {
+        run.attributes[AttributeScopes.FoundationAttributes.LinkAttribute.self]
+    }
+
     private func links(in attributed: AttributedString) -> [URL] {
-        attributed.runs.compactMap { $0.link }
+        attributed.runs.compactMap(link(of:))
     }
 
     private func linkedText(_ attributed: AttributedString, for url: URL) -> String? {
-        for run in attributed.runs where run.link == url {
+        for run in attributed.runs where link(of: run) == url {
             return String(attributed[run.range].characters)
         }
         return nil
@@ -91,5 +99,23 @@ final class PlainTextLinkDetectorTests: XCTestCase {
     func testMenuTargetRejectsAnExecutableScheme() {
         let url = URL(string: "javascript:alert(1)")!
         XCTAssertNil(PlainTextLinkDetector.menuTarget(for: url, labels: [:]))
+    }
+
+    /// Both attributes a detected link carries, read through their keys. The
+    /// detector builds them as one `AttributeContainer` (#1842), and a
+    /// container that replaced the run's attributes instead of merging them,
+    /// or that carried only the URL, would still linkify — so every other
+    /// test here would still pass.
+    func testADetectedLinkCarriesBothTheURLAndTheUnderline() throws {
+        let underlineKey = AttributeScopes.SwiftUIAttributes.UnderlineStyleAttribute.self
+        let scanned = PlainTextLinkDetector.scan("See https://example.com/underline-1018 now.")
+        let run = try XCTUnwrap(scanned.attributed.runs.first { link(of: $0) != nil })
+        XCTAssertEqual(link(of: run)?.absoluteString, "https://example.com/underline-1018")
+        XCTAssertEqual(run.attributes[underlineKey], .single)
+        XCTAssertEqual(
+            String(scanned.attributed[run.range].characters),
+            "https://example.com/underline-1018",
+            "the run the attributes land on is the URL's own text"
+        )
     }
 }

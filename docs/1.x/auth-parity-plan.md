@@ -47,8 +47,8 @@ for A.
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
-| C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Not started |
-| C2    | Native: first admin feature — Users (approve, disable, delete)   | Not started |
+| C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Done 2026-10-18 (#2124, #2126) |
+| C2    | Native: first admin feature — Users (approve, disable, delete)   | Done 2026-10-18 (#2127, #2128) |
 
 Tracking issues: A #1950, B #1951, C #1952.
 
@@ -277,7 +277,7 @@ scheduled.
 
 ### C1 — `isAdmin` in the kits
 
-**Status:** Not started.
+**Status:** Done 2026-10-18: Apple #2124, Android #2126.
 
 Decode the ID token payload (base64url JSON, no signature check; the
 token came from Cognito over TLS and D3 makes it a hint), expose
@@ -286,9 +286,27 @@ refresh, sign-out and account switch. Kit tests cover the claim
 renderings `admin_limits.is_admin` accepts and a group whose name only
 contains "admin".
 
+As built (Apple): `IdTokenClaims(idToken:)` in
+`CabalmailKit/Auth/IdTokenClaims.swift` (`groups`, `isAdmin`), plus
+`AuthTokens.isAdmin` and an `AuthService.isAdmin()` protocol
+extension. The extension computes the answer from `currentTokens()` on
+every call rather than caching it, so it follows a refresh (a group
+granted or removed shows up in the next token Cognito issues), a
+sign-out, and an account switch (an ended session reads no tokens),
+with no new protocol requirement for the test doubles. Nothing in the
+app reads it yet. C2 decides where the admin views appear and reads it
+at session start. `TestFixtures.idToken(claims:)` builds unsigned test
+tokens.
+
+As built (Android, #2126): the same shape in
+`kit/.../auth/IdTokenClaims.kt`. `AuthTokens.isAdmin` is an extension
+property, so the serialized token format is untouched, and
+`AuthService.isAdmin()` is an extension function, so the app's fakes
+gain no interface member. `testIdToken(claimsJson)` builds test tokens.
+
 ### C2 — First admin feature: Users
 
-**Status:** Not started.
+**Status:** Done 2026-10-18: Apple #2127, Android #2128.
 
 The webmail's Users view on native: list users (`/list_users`),
 approve (`/confirm_user`), enable/disable, delete, and per-user domain
@@ -297,3 +315,48 @@ pairs with B: someone signs up on a phone and an admin approves them
 from theirs. Shown only when `isAdmin`; a 403 from the server is
 treated as the authority. The other admin views (all-user Addresses,
 DMARC, CAA) are later work and out of scope here.
+
+As built (Apple):
+
+- **Where it lives:** a Users category in Settings (the operator's
+  choice, 2026-10-18), listed only while `SessionManager.isAdmin` is
+  true. That flag is read from the token when the session is wired,
+  before it reads as signed in. It's read again on each return to the
+  foreground and after any 403, and cleared at sign-out. Later admin
+  views become sibling categories in `CabalmailUI/Admin/`.
+- **The list:** accounts awaiting confirmation (any Cognito status but
+  `CONFIRMED`, as in the webmail), then confirmed ones. Each row pushes a
+  page with status, sign-in state, created date, mail user ID, Confirm
+  or Enable/Disable, Delete (confirmed in a dialog), and one toggle per
+  configured mail domain. Toggles are optimistic and move back if the
+  server refuses.
+- **Guards:** the admin's own account offers no Disable or Delete. The
+  server refuses self-delete, and self-disable would lock them out.
+  `master`, `dmarc` and `ci-probe`, the accounts `require_admin_mfa`
+  exempts, are hidden. The webmail hides only the first two.
+- **Errors:** a failed action shows in an alert, since the macOS Settings
+  window has no toast host. A 403 shows "Administrators only" and re-reads
+  `isAdmin`.
+- **Not included:** address assignment, which the webmail's Users view
+  also offers. It belongs with the all-user Addresses view.
+- **Replay verdicts:** `docs/request-replay.md` has the five writes.
+  `confirm_user` and `delete_user` are sent once, because a second copy
+  answers 500 for work the first did. `enable_user`, `disable_user` and
+  `set_user_domain_access` are sent again.
+
+As built (Android, #2128): the same screens and guards, in `ui/admin/`.
+
+- **Where it lives:** a `USERS` settings category, listed by
+  `SettingsCategory.listed(isAdmin)`. `UsersScreen` is Settings' Users
+  pane, and `UserDetailScreen` sits on a `users/{username}` route that
+  shares the pane's view model, the way the rules editor does.
+- **The admin flag:** `SettingsUiState.isAdmin` is read when
+  `SettingsViewModel` starts and again each time Settings enters
+  composition.
+- **The 403 path:** a 403 sets the Users state's `accessDenied`, and the
+  settings route re-reads the flag.
+- **Errors:** failed actions are typed errors that the screens word as
+  snackbars from `strings.xml`.
+- **Android has no request-replay table** like the Apple kit's. The
+  client's own retry is the one 401 replay every call gets. Whatever OkHttp
+  does on a failed connection applies to these writes as to every other.

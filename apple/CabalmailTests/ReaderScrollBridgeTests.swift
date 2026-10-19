@@ -12,16 +12,16 @@ import XCTest
 final class ReaderScrollBridgeTests: XCTestCase {
     private var window: NSWindow!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 600),
                           styleMask: [.borderless], backing: .buffered, defer: false)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         window.contentView = nil
         window = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func loadedReader(
@@ -40,6 +40,14 @@ final class ReaderScrollBridgeTests: XCTestCase {
         return view
     }
 
+    /// Fire-and-forget page script, issued from a synchronous context on
+    /// purpose: these scripts return no value, and what each test waits on is
+    /// the bridge's next capture, not the call. The async alternative would
+    /// await a result that is `undefined`.
+    private func run(_ script: String, in view: WKWebView) {
+        view.evaluateJavaScript(script, completionHandler: nil)
+    }
+
     private func waitForCapture(
         _ captures: @escaping () -> [ScrollCapture], where predicate: (ScrollCapture) -> Bool
     ) async throws -> ScrollCapture? {
@@ -55,7 +63,7 @@ final class ReaderScrollBridgeTests: XCTestCase {
         var captures: [ScrollCapture] = []
         coordinator.onScrollCaptured = { captures.append($0) }
         let view = try await loadedReader(coordinator: coordinator)
-        view.evaluateJavaScript("window.scrollTo(0, 900)", completionHandler: nil)
+        run("window.scrollTo(0, 900)", in: view)
         // Well inside the 2 s poll interval: only the bridge can deliver this.
         let deadline = Date().addingTimeInterval(1.5)
         var hit: ScrollCapture?
@@ -75,7 +83,7 @@ final class ReaderScrollBridgeTests: XCTestCase {
         var captures: [ScrollCapture] = []
         coordinator.onScrollCaptured = { captures.append($0) }
         let view = try await loadedReader(coordinator: coordinator, readerMode: false)
-        view.evaluateJavaScript("window.scrollTo(0, 900)", completionHandler: nil)
+        run("window.scrollTo(0, 900)", in: view)
         let hit = try await waitForCapture({ captures }, where: { !$0.isAtTop })
         XCTAssertEqual(hit?.anchor.first, "i", "got \(hit?.anchor ?? "nil")")
     }
@@ -88,14 +96,14 @@ final class ReaderScrollBridgeTests: XCTestCase {
         var captures: [ScrollCapture] = []
         coordinator.onScrollCaptured = { captures.append($0) }
         let view = try await loadedReader(coordinator: coordinator)
-        view.evaluateJavaScript("window.scrollTo(0, 900)", completionHandler: nil)
+        run("window.scrollTo(0, 900)", in: view)
         guard let hit = try await waitForCapture({ captures }, where: { !$0.isAtTop }) else {
             return XCTFail("no capture")
         }
         let idBefore = try await view.evaluateJavaScript(Self.topParagraphScript) as? String
-        view.evaluateJavaScript("window.scrollTo(0, 0)", completionHandler: nil)
+        run("window.scrollTo(0, 0)", in: view)
         _ = try await waitForCapture({ captures }, where: { $0.isAtTop })
-        view.evaluateJavaScript(HTMLBodyCoordinator.restoreScript(anchor: hit.anchor), completionHandler: nil)
+        run(HTMLBodyCoordinator.restoreScript(anchor: hit.anchor), in: view)
         _ = try await waitForCapture({ captures }, where: { !$0.isAtTop })
         let idAfter = try await view.evaluateJavaScript(Self.topParagraphScript) as? String
         XCTAssertFalse(idBefore?.isEmpty ?? true)
@@ -144,10 +152,10 @@ final class ReaderScrollBridgeTests: XCTestCase {
         var captures: [ScrollCapture] = []
         coordinator.onScrollCaptured = { captures.append($0) }
         let view = try await loadedReader(coordinator: coordinator)
-        view.evaluateJavaScript("window.scrollTo(0, 900)", completionHandler: nil)
+        run("window.scrollTo(0, 900)", in: view)
         let scrolled = try await waitForCapture({ captures }, where: { !$0.isAtTop })
         XCTAssertNotNil(scrolled)
-        view.evaluateJavaScript("window.scrollTo(0, 0)", completionHandler: nil)
+        run("window.scrollTo(0, 0)", in: view)
         let top = try await waitForCapture({ captures }, where: { $0.isAtTop })
         XCTAssertNotNil(top, "returning to the top should report atTop so the cache clears")
     }

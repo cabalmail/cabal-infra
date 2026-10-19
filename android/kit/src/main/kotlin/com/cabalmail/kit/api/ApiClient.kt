@@ -4,10 +4,12 @@ import com.cabalmail.kit.CabalmailException
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.models.Address
 import com.cabalmail.kit.models.AddressList
+import com.cabalmail.kit.models.AllowancesReply
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.AttachmentList
 import com.cabalmail.kit.models.BulkResult
 import com.cabalmail.kit.models.ComposeFields
+import com.cabalmail.kit.models.DomainAllowance
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.FolderList
 import com.cabalmail.kit.models.FolderStatus
@@ -15,6 +17,7 @@ import com.cabalmail.kit.models.MessageContent
 import com.cabalmail.kit.models.MessagePage
 import com.cabalmail.kit.models.MyDomains
 import com.cabalmail.kit.models.NavState
+import com.cabalmail.kit.models.PoolUser
 import com.cabalmail.kit.models.Preferences
 import com.cabalmail.kit.models.PreferencesUpdate
 import com.cabalmail.kit.models.PushEnvelope
@@ -46,6 +49,7 @@ import com.cabalmail.kit.models.SearchResult
 import com.cabalmail.kit.models.SendOutcome
 import com.cabalmail.kit.models.UploadGrant
 import com.cabalmail.kit.models.UploadGrantList
+import com.cabalmail.kit.models.UsersReply
 import com.cabalmail.kit.rss.RssClient
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
@@ -755,6 +759,65 @@ class ApiClient(
                 message = "Attachment upload failed (${response.status.value})",
             )
         }
+    }
+
+    // -------------------------------------------------------- administration
+    //
+    // Admin only: the server answers anyone outside the `admin` group with
+    // HTTP 403 (an [CabalmailException.ApiError]), which the caller treats as
+    // the authority whatever [com.cabalmail.kit.auth.isAdmin] said
+    // (`docs/auth.md`).
+
+    /** Every user in the pool, from `/list_users`. */
+    suspend fun listUsers(): List<PoolUser> = decode<UsersReply>(call(HttpMethod.Get, "list_users")).users
+
+    /** Confirms a pending sign-up (`/confirm_user`). */
+    suspend fun confirmUser(username: String) {
+        call(HttpMethod.Put, "confirm_user", body = buildJsonObject { put("username", username) })
+    }
+
+    /** Lets a disabled user sign in again (`/enable_user`). */
+    suspend fun enableUser(username: String) {
+        call(HttpMethod.Put, "enable_user", body = buildJsonObject { put("username", username) })
+    }
+
+    /** Stops a user signing in (`/disable_user`). */
+    suspend fun disableUser(username: String) {
+        call(HttpMethod.Put, "disable_user", body = buildJsonObject { put("username", username) })
+    }
+
+    /**
+     * Deletes a user and their domain grants (`/delete_user`). The server
+     * refuses the caller's own account with a 400.
+     */
+    suspend fun deleteUser(username: String) {
+        call(HttpMethod.Delete, "delete_user", body = buildJsonObject { put("username", username) })
+    }
+
+    /** The whole domain allow list, from `/list_user_domain_access`. */
+    suspend fun listUserDomainAccess(): List<DomainAllowance> =
+        decode<AllowancesReply>(call(HttpMethod.Get, "list_user_domain_access")).allowances
+
+    /**
+     * Grants ([allowed]) or revokes [user]'s access to create addresses on
+     * [domain], via `/set_user_domain_access`. `allowed` must reach the
+     * Lambda as a JSON boolean, which it refuses otherwise.
+     */
+    suspend fun setUserDomainAccess(
+        user: String,
+        domain: String,
+        allowed: Boolean,
+    ) {
+        call(
+            HttpMethod.Put,
+            "set_user_domain_access",
+            body =
+                buildJsonObject {
+                    put("user", user)
+                    put("domain", domain)
+                    put("allowed", allowed)
+                },
+        )
     }
 
     // ------------------------------------------------------------ mail rules

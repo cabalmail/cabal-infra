@@ -61,6 +61,9 @@ import com.cabalmail.android.notifications.PushRegistrar
 import com.cabalmail.android.reading.ReadingPositionKey
 import com.cabalmail.android.ui.addresses.AddressesScreen
 import com.cabalmail.android.ui.addresses.AddressesViewModel
+import com.cabalmail.android.ui.admin.UserDetailScreen
+import com.cabalmail.android.ui.admin.UsersScreen
+import com.cabalmail.android.ui.admin.UsersViewModel
 import com.cabalmail.android.ui.compose.ComposeLaunch
 import com.cabalmail.android.ui.compose.ComposeScreen
 import com.cabalmail.android.ui.compose.ComposeViewModel
@@ -654,6 +657,9 @@ private fun MailNavGraph(
             val viewModel: SettingsViewModel =
                 viewModel(factory = SettingsViewModel.factory(container))
             val state by viewModel.state.collectAsState()
+            // Each time Settings is shown: a token refreshed since may have
+            // gained or lost the admin group, which decides the Users category.
+            LaunchedEffect(Unit) { viewModel.refreshAdminStatus() }
             val preferences by viewModel.preferences.collectAsState()
             val folderChoices by viewModel.folderChoices.collectAsState()
             SettingsScreen(
@@ -691,7 +697,43 @@ private fun MailNavGraph(
                         onBack = onBack,
                     )
                 },
+                usersPane = { onBack ->
+                    // Scoped to the settings back-stack entry, like the rules
+                    // pane, so the per-user route below shares the instance.
+                    val usersViewModel: UsersViewModel =
+                        viewModel(factory = UsersViewModel.factory(container))
+                    val usersState by usersViewModel.state.collectAsState()
+                    // A 403: this account isn't an admin (any more), whatever
+                    // the token said; re-read so Settings drops Users.
+                    LaunchedEffect(usersState.accessDenied) {
+                        if (usersState.accessDenied) viewModel.refreshAdminStatus()
+                    }
+                    UsersScreen(
+                        state = usersState,
+                        onOpenUser = { navController.navigate("users/${Uri.encode(it)}") },
+                        onReload = usersViewModel::load,
+                        onDismissError = usersViewModel::clearActionError,
+                        onBack = onBack,
+                    )
+                },
                 onSignOut = onSignOut,
+            )
+        }
+
+        composable("users/{username}") { entry ->
+            val parentEntry = remember(entry) { navController.getBackStackEntry("settings") }
+            val viewModel: UsersViewModel =
+                viewModel(parentEntry, factory = UsersViewModel.factory(container))
+            val state by viewModel.state.collectAsState()
+            UserDetailScreen(
+                state = state,
+                username = Uri.decode(entry.arguments?.getString("username").orEmpty()),
+                onConfirm = viewModel::confirm,
+                onSetEnabled = viewModel::setEnabled,
+                onDelete = viewModel::delete,
+                onSetAccess = viewModel::setAccess,
+                onDismissError = viewModel::clearActionError,
+                onBack = { navController.popBackStack() },
             )
         }
 
