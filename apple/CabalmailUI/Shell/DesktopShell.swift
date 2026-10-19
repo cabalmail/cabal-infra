@@ -18,6 +18,10 @@ import CabalmailKit
 /// re-fires for the new folder or message.
 struct DesktopShell: View {
     @Environment(SceneNavigator.self) private var navigator
+    /// Read for one thing: whether the reader's flag control will draw a
+    /// palette menu, which decides the shape — and so the width — of its
+    /// disabled stand-in (`EmptyDetailToolbar`, #2016).
+    @Environment(Preferences.self) private var preferences
     @State private var mailState = WideMailState()
     @FocusState private var searchFieldFocused: Bool
     /// The sidebar stays visible: a `NavigationSplitView` here is
@@ -39,6 +43,15 @@ struct DesktopShell: View {
     /// stands while the search surface (whose leading item is a plain title
     /// of similar size) has the column. Zero until measured.
     @State private var listLeadingToolbarWidth: CGFloat = 0
+
+    /// Whether the reader's flag control offers palette rows, i.e. whether
+    /// it draws as a split button. The reader asks
+    /// `FlagMenuPolicy.rows(palette:taggedSlots:)` with the open message's
+    /// tags; with no message open there are no tags, so the enabled palette
+    /// is the whole answer.
+    private var flagMenuHasRows: Bool {
+        !FlagMenuPolicy.rows(palette: preferences.flagPalette, taggedSlots: []).isEmpty
+    }
 
     private var mail: WideMail {
         WideMail(
@@ -102,7 +115,9 @@ struct DesktopShell: View {
             // set comes from the same `ReaderToolbarLayout.macToolbar` order
             // the real toolbar draws.
             mail.reader(
-                mailPlaceholder: ReaderPlaceholderToolbar(items: EmptyDetailToolbar()),
+                mailPlaceholder: ReaderPlaceholderToolbar(
+                    items: EmptyDetailToolbar(flagMenuHasRows: flagMenuHasRows)
+                ),
                 feedPlaceholder: ReaderPlaceholderToolbar(items: EmptyFeedDetailToolbar())
             )
         }

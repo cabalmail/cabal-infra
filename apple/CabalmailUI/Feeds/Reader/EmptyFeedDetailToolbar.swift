@@ -16,10 +16,15 @@ struct EmptyFeedDetailToolbar: ToolbarContent {
     }
 
     private func standIn(for action: FeedReaderAction) -> some View {
-        Button {} label: {
-            Label(action.quiescentTitle, systemImage: action.quiescentSymbol)
-        }
-        .disabled(true)
+        // Built as the kind of control its live twin is
+        // (`FeedReaderToolbarLayout.macControlShape`): More is a menu, and a
+        // plain-button stand-in for it is narrower than the menu that
+        // replaces it, which moves every slot after it (#2016).
+        ToolbarStandIn(
+            title: action.quiescentTitle,
+            symbol: action.quiescentSymbol,
+            shape: FeedReaderToolbarLayout.macControlShape(for: action)
+        )
         .accessibilityIdentifier("feed.reader.empty.\(action.rawValue)")
     }
 }

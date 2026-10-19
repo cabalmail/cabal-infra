@@ -87,6 +87,31 @@ enum ReaderToolbarLayout {
         ]
     }
 
+    /// Which kind of control the macOS top toolbar draws for an action —
+    /// the rule the live buttons are built to and `EmptyDetailToolbar`'s
+    /// stand-ins are built from, so a greyed slot is exactly as wide as the
+    /// control that replaces it (#2016).
+    ///
+    /// Reply is a pull-down menu (Reply / Reply All / Forward, no primary
+    /// action); dispose and the read toggle are split buttons — a `Menu`
+    /// with a `primaryAction` and `.menuIndicator(optionMenuIndicator)`;
+    /// Flag is a split button only while the flag palette offers a row, and
+    /// the plain button it has always been otherwise (`flagButton`). Every
+    /// other slot is a plain button.
+    static func macControlShape(
+        for action: ReaderToolbarAction,
+        flagMenuHasRows: Bool
+    ) -> ReaderToolbarControlShape {
+        switch action {
+        case .reply, .overflow:        return .menu
+        case .dispose, .toggleRead:    return .splitButton
+        case .toggleFlag:              return flagMenuHasRows ? .splitButton : .button
+        case .editDraft, .remoteContent, .readerMode, .move,
+             .plainText, .viewSource, .viewHeaders, .printMessage:
+            return .button
+        }
+    }
+
     /// Where the reader's touch action set lives (`ReaderToolbarPolicy`).
     typealias Placement = ReaderToolbarPolicy.Placement
 
