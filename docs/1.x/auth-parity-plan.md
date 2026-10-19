@@ -43,7 +43,7 @@ for A.
 | A1    | Webmail: Cognito JSON client module + tests                      | Done 2026-10-18 (#2103) |
 | A2    | Webmail: port `App.jsx` flows, drop the dependency               | Done 2026-10-18 (#2107, #2116) |
 | A3    | Promote the auth contract to `docs/auth.md`                      | Done 2026-10-18 |
-| B1    | Native kits: sign-up contract fixes (Apple + Android)            | Apple in review; Android next |
+| B1    | Native kits: sign-up contract fixes (Apple + Android)            | Done 2026-10-18 (#2131, #2133) |
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
@@ -251,7 +251,7 @@ but can create no addresses until an admin grants it mail domains.
 
 ### B1 — Kit contract fixes (Apple and Android)
 
-**Status:** Apple in review; Android next, as its own PR.
+**Status:** Done 2026-10-18 (#2131 Apple, #2133 Android).
 
 Both `signUp` implementations (`AuthService.swift`,
 `CognitoAuthService.kt`) need: `preferred_username`; an
@@ -281,6 +281,19 @@ webmail's defaults (a literal `true`, and anything but `false`). A
 malformed or missing flag never fails the file, so a cached copy saved
 before the keys still loads. The new types are in
 `CabalmailKit/Auth/SignUp.swift`.
+
+As built (Android, #2133): the same shape in `kit/.../auth/SignUp.kt`.
+`signUp(username, password, email?, phone?, invitationCode?)` returns
+`SignUpResult.ConfirmationCodeSent(CodeDelivery)` or
+`SignUpResult.Confirmed`; a refused code throws
+`CabalmailException.InvalidInvitationCode`, and a refused username stays
+a `ServerError("UserLambdaValidationException", ...)` with the
+trigger's sentence. `resendConfirmationCode` returns `CodeDelivery?`.
+`Config` gains `invitationRequired` and `smsEnabled`, read through
+`LiteralFlagSerializer` (`config/Config.kt`), so they follow the same
+literal-`true` and anything-but-`false` rules and a malformed flag
+never fails the file. Every `AuthService` fake in the kit tests is
+updated; the app module has none.
 
 ### B2 / B3 — Sign-up screens
 
