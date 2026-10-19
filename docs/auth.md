@@ -148,7 +148,7 @@ Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySo
 | --- | --- | --- | --- | --- |
 | Sign-in, TOTP and SMS challenges | Yes | Yes | Yes | Hosted UI |
 | Refresh | Yes | Yes | Yes | Yes, via the Hosted UI token endpoint |
-| Sign-up, confirm, resend | Yes | Kit only, no UI | Kit only, no UI | No |
+| Sign-up, confirm, resend | Yes | Yes (Create Account on the sign-in form) | Kit only, no UI | No |
 | Forgot and reset password | Yes | Kit only, no UI | Kit only, no UI | No |
 | Recovery-email check | Yes | No | No | No |
 | Recovery email in settings (add, change, verify) | Yes (Security) | No | No | No |
@@ -158,6 +158,6 @@ Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySo
 | Admin recognition | Yes | Yes: Settings lists Users for an admin | Yes: Settings lists Users for an admin | No |
 | Users view (admin) | Yes | Yes (Settings → Users) | Yes (Settings → Users) | No |
 
-The native gaps are planned in [the auth parity plan](./1.x/auth-parity-plan.md): sign-up (B1–B3), the recovery-email check (B4), and the other admin views. The Linux client's sign-in, MFA and refresh are in progress against this contract ([Linux client plan](./1.x/linux-client-plan.md)).
+The native gaps are planned in [the auth parity plan](./1.x/auth-parity-plan.md): Android sign-up (B3), the recovery-email check (B4), and the other admin views. The Linux client's sign-in, MFA and refresh are in progress against this contract ([Linux client plan](./1.x/linux-client-plan.md)).
 
 The webmail's implementation is `react/admin/src/auth/`, the Apple kit's is `apple/CabalmailKit/Sources/CabalmailKit/Auth/`, and the Android kit's is `android/kit/src/main/kotlin/com/cabalmail/kit/auth/`. The extension's Hosted UI flow is in `extensions/shared/src/auth/`.
