@@ -28,8 +28,9 @@ use crate::error::{AuthFailure, CabalmailError, Result};
 /// A decoded `config.json`.
 ///
 /// Carries the fields the client reads. Terraform writes more
-/// (`invitation_required`, `sms_enabled`, `monitoring`, and the enrolment and
-/// extension client IDs); those are ignored until something needs them.
+/// (`invitation_required`, `sms_enabled`, `monitoring`, `operator_name`, and
+/// the enrolment and extension client IDs); those are ignored until something
+/// needs them.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Deployment {
     /// The host that serves `config.json` and the admin app.

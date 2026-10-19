@@ -231,3 +231,9 @@ variable "android_signing_cert_fingerprints" {
   description = "SHA-256 fingerprints (colon-separated hex, as Play Console's App signing page prints them) of the certificates the Android client is signed with. When non-empty, the admin origin publishes /.well-known/assetlinks.json granting the app the get_login_creds relation so password managers link it to the web app's saved login without asking. Empty (default) publishes nothing. See docs/password-autofill.md."
   default     = []
 }
+
+variable "operator_name" {
+  type        = string
+  description = "The operator's legal name, from the OPERATOR_NAME GitHub variable (infra.yml passes it as TF_VAR_operator_name). Published in /config.js and /config.json so the native apps' SMS consent text names the same brand as the webmail's and the front-door legal pages (docs/sms-10dlc.md). Empty leaves the consent text naming Cabalmail alone."
+  default     = ""
+}
