@@ -119,33 +119,35 @@ class CognitoAuthService(
         password: String,
         email: String?,
         phone: String?,
-    ) {
-        call(
-            "SignUp",
+        invitationCode: String?,
+    ): SignUpResult {
+        val body =
             buildJsonObject {
                 put("ClientId", clientId)
                 put("Username", username)
                 put("Password", password)
                 putJsonArray("UserAttributes") {
+                    add(nameValue("preferred_username", username))
                     if (!email.isNullOrEmpty()) {
-                        add(
-                            buildJsonObject {
-                                put("Name", "email")
-                                put("Value", email)
-                            },
-                        )
+                        add(nameValue("email", email))
                     }
                     if (!phone.isNullOrEmpty()) {
-                        add(
-                            buildJsonObject {
-                                put("Name", "phone_number")
-                                put("Value", phone)
-                            },
-                        )
+                        add(nameValue("phone_number", phone))
                     }
                 }
-            },
-        )
+                // Validation data, so check_invite can read the code without
+                // it being stored on the user; sent empty when there is none.
+                putJsonArray("ValidationData") {
+                    add(nameValue("invitationCode", invitationCode.orEmpty()))
+                }
+            }
+        val reply =
+            try {
+                call("SignUp", body)
+            } catch (error: CabalmailException.ServerError) {
+                throw if (isInvitationCodeRefusal(error)) CabalmailException.InvalidInvitationCode() else error
+            }
+        return SignUpResult.from(reply)
     }
 
     override suspend fun confirmSignUp(
@@ -162,14 +164,16 @@ class CognitoAuthService(
         )
     }
 
-    override suspend fun resendConfirmationCode(username: String) {
-        call(
-            "ResendConfirmationCode",
-            buildJsonObject {
-                put("ClientId", clientId)
-                put("Username", username)
-            },
-        )
+    override suspend fun resendConfirmationCode(username: String): CodeDelivery? {
+        val reply =
+            call(
+                "ResendConfirmationCode",
+                buildJsonObject {
+                    put("ClientId", clientId)
+                    put("Username", username)
+                },
+            )
+        return CodeDelivery.from(reply["CodeDeliveryDetails"])
     }
 
     override suspend fun forgotPassword(username: String) {
@@ -339,7 +343,26 @@ class CognitoAuthService(
 
     private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
+    private fun nameValue(
+        name: String,
+        value: String,
+    ) = buildJsonObject {
+        put("Name", name)
+        put("Value", value)
+    }
+
     companion object {
+        /**
+         * `check_invite` refusing the invitation code: a
+         * `UserLambdaValidationException` whose message names the code. A
+         * refused username is the same exception with the trigger's own
+         * sentence, and stays a [CabalmailException.ServerError] so a screen
+         * can show that sentence.
+         */
+        internal fun isInvitationCodeRefusal(error: CabalmailException.ServerError): Boolean =
+            error.code == "UserLambdaValidationException" &&
+                error.message.orEmpty().contains("invitation code", ignoreCase = true)
+
         /**
          * Cognito reports a Lambda-trigger rejection as
          * "<TriggerName> failed with error <trigger message>." — the wrapper

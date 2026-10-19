@@ -43,7 +43,7 @@ for A.
 | A1    | Webmail: Cognito JSON client module + tests                      | Done 2026-10-18 (#2103) |
 | A2    | Webmail: port `App.jsx` flows, drop the dependency               | Done 2026-10-18 (#2107, #2116) |
 | A3    | Promote the auth contract to `docs/auth.md`                      | Done 2026-10-18 |
-| B1    | Native kits: sign-up contract fixes (Apple + Android)            | Not started |
+| B1    | Native kits: sign-up contract fixes (Apple + Android)            | Done 2026-10-18 (#2131, #2133) |
 | B2    | Apple: sign-up, confirm and resend screens                       | Not started |
 | B3    | Android: sign-up, confirm and resend screens                     | Not started |
 | B4    | Native: recovery-email gate after sign-in                        | Not started |
@@ -96,6 +96,21 @@ A client never sends its own idea of admin-ness anywhere.
 the operator 2026-10-07: an invitation code, then admin approval of the
 new account. Native sign-up matches the webmail exactly; no new gate,
 no client-side policy beyond what `/config.js` advertises.
+
+**D5 — Contacts at sign-up: a phone with SMS, an email without.**
+Decided by the operator 2026-10-18, so that Cabalmail can be someone's
+only email service. With `sms_enabled`, the phone (with SMS consent) is
+required and the recovery email is optional. Without it, the email is
+required, since it is then the only channel that can verify or recover
+the account. After sign-in, an account with no email is asked to add
+one unless SMS is on and its phone is verified; an email the user gave
+is always offered for verification. The cost is that a phone-only
+account recovers by SMS alone, so a SIM swap could reset its password;
+the authenticator suggestion is its defence. The webmail implements it
+(the PR that recorded this decision), including a recovery-email
+section in its Security view so a phone-only account can still add an
+address later, and `docs/auth.md` carries the rule. B1's kits take both contacts as optional, so the rule lives in
+the screens.
 
 ## The auth contract
 
@@ -236,7 +251,7 @@ but can create no addresses until an admin grants it mail domains.
 
 ### B1 — Kit contract fixes (Apple and Android)
 
-**Status:** Not started.
+**Status:** Done 2026-10-18 (#2131 Apple, #2133 Android).
 
 Both `signUp` implementations (`AuthService.swift`,
 `CognitoAuthService.kt`) need: `preferred_username`; an
@@ -249,24 +264,61 @@ fields when they are not needed. Kit tests on each side pin the
 request body against the contract. Protocol changes update every
 conformer, including the shared test doubles.
 
+As built (Apple): `signUp(username:password:email:phone:invitationCode:)`
+returns a `SignUpResult`: `.confirmationCodeSent(CodeDelivery)` (medium
+and masked destination) or `.confirmed` (`check_invite` confirmed the
+account itself). `email` and `phone` are each sent only when given, so
+which a deployment asks for is the screens' call, not the kit's. A
+refused invitation code throws
+`CabalmailError.invalidInvitationCode`. A refused username stays
+`.server(code: "UserLambdaValidationException", ...)` with the trigger's
+sentence, which the sign-in form already shows as written. Other
+Cognito refusals (`UsernameExistsException`, `InvalidPasswordException`)
+pass through as `.server`, so B2 words them.
+`resendConfirmationCode` returns the new code's `CodeDelivery`.
+`Configuration` reads `invitationRequired` and `smsEnabled` with the
+webmail's defaults (a literal `true`, and anything but `false`). A
+malformed or missing flag never fails the file, so a cached copy saved
+before the keys still loads. The new types are in
+`CabalmailKit/Auth/SignUp.swift`.
+
+As built (Android, #2133): the same shape in `kit/.../auth/SignUp.kt`.
+`signUp(username, password, email?, phone?, invitationCode?)` returns
+`SignUpResult.ConfirmationCodeSent(CodeDelivery)` or
+`SignUpResult.Confirmed`; a refused code throws
+`CabalmailException.InvalidInvitationCode`, and a refused username stays
+a `ServerError("UserLambdaValidationException", ...)` with the
+trigger's sentence. `resendConfirmationCode` returns `CodeDelivery?`.
+`Config` gains `invitationRequired` and `smsEnabled`, read through
+`LiteralFlagSerializer` (`config/Config.kt`), so they follow the same
+literal-`true` and anything-but-`false` rules and a malformed flag
+never fails the file. Every `AuthService` fake in the kit tests is
+updated; the app module has none.
+
 ### B2 / B3 — Sign-up screens
 
 **Status:** Not started.
 
 A "Create account" entry on each sign-in screen, using the control
 domain already typed there. Screens: sign-up form (username, password,
-recovery email, invitation code when required, phone when
-`sms_enabled`), confirm-code with resend, and the pending-approval
-result. Apple and Android land as separate PRs, Apple first.
+invitation code when required, and the contacts D5 sets: with
+`sms_enabled` a required phone with consent and an optional recovery
+email, otherwise a required recovery email), confirm-code with resend,
+and the pending-approval result. Apple and Android land as separate
+PRs, Apple first.
 
 ### B4 — Recovery-email gate
 
 **Status:** Not started.
 
 Neither native client checks for a verified recovery email after
-sign-in. A natively created account (B2/B3) with SMS on would never be
-asked to verify its email, so this lands with or right after B2/B3.
-Same advisory rules as the webmail.
+sign-in. A natively created account (B2/B3) with SMS on that gave an
+email would never be asked to verify it, so this lands with or right
+after B2/B3. Same advisory rules as the webmail, which D5 sets: no ask
+to add an email when SMS is on and the phone is verified. Because a
+phone-only account is then never asked, B4 also adds a recovery-email
+row to each client's settings, as the webmail's Security view has
+(`docs/auth.md`, "Recovery email").
 
 Locked-out TOTP enrollment through `enrollClientId` is the remaining
 native gap. Android's config already carries the field. It only

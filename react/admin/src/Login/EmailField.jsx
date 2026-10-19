@@ -7,12 +7,15 @@
  *
  * SignUp adds a short hint beside the label, so `hint` renders only when
  * given. `children` render inside the field below the input (each caller's
- * own help line), mirroring UsernameField and PasswordField.
+ * own help line), mirroring UsernameField and PasswordField. SignUp makes
+ * the address optional when the pool has SMS (docs/auth.md, "Sign-up"), so
+ * `required` follows it.
  */
 export default function EmailField({
   value,
   onChange,
   hint = null,
+  required = true,
   children = null,
 }) {
   return (
@@ -33,7 +36,7 @@ export default function EmailField({
         placeholder="you@example.com"
         onChange={onChange}
         value={value || ''}
-        required
+        required={required}
       />
       {children}
     </div>

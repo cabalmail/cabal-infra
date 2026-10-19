@@ -13,9 +13,20 @@ function apiWith({ enabled = false } = {}) {
   };
 }
 
+// The recovery-email section loads on render; RecoveryEmail.test.jsx
+// covers it, so here it only has to answer.
+function recovery() {
+  return {
+    load: vi.fn(() => Promise.resolve({ address: 'alice@example.net', verified: true })),
+    save: vi.fn(() => Promise.resolve()),
+    resend: vi.fn(() => Promise.resolve()),
+    verify: vi.fn(() => Promise.resolve()),
+  };
+}
+
 describe('Security', () => {
   it('shows the off state with an enroll action', async () => {
-    render(<Security userName="alice" mfaApi={apiWith()} setMessage={vi.fn()} />);
+    render(<Security recoveryApi={recovery()} userName="alice" mfaApi={apiWith()} setMessage={vi.fn()} />);
     await waitFor(() => {
       expect(
         screen.getByRole('button', { name: 'Set up authenticator app' })
@@ -25,7 +36,7 @@ describe('Security', () => {
 
   it('shows the on state with a disable action', async () => {
     render(
-      <Security userName="alice" mfaApi={apiWith({ enabled: true })} setMessage={vi.fn()} />
+      <Security recoveryApi={recovery()} userName="alice" mfaApi={apiWith({ enabled: true })} setMessage={vi.fn()} />
     );
     await waitFor(() => {
       expect(
@@ -37,7 +48,7 @@ describe('Security', () => {
   it('walks through enrollment: secret, QR, code, confirm', async () => {
     const api = apiWith();
     const setMessage = vi.fn();
-    render(<Security userName="alice" mfaApi={api} setMessage={setMessage} />);
+    render(<Security recoveryApi={recovery()} userName="alice" mfaApi={api} setMessage={setMessage} />);
     fireEvent.click(
       await screen.findByRole('button', { name: 'Set up authenticator app' })
     );
@@ -60,7 +71,7 @@ describe('Security', () => {
   });
 
   it('cancel during enrollment returns to the off state', async () => {
-    render(<Security userName="alice" mfaApi={apiWith()} setMessage={vi.fn()} />);
+    render(<Security recoveryApi={recovery()} userName="alice" mfaApi={apiWith()} setMessage={vi.fn()} />);
     fireEvent.click(
       await screen.findByRole('button', { name: 'Set up authenticator app' })
     );
@@ -72,7 +83,7 @@ describe('Security', () => {
 
   it('disable turns two-factor off', async () => {
     const api = apiWith({ enabled: true });
-    render(<Security userName="alice" mfaApi={api} setMessage={vi.fn()} />);
+    render(<Security recoveryApi={recovery()} userName="alice" mfaApi={api} setMessage={vi.fn()} />);
     fireEvent.click(
       await screen.findByRole('button', { name: 'Turn off two-factor authentication' })
     );
@@ -87,7 +98,7 @@ describe('Security', () => {
   it('offers retry when the status read fails', async () => {
     const api = apiWith();
     api.getStatus = vi.fn((cb) => cb(new Error('boom')));
-    render(<Security userName="alice" mfaApi={api} setMessage={vi.fn()} />);
+    render(<Security recoveryApi={recovery()} userName="alice" mfaApi={api} setMessage={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     });

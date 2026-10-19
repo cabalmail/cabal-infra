@@ -14,7 +14,7 @@ Generic mail clients (Thunderbird, Apple Mail, Outlook, …) cannot be connected
 
 **Signing in.** Username and password, then — if you are enrolled in two-factor authentication — a 6-digit code from your authenticator app (the Apple apps submit it automatically when the sixth digit lands). Operators can make two-factor mandatory; when it is, signing in without an enrolled authenticator walks you through enrollment (scan the QR code, confirm the first code) before you can proceed. You can also enroll voluntarily from the web app.
 
-**Recovery.** Password reset is self-service by SMS where the operator has SMS configured; otherwise ask your administrator. If you lose your authenticator, an administrator must reset your MFA.
+**Recovery.** Password reset is self-service: the code goes to your verified recovery email, or by SMS to your phone where the operator has SMS configured. Where SMS is configured the recovery email is optional; you can add or change it under **Security** in the web app. Without either, ask your administrator. If you lose your authenticator, an administrator must reset your MFA.
 
 ## Addresses
 
@@ -33,7 +33,7 @@ Every address lives on its own subdomain (`foo@bar.example.com`) and delivers to
 
 <img src="./app_screens/ios_inbox.png" alt="Inbox on iPhone: filter pills, sender avatars, sort and select controls" width="300" />
 
-- **Folders.** Create, delete, and subscribe to folders; favorites sort to the top of pickers. Subscribed folders are refreshed proactively; unsubscribed folders load only when you open them. The folder name at the top of the message list is a menu: tap it to jump to another subscribed folder, or to any other folder under "Other folders". Two pills above the folder list narrow it, **Subscribed** and **Unread**, in any combination; turn both off to see every folder (the folder you are reading always stays listed). Choosing Unread on its own fetches a count for every folder, since unsubscribed folders are not tracked otherwise. The pill choice is remembered on each device. Nested folders can be expanded or collapsed at once from the buttons beside the pills (and, on the Mac, from the Mailbox menu).
+- **Folders.** Create, delete, and subscribe to folders; favorites sort to the top of pickers. Subscribed folders are refreshed proactively; unsubscribed folders load only when you open them. The folder name at the top of the message list is a menu: tap it to jump to another subscribed folder, or to any other folder under "Other folders". Two pills above the folder list narrow it, **Subscribed** and **Unread**, in any combination; turn both off to see every folder (the folder you are reading always stays listed, and so does INBOX under Unread, even with nothing unread). Choosing Unread on its own fetches a count for every folder, since unsubscribed folders are not tracked otherwise. The pill choice is remembered on each device. Nested folders can be expanded or collapsed at once from the buttons beside the pills (and, on the Mac, from the Mailbox menu).
 
   <img src="./app_screens/ios_folders.png" alt="Folder list on iPhone: All, Subscribed, and Unread pills above the folder tree" width="300" />
 - **Reading.** Remote images are blocked by default (load them per message; loading can let a sender track you). A sender-authentication line shows the SPF/DKIM/DMARC verdicts stamped by your own relay, or "not verified" when there are none. Sender avatars come from your Contacts, the sender's published BIMI logo, or initials.

@@ -9,6 +9,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -88,6 +89,8 @@ class ConfigServiceTest {
             assertEquals("1234567890abcdefghijklmnop", config.cognitoClientId)
             assertEquals(listOf("example-mail.com"), config.mailDomains)
             assertEquals("us-east-1", config.cognito.region)
+            assertTrue(config.invitationRequired)
+            assertFalse(config.smsEnabled)
             // The raw payload — not a re-serialization — lands in the cache,
             // tagged with the domain it came from.
             assertEquals(CachedConfig("admin.example.com", sampleJson), cache.stored)

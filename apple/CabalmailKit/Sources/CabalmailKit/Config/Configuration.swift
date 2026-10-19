@@ -11,17 +11,27 @@ public struct Configuration: Sendable, Codable, Equatable {
     public let domains: [MailDomain]
     public let invokeUrl: URL
     public let cognito: CognitoConfiguration
+    /// `invitation_required`: the pool's `check_invite` trigger wants an
+    /// invitation code, so sign-up asks for one.
+    public let invitationRequired: Bool
+    /// `sms_enabled`: the pool can send texts, so sign-up collects a phone
+    /// number and a code may arrive by SMS.
+    public let smsEnabled: Bool
 
     public init(
         controlDomain: String,
         domains: [MailDomain],
         invokeUrl: URL,
-        cognito: CognitoConfiguration
+        cognito: CognitoConfiguration,
+        invitationRequired: Bool = false,
+        smsEnabled: Bool = true
     ) {
         self.controlDomain = controlDomain
         self.domains = domains
         self.invokeUrl = invokeUrl
         self.cognito = cognito
+        self.invitationRequired = invitationRequired
+        self.smsEnabled = smsEnabled
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -29,6 +39,24 @@ public struct Configuration: Sendable, Codable, Equatable {
         case domains
         case invokeUrl
         case cognito = "cognitoConfig"
+        case invitationRequired = "invitation_required"
+        case smsEnabled = "sms_enabled"
+    }
+
+    /// The two flags read as the webmail reads them (`docs/auth.md`, "Client
+    /// configuration"): an invitation field only for a literal `true`, and
+    /// the phone field kept unless `false`, so a file older than
+    /// `sms_enabled` still collects a number. A missing or malformed flag
+    /// never fails the whole file, and a `ConfigurationCache` copy saved
+    /// before these keys still decodes.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        controlDomain = try container.decode(String.self, forKey: .controlDomain)
+        domains = try container.decode([MailDomain].self, forKey: .domains)
+        invokeUrl = try container.decode(URL.self, forKey: .invokeUrl)
+        cognito = try container.decode(CognitoConfiguration.self, forKey: .cognito)
+        invitationRequired = (try? container.decodeIfPresent(Bool.self, forKey: .invitationRequired)) == true
+        smsEnabled = (try? container.decodeIfPresent(Bool.self, forKey: .smsEnabled)) != false
     }
 
     /// IMAP hostname derived from the control domain.

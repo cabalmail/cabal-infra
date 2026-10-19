@@ -10,6 +10,9 @@ public enum CabalmailError: Error, Sendable, Equatable {
     case notConfigured
     case notSignedIn
     case invalidCredentials
+    /// Sign-up's invitation code was refused by the pool's `check_invite`
+    /// trigger.
+    case invalidInvitationCode
     case network(String)
     case transport(String)
     case protocolError(String)
@@ -72,6 +75,9 @@ extension CabalmailError: LocalizedError {
             return "You're signed out. Sign in and try again."
         case .invalidCredentials:
             return "That username or password wasn't accepted."
+        case .invalidInvitationCode:
+            // docs/auth.md's wording, so every client says the same thing.
+            return "Invalid invitation code."
         case .authExpired:
             return "Your session expired. Sign in again."
         case .network(let detail):
