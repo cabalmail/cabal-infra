@@ -150,14 +150,14 @@ Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySo
 | Refresh | Yes | Yes | Yes | Yes, via the Hosted UI token endpoint |
 | Sign-up, confirm, resend | Yes | Yes (Create Account on the sign-in form) | Yes (Create Account on the sign-in screen) | No |
 | Forgot and reset password | Yes | Kit only, no UI | Kit only, no UI | No |
-| Recovery-email check | Yes | No | No | No |
-| Recovery email in settings (add, change, verify) | Yes (Security) | No | No | No |
+| Recovery-email check | Yes | Yes | No | No |
+| Recovery email in settings (add, change, verify) | Yes (Security) | Yes (Settings › Account) | No | No |
 | Enrollment suggestion | Yes | No | No | No |
 | Locked-out TOTP setup | Yes | No | No | No |
 | TOTP on and off (Security settings) | Yes | Kit only, no UI | No | No |
 | Admin recognition | Yes | Yes: Settings lists Users for an admin | Yes: Settings lists Users for an admin | No |
 | Users view (admin) | Yes | Yes (Settings → Users) | Yes (Settings → Users) | No |
 
-The native gaps are planned in [the auth parity plan](./1.x/auth-parity-plan.md): the recovery-email check (B4), and the other admin views. The Linux client's sign-in, MFA and refresh are in progress against this contract ([Linux client plan](./1.x/linux-client-plan.md)).
+The native gaps are planned in [the auth parity plan](./1.x/auth-parity-plan.md): Android's recovery-email check and settings row (B4), and the other admin views. The Linux client's sign-in, MFA and refresh are in progress against this contract ([Linux client plan](./1.x/linux-client-plan.md)).
 
 The webmail's implementation is `react/admin/src/auth/`, the Apple kit's is `apple/CabalmailKit/Sources/CabalmailKit/Auth/`, and the Android kit's is `android/kit/src/main/kotlin/com/cabalmail/kit/auth/`. The extension's Hosted UI flow is in `extensions/shared/src/auth/`.

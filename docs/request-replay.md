@@ -165,11 +165,10 @@ seen when asked to; a second copy writes the same thing.
 ## Cognito
 
 Every Cognito call is a POST to one URL, so the policy reads the
-operation from `X-Amz-Target`. Only the first three rows are reachable
-from the shipped apps. The rest are Kit API that no Apple screen calls yet
-(auth-parity B2 plans the sign-up screens; no plan yet schedules a
-password-reset or authenticator screen), and their verdicts are the
-defaults such a screen inherits. How Cognito answers a second copy is
+operation from `X-Amz-Target`. The sign-in, sign-up and recovery-email
+rows are reachable from the shipped apps (auth parity B2 and B4). The
+password-reset and authenticator rows are Kit API that no Apple screen
+calls yet, and their verdicts are the defaults such a screen inherits. How Cognito answers a second copy is
 service behaviour, from its documentation and not checked on stage; the
 error each answer becomes is in `AuthService.swift`, and the refresh row's
 rotation setting is in `terraform/infra/modules/user_pool/main.tf`.
@@ -179,7 +178,7 @@ rotation setting is in `terraform/infra/modules/user_pool/main.tf`.
 | `InitiateAuth` (password) | `signIn` | A second, independent sign-in: new tokens or a new challenge. The first set is orphaned and expires. For a user with an SMS second factor (no flow turns one on today) it also texts a second code, for the session the client keeps, so the first text's code may be refused; signing in again after a failure would send that second text too. | Again |
 | `InitiateAuth` (refresh) | `refreshIdToken`, and a stale token on any call | A second token pair from the same refresh token. Refresh-token rotation is off; turning it on would need this row checked again. | Again |
 | `RespondToAuthChallenge` | `submitMfaCode` | The challenge session is single-use: "session expired", sign in again. A failure would ask the same, and the retry saves the likelier case, a first copy lost on a connection that went stale while the user typed the code. | Again |
-| `GetUser` | `totpEnabled` | A read sent as POST. | Again |
+| `GetUser` | `totpEnabled`, `recoveryContacts` | A read sent as POST. | Again |
 | `SetUserMFAPreference` | `confirmTotpEnrollment`, `disableTotp` | Sets the same preference. | Again |
 | `SignUp` | `signUp` | `UsernameExistsException` for the account the first copy made. | Once |
 | `ConfirmSignUp` | `confirmSignUp` | The user is already confirmed: `NotAuthorizedException`, which reads as a bad password. | Once |
@@ -188,3 +187,6 @@ rotation setting is in `terraform/infra/modules/user_pool/main.tf`.
 | `ConfirmForgotPassword` | `confirmForgotPassword` | The code is used: an error for a reset that worked. | Once |
 | `AssociateSoftwareToken` | `beginTotpEnrollment` | Issues a second secret; the reply carries it. Likely harmless, but not documented, and no screen calls it yet. | Once |
 | `VerifySoftwareToken` | `confirmTotpEnrollment` | Probably refused as a used code, after a verification that worked. | Once |
+| `UpdateUserAttributes` | `setRecoveryEmail` | Saves the same address again and sends it a second code, which may replace the first. | Once |
+| `GetUserAttributeVerificationCode` | `sendRecoveryEmailCode` | Sends a second code, which may replace the first. | Once |
+| `VerifyUserAttribute` | `verifyRecoveryEmail` | The code is used: probably an error for a verification that worked. | Once |

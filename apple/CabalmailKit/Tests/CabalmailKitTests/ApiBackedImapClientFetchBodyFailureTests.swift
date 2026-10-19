@@ -284,6 +284,12 @@ private actor RotatingAuthService: AuthService {
     func beginTotpEnrollment() async throws -> String { "ROTATINGSECRET" }
     func confirmTotpEnrollment(code: String) async throws {}
     func disableTotp() async throws {}
+    func recoveryContacts() async throws -> RecoveryContacts {
+        RecoveryContacts(email: nil, emailVerified: false, phoneVerified: false)
+    }
+    func setRecoveryEmail(_ address: String) async throws {}
+    func sendRecoveryEmailCode() async throws {}
+    func verifyRecoveryEmail(code: String) async throws {}
     func signUp(
         username: String, password: String, email: String?, phone: String?, invitationCode: String?
     ) async throws -> SignUpResult { .confirmed }

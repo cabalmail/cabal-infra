@@ -229,5 +229,14 @@ enum RequestReplayRows {
             try await $0.confirmTotpEnrollment(code: "123456")
         },
         CognitoRow("SetUserMFAPreference", .sentAgain, needsSession: true) { try await $0.disableTotp() },
+        CognitoRow("UpdateUserAttributes", .sentOnce, needsSession: true) {
+            try await $0.setRecoveryEmail("alice@example.net")
+        },
+        CognitoRow("GetUserAttributeVerificationCode", .sentOnce, needsSession: true) {
+            try await $0.sendRecoveryEmailCode()
+        },
+        CognitoRow("VerifyUserAttribute", .sentOnce, needsSession: true) {
+            try await $0.verifyRecoveryEmail(code: "123456")
+        },
     ]
 }
