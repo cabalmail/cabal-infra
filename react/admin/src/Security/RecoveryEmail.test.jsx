@@ -19,7 +19,7 @@ function renderWith(api, { smsEnabled = true, setMessage = vi.fn() } = {}) {
   return setMessage;
 }
 
-const typeAddress = (value) => fireEvent.change(screen.getByLabelText(/recovery email/i), { target: { value } });
+const typeAddress = (value) => fireEvent.change(screen.getByLabelText(/email address|new recovery email/i), { target: { value } });
 const typeCode = (value) => fireEvent.change(screen.getByLabelText('Verification code'), { target: { value } });
 
 describe('RecoveryEmail', () => {
@@ -102,7 +102,7 @@ describe('RecoveryEmail', () => {
     typeAddress('alice@example.net');
     fireEvent.click(screen.getByRole('button', { name: 'Save and send code' }));
     await waitFor(() => expect(setMessage).toHaveBeenLastCalledWith('Too many attempts. Please try again later.', true));
-    expect(screen.getByLabelText('Recovery email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email address')).toBeInTheDocument();
   });
 
   it('offers a retry when the address cannot be read', async () => {

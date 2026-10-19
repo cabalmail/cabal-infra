@@ -460,7 +460,7 @@ describe('Security view', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Security' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Add recovery email' }));
-    fireEvent.change(screen.getByLabelText('Recovery email'), { target: { value: 'alice@example.net' } });
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'alice@example.net' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save and send code' }));
     fireEvent.change(await screen.findByLabelText('Verification code'), { target: { value: '424242' } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify' }));

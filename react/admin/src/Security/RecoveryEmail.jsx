@@ -155,7 +155,7 @@ function RecoveryEmail({ recoveryApi, smsEnabled, setMessage }) {
       {status === 'editing' && (
         <form className="security__confirm" onSubmit={save} noValidate>
           <label className="security__label" htmlFor="recoveryEmail">
-            {current.address ? 'New recovery email' : 'Recovery email'}
+            {current.address ? 'New recovery email' : 'Email address'}
           </label>
           <input
             id="recoveryEmail"
