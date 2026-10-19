@@ -70,4 +70,13 @@ public enum HostPlatform {
     var reordersInEditMode: Bool {
         self == .iOS || self == .visionOS
     }
+
+    /// Whether a form's actions sit in one dialog-style row, the back-out
+    /// actions leading and the default action trailing and prominent: the
+    /// Mac, where a grouped form draws buttons as push buttons. Elsewhere
+    /// they stack as full-width rows, default action first
+    /// (`AuthFormActions`).
+    var formActionsInDialogRow: Bool {
+        self == .macOS
+    }
 }

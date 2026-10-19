@@ -11,6 +11,8 @@ enum TextEntryKind {
     case url
     /// Digits only: a one-time code.
     case digits
+    /// A phone number: the phone pad, which has the `+`.
+    case phone
     /// A name: each word capitalized.
     case words
     /// Prose: each sentence capitalized.
@@ -37,6 +39,8 @@ extension View {
             textInputAutocapitalization(.never).keyboardType(.URL)
         case .digits:
             keyboardType(.numberPad)
+        case .phone:
+            keyboardType(.phonePad)
         case .words:
             textInputAutocapitalization(.words)
         case .sentences:

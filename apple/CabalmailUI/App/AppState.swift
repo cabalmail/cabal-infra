@@ -163,6 +163,16 @@ extension AppState {
         sessionManager.cancelMfaChallenge()
     }
 
+    /// A sign-up flow against `controlDomain` (auth parity B2). It reads
+    /// `config.json` through the session's loader, so the cache a later
+    /// sign-in falls back on is the same one, and makes no session.
+    func makeSignUp(controlDomain: String) -> SignUpModel {
+        SignUpModel(
+            controlDomain: controlDomain,
+            loadConfiguration: sessionManager.sessionEnvironment.loadConfiguration
+        )
+    }
+
     func signOut() async {
         await sessionManager.signOut()
     }

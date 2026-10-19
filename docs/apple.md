@@ -1202,7 +1202,8 @@ Cognito 2xx that isn't JSON still escapes as a Foundation error, #1902.)
 The user-facing copy for every case is the enum's `LocalizedError`
 conformance in `Models/Errors.swift`. Most views show
 `error.localizedDescription`; some word particular cases themselves,
-among them the sign-in form (`SignInErrorText`), the composer
+among them the sign-in form (`SignInErrorText`), the sign-up screens
+(`SignUpErrorText`), the composer
 (`ComposeViewModel.describe`), Siri (`IntentError`), the feed views
 (`FeedErrorText`) and the message list's bulk actions.
 
