@@ -12,7 +12,20 @@ import SwiftUI
 /// bother reading Preferences for the dispose icon — `.archive` is the
 /// default and a one-frame icon flip when the real toolbar takes over is
 /// cheap.
+///
+/// Each stand-in is built as the *kind* of control its live twin is, from
+/// `ReaderToolbarLayout.macControlShape` — a chevron segment costs real
+/// points, so a plain-button stand-in for the Reply menu or the dispose,
+/// read and Flag split buttons is narrower than what replaces it, and every
+/// slot after it slides sideways when a message opens (#2016).
 struct EmptyDetailToolbar: ToolbarContent {
+    /// Whether the flag control will draw its palette menu, which decides
+    /// whether its live twin is a split button or the plain button it is
+    /// with an empty palette (`flagButton`). Read from `Preferences` by the
+    /// shell that installs these stand-ins — a `ToolbarContent` has no
+    /// reader model to ask.
+    let flagMenuHasRows: Bool
+
     private let actions = ReaderToolbarLayout.macToolbar(leading: .reply)
 
     // Split in two because a result-builder block takes at most ten children
@@ -42,10 +55,14 @@ struct EmptyDetailToolbar: ToolbarContent {
     }
 
     private func standIn(for action: ReaderToolbarAction) -> some View {
-        Button {} label: {
-            Label(title(for: action), systemImage: symbol(for: action))
-        }
-        .disabled(true)
+        ToolbarStandIn(
+            title: title(for: action),
+            symbol: symbol(for: action),
+            shape: ReaderToolbarLayout.macControlShape(
+                for: action,
+                flagMenuHasRows: flagMenuHasRows
+            )
+        )
     }
 
     // Exhaustive one-case-per-action lookups; the branch count IS the point.
