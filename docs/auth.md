@@ -134,7 +134,7 @@ Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySo
 | --- | --- | --- | --- | --- |
 | Sign-in, TOTP and SMS challenges | Yes | Yes | Yes | Hosted UI |
 | Refresh | Yes | Yes | Yes | Yes, via the Hosted UI token endpoint |
-| Sign-up, confirm, resend | Yes | Kit only, with no UI and no invitation code | Kit only, with no UI and no invitation code | No |
+| Sign-up, confirm, resend | Yes | Kit only, no UI | Kit only, with no UI and no invitation code | No |
 | Forgot and reset password | Yes | Kit only, no UI | Kit only, no UI | No |
 | Recovery-email check | Yes | No | No | No |
 | Enrollment suggestion | Yes | No | No | No |

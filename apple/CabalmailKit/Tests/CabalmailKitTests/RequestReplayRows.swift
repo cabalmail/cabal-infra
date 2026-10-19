@@ -210,7 +210,9 @@ enum RequestReplayRows {
         },
         CognitoRow("RespondToAuthChallenge", .sentAgain, needsChallenge: true) { try await $0.submitMfaCode("123456") },
         CognitoRow("SignUp", .sentOnce) {
-            try await $0.signUp(username: "alice", password: "pw", email: "a@b.example", phone: nil)
+            _ = try await $0.signUp(
+                username: "alice", password: "pw", email: "a@b.example", phone: nil, invitationCode: nil
+            )
         },
         CognitoRow("ConfirmSignUp", .sentOnce) { try await $0.confirmSignUp(username: "alice", code: "123456") },
         CognitoRow("ResendConfirmationCode", .sentOnce) { try await $0.resendConfirmationCode(username: "alice") },

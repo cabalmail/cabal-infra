@@ -35,9 +35,11 @@ public actor StubAuthService: AuthService {
     public func confirmTotpEnrollment(code: String) async throws {}
     public func disableTotp() async throws {}
 
-    public func signUp(username: String, password: String, email: String?, phone: String?) async throws {}
+    public func signUp(
+        username: String, password: String, email: String?, phone: String?, invitationCode: String?
+    ) async throws -> SignUpResult { .confirmed }
     public func confirmSignUp(username: String, code: String) async throws {}
-    public func resendConfirmationCode(username: String) async throws {}
+    public func resendConfirmationCode(username: String) async throws -> CodeDelivery? { nil }
     public func forgotPassword(username: String) async throws {}
     public func confirmForgotPassword(username: String, code: String, newPassword: String) async throws {}
 
@@ -73,9 +75,11 @@ public actor NullAuthService: AuthService {
     public func beginTotpEnrollment() async throws -> String { "NULLSECRET" }
     public func confirmTotpEnrollment(code: String) async throws {}
     public func disableTotp() async throws {}
-    public func signUp(username: String, password: String, email: String?, phone: String?) async throws {}
+    public func signUp(
+        username: String, password: String, email: String?, phone: String?, invitationCode: String?
+    ) async throws -> SignUpResult { .confirmed }
     public func confirmSignUp(username: String, code: String) async throws {}
-    public func resendConfirmationCode(username: String) async throws {}
+    public func resendConfirmationCode(username: String) async throws -> CodeDelivery? { nil }
     public func forgotPassword(username: String) async throws {}
     public func confirmForgotPassword(username: String, code: String, newPassword: String) async throws {}
     public func signOut() async throws {}
