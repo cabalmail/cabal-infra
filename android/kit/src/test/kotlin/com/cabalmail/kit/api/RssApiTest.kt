@@ -4,6 +4,7 @@ import com.cabalmail.kit.CabalmailException
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.AuthTokens
 import com.cabalmail.kit.auth.CodeDelivery
+import com.cabalmail.kit.auth.RecoveryContacts
 import com.cabalmail.kit.auth.SignInResult
 import com.cabalmail.kit.auth.SignUpResult
 import com.cabalmail.kit.models.RssFolderUpdate
@@ -73,6 +74,14 @@ class RssApiTest {
         ) = Unit
 
         override suspend fun signOut() = Unit
+
+        override suspend fun recoveryContacts() = RecoveryContacts(null, emailVerified = false, phoneVerified = false)
+
+        override suspend fun setRecoveryEmail(address: String) = Unit
+
+        override suspend fun sendRecoveryEmailCode() = Unit
+
+        override suspend fun verifyRecoveryEmail(code: String) = Unit
 
         override suspend fun currentIdToken(): String = "idtoken"
 

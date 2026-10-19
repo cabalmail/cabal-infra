@@ -110,6 +110,8 @@ fun SettingsScreen(
      * when [SettingsUiState.isAdmin]. `onBack` as for [rulesPane].
      */
     usersPane: @Composable (onBack: (() -> Unit)?) -> Unit,
+    /** Settings › Account › Recovery email (auth parity B4). */
+    onOpenRecoveryEmail: () -> Unit,
     onSignOut: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -173,6 +175,7 @@ fun SettingsScreen(
                             folderChoices = folderChoices,
                             onLoadFolderChoices = onLoadFolderChoices,
                             onPushFoldersChange = onPushFoldersChange,
+                            onOpenRecoveryEmail = onOpenRecoveryEmail,
                             onSignOut = onSignOut,
                             onBack = onBack,
                         )
@@ -233,6 +236,7 @@ private fun SettingsCategoryDetail(
     folderChoices: List<String>?,
     onLoadFolderChoices: () -> Unit,
     onPushFoldersChange: (Set<String>) -> Unit,
+    onOpenRecoveryEmail: () -> Unit,
     onSignOut: () -> Unit,
     onBack: (() -> Unit)?,
 ) {
@@ -262,7 +266,14 @@ private fun SettingsCategoryDetail(
                     .verticalScroll(rememberScrollState()),
         ) {
             when (category) {
-                SettingsCategory.ACCOUNT -> AccountSettings(state, preferences, onUpdate, onSignOut)
+                SettingsCategory.ACCOUNT ->
+                    AccountSettings(
+                        state,
+                        preferences,
+                        onUpdate,
+                        onOpenRecoveryEmail,
+                        onSignOut,
+                    )
                 SettingsCategory.READING -> ReadingSettings(preferences, onUpdate)
                 SettingsCategory.COMPOSING -> ComposingSettings(state, preferences, onUpdate)
                 // Handled by the caller (the panes come from the nav host).
@@ -292,6 +303,7 @@ private fun AccountSettings(
     state: SettingsUiState,
     preferences: AppPreferences,
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
+    onOpenRecoveryEmail: () -> Unit,
     onSignOut: () -> Unit,
 ) {
     ListItem(
@@ -308,6 +320,10 @@ private fun AccountSettings(
         empty = stringResource(R.string.settings_display_name_empty),
         singleLine = true,
         onChange = { name -> onUpdate { it.copy(displayName = name.trim()) } },
+    )
+    ListItem(
+        headlineContent = { Text(stringResource(R.string.settings_recovery_email)) },
+        modifier = Modifier.clickable(onClick = onOpenRecoveryEmail),
     )
     ListItem(
         headlineContent = { Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.error) },

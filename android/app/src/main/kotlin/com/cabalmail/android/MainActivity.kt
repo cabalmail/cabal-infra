@@ -28,6 +28,7 @@ import com.cabalmail.android.ui.auth.AuthPhase
 import com.cabalmail.android.ui.auth.SignInUiState
 import com.cabalmail.android.ui.auth.SignInViewModel
 import com.cabalmail.android.ui.auth.SignedOutScreens
+import com.cabalmail.android.ui.settings.RecoveryEmailPromptDialog
 import com.cabalmail.android.ui.theme.CabalmailTheme
 import com.cabalmail.android.ui.theme.resolvesDark
 
@@ -89,11 +90,19 @@ class MainActivity : ComponentActivity() {
         viewModel: SignInViewModel,
     ) {
         when (state.phase) {
-            is AuthPhase.SignedIn ->
+            is AuthPhase.SignedIn -> {
                 CabalmailNavHost(
                     container = container,
                     onSignOut = viewModel::signOut,
                 )
+                state.recoveryPrompt?.let { prompt ->
+                    RecoveryEmailPromptDialog(
+                        container = container,
+                        prompt = prompt,
+                        onDismiss = viewModel::dismissRecoveryPrompt,
+                    )
+                }
+            }
 
             else ->
                 SignedOutScreens(

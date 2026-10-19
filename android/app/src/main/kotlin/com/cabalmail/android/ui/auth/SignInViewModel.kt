@@ -7,9 +7,11 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.notifications.PushRegistrar
+import com.cabalmail.android.ui.settings.recoveryEmailPrompt
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.MfaMethod
+import com.cabalmail.kit.auth.RecoveryEmailPrompt
 import com.cabalmail.kit.auth.SignInResult
 import com.cabalmail.kit.config.ConfigException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +46,11 @@ data class SignInUiState(
      * null while it is still being read or when there is nothing to offer.
      */
     val rememberedControlDomain: String? = null,
+    /**
+     * What the check after an interactive sign-in asks (auth parity B4),
+     * while its dialog is up; null otherwise.
+     */
+    val recoveryPrompt: RecoveryEmailPrompt? = null,
 )
 
 class SignInViewModel(
@@ -94,7 +101,7 @@ class SignInViewModel(
         username: String,
         password: String,
     ) {
-        runAuthAction {
+        runAuthAction(checkRecoveryEmail = true) {
             val auth = authFor(controlDomain)
             when (val result = auth.signIn(username.trim(), password)) {
                 is SignInResult.SignedIn -> AuthPhase.SignedIn(username.trim())
@@ -119,7 +126,7 @@ class SignInViewModel(
     }
 
     fun submitMfaCode(code: String) {
-        runAuthAction {
+        runAuthAction(checkRecoveryEmail = true) {
             val auth = container.requireAuth()
             auth.submitMfaCode(code.trim())
             AuthPhase.SignedIn(auth.currentUsername().orEmpty())
@@ -140,7 +147,19 @@ class SignInViewModel(
         }
     }
 
-    private fun runAuthAction(action: suspend () -> AuthPhase) {
+    fun dismissRecoveryPrompt() {
+        mutableState.update { it.copy(recoveryPrompt = null) }
+    }
+
+    /**
+     * `checkRecoveryEmail`: the action is an interactive sign-in, so a
+     * session it starts gets the recovery-email check (`docs/auth.md`,
+     * "After sign-in"); a restore or a sign-out doesn't.
+     */
+    private fun runAuthAction(
+        checkRecoveryEmail: Boolean = false,
+        action: suspend () -> AuthPhase,
+    ) {
         viewModelScope.launch {
             mutableState.update { it.copy(busy = true, error = null) }
             try {
@@ -151,6 +170,15 @@ class SignInViewModel(
                         phase = phase,
                         rememberedControlDomain = activeDomain ?: it.rememberedControlDomain,
                     )
+                }
+                if (checkRecoveryEmail && phase is AuthPhase.SignedIn) {
+                    // Advisory: nothing here may turn a sign-in that worked into an error.
+                    val smsEnabled =
+                        container.configService.config.value
+                            ?.smsEnabled ?: true
+                    val auth = runCatching { container.requireAuth() }.getOrNull()
+                    val prompt = auth?.let { recoveryEmailPrompt(it, smsEnabled) }
+                    mutableState.update { it.copy(recoveryPrompt = prompt) }
                 }
             } catch (exception: Exception) {
                 mutableState.update {
