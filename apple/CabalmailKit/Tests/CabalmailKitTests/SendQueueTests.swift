@@ -224,9 +224,14 @@ final class SendQueueTests: XCTestCase {
         await queue.kickDrain()
         await gate.open()
 
-        try await waitUntil { await sent.subjects.contains("second") }
-        let remaining = try await outbox.count()
-        XCTAssertEqual(remaining, 0, "a message enqueued mid-drain was left in the outbox")
+        // The sender records a subject as its send starts, and the drain
+        // removes the entry only once the send returns, so wait for the
+        // outbox to empty rather than for the send to begin. Asserting the
+        // moment "second" was recorded raced that removal, and lost on the
+        // visionOS simulator.
+        try await waitUntil { try await outbox.count() == 0 }
+        let subjects = await sent.subjects
+        XCTAssertEqual(subjects, ["first", "second"], "a message enqueued mid-drain was left in the outbox")
         await queue.stop()
     }
 
