@@ -244,7 +244,7 @@ class CognitoAuthServiceTest {
                 )
 
             val exception =
-                runCatching { service(stub).signUp("chris", "pw", "a@b.example", null) }
+                runCatching { service(stub).signUp("chris", "pw", "a@b.example", null, null) }
                     .exceptionOrNull() as CabalmailException.ServerError
 
             assertEquals("An invitation is required.", exception.message)
