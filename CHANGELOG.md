@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   menu for Reply, split buttons for dispose, Mark as read and Flag, a menu
   for the feed reader's More — so the slots are the right width and the
   buttons light up where they already were.
+- **Flaky outbox drain test.** `testAMessageEnqueuedDuringADrainIsSentByTheSameDrain`
+  asserted the outbox was empty as soon as the second message's send had
+  started, but the drain removes an entry only once its send returns, so a
+  slow simulator could catch it in between; the visionOS leg of a stage
+  run did. It now waits for the outbox to empty, and still fails if the
+  mid-drain kick is dropped.
 
 ## [1.37.0] - 2026-10-19
 
