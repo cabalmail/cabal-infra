@@ -66,6 +66,9 @@ object FolderSections {
      * subscribed (if [FolderListFilter.subscribed]) and has unread mail (if
      * [FolderListFilter.unread]). The [selected] folder is always kept, so
      * the folder being read never vanishes when its last unread is read.
+     * INBOX is exempt from Unread, as the feed list's All Feeds row is: it
+     * is where new mail lands, so an inbox read to zero stays one tap away
+     * rather than leaving the list empty.
      */
     fun rows(
         folders: List<String>,
@@ -78,9 +81,12 @@ object FolderSections {
             folder == selected ||
                 (
                     (!filter.subscribed || folder in subscribed) &&
-                        (!filter.unread || hasUnread(statuses[folder]))
+                        (!filter.unread || isInbox(folder) || hasUnread(statuses[folder]))
                 )
         }
+
+    /** IMAP's INBOX name is case-insensitive (RFC 3501). */
+    private fun isInbox(folder: String): Boolean = folder.equals("INBOX", ignoreCase = true)
 
     /**
      * The folders whose STATUS is fetched proactively on refresh:
