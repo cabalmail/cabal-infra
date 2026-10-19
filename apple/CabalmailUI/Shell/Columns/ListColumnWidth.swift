@@ -169,6 +169,33 @@ enum ListColumnWidth {
         let ceiling = max(squeezedMinimum, splitWidth - readerFloor - reservedSlack)
         return (min(minimum, ceiling), ceiling)
     }
+
+    /// The floor the reading pane declares beside a column pinned to
+    /// `listWidth` in a split of `splitWidth`.
+    ///
+    /// `readerFloor` wherever the split can seat it, and the remainder of the
+    /// split (less `reservedSlack`) where it cannot. The floor has to yield
+    /// there because the list already has: `pinnedBounds` stops its ceiling
+    /// at `squeezedMinimum`, so below `squeezedMinimum + readerFloor +
+    /// reservedSlack` — 596pt with the shipped constants — the pinned width
+    /// and a constant floor over-subscribe the split, which is #1716's exact
+    /// fit with the sign flipped and fails the same way: UIKit tiles it at
+    /// launch, gives up when a size transition re-resolves it, and drops the
+    /// primary column.
+    ///
+    /// That band is not exotic on an iPad. The addresses inspector tiles
+    /// beside the split at regular width and takes its width out of the
+    /// measurement, so an 834pt portrait window with the inspector open
+    /// leaves a 534pt split — list pinned at 220, reader floor declared at
+    /// 360, 46pt over-subscribed — and composing from the toolbar's overflow
+    /// and cancelling was the size transition that collected it (#2106).
+    ///
+    /// Zero, the pre-layout measurement, resolves to `readerFloor`: nothing
+    /// is pinned against anything yet, and the first layout seats both.
+    static func pinnedReaderFloor(splitWidth: CGFloat, listWidth: CGFloat) -> CGFloat {
+        guard splitWidth > 0 else { return readerFloor }
+        return min(readerFloor, max(0, splitWidth - listWidth - reservedSlack))
+    }
 }
 
 #if os(macOS)
