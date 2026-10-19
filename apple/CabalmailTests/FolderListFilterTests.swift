@@ -5,7 +5,7 @@ import CabalmailKit
 // The mail sidebar's filter pills replaced the Subscribed / All folders
 // sections. These pin the pill semantics (two independent toggles; both
 // off is every folder, with no All pill to say so), the predicate, and the
-// two exemptions.
+// exemptions (the open folder from both pills, INBOX from Unread).
 final class FolderListFilterTests: XCTestCase {
 
     private func folder(_ path: String, subscribed: Bool = true) -> Folder {
@@ -72,6 +72,34 @@ final class FolderListFilterTests: XCTestCase {
         XCTAssertEqual(both.apply(to: folders, unreadCounts: counts, selection: "Trash").map(\.path),
                        ["INBOX", "Trash"],
                        "the folder being read never vanishes from under the user")
+    }
+
+    func testInboxStaysUnderUnreadWithNothingUnread() {
+        // The feed sidebar keeps All Feeds under its Unread pill; INBOX is
+        // the mail tree's equivalent, so reading it to zero must not empty
+        // the tree. Every other folder at zero still drops (`alpha` has no
+        // count, `Trash` a zero one).
+        let readCounts = ["INBOX": 0, "Trash": 0, "beta": 2]
+        let unread = FolderListFilter(subscribed: false, unread: true)
+        XCTAssertEqual(unread.apply(to: folders, unreadCounts: readCounts, selection: nil).map(\.path),
+                       ["INBOX", "beta"])
+        XCTAssertEqual(unread.apply(to: folders, unreadCounts: [:], selection: nil).map(\.path), ["INBOX"],
+                       "before any count arrives the tree still has its inbox")
+        let both = FolderListFilter(subscribed: true, unread: true)
+        XCTAssertEqual(both.apply(to: folders, unreadCounts: readCounts, selection: nil).map(\.path), ["INBOX"])
+    }
+
+    func testTheInboxExemptionMatchesAnyCaseAndOnlyCoversUnread() {
+        let unread = FolderListFilter(subscribed: false, unread: true)
+        XCTAssertEqual(unread.apply(to: [folder("Inbox")], unreadCounts: [:], selection: nil).map(\.path),
+                       ["Inbox"], "IMAP's INBOX name is case-insensitive")
+        XCTAssertEqual(
+            FolderListFilter.defaultForMail.apply(
+                to: [folder("INBOX", subscribed: false), folder("alpha")], unreadCounts: [:], selection: nil
+            ).map(\.path),
+            ["alpha"],
+            "the Subscribed pill still answers to the subscription"
+        )
     }
 
     func testOnlyUnreadWithoutSubscribedNeedsEveryCount() {

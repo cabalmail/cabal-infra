@@ -57,7 +57,9 @@ yet, change the product first, redeploy, re-screenshot, then resubmit.
    Terms and Privacy pages must carry the same disclosures. Both ship
    from this repo and render the operator identity from the
    `OPERATOR_NAME` / `TF_VAR_CONTROL_DOMAIN` GitHub variables, so a
-   correctly configured deploy already conforms.
+   correctly configured deploy already conforms. The native apps'
+   sign-up screens read the same name from `/config.json`'s
+   `operator_name`, which `infra.yml` fills from `OPERATOR_NAME`.
 2. **Support mailbox.** `help@support.<control domain>` must exist and
    be monitored; reviewers sometimes probe it, and it appears in the
    HELP keyword response.

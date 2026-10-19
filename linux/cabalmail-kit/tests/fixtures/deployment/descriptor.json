@@ -18,6 +18,7 @@
   "invitation_required": false,
   "sms_enabled": false,
   "monitoring": false,
+  "operator_name": "Example Operator LLC",
   "cognitoConfig": {
     "region": "us-east-1",
     "poolData": {

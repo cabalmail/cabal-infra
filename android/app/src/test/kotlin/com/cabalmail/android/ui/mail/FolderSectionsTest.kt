@@ -101,6 +101,33 @@ class FolderSectionsTest {
     }
 
     @Test
+    fun `INBOX stays under Unread with nothing unread`() {
+        // The feed list keeps All Feeds under its Unread pill; INBOX is the
+        // folder list's equivalent. Every other folder at zero still drops.
+        val read = statuses + ("INBOX" to FolderStatus(messages = 40, unseen = 0))
+        assertEquals(
+            listOf("INBOX", "receipts"),
+            FolderSections.rows(folders, subscribed, read, FolderListFilter(false, true), selected = null),
+        )
+        assertEquals(
+            listOf("INBOX"),
+            FolderSections.rows(folders, subscribed, emptyMap(), FolderListFilter(true, true), selected = null),
+        )
+        assertEquals(
+            listOf("Inbox"),
+            FolderSections.rows(listOf("Inbox"), emptySet(), emptyMap(), FolderListFilter(false, true), null),
+        )
+    }
+
+    @Test
+    fun `the INBOX exemption covers Unread, not Subscribed`() {
+        assertEquals(
+            listOf("Sent"),
+            FolderSections.rows(folders, setOf("Sent"), statuses, FolderListFilter(subscribed = true), selected = null),
+        )
+    }
+
+    @Test
     fun `the selected folder is always kept`() {
         assertEquals(
             listOf("INBOX", "Sent"),

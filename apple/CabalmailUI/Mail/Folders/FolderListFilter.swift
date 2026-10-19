@@ -118,7 +118,10 @@ struct FolderListFilter: Equatable {
 
     /// The folders the tree draws. `selection` is exempt: reading the last
     /// unread message in a folder must not pull that folder out from under
-    /// the user, and unsubscribing the open folder shouldn't either.
+    /// the user, and unsubscribing the open folder shouldn't either. INBOX
+    /// is exempt from the Unread pill, as the feed sidebar's All Feeds row
+    /// is: it is where new mail lands, so an inbox read to zero stays one
+    /// tap away rather than leaving the tree empty.
     func apply(
         to folders: [Folder],
         unreadCounts: [String: Int],
@@ -128,8 +131,15 @@ struct FolderListFilter: Equatable {
         return folders.filter { folder in
             if folder.path == selection { return true }
             if subscribed && !folder.isSubscribed { return false }
-            if unread && (unreadCounts[folder.path] ?? 0) <= 0 { return false }
+            if unread && !Self.isInbox(folder) && (unreadCounts[folder.path] ?? 0) <= 0 { return false }
             return true
         }
+    }
+
+    /// IMAP's INBOX name is case-insensitive (RFC 3501). Spelled out here
+    /// rather than calling `MailCounts.isInbox`, which is main-actor
+    /// isolated; this type is not.
+    private static func isInbox(_ folder: Folder) -> Bool {
+        folder.path.caseInsensitiveCompare(FolderTree.inboxPath) == .orderedSame
     }
 }

@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.37.0] - 2026-10-19
+
+### Changed
+- Android: **INBOX stays under the Unread pill.** The folder list's
+  Unread filter no longer hides INBOX once it has no unread mail, the
+  way the feed list keeps All Feeds listed under its own Unread pill.
+  Every other folder still drops out at zero, and the Subscribed pill
+  is unchanged.
+- **Android kit sign-up follows the auth contract.** `signUp` now sends
+  `preferred_username` and the invitation code (as Cognito validation
+  data, empty when there is none), and returns a `SignUpResult`: a
+  confirmation code sent to a masked email or phone, or the account
+  already confirmed. A refused invitation code throws its own
+  `CabalmailException.InvalidInvitationCode`, and a refused username
+  keeps the trigger's sentence. `resendConfirmationCode` reports where
+  the new code went, and `Config` reads `invitation_required` and
+  `sms_enabled` as the webmail and the Apple kit do, so the coming
+  sign-up screens can hide the fields a deployment doesn't use. Nothing
+  calls sign-up yet.
+- Apple: **INBOX stays under the Unread pill.** The sidebar's Unread
+  filter no longer hides INBOX once it has no unread mail, the way the
+  Feeds section keeps All Feeds listed under its own Unread pill. Every
+  other folder still drops out at zero, and the Subscribed pill is
+  unchanged.
+- **Apple kit sign-up follows the auth contract.** `signUp` now sends
+  `preferred_username` and the invitation code (as Cognito validation
+  data, empty when there is none). It returns whether Cognito sent a
+  confirmation code, and to which masked email or phone, or confirmed
+  the account itself. A refused invitation code throws its own error,
+  `CabalmailError.invalidInvitationCode`, and a refused username keeps
+  the trigger's sentence. `resendConfirmationCode` reports where the new
+  code went, and the configuration reads `invitation_required` and
+  `sms_enabled`, so the coming sign-up screens can hide the fields a
+  deployment doesn't use. Nothing calls sign-up yet.
+- **Recovery email optional at sign-up when SMS is on.** So that
+  Cabalmail can be someone's only email service, the webmail's sign-up
+  form keeps the phone number required wherever the deployment can send
+  texts and makes the recovery email optional there; without SMS the
+  email stays required, since it is then the only way to verify or
+  recover the account. After sign-in, an account with no email and a
+  verified phone is no longer asked to add one when SMS is on, while an
+  email that was given is still offered for verification. The Security
+  view gains a recovery-email section to add, change or verify the
+  address at any time, the only route for a phone-only account to add
+  one later. `docs/auth.md` records the rule for every client.
+
 ## [1.36.0] - 2026-10-19
 
 ### Added
