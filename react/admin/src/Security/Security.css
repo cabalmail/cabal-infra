@@ -94,5 +94,25 @@
 
 .security__confirm-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.security__section + .security__section {
+  margin-top: 24px;
+}
+
+.security__help {
+  margin: 0 0 12px;
+  color: var(--text-secondary, #666);
+}
+
+.security__address {
+  overflow-wrap: anywhere;
+}
+
+.security__confirm input.security__input--wide {
+  width: 100%;
+  max-width: 36ch;
+  box-sizing: border-box;
 }

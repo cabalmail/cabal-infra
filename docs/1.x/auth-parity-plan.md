@@ -107,8 +107,9 @@ one unless SMS is on and its phone is verified; an email the user gave
 is always offered for verification. The cost is that a phone-only
 account recovers by SMS alone, so a SIM swap could reset its password;
 the authenticator suggestion is its defence. The webmail implements it
-(the PR that recorded this decision), and `docs/auth.md` carries the
-rule. B1's kits take both contacts as optional, so the rule lives in
+(the PR that recorded this decision), including a recovery-email
+section in its Security view so a phone-only account can still add an
+address later, and `docs/auth.md` carries the rule. B1's kits take both contacts as optional, so the rule lives in
 the screens.
 
 ## The auth contract
@@ -283,7 +284,10 @@ Neither native client checks for a verified recovery email after
 sign-in. A natively created account (B2/B3) with SMS on that gave an
 email would never be asked to verify it, so this lands with or right
 after B2/B3. Same advisory rules as the webmail, which D5 sets: no ask
-to add an email when SMS is on and the phone is verified.
+to add an email when SMS is on and the phone is verified. Because a
+phone-only account is then never asked, B4 also adds a recovery-email
+row to each client's settings, as the webmail's Security view has
+(`docs/auth.md`, "Recovery email").
 
 Locked-out TOTP enrollment through `enrollClientId` is the remaining
 native gap. Android's config already carries the field. It only

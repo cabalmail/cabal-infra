@@ -422,7 +422,8 @@ describe('Security view', () => {
   it('reads TOTP status with GetUser and turns it off with SetUserMFAPreference', async () => {
     cognito({
       InitiateAuth: [auth()],
-      GetUser: [user(), user()],
+      // Sign-in, then the view's TOTP status and its recovery-email section.
+      GetUser: [user(), user(), user()],
       SetUserMFAPreference: [reply(200, {})],
     });
     await renderSignedOut();
@@ -430,11 +431,45 @@ describe('Security view', () => {
     await screen.findByTestId('email-view');
 
     fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+    // The recovery-email section reads the same GetUser reply.
+    await screen.findByText('is verified and can be used to recover your account.');
+    expect(screen.getByText('alice@example.com')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Turn off two-factor authentication' }));
     await screen.findByText('Two-factor authentication is off.');
     expect(sentTo('SetUserMFAPreference')[0]).toEqual({
       AccessToken: 'access-1', SoftwareTokenMfaSettings: { Enabled: false, PreferredMfa: false },
     });
+  });
+
+  // The account the post-sign-in gate no longer asks for an email (SMS
+  // on, phone verified) adds one here instead.
+  it('lets a phone-only account add and verify a recovery email', async () => {
+    config = { ...CONFIG, sms_enabled: true };
+    const phoneOnly = () => user({ email: null, phoneVerified: true });
+    cognito({
+      InitiateAuth: [auth()],
+      GetUser: [phoneOnly(), phoneOnly(), phoneOnly()],
+      UpdateUserAttributes: [reply(200, {
+        CodeDeliveryDetailsList: [{ AttributeName: 'email', DeliveryMedium: 'EMAIL', Destination: 'a***@e***' }],
+      })],
+      VerifyUserAttribute: [reply(200, {})],
+    });
+    await renderSignedOut();
+    await signIn();
+    await screen.findByTestId('email-view');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Security' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add recovery email' }));
+    fireEvent.change(screen.getByLabelText('Recovery email'), { target: { value: 'alice@example.net' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save and send code' }));
+    fireEvent.change(await screen.findByLabelText('Verification code'), { target: { value: '424242' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    await screen.findByText('is verified and can be used to recover your account.');
+
+    expect(sentTo('UpdateUserAttributes')[0]).toEqual({
+      AccessToken: 'access-1', UserAttributes: [{ Name: 'email', Value: 'alice@example.net' }],
+    });
+    expect(sentTo('VerifyUserAttribute')[0]).toEqual({ AccessToken: 'access-1', AttributeName: 'email', Code: '424242' });
   });
 });
 

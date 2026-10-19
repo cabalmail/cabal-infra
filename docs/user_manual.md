@@ -14,7 +14,7 @@ Generic mail clients (Thunderbird, Apple Mail, Outlook, …) cannot be connected
 
 **Signing in.** Username and password, then — if you are enrolled in two-factor authentication — a 6-digit code from your authenticator app (the Apple apps submit it automatically when the sixth digit lands). Operators can make two-factor mandatory; when it is, signing in without an enrolled authenticator walks you through enrollment (scan the QR code, confirm the first code) before you can proceed. You can also enroll voluntarily from the web app.
 
-**Recovery.** Password reset is self-service by SMS where the operator has SMS configured; otherwise ask your administrator. If you lose your authenticator, an administrator must reset your MFA.
+**Recovery.** Password reset is self-service: the code goes to your verified recovery email, or by SMS to your phone where the operator has SMS configured. Where SMS is configured the recovery email is optional; you can add or change it under **Security** in the web app. Without either, ask your administrator. If you lose your authenticator, an administrator must reset your MFA.
 
 ## Addresses
 

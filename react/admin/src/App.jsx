@@ -873,6 +873,34 @@ function App() {
     ),
   }), [withAccessToken]);
 
+  // The Security view's recovery-email section, as promises. The same
+  // Cognito calls as the VerifyEmail gate, which the section stands in for
+  // after sign-in: a phone-verified account is no longer sent through the
+  // gate (docs/auth.md, "After sign-in"), so this is where it adds one.
+  const recoveryApi = useMemo(() => {
+    const withToken = (fn) => new Promise((resolve, reject) => {
+      withAccessToken(
+        (client, accessToken) => fn(client, accessToken).then(resolve, reject),
+        () => reject(new Error('no session'))
+      );
+    });
+    return {
+      load: () => withToken((client, accessToken) => client.getUser(accessToken)).then(({ attributes }) => ({
+        address: attributes.email || null,
+        verified: attributes.email_verified === 'true',
+      })),
+      save: (address) => withToken(
+        (client, accessToken) => client.updateUserAttributes(accessToken, { email: address })
+      ),
+      resend: () => withToken(
+        (client, accessToken) => client.getUserAttributeVerificationCode(accessToken, 'email')
+      ),
+      verify: (code) => withToken(
+        (client, accessToken) => client.verifyUserAttribute(accessToken, 'email', code)
+      ),
+    };
+  }, [withAccessToken]);
+
   const doLogout = useCallback((e) => {
     e.preventDefault();
     if (authRef.current) authRef.current.session.clear();
@@ -1023,6 +1051,8 @@ function App() {
             <Security
               userName={state.userName}
               mfaApi={mfaApi}
+              recoveryApi={recoveryApi}
+              smsEnabled={state.sms_enabled}
               setMessage={setMessage}
             />
           </ErrorBoundary>

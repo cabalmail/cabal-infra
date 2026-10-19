@@ -133,6 +133,10 @@ A client may show admin features when the ID token's `cognito:groups` claim cont
 
 `ForgotPassword` (`ClientId`, `Username`). The reply's `CodeDeliveryDetails` says whether the code went to email or phone; say so rather than assuming. Then `ConfirmForgotPassword` (`ClientId`, `Username`, `ConfirmationCode`, `Password`). A user with no verified email or phone cannot reset; an operator sets a password with `admin-set-user-password`.
 
+## Recovery email
+
+Signed in, a user can see, add, change and verify their recovery email: `GetUser` reads `email` and `email_verified`, `UpdateUserAttributes` saves a new address (Cognito sends it a code, as the pool auto-verifies email), `GetUserAttributeVerificationCode` sends a fresh code, and `VerifyUserAttribute` takes it, all for `AttributeName: email` with the user's access token. The pool keeps no pending value, so a change replaces a verified address at once with an unverified one; say so before the user saves. For a phone-only account this is the only way to add an address after sign-up, since the check after sign-in no longer asks it.
+
 ## TOTP management
 
 Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySoftwareToken`, then `SetUserMFAPreference` (`Enabled` and `PreferredMfa` true), all with their own access token. Turning it off is `SetUserMFAPreference` with both false. `GetUser`'s `UserMFASettingList` reports the current state.
@@ -146,6 +150,7 @@ Signed in, a user can turn TOTP on with `AssociateSoftwareToken`, then `VerifySo
 | Sign-up, confirm, resend | Yes | Kit only, with no UI and no invitation code | Kit only, with no UI and no invitation code | No |
 | Forgot and reset password | Yes | Kit only, no UI | Kit only, no UI | No |
 | Recovery-email check | Yes | No | No | No |
+| Recovery email in settings (add, change, verify) | Yes (Security) | No | No | No |
 | Enrollment suggestion | Yes | No | No | No |
 | Locked-out TOTP setup | Yes | No | No | No |
 | TOTP on and off (Security settings) | Yes | Kit only, no UI | No | No |
