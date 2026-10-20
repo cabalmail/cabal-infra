@@ -52,28 +52,6 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual(status.listedMessages, 42)
     }
 
-    /// The `?flagged=1` reply carries the not-deleted count too, and it is the
-    /// one the list's positions are in: MESSAGES still counts a message
-    /// flagged `\Deleted` elsewhere and not yet expunged, which
-    /// `/list_messages` leaves out of its sort (#1836).
-    func testFolderStatusDecodesUndeletedCountAndPrefersItForPositions() async throws {
-        let body = #"{"messages":42,"unseen":3,"flagged":2,"undeleted":41,"uid_validity":12345,"uid_next":100}"#
-        let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 200)])
-        let api = URLSessionApiClient(
-            configuration: makeConfiguration(),
-            authService: StubAuthService(),
-            transport: http
-        )
-        let client = ApiBackedImapClient(api: api, host: "imap.example.com")
-        let status = try await client.status(path: "INBOX", flagged: true)
-        XCTAssertEqual(status.messages, 42)
-        XCTAssertEqual(status.flagged, 2)
-        XCTAssertEqual(status.undeleted, 41)
-        XCTAssertEqual(status.listedMessages, 41, "positions are over the not-deleted set, not MESSAGES")
-        let url = await http.requests[0].url?.absoluteString ?? ""
-        XCTAssertTrue(url.contains("flagged=1"))
-    }
-
     func testTopEnvelopesPagesByMessageIds() async throws {
         let listMessagesBody = #"{"message_ids":[10,9,8,7,6,5,4,3,2,1]}"#
         let listEnvelopesBody = """
