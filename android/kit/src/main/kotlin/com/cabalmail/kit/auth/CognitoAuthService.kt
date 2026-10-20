@@ -228,6 +228,60 @@ class CognitoAuthService(
             refreshed.idToken
         }
 
+    override suspend fun recoveryContacts(): RecoveryContacts {
+        val token = accessToken()
+        return RecoveryContacts.from(call("GetUser", buildJsonObject { put("AccessToken", token) }))
+    }
+
+    override suspend fun setRecoveryEmail(address: String) {
+        val token = accessToken()
+        call(
+            "UpdateUserAttributes",
+            buildJsonObject {
+                put("AccessToken", token)
+                putJsonArray("UserAttributes") { add(nameValue("email", address)) }
+            },
+        )
+    }
+
+    override suspend fun sendRecoveryEmailCode() {
+        val token = accessToken()
+        call(
+            "GetUserAttributeVerificationCode",
+            buildJsonObject {
+                put("AccessToken", token)
+                put("AttributeName", "email")
+            },
+        )
+    }
+
+    override suspend fun verifyRecoveryEmail(code: String) {
+        val token = accessToken()
+        call(
+            "VerifyUserAttribute",
+            buildJsonObject {
+                put("AccessToken", token)
+                put("AttributeName", "email")
+                put("Code", code)
+            },
+        )
+    }
+
+    /**
+     * The access token the user's own attribute calls authenticate with,
+     * refreshed when stale the way [currentIdToken] refreshes the ID token.
+     */
+    private suspend fun accessToken(): String =
+        mutex.withLock {
+            val tokens = tokenStore.readTokens() ?: throw CabalmailException.NotSignedIn()
+            if (!tokens.isExpired(clock())) {
+                return@withLock tokens.accessToken
+            }
+            val refreshed = refresh(tokens)
+            tokenStore.writeTokens(refreshed)
+            refreshed.accessToken
+        }
+
     override fun currentUsername(): String? = tokenStore.readUsername()
 
     override fun currentTokens(): AuthTokens? = tokenStore.readTokens()

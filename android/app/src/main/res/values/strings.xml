@@ -374,6 +374,7 @@
     <string name="settings_account">Account</string>
     <string name="settings_signed_in_as">Signed in</string>
     <string name="settings_server">Server</string>
+    <string name="settings_recovery_email">Recovery email</string>
     <string name="settings_display_name">Display name</string>
     <string name="settings_display_name_empty">None — messages show only the address</string>
     <string name="settings_reading">Reading</string>
