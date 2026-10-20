@@ -46,7 +46,7 @@ for A.
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Done 2026-10-18 (#2131, #2133) |
 | B2    | Apple: sign-up, confirm and resend screens                       | Done 2026-10-19 (#2143) |
 | B3    | Android: sign-up, confirm and resend screens                     | Done 2026-10-19 (#2145) |
-| B4    | Native: recovery-email gate after sign-in                        | Apple in review; Android next |
+| B4    | Native: recovery-email gate after sign-in                        | Done 2026-10-20 (#2152, #2153) |
 | C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Done 2026-10-18 (#2124, #2126) |
 | C2    | Native: first admin feature — Users (approve, disable, delete)   | Done 2026-10-18 (#2127, #2128) |
 
@@ -350,7 +350,7 @@ by default, whose whole row toggles it. The kit's `Config` gains
 
 ### B4 — Recovery-email gate
 
-**Status:** Apple in review; Android next, as its own PR.
+**Status:** Done 2026-10-20 (#2152 Apple, #2153 Android).
 
 Neither native client checks for a verified recovery email after
 sign-in. A natively created account (B2/B3) with SMS on that gave an
@@ -377,6 +377,15 @@ in `SignInView` for that callback moved its second-factor step into
 `MfaChallengeForm`, unchanged; that step's two platform conditionals
 and two cancel-role buttons moved with it, so the allowlist row and the
 role scan's entry moved too.
+
+As built (Android, #2153): the kit gains the same `RecoveryContacts` and
+`RecoveryEmailPrompt` and the four `AuthService` calls, authenticated
+with an access token refreshed under the same mutex as the ID token.
+`RecoveryEmailViewModel` drives Settings › Account › Recovery email (the
+`recovery-email` route) and the full-screen dialog `MainActivity` shows
+after an interactive sign-in or MFA answer; `SignInViewModel` runs the
+check through `recoveryEmailPrompt()`, which answers null on any
+failure, so the check can't turn a sign-in that worked into an error.
 
 Locked-out TOTP enrollment through `enrollClientId` is the remaining
 native gap. Android's config already carries the field. It only
