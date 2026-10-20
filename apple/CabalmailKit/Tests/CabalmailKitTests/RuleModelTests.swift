@@ -87,17 +87,20 @@ final class RuleModelTests: XCTestCase {
         XCTAssertTrue(rule.id.hasPrefix("r-"))
     }
 
-    func testDecodeRejectsUnknownFieldAndAction() {
-        // A `bcc` condition or a future action must fail the decode rather
-        // than be silently coerced (and rewritten on the next save).
+    func testDecodeKeepsUnknownFieldAndActionOpaque() {
+        // This test used to assert the opposite: an unknown `field` or
+        // `action` threw, so that no coerced value could be written back.
+        // #1901 kept that guarantee while dropping the cost — the value
+        // decodes to `.unknown`, which re-encodes verbatim and renders
+        // read-only, instead of failing the whole set's decode.
         let bccRule = #"{"conditions":[{"field":"bcc","value":"x"}]}"#
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(Rule.self, from: Data(bccRule.utf8))
-        )
+        let decodedBcc = try? JSONDecoder().decode(Rule.self, from: Data(bccRule.utf8))
+        XCTAssertEqual(decodedBcc?.conditions.map(\.field), [.unknown("bcc")])
+        XCTAssertEqual(decodedBcc?.isEditable, false)
         let futureAction = #"{"action":"quarantine"}"#
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(Rule.self, from: Data(futureAction.utf8))
-        )
+        let decodedAction = try? JSONDecoder().decode(Rule.self, from: Data(futureAction.utf8))
+        XCTAssertEqual(decodedAction?.action, .unknown("quarantine"))
+        XCTAssertEqual(decodedAction?.isEditable, false)
     }
 
     func testEmptyFlagsStaysOffTheWireAndNonEmptyRides() throws {
@@ -202,5 +205,88 @@ final class RuleModelTests: XCTestCase {
             XCTAssertTrue(id.dropFirst(2).allSatisfy { "0123456789abcdef".contains($0) })
         }
         XCTAssertNotEqual(Rule.mintID(), Rule.mintID())
+    }
+
+    // MARK: - Values newer than this build (#1901)
+
+    /// The issue's payload: a two-rule set whose second rule carries an
+    /// action this build doesn't know.
+    private static let unknownActionSetJSON = """
+    {"version":7,"updatedAt":"2026-10-06T00:00:00Z","rules":[\
+    {"id":"r-00000000000a","name":"Known rule",\
+    "conditions":[{"field":"from","value":"aws"}],"action":"archive"},\
+    {"id":"r-00000000000b","name":"Newer rule",\
+    "conditions":[{"field":"from","value":"ops"}],"action":"quarantine"}]}
+    """
+
+    func testUnknownActionKeepsTheRestOfTheSetReadable() throws {
+        // Before #1901 the unknown raw value threw out of `[Rule]`, so the
+        // whole set failed to decode and the editor showed a load error in
+        // place of every rule it did understand.
+        let set = try JSONDecoder().decode(
+            RuleSet.self, from: Data(Self.unknownActionSetJSON.utf8)
+        )
+        XCTAssertEqual(set.version, 7)
+        XCTAssertEqual(set.rules.map(\.name), ["Known rule", "Newer rule"])
+        XCTAssertEqual(set.rules[0].action, .archive)
+        XCTAssertTrue(set.rules[0].isEditable)
+        XCTAssertEqual(set.rules[1].action, .unknown("quarantine"))
+        XCTAssertFalse(set.rules[1].isEditable)
+        XCTAssertEqual(set.rules[1].unknownWireValues, ["quarantine"])
+        // Not coerced to a known action: `none` would have made a filing
+        // rule stop filing on the next save.
+        XCTAssertNotEqual(set.rules[1].action, Rule.Action.none)
+        XCTAssertNil(Rule.Action.allCases.first { $0 == .unknown("quarantine") })
+    }
+
+    func testUnknownConditionFieldKeepsTheRestOfTheSetReadable() throws {
+        let json = """
+        {"version":7,"rules":[\
+        {"id":"r-00000000000a","name":"Known rule",\
+        "conditions":[{"field":"list_id","value":"announce"}],"action":"copy",\
+        "copyFolders":["Lists"]},\
+        {"id":"r-00000000000b","name":"Plain rule",\
+        "conditions":[{"field":"from","value":"ops"}],"action":"copy",\
+        "copyFolders":["Ops"]}]}
+        """
+        let set = try JSONDecoder().decode(RuleSet.self, from: Data(json.utf8))
+        XCTAssertEqual(set.rules.map(\.name), ["Known rule", "Plain rule"])
+        XCTAssertEqual(set.rules[0].conditions.map(\.field), [.unknown("list_id")])
+        XCTAssertFalse(set.rules[0].isEditable)
+        XCTAssertEqual(set.rules[0].unknownWireValues, ["list_id"])
+        // The sibling rule is untouched by its neighbour's unknown field.
+        XCTAssertTrue(set.rules[1].isEditable)
+        XCTAssertEqual(set.rules[1].conditions.map(\.field), [.from])
+        XCTAssertNil(Rule.Field.allCases.first { $0 == .unknown("list_id") })
+    }
+
+    func testUnknownValuesRoundTripVerbatim() throws {
+        // The set is re-PUT whole on the next edit of any rule, so an
+        // opaque rule has to go back out carrying exactly what came in.
+        let set = try JSONDecoder().decode(
+            RuleSet.self, from: Data(Self.unknownActionSetJSON.utf8)
+        )
+        var opaque = set.rules[1]
+        opaque.conditions = [Rule.Condition(field: .unknown("list_id"), value: "ops")]
+        let data = try JSONEncoder().encode([set.rules[0], opaque])
+        let objects = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        )
+        XCTAssertEqual(objects[0]["action"] as? String, "archive")
+        XCTAssertEqual(objects[1]["action"] as? String, "quarantine")
+        let conditions = try XCTUnwrap(objects[1]["conditions"] as? [[String: Any]])
+        XCTAssertEqual(conditions[0]["field"] as? String, "list_id")
+        // And it survives the trip home again, unchanged.
+        let reread = try JSONDecoder().decode([Rule].self, from: data)
+        XCTAssertEqual(reread, [set.rules[0], opaque])
+    }
+
+    func testLegacyContinueNormalizationLeavesAnUnknownActionAlone() {
+        // The one transformation `load()` applies to every decoded rule
+        // must not touch a rule it can't read: `copy` would be a guess.
+        let opaque = Rule(
+            name: "Newer rule", action: .unknown("quarantine"), continueToNext: true
+        )
+        XCTAssertEqual(opaque.normalizingLegacyContinue(), opaque)
     }
 }

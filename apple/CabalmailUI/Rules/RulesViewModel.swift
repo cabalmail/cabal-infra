@@ -147,8 +147,14 @@ final class RulesViewModel {
         rules.first { $0.id == id }
     }
 
+    /// Writes an edited rule back. A rule the editors render read-only
+    /// (`Rule.isEditable` false — a field or action newer than this build)
+    /// is refused here rather than only in the views: saving a rewritten
+    /// copy of a rule we can't represent would drop whatever the newer
+    /// writer meant (#1901).
     func update(_ rule: Rule) {
         guard let index = rules.firstIndex(where: { $0.id == rule.id }),
+              rules[index].isEditable,
               rules[index] != rule
         else { return }
         rules[index] = rule
@@ -168,6 +174,9 @@ final class RulesViewModel {
     @discardableResult
     func duplicate(_ id: String) -> String? {
         guard let original = rule(withID: id),
+              // A copy of an unrenderable rule would be a new rule this
+              // build can't express; the row hides Duplicate for one.
+              original.isEditable,
               let index = rules.firstIndex(where: { $0.id == id }),
               rules.count < RulesValidator.maxRules
         else { return nil }

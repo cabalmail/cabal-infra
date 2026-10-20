@@ -478,9 +478,10 @@ final class RulesLoadCancellationTests: XCTestCase {
     }
 }
 
-/// Scripted backend. `@unchecked Sendable`: the view model is MainActor-
+/// Scripted backend, shared with `RulesOpaqueRuleTests`.
+/// `@unchecked Sendable`: the view model is MainActor-
 /// bound and awaits every call, so access is serial in these tests.
-private final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
+final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
     var ruleSet = RuleSet()
     var folders: [Folder] = []
     var saveError: Error?

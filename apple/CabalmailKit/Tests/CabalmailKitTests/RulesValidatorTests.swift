@@ -255,4 +255,38 @@ final class RulesValidatorTests: XCTestCase {
         let issues = RulesValidator.validate([validRule(), second])
         XCTAssertEqual(issues.map(\.ruleIndex), [1])
     }
+
+    // MARK: - Rules this build can't render (#1901)
+
+    func testARuleWithAnUnknownActionIsNeverAnIssue() {
+        // An opaque rule is round-tripped verbatim and nothing local can
+        // edit it, so a client-side issue on it would hold every later
+        // save of the set hostage.
+        var opaque = validRule()
+        opaque.action = .unknown("quarantine")
+        opaque.name = ""
+        opaque.forward = ["not an address"]
+        XCTAssertEqual(RulesValidator.validate(opaque), [])
+
+        // Control: the same two defects on a rule this build CAN render
+        // are still issues, so the check above is not inert.
+        var rendered = opaque
+        rendered.action = .move
+        XCTAssertEqual(issueFields(rendered).sorted(), ["forward[0]", "name"])
+    }
+
+    func testAnOpaqueRuleDoesNotBlockTheSetsSave() {
+        var opaque = validRule()
+        opaque.conditions = [Rule.Condition(field: .unknown("list_id"), value: "")]
+        XCTAssertEqual(RulesValidator.validate([validRule(), opaque]), [])
+
+        // Control: that empty condition value is an issue once the field is
+        // one this build knows.
+        var rendered = opaque
+        rendered.conditions = [Rule.Condition(field: .from, value: "")]
+        XCTAssertEqual(
+            RulesValidator.validate([validRule(), rendered]).map(\.field),
+            ["conditions[0].value"]
+        )
+    }
 }

@@ -10,22 +10,96 @@ import Foundation
 ///
 /// Decoding is tolerant of missing keys — absent fields read as the same
 /// defaults the Lambda's normalizer applies — so an older server row never
-/// fails the whole set. Unknown `field` / `action` values still fail the
-/// decode deliberately: silently coercing them would rewrite the rule on the
-/// next save.
+/// fails the whole set. A `field` or `action` value this build doesn't know
+/// (written by a newer client or a newer Lambda) decodes to `.unknown`,
+/// carrying the wire value verbatim: the rule is kept opaque rather than
+/// coerced, the editors render it read-only (`isEditable`), and a save of
+/// the set re-emits it byte for byte. Throwing instead failed the whole
+/// set's decode and left the editor showing nothing but a load error
+/// (#1901).
 public struct Rule: Codable, Identifiable, Hashable, Sendable {
     /// Condition fields. Five, not six: BCC recipients are stripped before a
     /// message is transmitted, so a BCC condition would silently never match
     /// (see the plan's "BCC is not offered").
-    public enum Field: String, Codable, CaseIterable, Sendable {
+    public enum Field: RawRepresentable, Codable, CaseIterable, Hashable, Sendable {
         case from, to, cc, subject, body
+        /// A field this build doesn't know, holding the wire value. Not in
+        /// `allCases`, so no picker ever offers one.
+        case unknown(String)
+
+        public static let allCases: [Field] = [.from, .to, .cc, .subject, .body]
+
+        public init(rawValue: String) {
+            self = Self.allCases.first { $0.rawValue == rawValue } ?? .unknown(rawValue)
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .from: return "from"
+            case .to: return "to"
+            case .cc: return "cc"
+            case .subject: return "subject"
+            case .body: return "body"
+            case .unknown(let value): return value
+            }
+        }
+
+        /// The wire value when this build doesn't know the field, else nil.
+        public var unknownValue: String? {
+            if case .unknown(let value) = self { return value }
+            return nil
+        }
+
+        public init(from decoder: Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
     /// The mutually-exclusive destination. `none` is the no-destination case
     /// (auxiliary actions still run); `archive` targets the user's existing
     /// `Archive` folder and is skipped by the compiler when there isn't one.
-    public enum Action: String, Codable, CaseIterable, Sendable {
+    public enum Action: RawRepresentable, Codable, CaseIterable, Hashable, Sendable {
         case move, copy, delete, archive, none
+        /// An action this build doesn't know, holding the wire value. Not in
+        /// `allCases`, so the destination list never offers one.
+        case unknown(String)
+
+        public static let allCases: [Action] = [.move, .copy, .delete, .archive, .none]
+
+        public init(rawValue: String) {
+            self = Self.allCases.first { $0.rawValue == rawValue } ?? .unknown(rawValue)
+        }
+
+        public var rawValue: String {
+            switch self {
+            case .move: return "move"
+            case .copy: return "copy"
+            case .delete: return "delete"
+            case .archive: return "archive"
+            case .none: return "none"
+            case .unknown(let value): return value
+            }
+        }
+
+        /// The wire value when this build doesn't know the action, else nil.
+        public var unknownValue: String? {
+            if case .unknown(let value) = self { return value }
+            return nil
+        }
+
+        public init(from decoder: Decoder) throws {
+            self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
     /// One trigger clause; a rule's conditions are ANDed and the only
@@ -91,6 +165,23 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
     public var replyBody: String
     /// Spill-through: keep evaluating later rules after this one fires.
     public var continueToNext: Bool
+
+    /// The wire values this build doesn't know, in wire order: the
+    /// condition fields first, then the action. Empty for every rule the
+    /// editors can render, so it doubles as the read-only question
+    /// (`isEditable`) and as what to tell the user the rule uses.
+    public var unknownWireValues: [String] {
+        conditions.compactMap(\.field.unknownValue) + [action.unknownValue].compactMap { $0 }
+    }
+
+    /// Whether the editors may change this rule. False for a rule carrying
+    /// a `field` or `action` this build doesn't know: there is no honest way
+    /// to show, let alone edit, a condition or destination whose meaning is
+    /// unknown, and an edit would save a rewritten rule (#1901). Such a rule
+    /// is listed, reorderable and deletable, and saved back unchanged.
+    public var isEditable: Bool {
+        unknownWireValues.isEmpty
+    }
 
     public init(
         id: String = Rule.mintID(),
@@ -202,7 +293,7 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
             rule.copyFolders = ["Archive"]
         case .delete:
             rule.continueToNext = false
-        case .copy, .none:
+        case .copy, .none, .unknown:
             break
         }
         return rule
