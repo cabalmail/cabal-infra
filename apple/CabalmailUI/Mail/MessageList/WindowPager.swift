@@ -252,6 +252,15 @@ struct WindowPager {
     /// since (#1870), otherwise the window would be mis-ordered or mis-
     /// aligned. Best-effort -- a failed fetch just leaves End to take the
     /// normal round trip.
+    ///
+    /// The generation clause is belt and braces, and deliberately kept as
+    /// such: every path that moves the generation cancels this task first
+    /// (`resetWindow` through `standDownWindowLoads`, and
+    /// `invalidateBottomPrefetch` on a size or row change), so
+    /// `!Task.isCancelled` returns before the generation is consulted and no
+    /// test can isolate it (#1981). The sibling guards elsewhere in the
+    /// window are pinned by stand-down tests; this one cannot be, and that
+    /// is a property of the cancel, not a gap in the suite.
     private func performBottomPrefetch(start: UInt32, total: UInt32) async {
         let sortAtKickoff = window.sortCriterion
         let generation = window.alignment.generation
