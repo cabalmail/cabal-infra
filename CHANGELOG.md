@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.1] - 2026-10-20
+
+### Changed
+- Apple: **Rules newer than the app stay readable.** A stored rule whose
+  condition field or action this build doesn't know — written by a newer
+  client or a newer server — now lists as a read-only row that says what it
+  uses, and is saved back to the server unchanged. The rules this build does
+  understand stay editable beside it; previously one such rule made the whole
+  set fail to decode, so the editor showed only a load error.
+
+### Fixed
+- Apple: **Back-out button on the feed and flag confirmations.** Six
+  confirmation dialogs — Delete Folder, Unsubscribe (from the feed sidebar
+  and from the subscription settings sheet), both Mark All as Read dialogs,
+  and Delete Flag in Settings — declared only their action button, so on
+  iPhone and visionOS, where SwiftUI drops a cancel-role button, the only
+  labelled control on screen was the action itself, destructive in four of
+  the six. Each now offers the same back-out its fourteen siblings do, and a
+  source-level invariant holds every `confirmationDialog` in the app targets
+  to declaring one.
+- Apple: **iPad keeps its message list and toolbar after the addresses
+  inspector.** Opening the Addresses inspector, composing from the message
+  list's overflow menu and cancelling could leave the window with nothing but
+  the reader's placeholder: no list column and no toolbar, so neither the
+  folder list nor the inspector's own toggle was reachable without relaunching.
+  The inspector tiles beside the split and takes its width out of it, which
+  left the pinned list column and the reading pane's declared floor asking for
+  more than the split had; the floor now yields to what the split has left
+  wherever it cannot have all 360pt, so the layout the composer's dismissal
+  re-resolves is one UIKit can still tile.
+
 ## [1.39.0] - 2026-10-20
 
 ### Added
