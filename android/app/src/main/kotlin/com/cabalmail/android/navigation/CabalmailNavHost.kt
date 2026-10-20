@@ -99,6 +99,8 @@ import com.cabalmail.android.ui.mail.folderListFilter
 import com.cabalmail.android.ui.rules.RuleEditorScreen
 import com.cabalmail.android.ui.rules.RulesScreen
 import com.cabalmail.android.ui.rules.RulesViewModel
+import com.cabalmail.android.ui.settings.RecoveryEmailScreen
+import com.cabalmail.android.ui.settings.RecoveryEmailViewModel
 import com.cabalmail.android.ui.settings.SettingsScreen
 import com.cabalmail.android.ui.settings.SettingsViewModel
 import com.cabalmail.android.ui.theme.ColorTokens
@@ -716,8 +718,14 @@ private fun MailNavGraph(
                         onBack = onBack,
                     )
                 },
+                onOpenRecoveryEmail = { navController.navigate("recovery-email") },
                 onSignOut = onSignOut,
             )
+        }
+
+        composable("recovery-email") {
+            val recoveryEmail: RecoveryEmailViewModel = viewModel(factory = RecoveryEmailViewModel.factory(container))
+            RecoveryEmailScreen(viewModel = recoveryEmail, onBack = { navController.popBackStack() })
         }
 
         composable("users/{username}") { entry ->

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.0] - 2026-10-20
+
+### Added
+- Android: **Recovery email in Settings.** Settings › Account › Recovery
+  email shows your recovery address and whether it is verified, and adds,
+  changes or verifies it with the code Cognito sends. After you sign in,
+  the app asks you to verify an address you gave but never verified, or
+  to add one when your account has no other way back in; an account
+  whose verified phone already recovers it, where the server sends
+  texts, isn't asked. You can skip the question.
+- Apple: **Recovery email in Settings, and a check after sign-in.**
+  Settings › Account › Recovery Email shows your recovery address and
+  whether it is verified, and adds, changes or verifies it with the code
+  Cognito sends. After you sign in, the app asks you to verify an
+  address you gave but never verified, or to add one when your account
+  has no other way back in. An account whose verified phone already
+  recovers it, where the server sends texts, isn't asked. You can skip
+  the question, and it is asked only in the window you signed in from.
+
 ## [1.38.0] - 2026-10-19
 
 ### Added

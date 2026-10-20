@@ -34,6 +34,12 @@ public actor StubAuthService: AuthService {
     public func beginTotpEnrollment() async throws -> String { "STUBSECRET" }
     public func confirmTotpEnrollment(code: String) async throws {}
     public func disableTotp() async throws {}
+    public func recoveryContacts() async throws -> RecoveryContacts {
+        RecoveryContacts(email: nil, emailVerified: false, phoneVerified: false)
+    }
+    public func setRecoveryEmail(_ address: String) async throws {}
+    public func sendRecoveryEmailCode() async throws {}
+    public func verifyRecoveryEmail(code: String) async throws {}
 
     public func signUp(
         username: String, password: String, email: String?, phone: String?, invitationCode: String?
@@ -75,6 +81,12 @@ public actor NullAuthService: AuthService {
     public func beginTotpEnrollment() async throws -> String { "NULLSECRET" }
     public func confirmTotpEnrollment(code: String) async throws {}
     public func disableTotp() async throws {}
+    public func recoveryContacts() async throws -> RecoveryContacts {
+        RecoveryContacts(email: nil, emailVerified: false, phoneVerified: false)
+    }
+    public func setRecoveryEmail(_ address: String) async throws {}
+    public func sendRecoveryEmailCode() async throws {}
+    public func verifyRecoveryEmail(code: String) async throws {}
     public func signUp(
         username: String, password: String, email: String?, phone: String?, invitationCode: String?
     ) async throws -> SignUpResult { .confirmed }

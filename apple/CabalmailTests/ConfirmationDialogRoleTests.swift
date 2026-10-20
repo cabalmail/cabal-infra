@@ -124,7 +124,7 @@ final class ConfirmationDialogRoleTests: XCTestCase {
     ///
     /// - `RichTextToolbar` presents an `.alert`, never a `confirmationDialog`,
     ///   and a cancel-role button renders normally there.
-    /// - `SignInView`'s pair are ordinary form rows (and a macOS button row),
+    /// - `MfaChallengeForm`'s pair are ordinary form rows (and a macOS button row),
     ///   not dialog actions.
     ///
     /// Keyed by path under `apple/`, not by filename: `ContentView.swift`
@@ -139,7 +139,7 @@ final class ConfirmationDialogRoleTests: XCTestCase {
     /// and the policy is compiled into it.
     private static let allowed = [
         "CabalmailUI/Compose/Editor/RichTextToolbar.swift": 1,
-        "CabalmailUI/Session/SignInView.swift": 2,
+        "CabalmailUI/Session/MfaChallengeForm.swift": 2,
     ]
 
     /// `force_try` is on in tests, so this throws rather than asserting the

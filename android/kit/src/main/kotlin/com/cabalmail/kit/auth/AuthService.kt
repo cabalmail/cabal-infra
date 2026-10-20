@@ -91,6 +91,23 @@ interface AuthService {
 
     suspend fun signOut()
 
+    /**
+     * The recovery email (`docs/auth.md`, "Recovery email"), with the user's
+     * own access token. [recoveryContacts] reads it for the check after
+     * sign-in and the settings row. [setRecoveryEmail] saves an address, and
+     * Cognito sends it a code, since the pool auto-verifies email; the pool
+     * keeps no pending value, so a verified address it replaces stops
+     * counting until the new one is verified. [sendRecoveryEmailCode] sends a
+     * fresh code and [verifyRecoveryEmail] takes it.
+     */
+    suspend fun recoveryContacts(): RecoveryContacts
+
+    suspend fun setRecoveryEmail(address: String)
+
+    suspend fun sendRecoveryEmailCode()
+
+    suspend fun verifyRecoveryEmail(code: String)
+
     /** Fresh ID token for API requests; refreshes automatically when stale. */
     suspend fun currentIdToken(): String
 

@@ -200,6 +200,12 @@ private struct AccountSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                NavigationLink {
+                    RecoveryEmailSettingsView()
+                } label: {
+                    Text("Recovery Email")
+                }
+                .accessibilityIdentifier("settings.recoveryEmail")
                 Button(role: .destructive) {
                     Task {
                         signOutInFlight = true

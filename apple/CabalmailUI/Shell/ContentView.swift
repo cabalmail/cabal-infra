@@ -19,6 +19,12 @@ public struct ContentView: View {
     /// restores comes back where it was (`StoredRoute`). Here, the one view a
     /// window keeps mounted across a sign-out, which clears it.
     @SceneStorage("route") private var storedRoute: Data?
+    /// Set when this window's sign-in form completes a sign-in, so the
+    /// recovery-email check runs once, here and in no other window
+    /// (auth parity B4).
+    @State private var checkRecoveryEmail = false
+    /// What that check asks, while its sheet is up.
+    @State private var recoveryPrompt: RecoveryEmailPrompt?
 
     public init() {}
 
@@ -27,13 +33,44 @@ public struct ContentView: View {
             switch appState.status {
             case .signedIn:
                 SignedInRootView(appState: appState, windowID: windowID, storedRoute: $storedRoute)
+                    .task(id: checkRecoveryEmail) { await runRecoveryEmailCheck() }
+                    .sheet(isPresented: recoveryPromptShown) { recoveryPromptSheet }
             case .restoring:
                 RestoringSplash()
             default:
-                SignInView()
+                SignInView(onSignedIn: { checkRecoveryEmail = true })
             }
         }
-        .onChange(of: appState.accountForgottenTick) { storedRoute = nil }
+        .onChange(of: appState.accountForgottenTick) {
+            storedRoute = nil
+            recoveryPrompt = nil
+        }
+    }
+
+    /// `docs/auth.md`, "After sign-in": one advisory check, which never
+    /// blocks the sign-in (`RecoveryEmailCheck`).
+    private func runRecoveryEmailCheck() async {
+        guard checkRecoveryEmail, let client = appState.client else { return }
+        checkRecoveryEmail = false
+        recoveryPrompt = await RecoveryEmailCheck.prompt(
+            auth: client.authService,
+            smsEnabled: client.configuration.smsEnabled
+        )
+    }
+
+    private var recoveryPromptShown: Binding<Bool> {
+        Binding(get: { recoveryPrompt != nil }, set: { if !$0 { recoveryPrompt = nil } })
+    }
+
+    @ViewBuilder private var recoveryPromptSheet: some View {
+        if let prompt = recoveryPrompt, let client = appState.client {
+            RecoveryEmailPromptSheet(
+                prompt: prompt,
+                auth: client.authService,
+                smsEnabled: client.configuration.smsEnabled,
+                onDismiss: { recoveryPrompt = nil }
+            )
+        }
     }
 }
 
