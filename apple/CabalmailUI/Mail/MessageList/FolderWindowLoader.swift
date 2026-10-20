@@ -265,7 +265,8 @@ final class FolderWindowLoader {
     /// Takes a STATUS reply's counts: `totalMessages` here, and the Unread and
     /// Flagged counts in the mail store, where the sidebar reads them too
     /// (`MailSessionStore.takeStatus`). Returns the server's own total, the
-    /// numbering the top page is addressed in.
+    /// numbering the top page is addressed in -- `listedMessages`, since that
+    /// is the set the positions are over (#1836).
     ///
     /// A reply that may predate a removal this client already applied
     /// (`mayPredateRemoval`) would count the departed message again, so it
@@ -278,7 +279,7 @@ final class FolderWindowLoader {
         mayPredateRemoval: Bool = false,
         askedAt: ContinuousClock.Instant = .now
     ) -> UInt32 {
-        let serverMessages = UInt32(max(0, status.messages ?? 0))
+        let serverMessages = UInt32(max(0, status.listedMessages ?? 0))
         var messages = serverMessages
         if mayPredateRemoval {
             messages = min(messages, totalBeforeReset ?? totalMessages)

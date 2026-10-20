@@ -27,6 +27,10 @@ public struct ApiFolderStatus: Sendable, Codable, Hashable {
     /// the Lambda adds a SEARCH FLAGGED only on demand. Nil on the cheap
     /// STATUS-only calls (the badge poller and idle).
     public let flagged: Int?
+    /// Count of not-deleted messages, the set `/list_messages` sorts. Present
+    /// alongside `flagged` on a `?flagged=1` request, nil on the cheap
+    /// STATUS-only calls. See `FolderStatus.listedMessages`.
+    public let undeleted: Int?
     public let uidValidity: UInt32?
     public let uidNext: UInt32?
 
@@ -34,6 +38,7 @@ public struct ApiFolderStatus: Sendable, Codable, Hashable {
         case messages
         case unseen
         case flagged
+        case undeleted
         case uidValidity = "uid_validity"
         case uidNext = "uid_next"
     }

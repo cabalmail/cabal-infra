@@ -185,8 +185,9 @@ struct WindowRefresher {
         generation passGeneration: Int,
         uidValidity: UInt32
     ) async throws {
-        // The top page is addressed in the server's own numbering.
-        let messages = UInt32(max(0, status.messages ?? 0))
+        // The top page is addressed in the server's own numbering, over the
+        // set `/list_messages` sorts (#1836).
+        let messages = UInt32(max(0, status.listedMessages ?? 0))
         let plan = await window.reconciler.windowPlan(for: reading)
         guard passGeneration == window.alignment.generation else { return }
         switch plan {
@@ -218,7 +219,7 @@ struct WindowRefresher {
         // pruning the list against an empty fetch (#939).
         let licensed = try await applyRefreshPage(fetched, uidNext: status.uidNext ?? 1,
                                                   uidValidity: uidValidity,
-                                                  serverReportsEmpty: status.messages == 0)
+                                                  serverReportsEmpty: status.listedMessages == 0)
         // The page's caches were written after its rows; whatever replaced
         // the rows meanwhile anchors its own window.
         guard generation == window.alignment.generation else { return }
