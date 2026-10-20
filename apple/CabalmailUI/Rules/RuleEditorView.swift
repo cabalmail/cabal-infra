@@ -146,6 +146,7 @@ private struct RuleConditionsSection: View {
         case .cc: return "Cc"
         case .subject: return "Subject"
         case .body: return "Body"
+        case .unknown(let value): return value
         }
     }
 }
@@ -159,7 +160,9 @@ extension Rule.Field {
     var conditionValueEntry: TextEntryKind {
         switch self {
         case .from, .to, .cc: return .email
-        case .subject, .body: return .verbatim
+        // A field this build doesn't know reaches no editor (the row is
+        // read-only, #1901); free text is the harmless answer.
+        case .subject, .body, .unknown: return .verbatim
         }
     }
 }
@@ -278,7 +281,7 @@ private struct RuleDestinationSection: View {
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
             }
-        case .archive, .delete, .none:
+        case .archive, .delete, .none, .unknown:
             EmptyView()
         }
     }

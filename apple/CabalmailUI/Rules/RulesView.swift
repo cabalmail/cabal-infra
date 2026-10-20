@@ -145,14 +145,19 @@ private struct RuleRow: View {
         // the switch trailing, where the grouped form puts every other
         // Settings switch.
         HStack(spacing: 12) {
-            NavigationLink {
-                RuleEditorView(model: model, ruleID: rule.id)
-            } label: {
+            if rule.isEditable {
+                NavigationLink {
+                    RuleEditorView(model: model, ruleID: rule.id)
+                } label: {
+                    summary
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
                 summary
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             enabledToggle
             // Visible stand-in for the context menu below: right-click
             // is the only other route to Move/Duplicate/Delete on macOS,
@@ -170,12 +175,24 @@ private struct RuleRow: View {
             rowActions
         }
         #else
-        NavigationLink {
-            RuleEditorView(model: model, ruleID: rule.id)
-        } label: {
-            HStack(spacing: 12) {
-                enabledToggle
-                summary
+        // A rule this build can't render has no editor to push: the row
+        // shows what it uses and stays read-only (#1901). Reorder and
+        // delete still apply — neither rewrites the rule.
+        Group {
+            if rule.isEditable {
+                NavigationLink {
+                    RuleEditorView(model: model, ruleID: rule.id)
+                } label: {
+                    HStack(spacing: 12) {
+                        enabledToggle
+                        summary
+                    }
+                }
+            } else {
+                HStack(spacing: 12) {
+                    enabledToggle
+                    summary
+                }
             }
         }
         .contextMenu {
@@ -190,6 +207,10 @@ private struct RuleRow: View {
             set: { model.setEnabled(rule.id, $0) }
         ))
         .labelsHidden()
+        // Enabling is an edit like any other, and the model refuses one on
+        // a rule it can't render, so the switch reads as broken unless it
+        // is disabled with it.
+        .disabled(!rule.isEditable)
         // The grouped form's mini switch on the Mac, where an automatic
         // toggle sharing its row drew a checkbox in the old list. iOS and
         // visionOS draw this switch already.
@@ -198,8 +219,16 @@ private struct RuleRow: View {
 
     private var summary: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(rule.name.isEmpty ? "Untitled rule" : rule.name)
-                .foregroundStyle(rule.enabled ? .primary : .secondary)
+            HStack(spacing: 6) {
+                Text(rule.name.isEmpty ? "Untitled rule" : rule.name)
+                    .foregroundStyle(rule.enabled ? .primary : .secondary)
+                if !rule.isEditable {
+                    Image(systemName: "lock")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Read-only")
+                }
+            }
             Text(RuleSummary.describe(rule))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -225,10 +254,12 @@ private struct RuleRow: View {
         }
         .disabled(!model.canMove(id: rule.id, by: 1))
         Divider()
-        Button {
-            model.duplicate(rule.id)
-        } label: {
-            Label("Duplicate", systemImage: "plus.square.on.square")
+        if rule.isEditable {
+            Button {
+                model.duplicate(rule.id)
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
         }
         Button(role: .destructive) {
             model.delete(id: rule.id)
@@ -380,6 +411,14 @@ enum RuleTemplates {
 /// handoff's `describeRule`.
 enum RuleSummary {
     static func describe(_ rule: Rule) -> String {
+        // A rule carrying a field or action this build doesn't know is
+        // summarized by what it uses instead of by a guess: every other
+        // phrase below would have to render a value with no meaning here
+        // (#1901).
+        if !rule.isEditable {
+            return "Uses \(rule.unknownWireValues.joined(separator: ", ")), "
+                + "which this version doesn't understand — kept unchanged"
+        }
         var parts = [conditionsPhrase(rule.conditions)]
         // A continuing None rule neither files nor stops; "no filing" would
         // just be noise, so a decorate-only rule reads "flag · continue".
@@ -423,6 +462,8 @@ enum RuleSummary {
             return "archive"
         case .none:
             return "no filing"
+        case .unknown(let value):
+            return value
         }
     }
 
@@ -433,6 +474,7 @@ enum RuleSummary {
         case .cc: return "Cc"
         case .subject: return "Subject"
         case .body: return "Body"
+        case .unknown(let value): return value
         }
     }
 }
