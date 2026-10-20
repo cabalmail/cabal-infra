@@ -206,19 +206,19 @@ final class AuthServiceTests: XCTestCase {
     func testStripLambdaTriggerWrapperLeavesOrdinaryMessagesAlone() {
         // No wrapper at all.
         XCTAssertEqual(
-            CognitoAuthService.stripLambdaTriggerWrapper(from: "Invitation code required"),
+            CognitoWire.stripLambdaTriggerWrapper(from: "Invitation code required"),
             "Invitation code required"
         )
         // A mid-sentence occurrence (the lead-in contains spaces) is a
         // real message, not Cognito's wrapper.
         XCTAssertEqual(
-            CognitoAuthService.stripLambdaTriggerWrapper(from: "The last attempt failed with error 42"),
+            CognitoWire.stripLambdaTriggerWrapper(from: "The last attempt failed with error 42"),
             "The last attempt failed with error 42"
         )
         // A trigger message with a single terminal period keeps it.
         let singlePeriod = "PreSignUp_SignUp failed with error Signups are closed."
         XCTAssertEqual(
-            CognitoAuthService.stripLambdaTriggerWrapper(from: singlePeriod),
+            CognitoWire.stripLambdaTriggerWrapper(from: singlePeriod),
             "Signups are closed."
         )
     }

@@ -45,8 +45,8 @@ for A.
 | A3    | Promote the auth contract to `docs/auth.md`                      | Done 2026-10-18 |
 | B1    | Native kits: sign-up contract fixes (Apple + Android)            | Done 2026-10-18 (#2131, #2133) |
 | B2    | Apple: sign-up, confirm and resend screens                       | Done 2026-10-19 (#2143) |
-| B3    | Android: sign-up, confirm and resend screens                     | In review |
-| B4    | Native: recovery-email gate after sign-in                        | Not started |
+| B3    | Android: sign-up, confirm and resend screens                     | Done 2026-10-19 (#2145) |
+| B4    | Native: recovery-email gate after sign-in                        | Apple in review; Android next |
 | C1    | Native kits: `isAdmin` from the ID token's `cognito:groups`      | Done 2026-10-18 (#2124, #2126) |
 | C2    | Native: first admin feature — Users (approve, disable, delete)   | Done 2026-10-18 (#2127, #2128) |
 
@@ -297,7 +297,7 @@ updated; the app module has none.
 
 ### B2 / B3 — Sign-up screens
 
-**Status:** B2 (Apple) done 2026-10-19 (#2143); B3 (Android) in review.
+**Status:** Done: B2 (Apple) 2026-10-19 (#2143), B3 (Android) 2026-10-19 (#2145).
 
 A "Create account" entry on each sign-in screen, using the control
 domain already typed there. Screens: sign-up form (username, password,
@@ -350,7 +350,7 @@ by default, whose whole row toggles it. The kit's `Config` gains
 
 ### B4 — Recovery-email gate
 
-**Status:** Not started.
+**Status:** Apple in review; Android next, as its own PR.
 
 Neither native client checks for a verified recovery email after
 sign-in. A natively created account (B2/B3) with SMS on that gave an
@@ -360,6 +360,23 @@ to add an email when SMS is on and the phone is verified. Because a
 phone-only account is then never asked, B4 also adds a recovery-email
 row to each client's settings, as the webmail's Security view has
 (`docs/auth.md`, "Recovery email").
+
+As built (Apple): the Kit gains `RecoveryContacts` (from `GetUser`'s
+attributes) with the D5 rule as `promptAfterSignIn(smsEnabled:)`, and
+four `AuthService` calls: `recoveryContacts`, `setRecoveryEmail`,
+`sendRecoveryEmailCode` and `verifyRecoveryEmail`. To fit them, the
+Cognito request and its error mapping moved out of the actor into
+`CognitoWire`, which `CognitoAuthService` calls through. The three new
+writes have rows in `docs/request-replay.md` (sent once). In the app,
+`RecoveryEmailModel` drives both Settings › Account › Recovery Email and
+the sheet the check raises; the check runs in the window whose sign-in
+form completed the sign-in (`SignInView.onSignedIn`, read by
+`ContentView`), so a second window doesn't raise a second sheet, and a
+failed `GetUser` raises nothing. The sheet can be skipped. Making room
+in `SignInView` for that callback moved its second-factor step into
+`MfaChallengeForm`, unchanged; that step's two platform conditionals
+and two cancel-role buttons moved with it, so the allowlist row and the
+role scan's entry moved too.
 
 Locked-out TOTP enrollment through `enrollClientId` is the remaining
 native gap. Android's config already carries the field. It only
