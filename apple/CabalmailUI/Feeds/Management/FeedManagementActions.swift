@@ -95,16 +95,19 @@ struct FeedManagementSheets: ViewModifier {
             }
             .confirmationDialog(deleteTitle, isPresented: deleteBinding, titleVisibility: .visible) {
                 Button("Delete Folder", role: .destructive) { deletePendingFolder() }
+                Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
             } message: {
                 Text("Feeds and folders inside it move up one level; nothing is unsubscribed.")
             }
             .confirmationDialog(unsubscribeTitle, isPresented: unsubscribeBinding, titleVisibility: .visible) {
                 Button("Unsubscribe", role: .destructive) { unsubscribePending() }
+                Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
             } message: {
                 Text("Its items and your read and flag marks for it are removed from this account.")
             }
             .confirmationDialog(markAllReadTitle, isPresented: markAllReadBinding, titleVisibility: .visible) {
                 Button("Mark All as Read") { markAllReadPending() }
+                Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
             } message: {
                 Text("Items you have not opened will be marked read too.")
             }

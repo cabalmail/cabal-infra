@@ -111,6 +111,7 @@ struct FeedItemListView: View {
         .confirmationDialog("Mark all items in \(title) as read?", isPresented: $confirmMarkAllRead,
                             titleVisibility: .visible) {
             Button("Mark All as Read") { Task { await model?.markAllRead() } }
+            Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
         } message: {
             Text("Items you have not opened will be marked read too.")
         }
