@@ -707,10 +707,14 @@ targets:
         # about a test, and 248 of them accumulated unnoticed because
         # nothing failed on one. It replaces the per-group `-Werror` list
         # tranche 1 added, which only covered the three groups the bundle
-        # was clean of then; the isolation diagnostics are ungrouped (no
-        # `[#Name]` to promote), so blanket promotion is the only thing
-        # that can guard them. Adding a warning-emitting test now fails the
-        # build rather than growing the backlog.
+        # was clean of then. What it promotes is every diagnostic the
+        # compiler is willing to promote — the `sending` and key-path
+        # families among them — which is NOT the actor-isolation family
+        # that was 178 of those 248: those stay warnings under
+        # `-warnings-as-errors`, and under `-swift-version 6` on this
+        # target too (both measured, #2135). Nothing in the build settings
+        # guards them. `TestBundleIsolationScanTests` guards the shape 165
+        # of them took instead.
         SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
         # XcodeGen derives TEST_HOST from the host target's NAME, but
         # CabalmailMac overrides PRODUCT_NAME to "Cabalmail" (the bundle
