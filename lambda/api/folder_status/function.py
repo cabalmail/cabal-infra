@@ -1,5 +1,5 @@
 '''Returns IMAP STATUS data (MESSAGES, UNSEEN, UIDVALIDITY, UIDNEXT) for a
-folder, plus an optional FLAGGED count.'''
+folder, plus optional FLAGGED and NOT-DELETED counts.'''
 import json
 from helper import get_imap_client # pylint: disable=import-error
 from helper import validate_folder_name # pylint: disable=import-error
@@ -27,6 +27,14 @@ def handler(event, _context):
     needs it -- keeps paying for the cheap STATUS-only round trip. The count
     excludes DELETED-but-not-expunged messages to match the `NOT DELETED` set
     /list_messages returns, so the "Flagged" pill and the list agree.
+
+    `?flagged=1` also returns `undeleted`, the same `NOT DELETED` count without
+    the FLAGGED term: STATUS MESSAGES counts DELETED-but-not-expunged messages,
+    while /list_messages sorts `NOT DELETED`, so the two totals are over
+    different sets and a client that addresses list positions by that total
+    sits one row off until the expunge lowers MESSAGES (#1836). Both extra
+    counts ride the one selection this parameter already pays for; the
+    STATUS-only path, which addresses no positions, is unchanged.
     '''
     query_string = event['queryStringParameters']
     user = event['requestContext']['authorizer']['claims']['cognito:username']
@@ -49,6 +57,7 @@ def handler(event, _context):
     }
     if want_flagged:
         body["flagged"] = len(client.search(['FLAGGED', 'NOT', 'DELETED']))
+        body["undeleted"] = len(client.search(['NOT', 'DELETED']))
     client.logout()
     return {
         "statusCode": 200,

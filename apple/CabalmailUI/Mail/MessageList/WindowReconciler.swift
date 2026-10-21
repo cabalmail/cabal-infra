@@ -14,13 +14,17 @@ struct WindowReconciler {
     /// to say where the rows sit: it lacks a count or UIDNEXT, it may have
     /// been answered before a removal this list already applied, a re-read
     /// is already running, or the window changed while it was out.
+    ///
+    /// The count is `listedMessages`, the one the server's list positions are
+    /// in: anchoring on `MESSAGES` leaves the window a row off per message
+    /// flagged `\Deleted` elsewhere and not yet expunged (#1836).
     func windowReading(
         _ status: FolderStatus,
         askedAt: ContinuousClock.Instant,
         mayPredateRemoval: Bool,
         generation: Int
     ) -> WindowReading? {
-        guard let messages = status.messages, let uidNext = status.uidNext, uidNext > 0,
+        guard let messages = status.listedMessages, let uidNext = status.uidNext, uidNext > 0,
               !mayPredateRemoval, !window.alignment.isReconciling, generation == window.alignment.generation
         else { return nil }
         return WindowReading(total: UInt32(max(0, messages)), uidNext: uidNext, askedAt: askedAt)

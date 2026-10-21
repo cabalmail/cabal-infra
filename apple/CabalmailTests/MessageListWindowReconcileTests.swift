@@ -74,6 +74,27 @@ final class MessageListWindowReconcileTests: XCTestCase {
         XCTAssertFalse(cached.contains(500))
     }
 
+    // MARK: - #1836: a `\Deleted` flag set elsewhere, with no expunge
+
+    /// A message flagged `\Deleted` elsewhere leaves the `NOT DELETED` sort
+    /// the pages are served from while STATUS MESSAGES still counts it, so a
+    /// window anchored on MESSAGES sees no change and sits a row off from
+    /// there down. The anchor reads the not-deleted count instead (#1836).
+    func testAMessageFlaggedDeletedElsewhereLeavesAPaginatedWindow() async throws {
+        let world = try await World.opened(size: 600, pages: 2)
+        XCTAssertEqual(world.model.envelopes.count, 450)
+        await world.persistSnapshot()
+        await world.server.flagDeleted(500)
+
+        await world.model.refresh()
+
+        XCTAssertFalse(world.model.envelopes.contains { $0.uid == 500 })
+        XCTAssertEqual(world.model.window!.totalMessages, 599, "the count the positions are in")
+        try await world.assertAligned()
+        let cached = try await world.snapshotUIDs()
+        XCTAssertFalse(cached.contains(500), "and the row the read proved gone leaves the snapshot")
+    }
+
     func testAFolderEmptiedElsewhereEmptiesAPaginatedWindow() async throws {
         let world = try await World.opened(size: 400, pages: 1)
         await world.server.removeAll()
@@ -330,6 +351,9 @@ private actor ServerFolder: ImapClient {
     private var dates: [UInt32: Date] = [:]
     private var nextUid: UInt32
     private var offline = false
+    /// Messages flagged `\Deleted` elsewhere and not yet expunged: out of
+    /// the sort the pages serve, still counted by STATUS MESSAGES.
+    private var deletedNotExpunged = 0
     private var pagesFail = false
     private(set) var pageCalls: [Page] = []
     private(set) var topCalls: [UInt32] = []
@@ -348,6 +372,15 @@ private actor ServerFolder: ImapClient {
     }
 
     func remove(_ uid: UInt32) { uids.removeAll { $0 == uid } }
+
+    /// `\Deleted` set on `uid` by another client, with no expunge: the row
+    /// leaves the `NOT DELETED` sort, MESSAGES does not move, UIDNEXT does
+    /// not move (#1836).
+    func flagDeleted(_ uid: UInt32) {
+        guard uids.contains(uid) else { return }
+        uids.removeAll { $0 == uid }
+        deletedNotExpunged += 1
+    }
     func removeAll() { uids.removeAll() }
 
     /// New mail on top.
@@ -397,7 +430,12 @@ private actor ServerFolder: ImapClient {
 
     func status(path: String, flagged: Bool) async throws -> FolderStatus {
         if offline { throw CabalmailError.network("offline") }
-        return FolderStatus(messages: uids.count, unseen: 0, flagged: 0, uidValidity: 7, uidNext: nextUid)
+        // The not-deleted count rides the same opt-in the Lambda puts it
+        // behind, so only a caller that asked for it gets one.
+        return FolderStatus(
+            messages: uids.count + deletedNotExpunged, unseen: 0, flagged: 0,
+            undeleted: flagged ? uids.count : nil, uidValidity: 7, uidNext: nextUid
+        )
     }
 
     func envelopes(folder: String, offset: UInt32, limit: UInt32, sort: SortCriterion) async throws -> [Envelope] {
