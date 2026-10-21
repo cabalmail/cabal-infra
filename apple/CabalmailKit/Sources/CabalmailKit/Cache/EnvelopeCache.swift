@@ -203,9 +203,18 @@ public actor EnvelopeCache {
     /// Folds `envelopes` into the folder's snapshot. `window` records where
     /// its rows sat on the server, and is kept only when every row it names
     /// is still on disk afterwards -- a record naming a row the merge didn't
-    /// leave there says nothing about the others. A merge that passes none
-    /// clears the one saved before, so a stored record is always one some
-    /// caller vouched for over the snapshot holding it.
+    /// leave there says nothing about the others.
+    ///
+    /// A merge that passes none leaves the saved record where it is: most
+    /// writers hold no window at all -- the Spotlight sweep merges a top page
+    /// into every subscribed folder whether its list is open or not -- and
+    /// the record vouches for the rows it names and says nothing about the
+    /// rest, so rows merged beside them don't falsify it. Clearing it here
+    /// left any folder written by something other than its own list anchored
+    /// to nothing on the next launch, which is the path that proves nothing
+    /// gone (#1836). A record that no longer vouches goes either way, so a
+    /// stored record is always one some caller vouched for over the snapshot
+    /// holding it.
     public func merge(
         envelopes: [Envelope],
         uidValidity: UInt32,
@@ -226,12 +235,16 @@ public actor EnvelopeCache {
         for envelope in envelopes {
             merged[envelope.uid] = envelope
         }
+        // The caller's record, or the saved one it says nothing about. A
+        // renumbered folder keeps neither: the rows it named are gone with
+        // the UIDs they were read at.
+        let record = window ?? (uidValidityChanged ? nil : existing?.window)
         try write(
             Snapshot(
                 uidValidity: uidValidity,
                 uidNext: uidNext,
                 envelopes: merged,
-                window: window.flatMap { $0.vouches(for: merged.keys) ? $0 : nil }
+                window: record.flatMap { $0.vouches(for: merged.keys) ? $0 : nil }
             ),
             for: folder
         )
