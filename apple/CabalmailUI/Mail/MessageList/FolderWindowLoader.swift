@@ -19,6 +19,13 @@ struct WindowAlignment {
     /// Nil while nothing proves where the loaded rows sit on the server: a
     /// window hydrated from the snapshot, or one just reset.
     var anchor: WindowAnchor?
+    /// The rows the anchor was proven over, when they are not simply the
+    /// loaded ones: a window hydrated from a snapshot wider than the record
+    /// that came with it holds rows the record never vouched for, and a
+    /// re-read may prove only the vouched ones gone (#1836). Nil whenever
+    /// the anchor covers the whole loaded window, which is every anchor a
+    /// session settles for itself.
+    var vouchedUIDs: Set<UInt32>?
     /// A window re-read is in flight; `ensureLoaded` starts no page meanwhile.
     var isReconciling = false
     /// Moved whenever the rows on screen are replaced or reset, or a search
@@ -378,17 +385,29 @@ final class FolderWindowLoader {
     /// trustworthy refresh decides afresh.
     func forgetWindowAnchor() {
         alignment.anchor = nil
+        alignment.vouchedUIDs = nil
         alignment.generation += 1
     }
 
     /// The window lines up with what a saved record proves about the rows
-    /// just hydrated from the snapshot (`WindowSnapshot.savedAnchor`), so the
+    /// just hydrated from the snapshot (`WindowSnapshot.savedRecord`), so the
     /// first refresh of the launch can realign them as one in the session
-    /// that wrote them would (#1836). As `forgetWindowAnchor`, the rows have
-    /// just been replaced, so the generation moves with them.
-    func adoptWindowAnchor(_ anchor: WindowAnchor) {
+    /// that wrote them would (#1836). The record vouches for `uids` alone,
+    /// which may be fewer rows than were hydrated. As `forgetWindowAnchor`,
+    /// the rows have just been replaced, so the generation moves with them.
+    func adoptWindowAnchor(_ anchor: WindowAnchor, vouchingFor uids: some Sequence<UInt32>) {
         alignment.anchor = anchor
+        alignment.vouchedUIDs = Set(uids)
         alignment.generation += 1
+    }
+
+    /// The loaded rows are themselves what `anchor` was proven over: a top
+    /// page that licensed them, every arrival placed among them, or a
+    /// re-read that just installed them. Any narrower vouched set a
+    /// hydrated record left retires with it.
+    func anchorLoadedWindow(_ anchor: WindowAnchor) {
+        alignment.anchor = anchor
+        alignment.vouchedUIDs = nil
     }
 
     /// Holds `isLoading` up for a refresh, a reset or a search until the
