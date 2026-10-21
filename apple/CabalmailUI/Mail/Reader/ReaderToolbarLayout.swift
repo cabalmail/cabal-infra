@@ -16,6 +16,37 @@ enum ReaderToolbarAction: String, CaseIterable {
     case viewSource = "reader.viewSource"
     case viewHeaders = "reader.viewHeaders"
     case printMessage = "reader.print"
+
+    /// Icon and label in the quiescent state (unread message, not flagged,
+    /// remote content blocked, original formatting, HTML showing, Archive
+    /// as the dispose default), which the macOS empty pane's stand-ins
+    /// draw. The toggles read `ReaderToggleFace`, as the live buttons do.
+    var quiescentSymbol: String {
+        quiescentFace.systemImage
+    }
+
+    var quiescentTitle: String {
+        quiescentFace.title
+    }
+
+    private var quiescentFace: (title: String, systemImage: String) {
+        func toggle(_ face: ReaderToggleFace) -> (String, String) { (face.title, face.systemImage) }
+        switch self {
+        case .reply:         return ("Reply", "arrowshape.turn.up.left")
+        case .editDraft:     return ("Edit Draft", "square.and.pencil")
+        case .dispose:       return ("Archive", "archivebox")
+        case .toggleRead:    return toggle(.read(isRead: false))
+        case .remoteContent: return toggle(.remoteContent(isShown: false))
+        case .toggleFlag:    return toggle(.flag(isFlagged: false))
+        case .readerMode:    return toggle(.readerView(isOn: false))
+        case .move:          return ("Move to folder…", "folder")
+        case .plainText:     return toggle(.plainText(isOn: false))
+        case .viewSource:    return ("View source", "chevron.left.forwardslash.chevron.right")
+        case .viewHeaders:   return ("View headers", "list.bullet.rectangle")
+        case .printMessage:  return ("Print…", "printer")
+        case .overflow:      return ("More actions", "ellipsis.circle")
+        }
+    }
 }
 
 /// Which reader actions each platform's bar draws and which ones ride a menu.
