@@ -33,6 +33,7 @@ from helper import ( # pylint: disable=import-error
     envelope_dict,
     get_imap_client,
     maintenance_guard,
+    solicited_envelope_entries,
     validate_folder_name,
     validate_search_text,
 )
@@ -374,7 +375,10 @@ def fetch_envelopes_grouped(client, triples):
     for folder, items in by_folder.items():
         ids = [uid for _, uid in items]
         client.select_folder(folder.replace('/', '.'), readonly=True)
-        fetched = client.fetch(ids, ENVELOPE_FETCH_KEYS)
+        # Dropping the unsolicited FLAGS updates in the response, which are
+        # keyed by their own UID and carry no ENVELOPE (#1990).
+        fetched = dict(solicited_envelope_entries(
+            client.fetch(ids, ENVELOPE_FETCH_KEYS), ids))
         for index, uid in items:
             data = fetched.get(uid)
             if data is None:
