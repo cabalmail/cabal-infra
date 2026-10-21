@@ -123,6 +123,36 @@ final class MessageListSavedWindowTests: XCTestCase {
         XCTAssertTrue(cached.contains(500))
     }
 
+    /// The write that destroyed the record in practice: the Spotlight sweep
+    /// merges a top page into every subscribed folder whether its list is
+    /// open or not, and a merge holding no window used to clear the saved
+    /// record. For a closed folder nothing then put it back, so the next
+    /// launch hydrated an anchored-to-nothing window, read its one page and
+    /// proved nothing gone -- the pre-#1836 path, from a snapshot that had a
+    /// record moments before.
+    func testARecordSurvivesASweepOfTheClosedFolderItDescribes() async throws {
+        let world = try await World.opened(size: 600, pages: 2)
+        await world.persistWindow()
+        try await world.sweepFolderIntoSnapshot()
+
+        let stored = await world.savedWindowRecord()
+        let record = try XCTUnwrap(stored, "a writer that holds no window leaves the record alone")
+        XCTAssertEqual(Set(record.uids), Set(world.model.envelopes.map(\.uid)))
+        // Deleted elsewhere while the folder was closed.
+        await world.server.remove(500)
+
+        let reopened = world.makeModel()
+        await reopened.loadInitial()
+
+        let pages = await world.server.pageCalls
+        XCTAssertEqual(Array(pages.suffix(2)), [Page(offset: 0, limit: 250), Page(offset: 249, limit: 201)],
+                       "the read still covers the saved window, not just its first page")
+        XCTAssertFalse(reopened.envelopes.contains { $0.uid == 500 })
+        try await world.assertAligned(reopened)
+        let cached = try await world.snapshotUIDs()
+        XCTAssertFalse(cached.contains(500), "the row the anchor let the read prove gone leaves the snapshot")
+    }
+
     /// A refresh saves the window it settled on, so the record is there for
     /// the next launch without waiting for a page to be scrolled.
     func testARefreshSavesTheWindowRecordItSettledOn() async throws {

@@ -91,13 +91,36 @@ final class EnvelopeCacheWindowRecordTests: XCTestCase {
         XCTAssertNil(noRows)
     }
 
-    func testAMergeWithNoRecordClearsTheOneSavedBefore() async throws {
+    /// Most writers hold no window at all -- the Spotlight sweep merges a
+    /// top page into every subscribed folder, open or not -- and such a
+    /// write leaves the saved record alone. It used to clear it, which left
+    /// any folder written by something other than its own list anchored to
+    /// nothing on the next launch (#1836).
+    func testAMergeWithNoRecordKeepsTheOneSavedBefore() async throws {
         try await cache.merge(
             envelopes: [envelope(1)], uidValidity: 7, uidNext: 2,
             window: record(total: 600, uids: [1]), into: "INBOX"
         )
 
-        try await cache.merge(envelopes: [envelope(1)], uidValidity: 7, uidNext: 2, into: "INBOX")
+        try await cache.merge(envelopes: [envelope(1), envelope(5)], uidValidity: 7, uidNext: 6, into: "INBOX")
+
+        let uids = await savedUIDs()
+        let stored = await savedRecord()
+        let saved = try XCTUnwrap(stored, "a write that holds no window says nothing about the record")
+        XCTAssertEqual(uids, [1, 5], "the row the other writer brought is in the snapshot")
+        XCTAssertEqual(Set(saved.uids), [1], "and the record goes on placing its own row")
+        XCTAssertEqual(saved.total, 600)
+    }
+
+    /// Except when the folder has been renumbered: the rows the record named
+    /// are gone with the UIDs they were read at.
+    func testAMergeUnderANewUIDValidityDropsTheSavedRecord() async throws {
+        try await cache.merge(
+            envelopes: [envelope(1)], uidValidity: 7, uidNext: 2,
+            window: record(total: 600, uids: [1]), into: "INBOX"
+        )
+
+        try await cache.merge(envelopes: [envelope(1)], uidValidity: 8, uidNext: 2, into: "INBOX")
 
         let saved = await savedRecord()
         XCTAssertNil(saved)

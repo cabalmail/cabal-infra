@@ -243,10 +243,11 @@ struct World {
     }
 
     /// Merges rows the loaded window doesn't hold into the snapshot, as the
-    /// deeper pages of an earlier session (or the Spotlight sweep's own
-    /// merge) leave there: the snapshot accumulates every row ever cached
-    /// for the folder while the window moves independently, so it is
-    /// routinely wider than the window that proved part of it (#1836).
+    /// deeper pages of an earlier session leave there, with the record the
+    /// window had: the snapshot accumulates every row ever cached for the
+    /// folder while the window moves independently, so it is routinely wider
+    /// than the window that proved part of it (#1836). A writer that holds no
+    /// window of its own is `sweepFolderIntoSnapshot`.
     func cacheRowsOutsideTheWindow(uids: [UInt32]) async throws {
         let existing = await client.envelopeCache.snapshot(for: "INBOX")
         try await client.envelopeCache.merge(
@@ -254,6 +255,22 @@ struct World {
             uidValidity: 7,
             uidNext: existing?.uidNext ?? 1,
             window: existing?.window,
+            into: "INBOX"
+        )
+    }
+
+    /// The Spotlight sweep's own write, in its real shape: a top page merged
+    /// into the folder's snapshot by a writer that holds no window at all
+    /// (`SpotlightIndexer.sweepFolder`), which runs over every subscribed
+    /// folder whether its list is open or not -- so there is no later
+    /// `persistLoadedPages` to put back anything it takes away.
+    func sweepFolderIntoSnapshot(limit: Int = 200) async throws {
+        let top = Array(await server.uids.prefix(limit))
+        let existing = await client.envelopeCache.snapshot(for: "INBOX")
+        try await client.envelopeCache.merge(
+            envelopes: await server.rows(top),
+            uidValidity: 7,
+            uidNext: existing?.uidNext ?? 1,
             into: "INBOX"
         )
     }
