@@ -162,6 +162,11 @@ struct WindowRefresher {
             // Whether the loaded rows still sit where the server has them
             // decides what comes next: usually the top page, as always.
             try await refreshWindow(reading, status: status, generation: generation, uidValidity: uidValidity)
+            // Save the window and what it now lines up with, so the next
+            // launch hydrates an anchored window rather than rows nothing
+            // places (#1836). Debounced and coalesced with the paging
+            // writes, and a no-op while the window is trimmed.
+            window.snapshot.schedulePersist()
             window.host?.errorMessage = nil
         } catch {
             // A refresh whose task was cancelled (a folder poll's hand-off,
