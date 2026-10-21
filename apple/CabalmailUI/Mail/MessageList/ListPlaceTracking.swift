@@ -92,6 +92,9 @@ final class ListPlaceTracker {
     @ObservationIgnored private var claim: FolderListHold.Claim?
     @ObservationIgnored private var didLand = false
     @ObservationIgnored private var isOnScreen = false
+    /// Whether a landing asked for while the list was off screen is still
+    /// owed: the ask does not come again, so `appeared` makes it.
+    @ObservationIgnored private var landsOnReturn = false
     /// Whether the user scrolled the list before it landed: its cached rows
     /// are on screen while the first refresh is still out.
     @ObservationIgnored private var userScrolledFirst = false
@@ -118,6 +121,8 @@ final class ListPlaceTracker {
         let holdsClaim = claim.map { navigator?.listHold.holds($0) ?? false } ?? false
         if !holdsClaim { takeClaim(model, in: navigator) }
         if let requested { scroll(to: requested) }
+        // The landing a load that finished off screen asked for.
+        if landsOnReturn { land(model: model, in: navigator) }
     }
 
     func disappeared() {
@@ -133,11 +138,19 @@ final class ListPlaceTracker {
     /// The view calls this from its load task, whose load outlives the
     /// task's cancellation, so a list whose view has gone or is covered gets
     /// here too. It does not land then: a covered list lands when it comes
-    /// back. Nor does a list land under a claim something has voided, or
+    /// back, on `appeared`, since the ask itself does not come again — the
+    /// view's load task runs once per mount, and a list remounted with the
+    /// model that load left takes the branch that does not land. Whether
+    /// the task was cancelled says nothing about either: a compact folder
+    /// pick mounts the list twice, so the load that lands it reports back
+    /// through a cancelled task while the list it belongs to is on screen
+    /// (#2030). Nor does a list land under a claim something has voided, or
     /// take a new one here unless it never had one (its scroll view not yet
     /// on screen): a list left behind must not void its successor's claim.
     func land(model: MessageListViewModel, in navigator: SceneNavigator?) {
-        guard !didLand, !Task.isCancelled else { return }
+        guard !didLand else { return }
+        guard isOnScreen else { return landsOnReturn = true }
+        landsOnReturn = false
         didLand = true
         if claim == nil { takeClaim(model, in: navigator) }
         guard let claim, let navigator, navigator.listHold.holds(claim) else { return }
