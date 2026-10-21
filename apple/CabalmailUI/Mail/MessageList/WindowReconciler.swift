@@ -18,6 +18,19 @@ struct WindowReconciler {
     /// The count is `listedMessages`, the one the server's list positions are
     /// in: anchoring on `MESSAGES` leaves the window a row off per message
     /// flagged `\Deleted` elsewhere and not yet expunged (#1836).
+    ///
+    /// The generation clause is belt and braces, and deliberately kept as
+    /// such: no caller can reach it with a moved generation. A pass that
+    /// asks STATUS itself returns at its own guard the line after that await
+    /// (`refreshPass`, pinned by
+    /// `MessageListRefreshCharacterizationTests`), and a pass handed a
+    /// STATUS already asked for has no await between the generation it
+    /// captured and this call -- the one that could, the cache invalidate on
+    /// a changed UIDVALIDITY, guards itself and then re-captures. So no
+    /// stand-down test can isolate it (#1981), and it is the check that
+    /// would be load-bearing the moment an await appears ahead of it.
+    /// `WindowReadingGenerationSourceScanTests` fails when either reason
+    /// stops holding, which is the signal that the test has become writable.
     func windowReading(
         _ status: FolderStatus,
         askedAt: ContinuousClock.Instant,
