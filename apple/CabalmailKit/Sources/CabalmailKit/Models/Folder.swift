@@ -40,14 +40,33 @@ public struct FolderStatus: Sendable, Codable, Hashable {
     /// request asked for it; nil on the cheap STATUS-only path. See
     /// `ApiFolderStatus.flagged`.
     public let flagged: Int?
+    /// Not-deleted message count: the set `/list_messages` sorts, and so the
+    /// numbering its positions are in. Only populated when the status request
+    /// asked for it (the same opt-in as `flagged`); nil on the cheap
+    /// STATUS-only path. Read it through `listedMessages`.
+    public let undeleted: Int?
     public let recent: Int?
     public let uidValidity: UInt32?
     public let uidNext: UInt32?
+
+    /// The count the folder's list positions are in: `undeleted` when the
+    /// reply carried it, else `messages`.
+    ///
+    /// `MESSAGES` counts messages flagged `\Deleted` but not yet expunged,
+    /// which `/list_messages` leaves out of its `NOT DELETED` sort. Addressing
+    /// a position by `messages` therefore lands one row off per such message
+    /// until the expunge lowers the count (#1836), so everything that treats
+    /// the total as a position -- the window anchor, the pagination gate, the
+    /// top page's offset -- reads this instead. Counts shown as counts (the
+    /// sidebar's total, the unread badge) keep reading `messages`: they answer
+    /// "how much mail is in there", not "where is row n".
+    public var listedMessages: Int? { undeleted ?? messages }
 
     public init(
         messages: Int? = nil,
         unseen: Int? = nil,
         flagged: Int? = nil,
+        undeleted: Int? = nil,
         recent: Int? = nil,
         uidValidity: UInt32? = nil,
         uidNext: UInt32? = nil
@@ -55,6 +74,7 @@ public struct FolderStatus: Sendable, Codable, Hashable {
         self.messages = messages
         self.unseen = unseen
         self.flagged = flagged
+        self.undeleted = undeleted
         self.recent = recent
         self.uidValidity = uidValidity
         self.uidNext = uidNext

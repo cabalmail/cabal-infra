@@ -16,11 +16,88 @@ public actor EnvelopeCache {
         public let uidValidity: UInt32
         public let uidNext: UInt32
         public let envelopes: [UInt32: Envelope]
+        /// Where these rows sat on the server when they were written, when
+        /// that was known; nil for a snapshot nothing proved (see
+        /// `WindowRecord`). Absent from snapshots written before it existed.
+        public let window: WindowRecord?
 
-        public init(uidValidity: UInt32, uidNext: UInt32, envelopes: [UInt32: Envelope]) {
+        public init(
+            uidValidity: UInt32,
+            uidNext: UInt32,
+            envelopes: [UInt32: Envelope],
+            window: WindowRecord? = nil
+        ) {
             self.uidValidity = uidValidity
             self.uidNext = uidNext
             self.envelopes = envelopes
+            self.window = window
+        }
+    }
+
+    /// The folder STATUS a snapshot's rows were proven to line up with, so a
+    /// list hydrated from disk knows where they sat and the first refresh can
+    /// prove a row gone without reading the whole folder (#1836). Without one
+    /// a hydrated window is anchored to nothing: rows removed while the
+    /// folder was closed stay on disk in any folder one page can't hold, an
+    /// offline launch shows them and a Spotlight hit opens them.
+    ///
+    /// `uids` is what pairs the record with the snapshot it sits in: it names
+    /// the rows the anchor was proven over, and it vouches for those rows
+    /// only. The snapshot is wider than any one window -- it accumulates
+    /// every row ever cached for the folder, while the loaded window moves
+    /// independently -- so the record has to survive sitting beside rows it
+    /// says nothing about, and a reader may prove gone only the rows it
+    /// names (`WindowAlignment.vouchedUIDs`). `sort` is the order those
+    /// positions were read in, since they mean nothing under another one.
+    public struct WindowRecord: Sendable, Codable, Equatable {
+        /// The folder's not-deleted count and UIDNEXT when the rows were
+        /// proven to match it (`WindowAnchor`).
+        public let total: UInt32
+        public let uidNext: UInt32
+        public let sort: SortCriterion
+        /// The UIDs the anchor was proven over, top-anchored at position 0.
+        public let uids: [UInt32]
+
+        public init(total: UInt32, uidNext: UInt32, sort: SortCriterion, uids: [UInt32]) {
+            self.total = total
+            self.uidNext = uidNext
+            self.sort = sort
+            self.uids = uids
+        }
+
+        /// Whether every row this record names is still among `uids` -- the
+        /// rows a snapshot holds now. A record naming a row that has left
+        /// the snapshot says nothing about the rest: the write that dropped
+        /// it moved the positions the others were proven at. Rows on disk
+        /// the record doesn't name are no business of its own (#1836): the
+        /// snapshot is routinely wider than the window that proved part of
+        /// it, and demanding equality deleted the record on every such
+        /// write, which left the next launch anchored to nothing.
+        ///
+        /// A record naming no rows vouches for nothing, and would otherwise
+        /// be a subset of every snapshot there is.
+        public func vouches(for others: some Sequence<UInt32>) -> Bool {
+            !uids.isEmpty && Set(uids).isSubset(of: Set(others))
+        }
+
+        /// This record with `removed` taken out: the rows it still names,
+        /// and a total lowered by each row that has left the folder, so what
+        /// it says about the survivors stays true. Nil once it names no rows.
+        ///
+        /// Dropping a row from a covered prefix leaves the rest a prefix
+        /// under any sort, and a row removed from below one doesn't move it,
+        /// so the record survives a removal it didn't ask for -- archiving
+        /// one row used to discard the record covering every other row on
+        /// disk (#1836).
+        func removing(_ removed: Set<UInt32>) -> WindowRecord? {
+            let kept = uids.filter { !removed.contains($0) }
+            guard !kept.isEmpty else { return nil }
+            return WindowRecord(
+                total: UInt32(max(0, Int(total) - removed.count)),
+                uidNext: uidNext,
+                sort: sort,
+                uids: kept
+            )
         }
     }
 
@@ -123,7 +200,28 @@ public actor EnvelopeCache {
         emit(.cleared)
     }
 
-    public func merge(envelopes: [Envelope], uidValidity: UInt32, uidNext: UInt32, into folder: String) throws {
+    /// Folds `envelopes` into the folder's snapshot. `window` records where
+    /// its rows sat on the server, and is kept only when every row it names
+    /// is still on disk afterwards -- a record naming a row the merge didn't
+    /// leave there says nothing about the others.
+    ///
+    /// A merge that passes none leaves the saved record where it is: most
+    /// writers hold no window at all -- the Spotlight sweep merges a top page
+    /// into every subscribed folder whether its list is open or not -- and
+    /// the record vouches for the rows it names and says nothing about the
+    /// rest, so rows merged beside them don't falsify it. Clearing it here
+    /// left any folder written by something other than its own list anchored
+    /// to nothing on the next launch, which is the path that proves nothing
+    /// gone (#1836). A record that no longer vouches goes either way, so a
+    /// stored record is always one some caller vouched for over the snapshot
+    /// holding it.
+    public func merge(
+        envelopes: [Envelope],
+        uidValidity: UInt32,
+        uidNext: UInt32,
+        window: WindowRecord? = nil,
+        into folder: String
+    ) throws {
         let existing = snapshot(for: folder)
         var merged: [UInt32: Envelope]
         let uidValidityChanged: Bool
@@ -137,8 +235,17 @@ public actor EnvelopeCache {
         for envelope in envelopes {
             merged[envelope.uid] = envelope
         }
+        // The caller's record, or the saved one it says nothing about. A
+        // renumbered folder keeps neither: the rows it named are gone with
+        // the UIDs they were read at.
+        let record = window ?? (uidValidityChanged ? nil : existing?.window)
         try write(
-            Snapshot(uidValidity: uidValidity, uidNext: uidNext, envelopes: merged),
+            Snapshot(
+                uidValidity: uidValidity,
+                uidNext: uidNext,
+                envelopes: merged,
+                window: record.flatMap { $0.vouches(for: merged.keys) ? $0 : nil }
+            ),
             for: folder
         )
         if uidValidityChanged { emit(.invalidated(folder: folder)) }
@@ -160,7 +267,14 @@ public actor EnvelopeCache {
         }
         guard !changed.isEmpty else { return }
         try write(
-            Snapshot(uidValidity: existing.uidValidity, uidNext: existing.uidNext, envelopes: envelopes),
+            Snapshot(
+                uidValidity: existing.uidValidity,
+                uidNext: existing.uidNext,
+                envelopes: envelopes,
+                // The rows are the same rows, with a flag changed, so the
+                // window record still vouches for them.
+                window: existing.window
+            ),
             for: folder
         )
         emit(.upserted(envelopes: changed, folder: folder))
@@ -176,16 +290,19 @@ public actor EnvelopeCache {
     public func remove(uids: [UInt32], folder: String) throws {
         guard !uids.isEmpty, let existing = snapshot(for: folder) else { return }
         var envelopes = existing.envelopes
-        var changed = false
+        var removed: Set<UInt32> = []
         for uid in uids where envelopes.removeValue(forKey: uid) != nil {
-            changed = true
+            removed.insert(uid)
         }
-        guard changed else { return }
+        guard !removed.isEmpty else { return }
         try write(
             Snapshot(
                 uidValidity: existing.uidValidity,
                 uidNext: existing.uidNext,
-                envelopes: envelopes
+                envelopes: envelopes,
+                // The rows left the folder, so the record's own count moves
+                // with them and it goes on vouching for the rest.
+                window: existing.window?.removing(removed)
             ),
             for: folder
         )

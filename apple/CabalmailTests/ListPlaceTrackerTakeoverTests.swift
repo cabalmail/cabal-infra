@@ -142,12 +142,15 @@ final class ListPlaceTrackerTakeoverTests: XCTestCase {
     }
 
     /// The view's load outlives its task: a list whose view has gone, or
-    /// that a reader covers, gets its landing from a cancelled task. It
-    /// does not land then, and spends nothing; it lands when it is back.
-    func testAListWhoseTaskWasCancelledLandsWhenItComesBack() async throws {
+    /// that a reader covers, gets its landing while it is off screen. It
+    /// does not land then, and spends nothing; it lands when it is back,
+    /// which is its scroll view appearing — nothing asks a second time
+    /// (#2030). That the asking task was cancelled says nothing either
+    /// way, and no longer stands the landing down:
+    /// `ListPlaceTrackerSecondMountTests`.
+    func testAListWhoseLandingArrivedOffScreenLandsWhenItComesBack() async throws {
         let model = try await world.openedList(preloaded: 250, stampsMessageIDs: true)
         navigator.restores.parkListAnchor(try anchor(index: 200, uid: 800))
-        tracker.appeared(model, in: navigator)
         let tracker = try XCTUnwrap(tracker)
         let navigator = try XCTUnwrap(navigator)
         let late = Task { @MainActor in
@@ -160,8 +163,9 @@ final class ListPlaceTrackerTakeoverTests: XCTestCase {
         XCTAssertNil(tracker.scrollRequest)
         XCTAssertNotNil(navigator.restores.pendingListAnchor, "not spent")
 
-        tracker.land(model: model, in: navigator)
+        tracker.appeared(model, in: navigator)
         XCTAssertEqual(tracker.scrollRequest?.row, 200)
+        XCTAssertNil(navigator.restores.pendingListAnchor, "taken")
     }
 
     // MARK: Recording resumes

@@ -5,6 +5,117 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.2] - 2026-10-21
+
+### Changed
+- **Stand-down coverage for the window re-read.** A folder-window re-read that
+  lands after a reset has replaced the rows it was reading is now pinned by a
+  regression test, and the window's four sibling checks record at the site why
+  no test can reach them: the bottom prefetch's task is always cancelled
+  first, nothing suspends ahead of the one on a STATUS reading, and the two
+  that answer a reset landing while a cache write is out have nothing to hold
+  the caches at. The last three are backed by source scans that fail if those
+  reasons stop holding.
+
+### Fixed
+- Apple: **Messages deleted elsewhere while a folder was closed leave the
+  offline list.** The message list saves the folder position its rows were
+  proven to sit at beside the rows themselves, so the first refresh after a
+  launch can prove a row removed elsewhere gone by re-reading its own window
+  rather than the whole folder. In any folder deeper than one read, such a
+  row used to stay on the device for good: it was gone from the list online,
+  but an offline launch still showed it and a Spotlight hit still opened a
+  message the server no longer had. The saved position vouches for its own
+  rows and no others, so it survives sitting beside the deeper pages the
+  offline cache keeps — a folder scrolled past its first page used to
+  discard it on the next write, which left the launch after that with
+  nothing to re-read against. It is refused, leaving the previous
+  behaviour, if a row it names has left the device or it was read in
+  another order, and it goes with the rows at sign-out.
+- Apple: **Message list stays lined up when mail is deleted elsewhere.** A
+  message flagged `\Deleted` by another client, with no expunge behind it,
+  leaves the set the server's list positions are numbered in while the folder's
+  STATUS total still counts it. A window anchored on that total therefore saw
+  no change at all, kept showing the row, and sat one position off from there
+  down in any folder deeper than the loaded window. `/folder_status` now
+  returns the not-deleted count alongside the flagged one, on the same opt-in
+  and the same folder selection it already pays for, and everything in the list
+  that treats the total as a position — the window anchor, the pagination gate,
+  the top page's offset — reads that instead. The cheap status poll the badge
+  and idle loops use is unchanged.
+- **Envelope fetches no longer fail when another session changes flags.**
+  `/list_envelopes` returned a 502 (`KeyError: b'ENVELOPE'`) when an IMAP
+  session changed flags on other messages in the same folder while envelopes
+  were being fetched: the fetch response also carries the unsolicited `FLAGS`
+  updates the server pushes, and those entries hold no envelope. Both envelope
+  fetches — the message list's and cross-folder search's — now keep only the
+  entries they asked for.
+- Apple: **A folder picked after launch keeps its place.** The message
+  list's landing stood itself down whenever the view's load task had been
+  cancelled, which on a compact folder pick is every time: the list is
+  mounted twice, so the load that lands it reports back through the first
+  mount's cancelled task while the list on screen is the second mount's.
+  A list that never lands records nothing as it scrolls, so a relaunch
+  reopened such a folder at the top while the folder the app launched on
+  came back exactly where it was. The landing now stands down only while
+  the list is off screen, and is made when the list comes back.
+- Android: **Blank rules start switched off.** A new rule has no
+  conditions, so it matches every message, and it reached the server within
+  moments of being added. It now arrives disabled, as the templates
+  already did, waiting for its editor.
+- Apple: **Add rule opens the new rule's editor, and a blank rule starts
+  switched off.** Adding a rule appended a live, enabled rule with no
+  conditions — one that matches every message — and left the screen on the
+  list, so nothing told you it was on. A blank rule now arrives disabled,
+  as the templates already did, and Add pushes its editor on every
+  platform.
+- Apple: **A checked box no longer opens and reads the message.** On iPad (and
+  in the visionOS Mail tab) checking one message in Select mode opened it in
+  the reader, which with "Mark as read: on open" marked it read on the server;
+  the same happened on the way back down from two checked to one. The reader
+  now shows the selected count for however many boxes are checked, and reading
+  a message is a tap outside Select mode.
+- **The macOS test bundle's concurrency ratchet covers the family it was
+  added for.** `SWIFT_TREAT_WARNINGS_AS_ERRORS` promotes the grouped
+  diagnostics but not the actor-isolation ones, which were 178 of the 248
+  warnings the ratchet was added to keep out, and `-swift-version 6` on that
+  target does not promote them either. A source scan pins the shape 165 of
+  them took instead — an isolated suite overriding `setUp`/`tearDown`
+  synchronously — and the setting's comment now says what it does and does
+  not cover.
+- Apple: **Reader toggle icons show the action, like their labels.** The mail
+  reader's read button drew the message's current state (an open envelope
+  beside "Mark as unread") while the feed reader's drew the action, and both
+  readers' remote-content and reader-view buttons drew the current state
+  beside a label naming the action. Every reader toggle now shows the action a
+  press performs, as Gmail, Proton Mail and Apple Mail's action sheet do and as
+  the app's own swipe actions, context menus and bulk bar already did: a read
+  message shows the unread envelope, a message showing its remote content a
+  slashed eye, a message in reader view the formatted-page glyph. The faces
+  come from one shared definition (`ReaderToggleFace`), so the two readers and
+  the macOS empty-pane placeholders can no longer drift apart.
+- Apple: **A message removed while a large folder was closed leaves the saved
+  list.** The window record a folder's snapshot carries was cleared by any
+  write that held no window of its own — the Spotlight sweep merges a top page
+  into every subscribed folder whether its list is open or not — so the next
+  launch read one page of an anchored-to-nothing window and could prove
+  nothing gone. In a folder deeper than that one page the message stayed in
+  the snapshot, an offline launch showed it and a Spotlight hit opened it. The
+  record now survives rows merged beside the ones it names, which is what it
+  always vouched for.
+
+### Security
+- **follow-redirects 1.16.1.** Bumps the transitive `follow-redirects`
+  dependency of the React app's `axios` from 1.16.0 to 1.16.1, fixing
+  cross-origin credential header leaks (array-form headers and
+  `sensitiveHeaders` regex escaping).
+- **Distrusted emSign intermediates refused by the Linux client.**
+  `rustls-webpki` moves from 0.103.15 to 0.103.16 in `linux/Cargo.lock`
+  (RUSTSEC-2026-0382). The older version could accept a certificate chain
+  through eMudhra's emSign intermediates, whose private keys are now public,
+  when the trust store still allowed such a path. The advisory also turned the
+  `supply-chain` gate red for every PR that runs the Rust checks.
+
 ## [1.39.1] - 2026-10-20
 
 ### Changed

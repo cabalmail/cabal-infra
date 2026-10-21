@@ -44,6 +44,11 @@ public actor FolderStateCache {
 
     /// Saves one folder's STATUS. A reply that left a count out (the cheap
     /// STATUS carries no flagged count) keeps the one saved before.
+    ///
+    /// The not-deleted count (`FolderStatus.undeleted`) is deliberately not
+    /// saved: it exists for live position arithmetic, `recordLocalCounts` has
+    /// no way to adjust it, and a saved status reads `listedMessages` back as
+    /// `messages` -- the same total an offline launch has always shown.
     public func recordStatus(_ status: FolderStatus, for path: String, ifUnchangedSince generation: Int) {
         guard generation == self.generation, fileURL != nil else { return }
         var state = load()

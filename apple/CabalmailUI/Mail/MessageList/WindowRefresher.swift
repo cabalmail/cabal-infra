@@ -143,6 +143,22 @@ struct WindowRefresher {
                 if let known = window.uidValidity, known != fresh {
                     try? await window.client.envelopeCache.invalidate(folder: window.folder.path)
                     try? await window.client.bodyCache.invalidate(folder: window.folder.path)
+                    // The two invalidates are the only awaits between the
+                    // generation this pass holds and the wipe below, and a
+                    // reset or a search that landed while they were out has
+                    // already rebuilt the window: wiping it here would drop
+                    // the rows *it* loaded and start its window over.
+                    //
+                    // Kept and pinned by shape rather than by a stand-down
+                    // test (#1981): the suite's hold vocabulary is
+                    // `FakeImapClient`'s, IMAP calls only, and the test
+                    // worlds build real caches on a temp directory, so these
+                    // two awaits have nothing to hold them at.
+                    // `CacheAwaitGenerationSourceScanTests` fails if the
+                    // guard goes, if it stops covering both invalidates, or
+                    // if an await it does not cover appears in the span --
+                    // that last one also being the signal that a holdable
+                    // seam has arrived and the stand-down test is writable.
                     guard generation == window.alignment.generation else { return }
                     window.envelopes = []
                     window.resetWindow()
@@ -162,6 +178,11 @@ struct WindowRefresher {
             // Whether the loaded rows still sit where the server has them
             // decides what comes next: usually the top page, as always.
             try await refreshWindow(reading, status: status, generation: generation, uidValidity: uidValidity)
+            // Save the window and what it now lines up with, so the next
+            // launch hydrates an anchored window rather than rows nothing
+            // places (#1836). Debounced and coalesced with the paging
+            // writes, and a no-op while the window is trimmed.
+            window.snapshot.schedulePersist()
             window.host?.errorMessage = nil
         } catch {
             // A refresh whose task was cancelled (a folder poll's hand-off,
@@ -185,8 +206,9 @@ struct WindowRefresher {
         generation passGeneration: Int,
         uidValidity: UInt32
     ) async throws {
-        // The top page is addressed in the server's own numbering.
-        let messages = UInt32(max(0, status.messages ?? 0))
+        // The top page is addressed in the server's own numbering, over the
+        // set `/list_messages` sorts (#1836).
+        let messages = UInt32(max(0, status.listedMessages ?? 0))
         let plan = await window.reconciler.windowPlan(for: reading)
         guard passGeneration == window.alignment.generation else { return }
         switch plan {
@@ -218,9 +240,20 @@ struct WindowRefresher {
         // pruning the list against an empty fetch (#939).
         let licensed = try await applyRefreshPage(fetched, uidNext: status.uidNext ?? 1,
                                                   uidValidity: uidValidity,
-                                                  serverReportsEmpty: status.messages == 0)
+                                                  serverReportsEmpty: status.listedMessages == 0)
         // The page's caches were written after its rows; whatever replaced
-        // the rows meanwhile anchors its own window.
+        // the rows meanwhile anchors its own window. Not redundant with the
+        // guard above the merge: that one catches a reset during the page
+        // fetch, this one a reset during `applyRefreshPage`'s cache writes,
+        // which are the only awaits between the two.
+        //
+        // Those writes are also why no stand-down test can isolate this one
+        // (#1981). The suite can hold an IMAP call -- and the guard above
+        // catches every reset that lands on one of those -- but the worlds
+        // build real caches, so the race this guard answers has no seam to
+        // hold. Pinned by shape instead, in
+        // `CacheAwaitGenerationSourceScanTests`, which holds both guards and
+        // the span between them.
         guard generation == window.alignment.generation else { return }
         try await window.reconciler.settleAnchor(after: reading, licensed: licensed, uidValidity: uidValidity)
     }

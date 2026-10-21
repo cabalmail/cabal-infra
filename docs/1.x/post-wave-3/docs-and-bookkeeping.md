@@ -145,6 +145,8 @@ If a release PR is open, every merge to `stage` re-runs its whole suite. In that
   > **Erratum (2026-10-15):** The copy is done, by the change that added `docs/1.x/post-wave-3/`: the catalogue is at `docs/1.x/platform-conditionals-followups.md` with the header and Progress table above, and it says "the maintainer" where this step said "the owner". Adding its path to `CLAUDE.md:91` and to the header of `apple/platform-conditionals-allowlist.txt`, and linking it from `docs/apple.md` "Platform conditionals", are still PR 2's.
 
 - `docs/1.x/cross-media-ux-plan.md:11, 215`: Phase 1 becomes "Shipped in 1.22.0 (2026-09-25)". Say plainly that no stage or device verification was recorded (inferred from the plan text). flags-and-cross-media.md A0 checks this and does it only if this plan has not.
+
+  > **Erratum (2026-10-20):** Done. `cross-media-ux-plan.md` was revised in place against `stage` at d6d36148: Phase 1 reads "Shipped in 1.22.0 (2026-09-25)" and says that no stage or device verification was recorded. The line numbers above no longer apply.
 - With decision 4 (b), add the index page: one line per workstream, no names, no rigs. If you have retired the detached reader window by then (detached-reader-window.md decision 1 (b)), the page records that in one line.
 
   > **Erratum (2026-10-15):** Decision 4 was answered (c): every plan is in `docs/1.x/post-wave-3/`, and that folder's `README.md`, added by the same change, is the index. This page is not needed.
@@ -215,6 +217,8 @@ Otherwise, open one Claude Code session on `cabal-infra`. It reads this plan and
 - **The three "Tracked in #1826" pins** go to account-isolation.md. **The deleted `requestCompose()` comment and the Mac mailto comment** go to multi-window-and-restore.md W2.
 - **The CI sections of `docs/apple.md`, `:1074`, the release dashboard and making `apple-gate` required** go to apple-ci-and-build-config.md.
 - **The Room-version erratum in `cross-media-ux-plan.md:306-311, 467`** goes to android-parity.md PR 9. The claim becomes false only when that PR takes Room version 2, so the erratum belongs in the same PR.
+
+  > **Erratum (2026-10-20):** Not needed. The in-place revision of `cross-media-ux-plan.md` on 2026-10-20 already says the feed store is at Room version 1 and that Phase 2 is version 3 if android-parity.md PR 9 lands first.
 - **The `SpotlightRouting.swift` comments** (`AppDelegate.swift:113`, `AppRootLifecycle.swift:65`), which flags-and-cross-media.md hands here, need no fix. The file exists at `apple/CabalmailUI/Navigation/SpotlightRouting.swift`, and both comments are accurate.
 - **The FU burn-down and the stricter `canImport` check** go to platform-conditionals.md. **Live re-checks of fixes cleared on tests** go to live-verification.md.
 - **Not pursued:**

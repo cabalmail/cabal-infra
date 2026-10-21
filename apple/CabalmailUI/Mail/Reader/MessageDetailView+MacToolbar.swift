@@ -66,10 +66,7 @@ extension MessageDetailView {
             Button {
                 model.forcePlainText.toggle()
             } label: {
-                Label(
-                    model.forcePlainText ? "Show HTML" : "Show plain text",
-                    systemImage: model.forcePlainText ? "doc.richtext" : "doc.plaintext"
-                )
+                ReaderToggleFace.plainText(isOn: model.forcePlainText).label
             }
             .disabled(model.htmlBody == nil || model.plainText == nil)
             .accessibilityIdentifier("reader.plainText")

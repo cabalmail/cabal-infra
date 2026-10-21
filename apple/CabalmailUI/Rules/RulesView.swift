@@ -60,6 +60,10 @@ struct RulesView: View {
 /// The loaded list: master side of the master/detail flow.
 private struct RulesListView: View {
     @Bindable var model: RulesViewModel
+    /// The rule Add just made, pushed into the editor. The rows push the
+    /// editor through their own `NavigationLink`; adding has no link to
+    /// follow, so it pushes by value instead (#2031).
+    @State private var addedRuleID: String?
 
     var body: some View {
         AsyncContentView(
@@ -69,12 +73,15 @@ private struct RulesListView: View {
             retry: { Task { await model.load() } },
             content: {
                 if model.rules.isEmpty {
-                    RulesEmptyState(model: model)
+                    RulesEmptyState(model: model, addedRuleID: $addedRuleID)
                 } else {
                     rulesList
                 }
             }
         )
+        .navigationDestination(item: $addedRuleID) { id in
+            RuleEditorView(model: model, ruleID: id)
+        }
         .editButtonToolbar()
         .safeAreaInset(edge: .bottom) { RulesSaveStatusBar(model: model) }
         .alert("Rules updated on another device", isPresented: $model.conflict) {
@@ -117,7 +124,7 @@ private struct RulesListView: View {
                 // Settings window either). Delete is on the rows (see
                 // RuleRow).
                 Button {
-                    model.add()
+                    addedRuleID = model.add()
                 } label: {
                     Label("Add rule", systemImage: "plus")
                 }
@@ -315,6 +322,8 @@ private struct RulesSaveStatusBar: View {
 /// exist and never creates one.
 private struct RulesEmptyState: View {
     @Bindable var model: RulesViewModel
+    /// Set to the new rule's id so `RulesListView` pushes its editor.
+    @Binding var addedRuleID: String?
 
     var body: some View {
         ScrollView {
@@ -349,7 +358,7 @@ private struct RulesEmptyState: View {
                     )
                 }
                 Button("Start with a blank rule") {
-                    model.add()
+                    addedRuleID = model.add()
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -361,7 +370,7 @@ private struct RulesEmptyState: View {
 
     private func templateButton(_ title: String, subtitle: String, template: Rule) -> some View {
         Button {
-            model.add(template)
+            addedRuleID = model.add(template)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.body.weight(.medium))

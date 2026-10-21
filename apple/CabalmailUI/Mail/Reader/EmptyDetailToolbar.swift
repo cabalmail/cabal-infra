@@ -56,52 +56,13 @@ struct EmptyDetailToolbar: ToolbarContent {
 
     private func standIn(for action: ReaderToolbarAction) -> some View {
         ToolbarStandIn(
-            title: title(for: action),
-            symbol: symbol(for: action),
+            title: action.quiescentTitle,
+            symbol: action.quiescentSymbol,
             shape: ReaderToolbarLayout.macControlShape(
                 for: action,
                 flagMenuHasRows: flagMenuHasRows
             )
         )
-    }
-
-    // Exhaustive one-case-per-action lookups; the branch count IS the point.
-    // swiftlint:disable:next cyclomatic_complexity
-    private func symbol(for action: ReaderToolbarAction) -> String {
-        switch action {
-        case .reply:         return "arrowshape.turn.up.left"
-        case .editDraft:     return "square.and.pencil"
-        case .dispose:       return "archivebox"
-        case .toggleRead:    return "envelope.badge"
-        case .remoteContent: return "eye.slash"
-        case .toggleFlag:    return "flag"
-        case .readerMode:    return "doc.richtext"
-        case .move:          return "folder"
-        case .plainText:     return "doc.plaintext"
-        case .viewSource:    return "chevron.left.forwardslash.chevron.right"
-        case .viewHeaders:   return "list.bullet.rectangle"
-        case .printMessage:  return "printer"
-        case .overflow:      return "ellipsis.circle"
-        }
-    }
-
-    // swiftlint:disable:next cyclomatic_complexity
-    private func title(for action: ReaderToolbarAction) -> String {
-        switch action {
-        case .reply:         return "Reply"
-        case .editDraft:     return "Edit Draft"
-        case .dispose:       return "Archive"
-        case .toggleRead:    return "Mark as read"
-        case .remoteContent: return "Show remote content"
-        case .toggleFlag:    return "Flag"
-        case .readerMode:    return "Show reader view"
-        case .move:          return "Move to folder…"
-        case .plainText:     return "Show plain text"
-        case .viewSource:    return "View source"
-        case .viewHeaders:   return "View headers"
-        case .printMessage:  return "Print…"
-        case .overflow:      return "More actions"
-        }
     }
 }
 

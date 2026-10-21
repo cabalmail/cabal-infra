@@ -65,19 +65,17 @@ struct FeedReaderBarItem: View {
             Button {
                 Task { await model.setRead(!model.item.isRead) }
             } label: {
-                Label(model.item.isRead ? "Mark as unread" : "Mark as read",
-                      systemImage: model.item.isRead ? "envelope.badge" : "envelope.open")
+                ReaderToggleFace.read(isRead: model.item.isRead).label
             }
             .accessibilityIdentifier(action.identifier)
         case .favorite:
             // The mail reader's flag control, word for word and glyph for
-            // glyph (`MessageDetailView+FlagOptions`); the identifier keeps
-            // the wire name for the probes.
+            // glyph (`ReaderToggleFace`); the identifier keeps the wire name
+            // for the probes.
             Button {
                 Task { await model.setFavorite(!model.item.isFavorite) }
             } label: {
-                Label(model.item.isFavorite ? "Unflag" : "Flag",
-                      systemImage: model.item.isFavorite ? "flag.slash" : "flag")
+                ReaderToggleFace.flag(isFlagged: model.item.isFavorite).label
             }
             .accessibilityIdentifier(action.identifier)
         case .readerMode:
@@ -95,8 +93,7 @@ struct FeedReaderBarItem: View {
         Button {
             model.toggleReaderMode()
         } label: {
-            Label(model.readerMode ? "Show original formatting" : "Show reader view",
-                  systemImage: model.readerMode ? "text.alignleft" : "doc.richtext")
+            ReaderToggleFace.readerView(isOn: model.readerMode).label
         }
         .accessibilityIdentifier(FeedReaderAction.readerMode.identifier)
     }
@@ -105,8 +102,7 @@ struct FeedReaderBarItem: View {
         Button {
             model.toggleRemoteContent()
         } label: {
-            Label(model.remoteContentAllowed ? "Hide remote content" : "Show remote content",
-                  systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash")
+            ReaderToggleFace.remoteContent(isShown: model.remoteContentAllowed).label
         }
         .disabled(model.item.bodyHtml.isEmpty)
         .accessibilityIdentifier(FeedReaderAction.remoteContent.identifier)

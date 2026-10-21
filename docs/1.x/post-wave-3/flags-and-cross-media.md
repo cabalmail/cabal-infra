@@ -136,6 +136,8 @@ Release: one. Promote waits for A4, so the badge never ships without the retarge
 7. `unified-flags-plan.md:169-171, 349-352`: feed favourites have been flags since 1.22.0 and draw mail's glyph and colour (`FeedItemListView.swift:337-341`). Record decision 2.
 8. `unified-flags-plan.md:162-167, 300`: on Apple the mark is `flag.fill`, not a star; `AppState.requestToggleFlagged` is now `WindowCommand.toggleFlagged`; client PRs merge after Phase 1 is in prod, not only "live on stage" (`:235, 258`).
 
+> **Erratum (2026-10-20):** Items 1 to 6, and Phase 1's status, were folded into `cross-media-ux-plan.md` on 2026-10-20 as in-place rewrites against `stage` at d6d36148, not as dated errata: that plan still has phases to ship, and such a plan is corrected in place. It now writes each open decision to its default and lists them under "Open decisions". A0 is left with items 7 and 8 and recording decisions 1 to 3; where an answer differs from the default, A0 rewrites the affected text of the cross-media plan in place.
+
 (Phase 3's stale `bulkMode` text at `cross-media-ux-plan.md:344-349` belongs to feed-bulk-actions.md.)
 
 ### Session 2: Phase 2, custom flags on feed items (one release; server PRs ride the one before)

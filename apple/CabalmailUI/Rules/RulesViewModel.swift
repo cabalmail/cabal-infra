@@ -163,8 +163,14 @@ final class RulesViewModel {
 
     /// Appends and returns the new rule's id so the caller can navigate to
     /// the editor. Returns nil at the server's rule-count cap.
+    ///
+    /// A blank rule arrives DISABLED, as every template does: it has no
+    /// conditions, so it matches every message, and it is saved to the
+    /// server within a debounce of being added. Enabled, it is a live
+    /// every-message rule the user never switched on, shadowing everything
+    /// below it the moment it is dragged up (#2031).
     @discardableResult
-    func add(_ rule: Rule = Rule(name: "New rule")) -> String? {
+    func add(_ rule: Rule = Rule(name: "New rule", enabled: false)) -> String? {
         guard rules.count < RulesValidator.maxRules else { return nil }
         rules.append(rule)
         scheduleSave()
