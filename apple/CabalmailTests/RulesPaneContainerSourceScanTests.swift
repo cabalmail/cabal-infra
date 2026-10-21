@@ -9,6 +9,9 @@ import XCTest
 /// the source.
 final class RulesPaneContainerSourceScanTests: XCTestCase {
     private static let bareList = #"\bList\s*[({]"#
+    /// A `model.add(...)` call whose returned id goes nowhere: nothing but
+    /// whitespace sits to its left on the line.
+    private static let discardedAdd = #"(?m)^\s*model\.add\("#
 
     func testRulesPaneIsAGroupedFormNotABareList() throws {
         let source = try Self.source(of: "CabalmailUI/Rules/RulesView.swift")
@@ -25,6 +28,33 @@ final class RulesPaneContainerSourceScanTests: XCTestCase {
             source.contains(".miniSwitchStyleOnMac()"),
             "the rule's Enabled toggle has lost its Mac switch style and can draw as a checkbox again"
         )
+    }
+
+    /// Every Add in the Rules pane must take the id `add` returns and push
+    /// the editor with it: Add used to drop it at all four sites, so a new
+    /// rule was appended to the list and the screen stayed where it was
+    /// (#2031). The push is a `navigationDestination(item:)` binding, which
+    /// no behaviour test over the view model can see, so this reads the
+    /// source. A call whose result is discarded is the regression.
+    func testEveryAddSiteTakesTheIDItIsReturned() throws {
+        let source = try Self.source(of: "CabalmailUI/Rules/RulesView.swift")
+        XCTAssertTrue(
+            source.contains(".navigationDestination(item: $addedRuleID)"),
+            "the Rules pane no longer pushes the editor for a rule Add just made"
+        )
+        XCTAssertNil(
+            source.range(of: Self.discardedAdd, options: .regularExpression),
+            "an Add site drops the id `add` returned, so the editor can't be pushed for it"
+        )
+    }
+
+    /// Proves the discarded-Add pattern catches the shape it guards against
+    /// and nothing else, so the scan above can't pass vacuously.
+    func testDiscardedAddPatternMatchesDroppedResultsOnly() {
+        XCTAssertNotNil("model.add()".range(of: Self.discardedAdd, options: .regularExpression))
+        XCTAssertNotNil("    model.add(template)".range(of: Self.discardedAdd, options: .regularExpression))
+        XCTAssertNil("addedRuleID = model.add()".range(of: Self.discardedAdd, options: .regularExpression))
+        XCTAssertNil("addedRuleID = model.add(template)".range(of: Self.discardedAdd, options: .regularExpression))
     }
 
     /// Proves the pattern catches the shape it guards against and nothing

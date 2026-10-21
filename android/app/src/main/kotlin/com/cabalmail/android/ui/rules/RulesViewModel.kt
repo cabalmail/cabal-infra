@@ -167,8 +167,15 @@ class RulesViewModel(
     }
 
     /** Appends and returns the new rule's id (for navigation), or null at
-     * the server's rule-count cap. */
-    fun add(rule: Rule = Rule(name = "New rule")): String? {
+     * the server's rule-count cap.
+     *
+     * A blank rule arrives disabled, as every template does: it has no
+     * conditions, so it matches every message, and the debounced save puts
+     * it on the server within moments. Enabled, it is a live every-message
+     * rule the user never switched on (#2031). The wire default stays
+     * `true` in [Rule] -- a rule the server sends without the key is
+     * enabled. */
+    fun add(rule: Rule = Rule(name = "New rule", enabled = false)): String? {
         var added: String? = null
         mutate { rules ->
             if (rules.size >= RulesValidator.MAX_RULES) {
