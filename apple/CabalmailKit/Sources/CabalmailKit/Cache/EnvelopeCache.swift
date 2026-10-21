@@ -259,7 +259,7 @@ public actor EnvelopeCache {
                 uidNext: existing.uidNext,
                 envelopes: envelopes,
                 // The rows are the same rows, with a flag changed, so the
-                // window record still describes them.
+                // window record still vouches for them.
                 window: existing.window
             ),
             for: folder

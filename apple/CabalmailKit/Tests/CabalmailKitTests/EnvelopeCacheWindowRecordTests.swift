@@ -4,8 +4,8 @@ import XCTest
 /// The window record a snapshot carries: where its rows sat on the server,
 /// so a list hydrated from disk can prove a row gone the way the session
 /// that wrote it could (#1836). The cache's part of that is the pairing
-/// guarantee -- a stored record always describes the rows stored with it,
-/// whatever else has written the snapshot since.
+/// guarantee -- a stored record always vouches for rows that are still
+/// stored with it, whatever else has written the snapshot since.
 final class EnvelopeCacheWindowRecordTests: XCTestCase {
     private var tempDir: URL!
     private var cache: EnvelopeCache!
