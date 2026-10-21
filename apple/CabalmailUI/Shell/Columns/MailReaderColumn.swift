@@ -4,8 +4,9 @@ import CabalmailKit
 /// What a mail reader column shows. Pure, so every shell's reader is tested
 /// on the Mac host.
 enum MailReaderChoice: Equatable {
-    /// Two or more messages selected in the list: no single message to read,
-    /// so the column says how many, as Mail does.
+    /// Rows selected in the list with no one message to read: two or more,
+    /// or any number checked in Select mode, whose checkboxes never open a
+    /// message (#2032). The column says how many, as Mail does.
     case selection(count: Int)
     /// The open message, against its own folder.
     case reader(folder: Folder, envelope: Envelope)
@@ -21,7 +22,18 @@ enum MailReaderChoice: Equatable {
         if let envelope, let folder = MessageFolderPolicy.folder(for: envelope, in: sidebarFolder) {
             return .reader(folder: folder, envelope: envelope)
         }
+        // One row selected and no message to show is Select mode's single
+        // checked box (#2032): the count stands in for it rather than the
+        // empty prompt, which would say nothing is selected while the action
+        // bar below the list says one row is.
+        if selectionCount == 1 { return .selection(count: 1) }
         return .empty
+    }
+
+    /// The placeholder's title for `count` selected rows. One is reachable
+    /// from Select mode, so the count agrees in number (#2032).
+    static func selectionTitle(count: Int) -> String {
+        count == 1 ? "1 Message Selected" : "\(count) Messages Selected"
     }
 }
 
@@ -46,7 +58,7 @@ struct MailReaderColumn<PlaceholderChrome: ViewModifier>: View {
         case .selection(let count):
             // Bulk actions live in the action bar beneath the message list.
             ContentUnavailableView(
-                "\(count) Messages Selected",
+                MailReaderChoice.selectionTitle(count: count),
                 systemImage: "envelope.badge",
                 description: Text("Use the action bar below the list to act on them together.")
             )
