@@ -373,10 +373,21 @@ final class FolderWindowLoader {
         scheduleBottomPrefetch()
     }
 
-    /// The window no longer lines up with anything known: hydrated from the
-    /// snapshot, or reset. The next trustworthy refresh decides afresh.
+    /// The window no longer lines up with anything known: hydrated from a
+    /// snapshot with no record of where its rows sat, or reset. The next
+    /// trustworthy refresh decides afresh.
     func forgetWindowAnchor() {
         alignment.anchor = nil
+        alignment.generation += 1
+    }
+
+    /// The window lines up with what a saved record proves about the rows
+    /// just hydrated from the snapshot (`WindowSnapshot.savedAnchor`), so the
+    /// first refresh of the launch can realign them as one in the session
+    /// that wrote them would (#1836). As `forgetWindowAnchor`, the rows have
+    /// just been replaced, so the generation moves with them.
+    func adoptWindowAnchor(_ anchor: WindowAnchor) {
+        alignment.anchor = anchor
         alignment.generation += 1
     }
 

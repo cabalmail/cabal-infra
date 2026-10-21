@@ -10,8 +10,12 @@ import Foundation
 /// `lambda/api/list_messages/function.py` consumes: a concatenation of
 /// `sort_order` (`"REVERSE "` or `""`) and `sort_field` (`"ARRIVAL"`,
 /// `"DATE"`, `"FROM"`, `"SUBJECT"`).
-public struct SortCriterion: Sendable, Hashable {
-    public enum Field: String, Sendable, Hashable, CaseIterable {
+///
+/// `Codable` so a saved window record can name the order its rows were read
+/// in: positions are per-order, so a record read back under another one says
+/// nothing (`EnvelopeCache.WindowRecord`).
+public struct SortCriterion: Sendable, Hashable, Codable {
+    public enum Field: String, Sendable, Hashable, Codable, CaseIterable {
         /// IMAP ARRIVAL — server-side received timestamp. The historical
         /// Inbox default; survives time-zone confusion better than DATE.
         case dateReceived
@@ -31,7 +35,7 @@ public struct SortCriterion: Sendable, Hashable {
         }
     }
 
-    public enum Direction: String, Sendable, Hashable, CaseIterable {
+    public enum Direction: String, Sendable, Hashable, Codable, CaseIterable {
         case descending
         case ascending
 

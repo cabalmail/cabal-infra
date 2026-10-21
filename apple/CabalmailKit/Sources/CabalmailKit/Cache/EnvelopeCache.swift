@@ -16,11 +16,56 @@ public actor EnvelopeCache {
         public let uidValidity: UInt32
         public let uidNext: UInt32
         public let envelopes: [UInt32: Envelope]
+        /// Where these rows sat on the server when they were written, when
+        /// that was known; nil for a snapshot nothing proved (see
+        /// `WindowRecord`). Absent from snapshots written before it existed.
+        public let window: WindowRecord?
 
-        public init(uidValidity: UInt32, uidNext: UInt32, envelopes: [UInt32: Envelope]) {
+        public init(
+            uidValidity: UInt32,
+            uidNext: UInt32,
+            envelopes: [UInt32: Envelope],
+            window: WindowRecord? = nil
+        ) {
             self.uidValidity = uidValidity
             self.uidNext = uidNext
             self.envelopes = envelopes
+            self.window = window
+        }
+    }
+
+    /// The folder STATUS a snapshot's rows were proven to line up with, so a
+    /// list hydrated from disk knows where they sat and the first refresh can
+    /// prove a row gone without reading the whole folder (#1836). Without one
+    /// a hydrated window is anchored to nothing: rows removed while the
+    /// folder was closed stay on disk in any folder one page can't hold, an
+    /// offline launch shows them and a Spotlight hit opens them.
+    ///
+    /// `uids` is what pairs the record with the snapshot it sits in: it names
+    /// the rows the anchor was proven over, so a write that changed the rows
+    /// without a fresh record leaves a set that no longer matches and the
+    /// record is ignored. `sort` is the order those positions were read in,
+    /// since they mean nothing under another one.
+    public struct WindowRecord: Sendable, Codable, Equatable {
+        /// The folder's not-deleted count and UIDNEXT when the rows were
+        /// proven to match it (`WindowAnchor`).
+        public let total: UInt32
+        public let uidNext: UInt32
+        public let sort: SortCriterion
+        /// The UIDs the anchor was proven over, top-anchored at position 0.
+        public let uids: [UInt32]
+
+        public init(total: UInt32, uidNext: UInt32, sort: SortCriterion, uids: [UInt32]) {
+            self.total = total
+            self.uidNext = uidNext
+            self.sort = sort
+            self.uids = uids
+        }
+
+        /// Whether this record still describes exactly `uids` -- the rows a
+        /// snapshot holds now. A record that doesn't says nothing about them.
+        public func describes(uids others: some Sequence<UInt32>) -> Bool {
+            Set(uids) == Set(others)
         }
     }
 
@@ -123,7 +168,19 @@ public actor EnvelopeCache {
         emit(.cleared)
     }
 
-    public func merge(envelopes: [Envelope], uidValidity: UInt32, uidNext: UInt32, into folder: String) throws {
+    /// Folds `envelopes` into the folder's snapshot. `window` records where
+    /// its rows sat on the server, and is kept only when it describes the
+    /// rows the merge leaves on disk -- a merge over rows the anchor was
+    /// never proven over (older pages the caller didn't re-read) keeps none,
+    /// and a merge that passes none clears the one saved before, so a stored
+    /// record always matches the snapshot holding it.
+    public func merge(
+        envelopes: [Envelope],
+        uidValidity: UInt32,
+        uidNext: UInt32,
+        window: WindowRecord? = nil,
+        into folder: String
+    ) throws {
         let existing = snapshot(for: folder)
         var merged: [UInt32: Envelope]
         let uidValidityChanged: Bool
@@ -138,7 +195,12 @@ public actor EnvelopeCache {
             merged[envelope.uid] = envelope
         }
         try write(
-            Snapshot(uidValidity: uidValidity, uidNext: uidNext, envelopes: merged),
+            Snapshot(
+                uidValidity: uidValidity,
+                uidNext: uidNext,
+                envelopes: merged,
+                window: window.flatMap { $0.describes(uids: merged.keys) ? $0 : nil }
+            ),
             for: folder
         )
         if uidValidityChanged { emit(.invalidated(folder: folder)) }
@@ -160,7 +222,14 @@ public actor EnvelopeCache {
         }
         guard !changed.isEmpty else { return }
         try write(
-            Snapshot(uidValidity: existing.uidValidity, uidNext: existing.uidNext, envelopes: envelopes),
+            Snapshot(
+                uidValidity: existing.uidValidity,
+                uidNext: existing.uidNext,
+                envelopes: envelopes,
+                // The rows are the same rows, with a flag changed, so the
+                // window record still describes them.
+                window: existing.window
+            ),
             for: folder
         )
         emit(.upserted(envelopes: changed, folder: folder))
