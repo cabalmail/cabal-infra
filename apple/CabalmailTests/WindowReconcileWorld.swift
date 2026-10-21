@@ -131,6 +131,10 @@ actor ServerFolder: ImapClient {
         uids.removeAll { moved.contains($0) }
     }
 
+    /// What the server would answer for these rows, whatever positions they
+    /// sit at now.
+    func rows(_ wanted: [UInt32]) -> [Envelope] { wanted.map(envelope) }
+
     func listFolders() async throws -> [Folder] { throw unexpected() }
     func createFolder(name: String, parent: String?) async throws { throw unexpected() }
     func deleteFolder(path: String) async throws { throw unexpected() }
@@ -236,6 +240,22 @@ struct World {
     func persistWindow() async {
         await model.stopWatching()
         await model.window!.snapshot.persistLoadedPages()
+    }
+
+    /// Merges rows the loaded window doesn't hold into the snapshot, as the
+    /// deeper pages of an earlier session (or the Spotlight sweep's own
+    /// merge) leave there: the snapshot accumulates every row ever cached
+    /// for the folder while the window moves independently, so it is
+    /// routinely wider than the window that proved part of it (#1836).
+    func cacheRowsOutsideTheWindow(uids: [UInt32]) async throws {
+        let existing = await client.envelopeCache.snapshot(for: "INBOX")
+        try await client.envelopeCache.merge(
+            envelopes: await server.rows(uids),
+            uidValidity: 7,
+            uidNext: existing?.uidNext ?? 1,
+            window: existing?.window,
+            into: "INBOX"
+        )
     }
 
     /// Rewrites the saved record, as a session that wrote one over other

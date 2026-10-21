@@ -42,10 +42,13 @@ public actor EnvelopeCache {
     /// offline launch shows them and a Spotlight hit opens them.
     ///
     /// `uids` is what pairs the record with the snapshot it sits in: it names
-    /// the rows the anchor was proven over, so a write that changed the rows
-    /// without a fresh record leaves a set that no longer matches and the
-    /// record is ignored. `sort` is the order those positions were read in,
-    /// since they mean nothing under another one.
+    /// the rows the anchor was proven over, and it vouches for those rows
+    /// only. The snapshot is wider than any one window -- it accumulates
+    /// every row ever cached for the folder, while the loaded window moves
+    /// independently -- so the record has to survive sitting beside rows it
+    /// says nothing about, and a reader may prove gone only the rows it
+    /// names (`WindowAlignment.vouchedUIDs`). `sort` is the order those
+    /// positions were read in, since they mean nothing under another one.
     public struct WindowRecord: Sendable, Codable, Equatable {
         /// The folder's not-deleted count and UIDNEXT when the rows were
         /// proven to match it (`WindowAnchor`).
@@ -62,10 +65,39 @@ public actor EnvelopeCache {
             self.uids = uids
         }
 
-        /// Whether this record still describes exactly `uids` -- the rows a
-        /// snapshot holds now. A record that doesn't says nothing about them.
-        public func describes(uids others: some Sequence<UInt32>) -> Bool {
-            Set(uids) == Set(others)
+        /// Whether every row this record names is still among `uids` -- the
+        /// rows a snapshot holds now. A record naming a row that has left
+        /// the snapshot says nothing about the rest: the write that dropped
+        /// it moved the positions the others were proven at. Rows on disk
+        /// the record doesn't name are no business of its own (#1836): the
+        /// snapshot is routinely wider than the window that proved part of
+        /// it, and demanding equality deleted the record on every such
+        /// write, which left the next launch anchored to nothing.
+        ///
+        /// A record naming no rows vouches for nothing, and would otherwise
+        /// be a subset of every snapshot there is.
+        public func vouches(for others: some Sequence<UInt32>) -> Bool {
+            !uids.isEmpty && Set(uids).isSubset(of: Set(others))
+        }
+
+        /// This record with `removed` taken out: the rows it still names,
+        /// and a total lowered by each row that has left the folder, so what
+        /// it says about the survivors stays true. Nil once it names no rows.
+        ///
+        /// Dropping a row from a covered prefix leaves the rest a prefix
+        /// under any sort, and a row removed from below one doesn't move it,
+        /// so the record survives a removal it didn't ask for -- archiving
+        /// one row used to discard the record covering every other row on
+        /// disk (#1836).
+        func removing(_ removed: Set<UInt32>) -> WindowRecord? {
+            let kept = uids.filter { !removed.contains($0) }
+            guard !kept.isEmpty else { return nil }
+            return WindowRecord(
+                total: UInt32(max(0, Int(total) - removed.count)),
+                uidNext: uidNext,
+                sort: sort,
+                uids: kept
+            )
         }
     }
 
@@ -169,11 +201,11 @@ public actor EnvelopeCache {
     }
 
     /// Folds `envelopes` into the folder's snapshot. `window` records where
-    /// its rows sat on the server, and is kept only when it describes the
-    /// rows the merge leaves on disk -- a merge over rows the anchor was
-    /// never proven over (older pages the caller didn't re-read) keeps none,
-    /// and a merge that passes none clears the one saved before, so a stored
-    /// record always matches the snapshot holding it.
+    /// its rows sat on the server, and is kept only when every row it names
+    /// is still on disk afterwards -- a record naming a row the merge didn't
+    /// leave there says nothing about the others. A merge that passes none
+    /// clears the one saved before, so a stored record is always one some
+    /// caller vouched for over the snapshot holding it.
     public func merge(
         envelopes: [Envelope],
         uidValidity: UInt32,
@@ -199,7 +231,7 @@ public actor EnvelopeCache {
                 uidValidity: uidValidity,
                 uidNext: uidNext,
                 envelopes: merged,
-                window: window.flatMap { $0.describes(uids: merged.keys) ? $0 : nil }
+                window: window.flatMap { $0.vouches(for: merged.keys) ? $0 : nil }
             ),
             for: folder
         )
@@ -245,16 +277,19 @@ public actor EnvelopeCache {
     public func remove(uids: [UInt32], folder: String) throws {
         guard !uids.isEmpty, let existing = snapshot(for: folder) else { return }
         var envelopes = existing.envelopes
-        var changed = false
+        var removed: Set<UInt32> = []
         for uid in uids where envelopes.removeValue(forKey: uid) != nil {
-            changed = true
+            removed.insert(uid)
         }
-        guard changed else { return }
+        guard !removed.isEmpty else { return }
         try write(
             Snapshot(
                 uidValidity: existing.uidValidity,
                 uidNext: existing.uidNext,
-                envelopes: envelopes
+                envelopes: envelopes,
+                // The rows left the folder, so the record's own count moves
+                // with them and it goes on vouching for the rest.
+                window: existing.window?.removing(removed)
             ),
             for: folder
         )

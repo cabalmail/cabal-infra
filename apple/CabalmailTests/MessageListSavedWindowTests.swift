@@ -45,6 +45,41 @@ final class MessageListSavedWindowTests: XCTestCase {
         XCTAssertFalse(offline.envelopes.contains { $0.uid == 500 })
     }
 
+    /// The snapshot is wider than any one window -- it accumulates every
+    /// row ever cached for the folder, while the loaded window moves
+    /// independently -- and a record that had to name every row on disk was
+    /// deleted on the first write in that state, which is the normal state
+    /// of a folder paged past its top page. The record now vouches for its
+    /// own rows: they are proven gone when the read covers them, and the
+    /// rows beside them, which no anchor ever placed, are left alone.
+    func testARecordVouchesForItsOwnRowsBesideRowsTheWindowNeverHeld() async throws {
+        let world = try await World.opened(size: 600, pages: 2)
+        // Rows from an earlier session's deeper pages: on disk, far below
+        // the positions this window's read will reach.
+        try await world.cacheRowsOutsideTheWindow(uids: Array(1...10))
+        await world.persistWindow()
+
+        let stored = await world.savedWindowRecord()
+        let record = try XCTUnwrap(stored,
+                                   "a snapshot wider than the window keeps the record it vouched for")
+        XCTAssertEqual(Set(record.uids), Set(world.model.envelopes.map(\.uid)))
+        // Deleted elsewhere while the folder was closed.
+        await world.server.remove(500)
+
+        let reopened = world.makeModel()
+        await reopened.loadInitial()
+
+        let pages = await world.server.pageCalls
+        XCTAssertEqual(Array(pages.suffix(2)), [Page(offset: 0, limit: 250), Page(offset: 249, limit: 211)],
+                       "the read covers every hydrated row")
+        XCTAssertFalse(reopened.envelopes.contains { $0.uid == 500 })
+        try await world.assertAligned(reopened)
+        let cached = try await world.snapshotUIDs()
+        XCTAssertFalse(cached.contains(500), "the row the record vouched for is proven gone")
+        XCTAssertTrue(cached.isSuperset(of: Set(1...10)),
+                      "rows the record never vouched for are not proven anything")
+    }
+
     /// A record that no longer names the rows on disk proves nothing about
     /// them: the launch falls back to the one-page read of a window anchored
     /// to nothing, which leaves the uncovered row on disk.

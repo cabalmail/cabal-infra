@@ -53,10 +53,11 @@ final class EnvelopeCacheWindowRecordTests: XCTestCase {
         XCTAssertEqual(Set(saved.uids), [1, 2, 3])
     }
 
-    /// The merge leaves the rows of an earlier session beside the window's,
-    /// so the anchor was never proven over everything on disk: the record
-    /// would overstate the window and is dropped.
-    func testAMergeDropsARecordTheMergedRowsDontMatch() async throws {
+    /// The merge leaves the rows of an earlier session beside the window's.
+    /// The record vouches for its own rows, not for the snapshot: it used to
+    /// be dropped here, which is every write to a folder paged past its top
+    /// page, so the next launch was anchored to nothing (#1836).
+    func testAMergeKeepsARecordBesideRowsItDoesNotName() async throws {
         try await cache.merge(envelopes: [envelope(9)], uidValidity: 7, uidNext: 10, into: "INBOX")
 
         try await cache.merge(
@@ -67,7 +68,27 @@ final class EnvelopeCacheWindowRecordTests: XCTestCase {
         let uids = await savedUIDs()
         let saved = await savedRecord()
         XCTAssertEqual(uids, [1, 2, 9], "the older row stays in the snapshot")
-        XCTAssertNil(saved, "and nothing proves where the rows on disk sit")
+        XCTAssertEqual(saved.map { Set($0.uids) }, [1, 2], "and the record still places the window's own rows")
+    }
+
+    /// The surviving half of the old equality rule: a record naming a row
+    /// that is not on disk is dropped, because the write that took the row
+    /// away moved the positions the rest were proven at. So is one naming no
+    /// rows, which would otherwise vouch for every snapshot there is.
+    func testAMergeDropsARecordNamingARowItDidNotLeaveOnDisk() async throws {
+        try await cache.merge(
+            envelopes: [envelope(1)], uidValidity: 7, uidNext: 3,
+            window: record(total: 600, uids: [1, 2]), into: "INBOX"
+        )
+        let missingRow = await savedRecord()
+        XCTAssertNil(missingRow)
+
+        try await cache.merge(
+            envelopes: [envelope(1)], uidValidity: 7, uidNext: 3,
+            window: record(total: 600, uids: []), into: "INBOX"
+        )
+        let noRows = await savedRecord()
+        XCTAssertNil(noRows)
     }
 
     func testAMergeWithNoRecordClearsTheOneSavedBefore() async throws {
@@ -82,7 +103,10 @@ final class EnvelopeCacheWindowRecordTests: XCTestCase {
         XCTAssertNil(saved)
     }
 
-    func testARemovalClearsTheRecordAndMarkingReadKeepsIt() async throws {
+    /// A removal narrows the record rather than discarding it: archiving one
+    /// row used to throw away what placed every other row on disk (#1836).
+    /// The row left the folder, so the record's count comes down with it.
+    func testARemovalNarrowsTheRecordAndMarkingReadKeepsIt() async throws {
         try await cache.merge(
             envelopes: [envelope(1), envelope(2)], uidValidity: 7, uidNext: 3,
             window: record(total: 600, uids: [1, 2]), into: "INBOX"
@@ -93,8 +117,14 @@ final class EnvelopeCacheWindowRecordTests: XCTestCase {
         XCTAssertNotNil(afterMarking, "the same rows, with a flag changed")
 
         try await cache.remove(uids: [2], folder: "INBOX")
-        let afterRemoval = await savedRecord()
-        XCTAssertNil(afterRemoval, "a row left, so the record no longer holds")
+        let stored = await savedRecord()
+        let afterRemoval = try XCTUnwrap(stored)
+        XCTAssertEqual(Set(afterRemoval.uids), [1], "the row that left is no longer vouched for")
+        XCTAssertEqual(afterRemoval.total, 599, "and the folder is one message shorter")
+
+        try await cache.remove(uids: [1], folder: "INBOX")
+        let afterLastRow = await savedRecord()
+        XCTAssertNil(afterLastRow, "a record naming no rows vouches for nothing")
     }
 
     func testTheRecordSurvivesAReopenAndGoesWithTheSnapshot() async throws {

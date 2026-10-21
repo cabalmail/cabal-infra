@@ -55,7 +55,7 @@ struct WindowReconciler {
     ) async throws {
         guard let reading else { return }
         if licensed {
-            window.alignment.anchor = WindowAnchor(total: reading.total, uidNext: reading.uidNext)
+            window.anchorLoadedWindow(WindowAnchor(total: reading.total, uidNext: reading.uidNext))
             return
         }
         guard let anchor = window.alignment.anchor,
@@ -66,7 +66,7 @@ struct WindowReconciler {
             if envelope.uid >= anchor.uidNext && envelope.uid < reading.uidNext { count += 1 }
         }
         if placed == change.arrivals {
-            window.alignment.anchor = WindowAnchor(total: reading.total, uidNext: reading.uidNext)
+            window.anchorLoadedWindow(WindowAnchor(total: reading.total, uidNext: reading.uidNext))
         } else if canRereadWindow {
             let range = planner.coveringWindowRange(arrivals: change.arrivals, total: reading.total)
             try await rereadReportingTopFailures(range, reading: reading, uidValidity: uidValidity)
@@ -123,7 +123,12 @@ struct WindowReconciler {
     /// earlier sessions.
     private func rereadWindow(_ range: Range<Int>, reading: WindowReading, uidValidity: UInt32) async throws {
         guard !range.isEmpty else { return }
-        let judged = Set(window.envelopes.map(\.uid))
+        // The rows this read may prove gone: the loaded ones, or the fewer
+        // ones a hydrated record vouched for. A snapshot is routinely wider
+        // than the window that proved part of it, and a hydrate shows all of
+        // it, so judging every hydrated row would declare gone rows the
+        // anchor never placed -- the mirror of the bug it closes (#1836).
+        let judged = window.alignment.vouchedUIDs ?? Set(window.envelopes.map(\.uid))
         let wasTop = !window.hasTrimmedFront
         let reach = window.alignment.anchor
             .flatMap { $0.change(toTotal: reading.total, uidNext: reading.uidNext) }
@@ -141,7 +146,7 @@ struct WindowReconciler {
               !(read.rows.isEmpty && reading.total > 0)
         else { return }
         installWindow(read.rows, at: range.lowerBound)
-        window.alignment.anchor = WindowAnchor(total: reading.total, uidNext: reading.uidNext)
+        window.anchorLoadedWindow(WindowAnchor(total: reading.total, uidNext: reading.uidNext))
         guard range.lowerBound == 0, wasTop,
               !read.rows.contains(where: { $0.uid >= reading.uidNext })
         else { return }
