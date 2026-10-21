@@ -267,6 +267,44 @@ final class RulesViewModelTests: XCTestCase {
         XCTAssertEqual(model.rules.count, RulesValidator.maxRules)
     }
 
+    /// A blank rule has no conditions, so it matches every message, and the
+    /// debounced save puts it on the server within moments of Add. Enabled,
+    /// that is a live every-message rule the user never switched on, which
+    /// shadows every rule below it as soon as it is dragged up (#2031). It
+    /// arrives disabled, as every template does.
+    func testABlankRuleIsAddedDisabledAndSavedThatWay() async {
+        let backend = FakeRulesBackend()
+        let model = makeModel(backend)
+        await model.load()
+
+        let added = model.add()
+
+        XCTAssertNotNil(added)
+        let rule = try? XCTUnwrap(model.rules.first { $0.id == added })
+        XCTAssertEqual(model.rules.count, 1)
+        XCTAssertFalse(rule?.enabled ?? true, "a blank every-message rule was added switched on")
+        XCTAssertEqual(rule?.conditions.count, 0, "the premise: it matches every message")
+        XCTAssertEqual(rule?.action, Rule.Action.none)
+        await waitForSaves(backend, 1)
+        XCTAssertEqual(backend.savedSets.last?.rules.map(\.enabled), [false],
+                       "the rule the server was given is switched on")
+    }
+
+    /// Only the blank default is disabled: `add(_:)` is also how a template
+    /// and a duplicate are appended, and it must not override what the
+    /// caller handed it in either direction.
+    func testAddKeepsTheEnabledFlagOfARuleItIsGiven() async {
+        let backend = FakeRulesBackend()
+        let model = makeModel(backend)
+        await model.load()
+
+        model.add(Rule(name: "On", enabled: true))
+        model.add(Rule(name: "Off", enabled: false))
+
+        XCTAssertEqual(model.rules.map(\.name), ["On", "Off"])
+        XCTAssertEqual(model.rules.map(\.enabled), [true, false])
+    }
+
     func testCreateArchiveFolderRefreshesAndReports() async {
         let backend = FakeRulesBackend()
         let model = makeModel(backend)
