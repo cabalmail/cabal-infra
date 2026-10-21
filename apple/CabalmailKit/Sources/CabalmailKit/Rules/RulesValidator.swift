@@ -61,7 +61,14 @@ public enum RulesValidator {
     }
 
     /// Validates one rule. `index` only labels the returned issues.
+    ///
+    /// A rule this build can't render (`Rule.isEditable` false — a `field`
+    /// or `action` newer than the app) is never an issue: it is round-tripped
+    /// verbatim, the server that wrote it owns its validation, and flagging
+    /// it here would hold the whole set's save hostage to a rule nothing
+    /// local can fix (#1901).
     public static func validate(_ rule: Rule, at index: Int = 0) -> [Issue] {
+        guard rule.isEditable else { return [] }
         var issues = scalarIssues(rule, at: index)
         issues += conditionIssues(rule.conditions, at: index)
         issues += copyFolderIssues(rule.copyFolders, at: index)

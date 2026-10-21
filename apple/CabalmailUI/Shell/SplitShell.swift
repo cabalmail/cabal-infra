@@ -89,7 +89,10 @@ struct SplitShell: View {
             // reader the width of the whole window: on iPhone Duo's 951 pt
             // inner display a list wider than 410 pt did that, so the
             // crease-pinned 50/50 split could never tile (#1679). The floor
-            // is the one `listColumnBounds` already keeps for the reader.
+            // is the one `listColumnBounds` already keeps for the reader —
+            // and, in a split too narrow to seat that beside the pinned list,
+            // what the split has left instead, because the two declared
+            // together would over-subscribe it (#2106).
             mail.reader(mailPlaceholder: EmptyModifier(), feedPlaceholder: EmptyModifier())
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
         }
@@ -277,8 +280,6 @@ extension SplitShell {
 /// Clamp bounds for the resizable message-list column. Shared with the Mac's
 /// width policy so the two can't drift — see `ListColumnWidth`.
 private let listColumnMinWidth = ListColumnWidth.minimum
-/// Width reserved for the reading pane when clamping the list column's maximum.
-private let readerColumnMinWidth = ListColumnWidth.readerFloor
 
 extension SplitShell {
     /// Clamp range for the pinned list column: a ceiling that leaves the
@@ -295,6 +296,17 @@ extension SplitShell {
     private var listColumnWidth: CGFloat {
         let bounds = listColumnBounds
         return min(max(CGFloat(listColumnWidthStored), bounds.minimum), bounds.maximum)
+    }
+
+    /// Floor the reading pane declares, which is `ListColumnWidth.readerFloor`
+    /// wherever the split can seat it beside the pinned list column and the
+    /// rest of the split where it cannot (`pinnedReaderFloor`). Constant, it
+    /// over-subscribed every split narrower than 596pt — which is what the
+    /// addresses inspector tiling beside the columns leaves on an iPad in
+    /// portrait (#2106).
+    private var readerColumnMinWidth: CGFloat {
+        ListColumnWidth.pinnedReaderFloor(splitWidth: mailState.splitWidth,
+                                          listWidth: listColumnWidth)
     }
 
     /// Binding the drag handle writes: clamps on read, persists on write.

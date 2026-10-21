@@ -173,6 +173,7 @@ private struct FlagPaletteEntryEditor: View {
                         bindings.delete()
                         dismiss()
                     }
+                    Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
                 } message: {
                     Text(
                         "Deleting a flag hides its name and color. Messages "
