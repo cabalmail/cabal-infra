@@ -43,16 +43,13 @@ extension MessageDetailView {
         }
     }
 
-    /// Face reflects the current state; tap-action is the inverse. Matches
-    /// Mail.app: an already-read message shows "envelope.open" and tapping
-    /// marks it unread. A `Label` so the macOS » popup has a title to draw
-    /// when the toolbar overflows; the bars render it icon-only.
-    @ViewBuilder
+    /// Face names the press's action, glyph included: a read message shows
+    /// the unread envelope beside "Mark as unread" (`ReaderToggleFace`,
+    /// shared with the feed reader). A `Label` so the macOS » popup has a
+    /// title to draw when the toolbar overflows; the bars render it
+    /// icon-only.
     private func seenToolbarLabel(isSeen: Bool) -> some View {
-        Label(
-            isSeen ? "Mark as unread" : "Mark as read",
-            systemImage: isSeen ? "envelope.open" : "envelope.badge"
-        )
+        ReaderToggleFace.read(isRead: isSeen).label
     }
 
     /// Runs the toggle the control's face advertises — shared by the plain
