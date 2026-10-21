@@ -73,8 +73,8 @@ final class WindowReadingGenerationSourceScanTests: XCTestCase {
         )
     }
 
-    /// The one await in that span guards the generation and then takes a fresh
-    /// one, since the branch's own reset moves it.
+    /// The invalidate awaits are guarded, and the branch then takes a fresh
+    /// generation, since the reset it runs moves the one the pass held.
     func testTheUidValidityBranchGuardsAndThenRecapturesTheGeneration() throws {
         let branch = try Self.invalidateBranch(try Self.refreshPass())
         XCTAssertTrue(branch.contains(Self.guardLine),
