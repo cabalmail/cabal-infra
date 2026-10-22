@@ -1246,6 +1246,31 @@ def unsubscribe_folder(folder, host, user):
     client.logout()
     return return_value
 
+def folder_subscription_response(event, operate):
+    '''Runs a subscription change for the calling user and builds its response.
+
+    Subscribing and unsubscribing read the same body, validate the folder the
+    same way and answer with the same 200, so only the call differs: `operate`
+    is subscribe_folder or unsubscribe_folder, called with the dot-delimited
+    folder, no host (each picks the mailbox it needs) and the caller's
+    username.
+    '''
+    body, error = parse_json_body(event)
+    if error:
+        return error
+    user = event['requestContext']['authorizer']['claims']['cognito:username']
+    try:
+        folder = validate_folder_name(body.get('folder')).replace("/", ".")
+    except ValueError as err:
+        return invalid_input_response(err)
+    status = operate(folder, None, user)
+    return {
+        "statusCode": 200,
+        "body": json.dumps({
+            "status": str(status)
+        })
+    }
+
 def get_message(_host, user, folder, msg_id):
     '''Gets a message from cache on s3 or from imap server.
 
