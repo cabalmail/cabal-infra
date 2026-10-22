@@ -1,1 +1,0 @@
-- **Vite patch bumps.** Updated `vite` to 8.1.6 (React admin app) and 7.3.7 (browser extensions) to pick up the `launch-editor` Windows existence-check fix (CVE-2026-112942). Dev-server tooling only.

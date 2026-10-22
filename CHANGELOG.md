@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.3] - 2026-10-22
+
+### Fixed
+- Apple: **Tapping the selected row opens it again.** On visionOS's Search
+  tab, a result opened and then left with Back could not be reopened by
+  tapping its row, and on iPad a search result open when the window narrowed
+  left a highlighted row whose tap did nothing after widening. The reading
+  pane is derived from the list's selection, so re-selecting the row that was
+  already selected was no change at all; a tap now opens the row whenever the
+  pane is not already showing it.
+- **A NIL header-fields section no longer fails a whole envelope page.** When
+  the mail server answered the fetch's header section with NIL rather than a
+  literal, `/list_envelopes` (and `/search_envelopes`, by the same shared
+  code) returned a 502 for every message in the page instead of the one
+  affected envelope's headers coming back empty.
+- Apple: **Message and article text follows the system text size.** HTML
+  message bodies and the feed reader's article view now scale with the
+  Dynamic Type setting on iPhone and iPad, as plain-text bodies already did.
+  Both reader and original styling scale: the sender's own font sizes and
+  fixed line heights grow together, so lines don't overlap, and at the
+  default size original styling is exactly the sender's. Reader styling's
+  column widens with the text, so a line keeps its length. The Mac reader is
+  unchanged.
+
+### Security
+- **Vite patch bumps.** Updated `vite` to 8.1.6 (React admin app) and 7.3.7 (browser extensions) to pick up the `launch-editor` Windows existence-check fix (CVE-2026-112942). Dev-server tooling only.
+
 ## [1.39.2] - 2026-10-21
 
 ### Changed
