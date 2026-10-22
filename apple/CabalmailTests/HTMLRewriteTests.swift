@@ -72,6 +72,23 @@ final class HTMLRewriteTests: XCTestCase {
         XCTAssertTrue(ours.lowerBound < theirs.lowerBound, result)
     }
 
+    // MARK: - Text scale
+
+    /// At the default text size "Original" mode's document is unchanged:
+    /// nothing marks it for the reader's text-scaling script.
+    func testTheDefaultScaleAddsNothing() {
+        let html = "<html><head></head><body>hi</body></html>"
+        XCTAssertEqual(rewrite(html: html, inlineImages: [:], textScale: 1), rewrite(html: html, inlineImages: [:]))
+        XCTAssertFalse(rewrite(html: html, inlineImages: [:]).contains(ReaderTextScale.metaName))
+    }
+
+    func testALargerSizeMarksTheDocumentInBothModes() {
+        let meta = "<meta name=\"\(ReaderTextScale.metaName)\" content=\"2.0\">"
+        let html = "<html><head></head><body>hi</body></html>"
+        XCTAssertTrue(rewrite(html: html, inlineImages: [:], textScale: 2).contains("<head>\(headDefaults)\(meta)"))
+        XCTAssertTrue(rewrite(html: html, inlineImages: [:], readerMode: true, textScale: 2).contains(meta))
+    }
+
     // MARK: - cid: rewriting
 
     func testRewritesInlineImageReferencesCaseInsensitively() {

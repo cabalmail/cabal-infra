@@ -10,8 +10,9 @@ import CabalmailKit
 /// script, plugins and frames by its own content security policy (#1911).
 ///
 /// Reader mode runs the vendored Readability.js over the loaded page and
-/// re-renders the extracted article with the mail reader's stylesheet; the
-/// user can flip back to the publisher's own rendering at any time.
+/// re-renders the extracted article with the mail reader's stylesheet, at
+/// the system text size (`ReaderTextScale`); the user can flip back to the
+/// publisher's own rendering at any time.
 struct ArticleWebView: View {
     let url: URL
     let dataStoreID: UUID?
@@ -22,9 +23,11 @@ struct ArticleWebView: View {
     @State private var failure: String?
     /// Bumped by Retry to rebuild the web view and load again.
     @State private var attempt = 0
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ArticleWebViewRepresentable(url: url, dataStoreID: dataStoreID, readerMode: readerMode,
+                                    textScale: dynamicTypeSize.bodyTextScale,
                                     onFailure: { failure = $0 })
             .id(attempt)
             .overlay {
@@ -57,6 +60,7 @@ private struct ArticleWebViewRepresentable: NSViewRepresentable {
     let url: URL
     let dataStoreID: UUID?
     let readerMode: Bool
+    let textScale: Double
     let onFailure: @MainActor (String?) -> Void
 
     func makeCoordinator() -> ArticleWebCoordinator { ArticleWebCoordinator(onFailure: onFailure) }
@@ -66,7 +70,7 @@ private struct ArticleWebViewRepresentable: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        context.coordinator.apply(readerMode: readerMode, on: nsView)
+        context.coordinator.apply(readerMode: readerMode, textScale: textScale, on: nsView)
     }
 }
 #else
@@ -74,6 +78,7 @@ private struct ArticleWebViewRepresentable: UIViewRepresentable {
     let url: URL
     let dataStoreID: UUID?
     let readerMode: Bool
+    let textScale: Double
     let onFailure: @MainActor (String?) -> Void
 
     func makeCoordinator() -> ArticleWebCoordinator { ArticleWebCoordinator(onFailure: onFailure) }
@@ -83,7 +88,7 @@ private struct ArticleWebViewRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        context.coordinator.apply(readerMode: readerMode, on: uiView)
+        context.coordinator.apply(readerMode: readerMode, textScale: textScale, on: uiView)
     }
 }
 #endif
@@ -91,6 +96,7 @@ private struct ArticleWebViewRepresentable: UIViewRepresentable {
 /// Owns the page/reader state machine. `readerMode` is what the toolbar
 /// asks for; `showingReader` is what is on screen. When they differ and the
 /// live page has finished loading, extraction runs (or the page reloads).
+/// A reader on screen at another text size than the system's renders again.
 @MainActor
 final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     private var pageURL: URL?
@@ -98,7 +104,13 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     private var showingReader = false
     private var pageLoaded = false
     private var extracting = false
-    private var readerDocument: String?
+    /// The live page's article, extracted once; the reader document is built
+    /// from it at the text size of the moment.
+    private var article: ExtractedArticle?
+    /// The system text size, as `DynamicTypeSize.bodyTextScale`.
+    private var textScale: Double = 1
+    /// The text size the reader on screen was rendered at.
+    private var readerTextScale: Double?
     /// Set from `showReader` until the reader document commits. That load,
     /// and no other, runs with page JavaScript off (#1911). `showingReader`
     /// can't stand in for it: it is still true while a link tapped in the
@@ -125,6 +137,9 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         // reader rendering's own load turns them off (`decidePolicyFor`).
         // swiftlint:disable:next content_javascript_enabled
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        // Does nothing on the live page: only the reader document carries
+        // the scale it reads.
+        ReaderTextScale.install(on: configuration.userContentController)
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
         #if os(iOS) || os(visionOS)
@@ -135,16 +150,24 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         return webView
     }
 
-    func apply(readerMode: Bool, on webView: WKWebView) {
+    func apply(readerMode: Bool, textScale: Double, on webView: WKWebView) {
         wantsReader = readerMode
+        self.textScale = textScale
         reconcile(on: webView)
     }
 
     private func reconcile(on webView: WKWebView) {
-        guard wantsReader != showingReader, pageLoaded, !extracting else { return }
+        guard pageLoaded, !extracting else { return }
+        if wantsReader, showingReader {
+            if readerTextScale != textScale, let article {
+                showReader(article, on: webView)
+            }
+            return
+        }
+        guard wantsReader != showingReader else { return }
         if wantsReader {
-            if let readerDocument {
-                showReader(readerDocument, on: webView)
+            if let article {
+                showReader(article, on: webView)
             } else {
                 extract(on: webView)
             }
@@ -173,18 +196,20 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
                     // still reads "reader" so the user can try again.
                     return
                 }
-                let document = ArticleReaderDocument.html(for: article, sourceHost: self.pageURL?.host() ?? "")
-                self.readerDocument = document
-                self.showReader(document, on: webView)
+                self.article = article
+                self.showReader(article, on: webView)
             }
         }
     }
 
-    private func showReader(_ document: String, on webView: WKWebView) {
+    private func showReader(_ article: ExtractedArticle, on webView: WKWebView) {
         showingReader = true
         pageLoaded = false
         loadingReader = true
         linkOutOfReader = false
+        readerTextScale = textScale
+        let document = ArticleReaderDocument.html(
+            for: article, sourceHost: pageURL?.host() ?? "", textScale: textScale)
         webView.loadHTMLString(document, baseURL: pageURL)
     }
 
@@ -199,7 +224,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
             linkOutOfReader = false
             showingReader = false
             pageLoaded = false
-            readerDocument = nil
+            article = nil
         }
     }
 
@@ -211,7 +236,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         if !showingReader, webView.url != pageURL, let current = webView.url,
            current.scheme?.hasPrefix("http") == true {
             pageURL = current
-            readerDocument = nil
+            article = nil
         }
         reconcile(on: webView)
     }
@@ -282,7 +307,7 @@ struct ExtractedArticle: Decodable, Equatable {
 /// Wraps Readability's output in the mail reader's stylesheet (`rewrite`'s
 /// reader mode), so an article reads like a reader-mode message.
 enum ArticleReaderDocument {
-    static func html(for article: ExtractedArticle, sourceHost: String) -> String {
+    static func html(for article: ExtractedArticle, sourceHost: String, textScale: Double = 1) -> String {
         let title = escape(article.title)
         let byline = escape(article.byline)
         let meta = [byline, escape(sourceHost)].filter { !$0.isEmpty }.joined(separator: " · ")
@@ -293,7 +318,7 @@ enum ArticleReaderDocument {
         \(article.content)
         </article>
         """
-        return contentPolicy + rewrite(html: body, inlineImages: [:], readerMode: true)
+        return contentPolicy + rewrite(html: body, inlineImages: [:], readerMode: true, textScale: textScale)
     }
 
     /// Refuses script, plugins and frames in the reader document, whatever
