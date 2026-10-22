@@ -26,37 +26,58 @@ fun ruleConditionKeyboardOptions(field: RuleField): KeyboardOptions =
     )
 
 /**
- * `inputType` with suggestions refused.
+ * The `inputType` a condition value edits under.
  *
- * `autoCorrectEnabled = false` only clears `TYPE_TEXT_FLAG_AUTO_CORRECT`,
- * which Gboard reads as "this app corrects for itself" rather than "do not
- * correct": Subject and Body values reached it as a bare `0x1` and were
- * rewritten as each word ended, and the editor's auto-save carried the
- * rewrite to the server (#2038). `TYPE_TEXT_FLAG_NO_SUGGESTIONS` is the
- * flag that stops it. Everything else about the type is left as Compose
- * derived it from [ruleConditionKeyboardOptions], so the email variation
- * that already behaved survives.
+ * Two levers have already been measured on Gboard 18.5.4 and only one of
+ * them works. Clearing `TYPE_TEXT_FLAG_AUTO_CORRECT` (#2023) left Subject
+ * and Body at `0x1` and they were rewritten; adding
+ * `TYPE_TEXT_FLAG_NO_SUGGESTIONS` took them to `0x80001` and they were
+ * rewritten again (#2038). What Gboard does honour is the *variation*: the
+ * address fields were the one part of the row never corrected, and what
+ * sets them apart is the email variation they take for #2022.
+ *
+ * So the free-text fields take a variation of their own:
+ * `TYPE_TEXT_VARIATION_FILTER`, the one for text that filters a list --
+ * which is exactly what a condition value does to the mail stream.
+ * Measured verbatim where the rule Name field beside it, at `0x8001`, was
+ * corrected 3 of 3 in the same session. The flag rides along for the IMEs
+ * that do read it, and the address fields keep their own variation.
  */
-fun withoutImeSuggestions(inputType: Int): Int = inputType or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+fun ruleConditionInputType(
+    field: RuleField,
+    inputType: Int,
+): Int {
+    val variation =
+        if (field.holdsAddresses) {
+            inputType and InputType.TYPE_MASK_VARIATION
+        } else {
+            InputType.TYPE_TEXT_VARIATION_FILTER
+        }
+    return (inputType and InputType.TYPE_MASK_VARIATION.inv()) or variation or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+}
 
 /**
  * Runs [content] with every text field in it editing under
- * [withoutImeSuggestions].
+ * [ruleConditionInputType] for [field].
  *
- * `KeyboardOptions` has no way to ask for the flag, so the input connection
- * the platform builds is intercepted and the `EditorInfo` Compose filled in
- * is amended in place. Wrap the one field that needs it, never a whole
- * screen: the interception reaches every text field in the subtree.
+ * `KeyboardOptions` can ask for neither the variation nor the flag, so the
+ * input connection the platform builds is intercepted and the `EditorInfo`
+ * Compose filled in is amended in place. Wrap the one field that needs it,
+ * never a whole screen: the interception reaches every text field in the
+ * subtree.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun WithoutImeSuggestions(content: @Composable () -> Unit) {
+fun WithoutImeRewrites(
+    field: RuleField,
+    content: @Composable () -> Unit,
+) {
     InterceptPlatformTextInput(
         interceptor = { request, nextHandler ->
             val amended =
                 PlatformTextInputMethodRequest { outAttributes ->
                     val connection = request.createInputConnection(outAttributes)
-                    outAttributes.inputType = withoutImeSuggestions(outAttributes.inputType)
+                    outAttributes.inputType = ruleConditionInputType(field, outAttributes.inputType)
                     connection
                 }
             nextHandler.startInputMethod(amended)

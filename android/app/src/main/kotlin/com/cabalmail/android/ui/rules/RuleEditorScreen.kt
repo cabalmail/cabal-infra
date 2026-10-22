@@ -270,8 +270,9 @@ private fun ConditionRow(
         }
         // A value is a literal substring, so nothing may rewrite it: no
         // capitalization, no auto-correct and -- the half `KeyboardOptions`
-        // cannot ask for -- no suggestions either (#2038).
-        WithoutImeSuggestions {
+        // cannot ask for -- an input-type variation the IME declines to
+        // correct (#2038).
+        WithoutImeRewrites(condition.field) {
             OutlinedTextField(
                 value = condition.value,
                 onValueChange = { onChange(condition.copy(value = it)) },
