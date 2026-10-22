@@ -310,6 +310,13 @@ struct WindowRefresher {
         if !disappeared.isEmpty {
             let gone = Set(disappeared)
             window.envelopes.removeAll { gone.contains($0.uid) }
+            // The list hears it the way it hears a removal the app made, so
+            // its selection and its reader let go of the row: nothing else
+            // tells them, and a reader left on it kept rendering a message
+            // the server no longer has (#2037).
+            window.host?.windowDidRemoveRows(
+                Set(disappeared.map { MessageRef(folder: window.folder.path, uid: $0) })
+            )
         }
         window.mergeFetched(fetched)
         window.recomputeHasMore(windowEndBefore: windowEnd)
