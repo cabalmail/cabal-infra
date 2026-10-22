@@ -424,6 +424,18 @@ extension MessageListView {
         }
         #endif
         let ref = model.rowRef(for: envelope)
+        // Selecting the row that is already the whole selection is no change
+        // for `wideList`'s `.onChange` to hear, so the pane would keep an
+        // emptiness a popped reader or a layout swap left behind and the tap
+        // would do nothing (`ReadingPaneSelectionPolicy.reopens`, #2033/#2034).
+        if ReadingPaneSelectionPolicy.reopens(
+            selectedRefs: model.selectedRefs,
+            tapped: ref,
+            paneShowing: selection.map { model.rowRef(for: $0) },
+            bulkMode: model.bulkMode
+        ) {
+            selection = envelope
+        }
         model.selectedRefs = [ref]
         model.setSelectionAnchor(ref)
         model.selectionCursor = ref

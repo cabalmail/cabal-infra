@@ -16,7 +16,7 @@ This table and the **Status:** line under each work item are updated in the same
 
 | Work item | Status |
 |---|---|
-| Session 1, PR A. Wide-path selection (#2032, #2034, #2033's second half) | Not started (2026-10-15) |
+| Session 1, PR A. Wide-path selection (#2032, #2034, #2033's second half) | Mostly landed (2026-10-22): #2032 in PR #2165, #2034 and #2033's second half in PR #2182; decision 2 (Select entry) not started |
 | Session 1, PR B. The open search result across a layout swap (#2033's first half) | Not started (2026-10-15) |
 | Session 1, PR G. The first key after launch (#1929) | Not started (2026-10-15) |
 | Session 1, PR C. iPad menu commands (#2027, #2024, #2026) | Not started (2026-10-15) |
@@ -106,7 +106,7 @@ Issue states read on GitHub on 2026-10-12. Paths are under `apple/CabalmailUI/` 
 - Verify: CI. Mini iPad simulator: #2032's steps with server read state before and after; check one box, then narrow and widen, and confirm the reader still ignores the box (Select mode crosses the swap); #2033's narrow, widen and re-tap. visionOS simulator for #2034 (PR CI only builds visionOS). Studio Duo simulator, inner display: Select mode, then one box checked across a fold and unfold.
 - Risk: medium. This is the Mac's selection path too: click, Shift-click and Command-click on the signed Mac build.
 
-**Status:** Not started (2026-10-15).
+**Status:** Mostly landed (2026-10-22). #2032 shipped in PR #2165 as `ReadingPaneSelectionPolicy.shown` plus `MailReaderChoice`'s singular count label. #2034 and #2033's second half shipped in PR #2182 as `ReadingPaneSelectionPolicy.reopens`, asked by `selectRow` before it writes `selectedRefs`: an equal set is no longer a dead tap, measured pre and post on the visionOS and iPad simulators. Decision 2 (what is checked when Select mode is entered with a message open) is **not started**, and neither is the visionOS pop-clears-the-selection half of this item's scope line - the re-open rule covers the reported symptom without it. #2033 keeps `accepted` for PR B's half.
 
 **PR B. The open search result across a layout swap (#2033's first half).**
 - Scope: narrowing or folding mid-search opens the Search tab with the result pushed; widening or unfolding with a result open shows it in the split's reader. Hold the result in the `ShellHandOff` value beside the search hand-off it already makes, so the navigator gains no stored property, and let `SearchView` take it on appear, as the feed reader takes `takeItemForHandOff()` (`Navigation/FeedNavigationState.swift:73`). If mail-correctness.md's PR 2 left a search re-run that drops the open result to this plan (its line 83), fix it here.
