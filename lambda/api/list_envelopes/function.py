@@ -9,6 +9,7 @@ from helper import ( # pylint: disable=import-error
     invalid_input_response,
     log_folder_size_bucket,
     query_params,
+    solicited_envelope_entries,
     validate_folder_name,
     validate_uid_list,
 )
@@ -30,7 +31,10 @@ def handler(event, _context):
     imap_folder = folder.replace("/", ".")
     client = get_imap_client(query_string['host'], user, imap_folder, True)
     envelopes = {}
-    for msgid, data in client.fetch(ids, ENVELOPE_FETCH_KEYS).items():
+    # Not .items(): a fetch response also carries the unsolicited FLAGS updates
+    # Dovecot pushes for other messages in the folder (#1990).
+    fetched = client.fetch(ids, ENVELOPE_FETCH_KEYS)
+    for msgid, data in solicited_envelope_entries(fetched, ids):
         envelopes[msgid] = envelope_dict(msgid, data)
     # Time only the envelope fetch -- the size lookup below is an extra STATUS
     # for observability, not request work, so it stays out of duration_ms.

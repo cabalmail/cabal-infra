@@ -14,13 +14,30 @@ struct WindowReconciler {
     /// to say where the rows sit: it lacks a count or UIDNEXT, it may have
     /// been answered before a removal this list already applied, a re-read
     /// is already running, or the window changed while it was out.
+    ///
+    /// The count is `listedMessages`, the one the server's list positions are
+    /// in: anchoring on `MESSAGES` leaves the window a row off per message
+    /// flagged `\Deleted` elsewhere and not yet expunged (#1836).
+    ///
+    /// The generation clause is belt and braces, and deliberately kept as
+    /// such: no caller can reach it with a moved generation. A pass that
+    /// asks STATUS itself returns at its own guard the line after that await
+    /// (`refreshPass`, pinned by
+    /// `MessageListRefreshCharacterizationTests`), and a pass handed a
+    /// STATUS already asked for has no await between the generation it
+    /// captured and this call -- the one that could, the cache invalidate on
+    /// a changed UIDVALIDITY, guards itself and then re-captures. So no
+    /// stand-down test can isolate it (#1981), and it is the check that
+    /// would be load-bearing the moment an await appears ahead of it.
+    /// `WindowReadingGenerationSourceScanTests` fails when either reason
+    /// stops holding, which is the signal that the test has become writable.
     func windowReading(
         _ status: FolderStatus,
         askedAt: ContinuousClock.Instant,
         mayPredateRemoval: Bool,
         generation: Int
     ) -> WindowReading? {
-        guard let messages = status.messages, let uidNext = status.uidNext, uidNext > 0,
+        guard let messages = status.listedMessages, let uidNext = status.uidNext, uidNext > 0,
               !mayPredateRemoval, !window.alignment.isReconciling, generation == window.alignment.generation
         else { return nil }
         return WindowReading(total: UInt32(max(0, messages)), uidNext: uidNext, askedAt: askedAt)
@@ -51,7 +68,7 @@ struct WindowReconciler {
     ) async throws {
         guard let reading else { return }
         if licensed {
-            window.alignment.anchor = WindowAnchor(total: reading.total, uidNext: reading.uidNext)
+            window.anchorLoadedWindow(WindowAnchor(total: reading.total, uidNext: reading.uidNext))
             return
         }
         guard let anchor = window.alignment.anchor,
@@ -62,7 +79,7 @@ struct WindowReconciler {
             if envelope.uid >= anchor.uidNext && envelope.uid < reading.uidNext { count += 1 }
         }
         if placed == change.arrivals {
-            window.alignment.anchor = WindowAnchor(total: reading.total, uidNext: reading.uidNext)
+            window.anchorLoadedWindow(WindowAnchor(total: reading.total, uidNext: reading.uidNext))
         } else if canRereadWindow {
             let range = planner.coveringWindowRange(arrivals: change.arrivals, total: reading.total)
             try await rereadReportingTopFailures(range, reading: reading, uidValidity: uidValidity)
@@ -119,7 +136,12 @@ struct WindowReconciler {
     /// earlier sessions.
     private func rereadWindow(_ range: Range<Int>, reading: WindowReading, uidValidity: UInt32) async throws {
         guard !range.isEmpty else { return }
-        let judged = Set(window.envelopes.map(\.uid))
+        // The rows this read may prove gone: the loaded ones, or the fewer
+        // ones a hydrated record vouched for. A snapshot is routinely wider
+        // than the window that proved part of it, and a hydrate shows all of
+        // it, so judging every hydrated row would declare gone rows the
+        // anchor never placed -- the mirror of the bug it closes (#1836).
+        let judged = window.alignment.vouchedUIDs ?? Set(window.envelopes.map(\.uid))
         let wasTop = !window.hasTrimmedFront
         let reach = window.alignment.anchor
             .flatMap { $0.change(toTotal: reading.total, uidNext: reading.uidNext) }
@@ -137,7 +159,7 @@ struct WindowReconciler {
               !(read.rows.isEmpty && reading.total > 0)
         else { return }
         installWindow(read.rows, at: range.lowerBound)
-        window.alignment.anchor = WindowAnchor(total: reading.total, uidNext: reading.uidNext)
+        window.anchorLoadedWindow(WindowAnchor(total: reading.total, uidNext: reading.uidNext))
         guard range.lowerBound == 0, wasTop,
               !read.rows.contains(where: { $0.uid >= reading.uidNext })
         else { return }

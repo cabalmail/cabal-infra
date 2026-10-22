@@ -199,6 +199,8 @@ Conditional legs: feed notification toggles in Settings, only if flags-and-cross
 
 Room numbering: `docs/1.x/cross-media-ux-plan.md:306-311` and `:467` say Phase 2 is Room version 2. PR 9 takes version 2, so Phase 2 becomes version 3. PR 9 adds the dated erratum there, since the claim turns false only when PR 9 merges.
 
+> **Erratum (2026-10-20):** `cross-media-ux-plan.md` was revised in place on 2026-10-20 and already says Phase 2 is Room version 3 if PR 9 lands first, so PR 9 adds nothing there.
+
 ## Background from the rearchitecture
 
 The sticky feed order design was a short plan written in the rearchitecture project when the maintainer asked that the feed list's order stick per feed (or folder) across devices. Apple's #1930 and #1959 and the server's #1919 shipped it; PR 9 and PR 10 are its Android follow-up. What this plan uses from it:

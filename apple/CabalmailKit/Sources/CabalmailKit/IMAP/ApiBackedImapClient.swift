@@ -79,6 +79,7 @@ public actor ApiBackedImapClient: ImapClient {
             messages: raw.messages,
             unseen: raw.unseen,
             flagged: raw.flagged,
+            undeleted: raw.undeleted,
             recent: nil,
             uidValidity: raw.uidValidity,
             uidNext: raw.uidNext

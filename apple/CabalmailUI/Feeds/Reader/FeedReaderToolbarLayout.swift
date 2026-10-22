@@ -9,26 +9,26 @@ enum FeedReaderAction: String, CaseIterable {
     var identifier: String { "feed.reader.\(rawValue)" }
 
     /// Icon and label in the quiescent state (unread item, not flagged,
-    /// reader styling available, feed content showing).
+    /// reader styling available, feed content showing), which the macOS
+    /// empty pane's stand-ins draw. The toggles read `ReaderToggleFace`, as
+    /// the live buttons and the mail reader's stand-ins do.
     var quiescentSymbol: String {
-        switch self {
-        case .read:          return "envelope.open"
-        case .favorite:      return "flag"
-        case .readerMode:    return "doc.richtext"
-        case .remoteContent: return "eye.slash"
-        case .article:       return "safari"
-        case .more:          return "ellipsis.circle"
-        }
+        quiescentFace.systemImage
     }
 
     var quiescentTitle: String {
+        quiescentFace.title
+    }
+
+    private var quiescentFace: (title: String, systemImage: String) {
+        func toggle(_ face: ReaderToggleFace) -> (String, String) { (face.title, face.systemImage) }
         switch self {
-        case .read:          return "Mark as read"
-        case .favorite:      return "Flag"
-        case .readerMode:    return "Show reader view"
-        case .remoteContent: return "Show remote content"
-        case .article:       return "Open article"
-        case .more:          return "More"
+        case .read:          return toggle(.read(isRead: false))
+        case .favorite:      return toggle(.flag(isFlagged: false))
+        case .readerMode:    return toggle(.readerView(isOn: false))
+        case .remoteContent: return toggle(.remoteContent(isShown: false))
+        case .article:       return ("Open article", "safari")
+        case .more:          return ("More", "ellipsis.circle")
         }
     }
 }

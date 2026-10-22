@@ -46,6 +46,10 @@ final class ApiBackedImapClientTests: XCTestCase {
         XCTAssertEqual(status.unseen, 3)
         XCTAssertEqual(status.uidValidity, 12345)
         XCTAssertEqual(status.uidNext, 100)
+        // A STATUS-only reply carries no not-deleted count, so the positions
+        // fall back to MESSAGES -- what the list has always addressed.
+        XCTAssertNil(status.undeleted)
+        XCTAssertEqual(status.listedMessages, 42)
     }
 
     func testTopEnvelopesPagesByMessageIds() async throws {

@@ -1398,6 +1398,11 @@ ENVELOPE_FETCH_KEYS = [
     'ENVELOPE', 'FLAGS', 'BODYSTRUCTURE', ENVELOPE_HEADER_FIELDS_KEY
 ]
 
+# The keys envelope_dict subscripts rather than .get()s. A fetch response can
+# hold entries carrying none of them (see solicited_envelope_entries), so this
+# tuple and those subscripts must stay in lockstep.
+ENVELOPE_REQUIRED_KEYS = (b'ENVELOPE', b'FLAGS', b'BODYSTRUCTURE')
+
 # Deep threads grow References without bound and envelopes are fetched ~50 at
 # a time, so emit only the newest ids. RFC 5322 itself sanctions trimming old
 # ids; reply threading only ever appends one id to what it received.
@@ -1457,6 +1462,33 @@ def parse_message_ids(raw):
     return _MSGID_RE.findall(raw)
 
 
+def solicited_envelope_entries(fetched, ids):
+    '''Filters an IMAPClient.fetch() response down to the entries asked for.
+
+    imapclient returns parse_fetch_response over every untagged FETCH imaplib
+    has collected, which includes the unsolicited `* N FETCH (FLAGS ...)`
+    updates Dovecot pushes when another session changes flags in the selected
+    folder. Such an entry is keyed by its own UID and carries only SEQ, FLAGS
+    and UID, so handing it to envelope_dict raised KeyError and the whole
+    request became a 502 (#1990). Pooled connections widen the window, since
+    updates queued on an idle socket are read at the next checkout.
+
+    Keeps an entry only when its key was requested and it carries every key
+    envelope_dict subscripts, and returns (msgid, data) pairs in the order the
+    ids were requested. A requested id whose entry lacks those keys is dropped
+    rather than raised on: a UID that left the mailbox mid-fetch returns no
+    entry at all, callers already tolerate an id coming back without an
+    envelope, and a missing row beats a failed page.
+    '''
+    entries = []
+    for msgid in ids:
+        data = fetched.get(msgid)
+        if data is None or any(key not in data for key in ENVELOPE_REQUIRED_KEYS):
+            continue
+        entries.append((msgid, data))
+    return entries
+
+
 def envelope_dict(msgid, data):
     '''Builds the per-envelope JSON payload from one IMAP fetch result entry.
 
@@ -1466,9 +1498,13 @@ def envelope_dict(msgid, data):
     '''
     envelope = data[b'ENVELOPE']
     # The header blob now carries two fields with possible RFC 5322 folding,
-    # so parse it properly instead of splitting on whitespace.
+    # so parse it properly instead of splitting on whitespace. Dovecot can
+    # answer the section with NIL, which imapclient parses as the key being
+    # PRESENT with value None - so the `.get` default never applies and
+    # `or b''` is what keeps one such message from 502ing the whole page
+    # (#2050); every caller of this function is unguarded.
     headers = HeaderParser().parsestr(
-        data.get(ENVELOPE_HEADER_FIELDS_KEY.encode(), b'').decode(errors='replace')
+        (data.get(ENVELOPE_HEADER_FIELDS_KEY.encode()) or b'').decode(errors='replace')
     )
     priority_header = headers.get('X-Priority') or ''
     return {

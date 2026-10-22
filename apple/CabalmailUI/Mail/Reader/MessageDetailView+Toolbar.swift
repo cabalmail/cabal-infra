@@ -168,12 +168,7 @@ extension MessageDetailView {
             Button {
                 model.toggleRemoteContent()
             } label: {
-                Label(
-                    model.remoteContentAllowed
-                        ? "Hide remote content"
-                        : "Show remote content",
-                    systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash"
-                )
+                ReaderToggleFace.remoteContent(isShown: model.remoteContentAllowed).label
             }
             .disabled(model.htmlBody == nil)
             .accessibilityIdentifier("reader.remoteContent")
@@ -186,12 +181,7 @@ extension MessageDetailView {
             Button {
                 model.toggleReaderMode()
             } label: {
-                Label(
-                    model.readerMode
-                        ? "Show original formatting"
-                        : "Show reader view",
-                    systemImage: model.readerMode ? "text.alignleft" : "doc.richtext"
-                )
+                ReaderToggleFace.readerView(isOn: model.readerMode).label
             }
             .disabled(model.htmlBody == nil)
             .accessibilityIdentifier("reader.readerMode")
@@ -292,10 +282,7 @@ extension MessageDetailView {
             Button {
                 model.toggleReaderMode()
             } label: {
-                Label(
-                    model.readerMode ? "Show original formatting" : "Show reader view",
-                    systemImage: model.readerMode ? "text.alignleft" : "doc.richtext"
-                )
+                ReaderToggleFace.readerView(isOn: model.readerMode).label
             }
             .disabled(model.htmlBody == nil)
             .accessibilityIdentifier("reader.readerMode")
@@ -308,10 +295,7 @@ extension MessageDetailView {
             Button {
                 model.toggleRemoteContent()
             } label: {
-                Label(
-                    model.remoteContentAllowed ? "Hide remote content" : "Show remote content",
-                    systemImage: model.remoteContentAllowed ? "eye.fill" : "eye.slash"
-                )
+                ReaderToggleFace.remoteContent(isShown: model.remoteContentAllowed).label
             }
             .disabled(model.htmlBody == nil)
             .accessibilityIdentifier("reader.remoteContent")
@@ -421,10 +405,7 @@ extension MessageDetailView {
                     Button {
                         model.forcePlainText.toggle()
                     } label: {
-                        Label(
-                            model.forcePlainText ? "Show HTML" : "Show plain text",
-                            systemImage: model.forcePlainText ? "doc.richtext" : "doc.plaintext"
-                        )
+                        ReaderToggleFace.plainText(isOn: model.forcePlainText).label
                     }
                 }
 

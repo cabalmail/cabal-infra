@@ -19,6 +19,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -320,6 +321,66 @@ class RulesViewModelTest {
                 RulesValidator.MAX_RULES,
                 model.state.value.rules
                     ?.size,
+            )
+        }
+
+    /**
+     * A blank rule has no conditions, so it matches every message, and the
+     * debounced save puts it on the server within moments of Add. Enabled,
+     * that is a live every-message rule the user never switched on, which
+     * shadows every rule below it as soon as it is moved up (#2031).
+     */
+    @Test
+    fun `a blank rule is added disabled and saved that way`() =
+        runTest(dispatcher) {
+            val backend = FakeBackend()
+            val model = RulesViewModel(backend)
+            advanceUntilIdle()
+
+            val added = model.add()
+            advanceUntilIdle()
+
+            val rule =
+                model.state.value.rules
+                    ?.single()
+            assertNotNull(added)
+            assertFalse(rule!!.enabled, "a blank every-message rule was added switched on")
+            assertTrue(rule.conditions.isEmpty(), "the premise: it matches every message")
+            assertEquals(RuleAction.NONE, rule.action)
+            assertEquals(
+                listOf(false),
+                backend.savedSets
+                    .last()
+                    .first
+                    .map { it.enabled },
+            )
+        }
+
+    /**
+     * Only the blank default is disabled: `add` is also how a template and a
+     * duplicate are appended, and it must not override what the caller
+     * handed it in either direction.
+     */
+    @Test
+    fun `add keeps the enabled flag of a rule it is given`() =
+        runTest(dispatcher) {
+            val backend = FakeBackend()
+            val model = RulesViewModel(backend)
+            advanceUntilIdle()
+
+            model.add(Rule(name = "On", enabled = true))
+            model.add(Rule(name = "Off", enabled = false))
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("On", "Off"),
+                model.state.value.rules
+                    ?.map { it.name },
+            )
+            assertEquals(
+                listOf(true, false),
+                model.state.value.rules
+                    ?.map { it.enabled },
             )
         }
 

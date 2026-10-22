@@ -49,7 +49,25 @@ final class MailReaderChoiceTests: XCTestCase {
 
     func testNoMessageIsTheEmptyPrompt() {
         XCTAssertEqual(MailReaderChoice.choose(selectionCount: 0, envelope: nil, sidebarFolder: inbox), .empty)
-        XCTAssertEqual(MailReaderChoice.choose(selectionCount: 1, envelope: nil, sidebarFolder: inbox), .empty)
+    }
+
+    /// One selected row with no message to show used to be the empty prompt;
+    /// it is Select mode's single checked box, and the pane now says so
+    /// rather than "No message selected" beside an action bar reading
+    /// "1 selected" (#2032).
+    func testOneSelectedWithNoMessageIsTheCount() {
+        XCTAssertEqual(
+            MailReaderChoice.choose(selectionCount: 1, envelope: nil, sidebarFolder: inbox),
+            .selection(count: 1)
+        )
+    }
+
+    /// The placeholder is reachable at one now, so its title has to agree in
+    /// number (#2032).
+    func testTheSelectionTitleAgreesInNumber() {
+        XCTAssertEqual(MailReaderChoice.selectionTitle(count: 1), "1 Message Selected")
+        XCTAssertEqual(MailReaderChoice.selectionTitle(count: 2), "2 Messages Selected")
+        XCTAssertEqual(MailReaderChoice.selectionTitle(count: 22), "22 Messages Selected")
     }
 
     func testNoFolderAnywhereIsTheEmptyPrompt() {

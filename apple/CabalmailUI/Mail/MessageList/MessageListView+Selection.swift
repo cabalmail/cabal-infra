@@ -376,11 +376,14 @@ extension MessageListView {
             }
             // Derive the reading-pane selection from the selection set: exactly
             // one selected -> show that message, the row the ref names (of two
-            // search rows sharing a UID, the one picked); zero or many -> the
-            // parent shows the count placeholder.
+            // search rows sharing a UID, the one picked); zero or many, or any
+            // number checked in Select mode -> the parent shows the count
+            // placeholder (`ReadingPaneSelectionPolicy`).
             .onChange(of: model.selectedRefs) { _, refs in
                 if refs.count == 1 { model.setSelectionAnchor(refs.first) }
-                selection = refs.count == 1 ? refs.first.flatMap(model.envelope(for:)) : nil
+                selection = ReadingPaneSelectionPolicy
+                    .shown(selectedRefs: refs, bulkMode: model.bulkMode)
+                    .flatMap(model.envelope(for:))
                 onSelectionCountChanged(refs.count)
             }
             // A selection a layout swap handed this list was never a change
@@ -421,6 +424,18 @@ extension MessageListView {
         }
         #endif
         let ref = model.rowRef(for: envelope)
+        // Selecting the row that is already the whole selection is no change
+        // for `wideList`'s `.onChange` to hear, so the pane would keep an
+        // emptiness a popped reader or a layout swap left behind and the tap
+        // would do nothing (`ReadingPaneSelectionPolicy.reopens`, #2033/#2034).
+        if ReadingPaneSelectionPolicy.reopens(
+            selectedRefs: model.selectedRefs,
+            tapped: ref,
+            paneShowing: selection.map { model.rowRef(for: $0) },
+            bulkMode: model.bulkMode
+        ) {
+            selection = envelope
+        }
         model.selectedRefs = [ref]
         model.setSelectionAnchor(ref)
         model.selectionCursor = ref

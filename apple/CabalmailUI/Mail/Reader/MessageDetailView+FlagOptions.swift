@@ -72,12 +72,8 @@ extension MessageDetailView {
     }
     #endif
 
-    @ViewBuilder
     private func flagToolbarLabel(isFlagged: Bool) -> some View {
-        Label(
-            isFlagged ? "Unflag" : "Flag",
-            systemImage: isFlagged ? "flag.slash" : "flag"
-        )
+        ReaderToggleFace.flag(isFlagged: isFlagged).label
     }
 
     /// The rows the menu offers, read here so the enclosing body observes

@@ -2,21 +2,51 @@ import Foundation
 import CabalmailKit
 
 /// What a `FolderWindowLoader` keeps of its folder for the next open: the
-/// envelope snapshot (a warm-reopen cache, not a source of truth) and the
-/// counts the last STATUS saved.
+/// envelope snapshot (a warm-reopen cache, not a source of truth), the
+/// record of where its rows sat on the server, and the counts the last
+/// STATUS saved.
 @MainActor
 struct WindowSnapshot {
     let window: FolderWindowLoader
 
     /// Shows the folder's saved rows at once on open, sorted in the active
-    /// order. Nothing says where they sit on the server now, so the window
-    /// keeps no anchor; the refresh that follows decides (`WindowPlanner`)
-    /// and sets the real count from STATUS.
+    /// order, and anchors the window to where the snapshot says the rows its
+    /// record vouches for sat (`savedRecord`). Without an anchor
+    /// nothing says where they sit on the server now and the refresh that
+    /// follows decides (`WindowPlanner`); either way it sets the real count
+    /// from STATUS.
     func hydrateFromCache() async {
         guard let snapshot = await window.client.envelopeCache.snapshot(for: window.folder.path) else { return }
         window.uidValidity = snapshot.uidValidity
         window.envelopes = window.placedInFolder(Array(snapshot.envelopes.values)).sorted(by: window.envelopeOrder)
-        window.forgetWindowAnchor()
+        if let record = savedRecord(in: snapshot) {
+            window.adoptWindowAnchor(
+                WindowAnchor(total: record.total, uidNext: record.uidNext),
+                vouchingFor: record.uids
+            )
+        } else {
+            window.forgetWindowAnchor()
+        }
+    }
+
+    /// The window record a snapshot supports for the rows just hydrated, or
+    /// nil when it supports none: no record (one written before this
+    /// existed, or over rows nothing proved), a record naming a row that has
+    /// left the snapshot (the write that dropped it moved the positions the
+    /// others were proven at), or one read in another order, whose positions
+    /// aren't these. The rows on disk it doesn't name are hydrated too and
+    /// it says nothing about them -- a snapshot is routinely wider than the
+    /// window that proved part of it.
+    ///
+    /// With one, the first refresh after a launch can prove a row gone the
+    /// way a refresh in the session that wrote it could: the re-read covers
+    /// the window's rows plus one position per arrival since, rather than
+    /// having to hold the whole folder (#1836).
+    private func savedRecord(in snapshot: EnvelopeCache.Snapshot) -> EnvelopeCache.WindowRecord? {
+        guard let record = snapshot.window, record.sort == window.sortCriterion,
+              record.vouches(for: snapshot.envelopes.keys)
+        else { return nil }
+        return record
     }
 
     /// Starts the pills from the counts the last successful STATUS saved,
@@ -64,10 +94,32 @@ struct WindowSnapshot {
     /// snapshot, whatever was due to be written when the search started
     /// (#1870), and with the list gone nothing is written: whether a search
     /// was showing can't be known then.
-    private func persistLoadedPages() async {
+    func persistLoadedPages() async {
         guard !window.hasTrimmedFront, let list = window.host, !list.isSearchActive,
               let uidValidity = window.uidValidity, let uidNext = window.envelopes.map(\.uid).max() else { return }
         try? await persistCache(uidValidity: uidValidity, uidNext: uidNext + 1)
+    }
+
+    /// The window record written beside the rows: the anchor the rows are
+    /// known to line up with, the order they were read in, and the rows it
+    /// was proven over, so the next launch can tell what it is reading back
+    /// (#1836). None while nothing proves where the rows sit -- the snapshot
+    /// is then the warm cache it always was.
+    ///
+    /// Those rows are the loaded ones, except in a window carrying a
+    /// narrower vouched set from its own hydrate: the anchor was never
+    /// proven over the rest, so a record naming them would hand the next
+    /// launch a claim this one never had.
+    private var windowRecord: EnvelopeCache.WindowRecord? {
+        window.alignment.anchor.map { anchor in
+            let loaded = window.envelopes.map(\.uid)
+            return EnvelopeCache.WindowRecord(
+                total: anchor.total,
+                uidNext: anchor.uidNext,
+                sort: window.sortCriterion,
+                uids: window.alignment.vouchedUIDs.map { loaded.filter($0.contains) } ?? loaded
+            )
+        }
     }
 
     private func persistCache(uidValidity: UInt32, uidNext: UInt32) async throws {
@@ -75,6 +127,7 @@ struct WindowSnapshot {
             envelopes: window.envelopes,
             uidValidity: uidValidity,
             uidNext: uidNext,
+            window: windowRecord,
             into: window.folder.path
         )
     }
