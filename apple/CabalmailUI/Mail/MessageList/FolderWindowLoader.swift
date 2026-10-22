@@ -11,6 +11,10 @@ protocol FolderWindowHost: AnyObject {
     var isBuildingBulkSelection: Bool { get }
     /// The list's one error line. The window writes it and never reads it.
     var errorMessage: String? { get set }
+    /// Rows a refresh proved gone from the folder: moved or expunged by
+    /// another client, so whatever holds them has to let go
+    /// (`WindowRefresher.applyRefreshPage`, #2037).
+    func windowDidRemoveRows(_ refs: Set<MessageRef>)
 }
 
 /// What a folder window is known to line up with on the server, and the

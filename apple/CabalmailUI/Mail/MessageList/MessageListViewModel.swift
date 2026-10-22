@@ -428,6 +428,22 @@ extension MessageListViewModel: FolderWindowHost {
     /// Select mode is on with rows picked: a re-read waits rather than
     /// reshuffle the rows under the selection being built.
     var isBuildingBulkSelection: Bool { bulkMode && !selectedRefs.isEmpty }
+
+    /// A refresh proved these rows gone from the folder, so the selection
+    /// queues the same reaction a removal the app made queues
+    /// (`applyRemoval(of:from:advancing:)`) and the views let go of them.
+    ///
+    /// It never advances, and names no target: nobody here made the removal,
+    /// so no window's after-dispose preference applies and there is no
+    /// window to apply it in. A selection wholly on the rows clears -- which
+    /// is what empties a reader that was showing one of them (#2037) -- and a
+    /// larger one just loses them, as it does for a change another list made.
+    func windowDidRemoveRows(_ refs: Set<MessageRef>) {
+        guard !refs.isEmpty else { return }
+        selectionReactions.append(ListSelectionReaction(
+            kind: .removal, rows: refs, target: nil, origin: nil, advances: false
+        ))
+    }
 }
 
 // MARK: - The folder's poller
