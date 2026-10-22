@@ -1498,9 +1498,13 @@ def envelope_dict(msgid, data):
     '''
     envelope = data[b'ENVELOPE']
     # The header blob now carries two fields with possible RFC 5322 folding,
-    # so parse it properly instead of splitting on whitespace.
+    # so parse it properly instead of splitting on whitespace. Dovecot can
+    # answer the section with NIL, which imapclient parses as the key being
+    # PRESENT with value None - so the `.get` default never applies and
+    # `or b''` is what keeps one such message from 502ing the whole page
+    # (#2050); every caller of this function is unguarded.
     headers = HeaderParser().parsestr(
-        data.get(ENVELOPE_HEADER_FIELDS_KEY.encode(), b'').decode(errors='replace')
+        (data.get(ENVELOPE_HEADER_FIELDS_KEY.encode()) or b'').decode(errors='replace')
     )
     priority_header = headers.get('X-Priority') or ''
     return {
