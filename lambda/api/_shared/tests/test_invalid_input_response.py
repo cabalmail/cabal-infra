@@ -142,6 +142,11 @@ REFUSED = {
 
 HANDLERS = {name: _load_handler(name) for name in REFUSED}
 
+# These two reach the builder through helper.folder_subscription_response
+# rather than calling it themselves, so the name to patch for them is the one
+# in `helper`, where that shared builder resolves it.
+VIA_HELPER = {'subscribe_folder', 'unsubscribe_folder'}
+
 
 class InvalidInputResponseTest(unittest.TestCase):
     '''The 400 shape itself. Every handler used to build this dict inline, so
@@ -179,12 +184,13 @@ class SharedBuilderIsReachedTest(unittest.TestCase):
         sentinel = {"statusCode": 499, "body": "sentinel"}
         for name, module in HANDLERS.items():
             with self.subTest(handler=name):
-                saved = module.invalid_input_response
-                module.invalid_input_response = lambda _err, _s=sentinel: _s
+                namespace = helper if name in VIA_HELPER else module
+                saved = namespace.invalid_input_response
+                namespace.invalid_input_response = lambda _err, _s=sentinel: _s
                 try:
                     self.assertIs(module.handler(REFUSED[name], None), sentinel)
                 finally:
-                    module.invalid_input_response = saved
+                    namespace.invalid_input_response = saved
 
     def test_positive_control_the_unpatched_handlers_answer_a_real_400(self):
         '''Without this the identity above could hold for a handler that never
