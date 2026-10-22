@@ -64,6 +64,9 @@ struct HTMLBodyView: View {
     @State private var hoveredHref: String?
     @Environment(\.openURL) private var openURL
     @Environment(AppState.self) private var appState
+    /// The system text size; the body's text is scaled to it
+    /// (`ReaderTextScale`), as the plain-text body's `.body` font is.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(
         html: String,
@@ -111,6 +114,7 @@ struct HTMLBodyView: View {
             inlineImages: inlineImages,
             allowRemote: allowRemote,
             readerMode: readerMode,
+            textScale: dynamicTypeSize.bodyTextScale,
             printRequestTick: printRequestTick,
             restoreAnchor: restoreAnchor,
             onScrollCaptured: onScrollCaptured,
@@ -123,6 +127,7 @@ struct HTMLBodyView: View {
             inlineImages: inlineImages,
             allowRemote: allowRemote,
             readerMode: readerMode,
+            textScale: dynamicTypeSize.bodyTextScale,
             printRequestTick: printRequestTick,
             restoreAnchor: restoreAnchor,
             onScrollCaptured: onScrollCaptured,
@@ -186,6 +191,7 @@ private struct MobileHTMLView: UIViewRepresentable {
     let inlineImages: [String: URL]
     let allowRemote: Bool
     let readerMode: Bool
+    let textScale: Double
     let printRequestTick: Int
     let restoreAnchor: String?
     let onScrollCaptured: ((ScrollCapture) -> Void)?
@@ -218,6 +224,7 @@ private struct MobileHTMLView: UIViewRepresentable {
             inlineImages: inlineImages,
             allowRemote: allowRemote,
             readerMode: readerMode,
+            textScale: textScale,
             on: uiView
         )
         context.coordinator.handlePrintTick(printRequestTick, for: uiView)
@@ -234,6 +241,7 @@ private struct MacHTMLView: NSViewRepresentable {
     let inlineImages: [String: URL]
     let allowRemote: Bool
     let readerMode: Bool
+    let textScale: Double
     let printRequestTick: Int
     let restoreAnchor: String?
     let onScrollCaptured: ((ScrollCapture) -> Void)?
@@ -261,6 +269,7 @@ private struct MacHTMLView: NSViewRepresentable {
             inlineImages: inlineImages,
             allowRemote: allowRemote,
             readerMode: readerMode,
+            textScale: textScale,
             on: nsView
         )
         context.coordinator.handlePrintTick(printRequestTick, for: nsView)
@@ -272,8 +281,9 @@ private struct MacHTMLView: NSViewRepresentable {
 // MARK: - Shared helpers
 
 /// Builds the reader's web view with the privacy posture both platforms
-/// share: no persistent website data, no page JavaScript, the link bridge
-/// installed, and link preview off.
+/// share: no persistent website data, no page JavaScript, the link and
+/// scroll bridges and the text-scaling script installed, and link preview
+/// off.
 ///
 /// `allowsLinkPreview` defaults to true, which makes a long-press **fetch
 /// the target page** to render the preview — a silent third-party request
@@ -290,6 +300,7 @@ func makeReaderWebView(coordinator: HTMLBodyCoordinator) -> WKWebView {
     configuration.defaultWebpagePreferences = preferences
     coordinator.installLinkBridge(on: configuration.userContentController)
     coordinator.installScrollBridge(on: configuration.userContentController)
+    ReaderTextScale.install(on: configuration.userContentController)
     let view = WKWebView(frame: .zero, configuration: configuration)
     view.navigationDelegate = coordinator
     view.allowsLinkPreview = false
@@ -297,7 +308,7 @@ func makeReaderWebView(coordinator: HTMLBodyCoordinator) -> WKWebView {
 }
 
 /// Navigation-level + content-blocker coordination for the embedded web
-/// view. The content rule list does the heavy lifting against subresources
+/// view. The content rule list (`RemoteContentBlocker`) does the heavy lifting against subresources
 /// (images, CSS, fonts); the navigation delegate's decision is a secondary
 /// guard against top-level navigations the user didn't ask for (e.g. a
 /// meta-refresh in the message body).
@@ -310,7 +321,7 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     var allowRemote: Bool
     private var installedBlocker: WKContentRuleList?
     /// Hash of the inputs behind the currently-loaded page (HTML, inline
-    /// images, remote policy, reader mode). `render` reloads only when this
+    /// images, remote policy, reader mode, text scale). `render` reloads only when this
     /// changes — see its doc comment for why reloading on every `update*View`
     /// breaks remote-image loading.
     private var renderedSignature: Int?
@@ -470,12 +481,16 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     /// images (e.g. USPS Informed Delivery mailpiece scans) never finished
     /// before the next reload cancelled them, so they stayed stuck on alt text
     /// no matter how often the user tapped "Show remote content".
+    ///
+    /// A new `textScale` (the system text size changed) renders again: the
+    /// scale reaches the page through the document (`ReaderTextScale`).
     @MainActor
     func render(
         html: String,
         inlineImages: [String: URL],
         allowRemote: Bool,
         readerMode: Bool,
+        textScale: Double = 1,
         on webView: WKWebView
     ) {
         self.allowRemote = allowRemote
@@ -483,14 +498,16 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
             html: html,
             inlineImages: inlineImages,
             allowRemote: allowRemote,
-            readerMode: readerMode
+            readerMode: readerMode,
+            textScale: textScale
         )
         guard signature != renderedSignature else { return }
         renderedSignature = signature
         let rewritten = rewrite(
             html: html,
             inlineImages: inlineImages,
-            readerMode: readerMode
+            readerMode: readerMode,
+            textScale: textScale
         )
         let controller = webView.configuration.userContentController
 
@@ -508,7 +525,7 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
         // or tracker pixels leak. Install synchronously when the compiled list
         // is already cached; otherwise compile first and only then load, so we
         // never issue a load while the page is unguarded.
-        if installedBlocker == nil, let cached = Self.cachedBlocker {
+        if installedBlocker == nil, let cached = RemoteContentBlocker.cached {
             controller.add(cached)
             installedBlocker = cached
         }
@@ -517,7 +534,7 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
             return
         }
         Task { [weak self, weak webView] in
-            let list = await HTMLBodyCoordinator.sharedBlocker()
+            let list = await RemoteContentBlocker.shared()
             guard let self, let webView else { return }
             // Bail if a newer render superseded this one (e.g. the user tapped
             // "Show remote content" while we compiled) — that render already
@@ -539,55 +556,19 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
         html: String,
         inlineImages: [String: URL],
         allowRemote: Bool,
-        readerMode: Bool
+        readerMode: Bool,
+        textScale: Double
     ) -> Int {
         var hasher = Hasher()
         hasher.combine(html)
         hasher.combine(allowRemote)
         hasher.combine(readerMode)
+        hasher.combine(textScale)
         for (cid, url) in inlineImages.sorted(by: { $0.key < $1.key }) {
             hasher.combine(cid)
             hasher.combine(url)
         }
         return hasher.finalize()
-    }
-
-    /// One-time compile of the block-everything-remote rule list. Compilation
-    /// is async and slightly expensive; cache the result so every subsequent
-    /// message re-uses the same compiled list.
-    @MainActor
-    private static var cachedBlocker: WKContentRuleList?
-    @MainActor
-    private static var pendingCompile: Task<WKContentRuleList?, Never>?
-
-    @MainActor
-    static func sharedBlocker() async -> WKContentRuleList? {
-        if let cached = cachedBlocker { return cached }
-        if let pending = pendingCompile { return await pending.value }
-        let task = Task<WKContentRuleList?, Never> { @MainActor in
-            let json = """
-            [
-              {
-                "trigger": { "url-filter": "^https?://" },
-                "action": { "type": "block" }
-              }
-            ]
-            """
-            do {
-                let list = try await WKContentRuleListStore.default().compileContentRuleList(
-                    forIdentifier: "cabalmail-block-remote",
-                    encodedContentRuleList: json
-                )
-                cachedBlocker = list
-                return list
-            } catch {
-                return nil
-            }
-        }
-        pendingCompile = task
-        let list = await task.value
-        pendingCompile = nil
-        return list
     }
 }
 

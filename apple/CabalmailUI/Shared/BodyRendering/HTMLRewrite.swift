@@ -6,11 +6,14 @@ import CabalmailKit
 /// we never need to run a JS context. In `readerMode`, prepends a reset +
 /// typography stylesheet that overrides author CSS for a Safari Reader-
 /// style presentation. Both modes get a default viewport meta and a default
-/// (author-overridable) brand link color.
+/// (author-overridable) brand link color. A `textScale` other than 1 (the
+/// Dynamic Type body ratio, `DynamicTypeSize.bodyTextScale`) marks the
+/// document for the reader's text-scaling script (`ReaderTextScale`).
 func rewrite(
     html: String,
     inlineImages: [String: URL],
-    readerMode: Bool = false
+    readerMode: Bool = false,
+    textScale: Double = 1
 ) -> String {
     var result = html
     for (cid, url) in inlineImages {
@@ -26,7 +29,7 @@ func rewrite(
     if readerMode {
         result = readerStylesheet + result
     }
-    return insertingHeadDefaults(into: result)
+    return insertingHeadDefaults(into: result, textScale: textScale)
 }
 
 /// Injected on both render paths. Without it WebKit lays the document out
@@ -71,8 +74,9 @@ private let upgradeInsecureRequests =
 /// ahead of a `<!DOCTYPE>` would push the author's page into quirks mode
 /// and change how their CSS renders, which is exactly what "Original" mode
 /// must not do.
-private func insertingHeadDefaults(into html: String) -> String {
+private func insertingHeadDefaults(into html: String, textScale: Double) -> String {
     let headDefaults = viewportMeta + upgradeInsecureRequests + defaultLinkStyle
+        + ReaderTextScale.meta(for: textScale)
     // `<head>` first, then `<html>`, then the doctype; a bare fragment has
     // none of them and can simply be prefixed (the parser synthesizes the
     // head around it).
@@ -106,6 +110,11 @@ private let brandLinkColorDark = ColorTokens.Hex.accentForestFg.dark
 /// a `prefers-color-scheme: dark` branch so the page follows the user's
 /// system appearance (which is why `readerMode` also drops the `.light`
 /// WebKit override in the host view).
+///
+/// 17px is the body size at the default text size; `ReaderTextScale`
+/// multiplies it, with everything else, for a larger one. The width cap is
+/// in `em` (40em is 680px at 17px) so it widens with the text and a line
+/// keeps the same number of characters.
 private let readerStylesheet = """
 <style>
   html, body {
@@ -119,7 +128,7 @@ private let readerStylesheet = """
   }
   body {
     padding: 20px 10px !important;
-    max-width: 680px !important;
+    max-width: 40em !important;
     margin: 0 auto !important;
   }
   *, *::before, *::after {
