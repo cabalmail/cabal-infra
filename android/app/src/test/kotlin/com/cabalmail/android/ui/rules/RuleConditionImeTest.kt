@@ -6,21 +6,27 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.cabalmail.kit.models.RuleField
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
  * What a rule condition value asks of the IME (#2038).
  *
- * `autoCorrectEnabled = false` landed with #2023 and was not enough: Gboard
- * reads a missing `TYPE_TEXT_FLAG_AUTO_CORRECT` as "the app corrects for
- * itself" and kept rewriting Subject and Body values. The input types below
- * are the ones read live off `dumpsys input_method` on an Android 15
- * emulator: `0x1` for Subject and Body, `0x21` for From.
+ * Every number here was read off `dumpsys input_method` on an Android 15
+ * emulator while the value was focused, and every one of them has a typing
+ * arm behind it. [plainText] and [emailText] are what Compose derives from
+ * [ruleConditionKeyboardOptions]; [flagOnly] is what the first fix shipped
+ * and Gboard 18.5.4 corrected anyway; [filterText] is what ships now and
+ * took `wont becuase recieve ` and `becuase recieve thier ` verbatim while
+ * the rule Name field beside it, at `0x8001`, was corrected 3 of 3.
  */
 class RuleConditionImeTest {
     private val plainText = 0x1
     private val emailText = 0x21
+    private val flagOnly = 0x80001
+    private val filterText = 0x800b1
+    private val filterEmail = 0x80021
 
     @Test
     fun `no condition field corrects or capitalizes, and only addresses take the email keyboard`() {
@@ -37,57 +43,73 @@ class RuleConditionImeTest {
     }
 
     @Test
-    fun `the flag Gboard reads is the one the report names`() {
+    fun `the bits the live reads are written in`() {
         assertEquals(0x80000, InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
+        assertEquals(0xb0, InputType.TYPE_TEXT_VARIATION_FILTER)
     }
 
     @Test
-    fun `both measured input types come back refusing suggestions`() {
-        for (measured in listOf(plainText, emailText)) {
-            val amended = withoutImeSuggestions(measured)
+    fun `each field edits under the type measured verbatim for it`() {
+        assertEquals(filterText, ruleConditionInputType(RuleField.SUBJECT, plainText))
+        assertEquals(filterText, ruleConditionInputType(RuleField.BODY, plainText))
+        for (field in listOf(RuleField.FROM, RuleField.TO, RuleField.CC)) {
+            assertEquals(filterEmail, ruleConditionInputType(field, emailText), "$field lost the email variation")
+        }
+    }
+
+    @Test
+    fun `every field carries a variation and refuses suggestions`() {
+        for (field in RuleField.entries) {
+            val derived = if (field.holdsAddresses) emailText else plainText
+            val amended = ruleConditionInputType(field, derived)
+            assertNotEquals(0, amended and InputType.TYPE_MASK_VARIATION, "$field edits with no variation at all")
             assertTrue(
                 amended and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS != 0,
-                "0x${measured.toString(16)} still allows suggestions",
+                "$field still allows suggestions",
             )
             assertEquals(
-                measured and InputType.TYPE_MASK_CLASS,
+                derived and InputType.TYPE_MASK_CLASS,
                 amended and InputType.TYPE_MASK_CLASS,
-                "0x${measured.toString(16)} changed class",
+                "$field changed class",
             )
-            assertEquals(
-                measured and InputType.TYPE_MASK_VARIATION,
-                amended and InputType.TYPE_MASK_VARIATION,
-                "0x${measured.toString(16)} changed variation",
-            )
-            assertEquals(
-                0,
-                amended and InputType.TYPE_TEXT_FLAG_AUTO_CORRECT,
-                "0x${measured.toString(16)} asked for auto-correct back",
-            )
+            assertEquals(0, amended and InputType.TYPE_TEXT_FLAG_AUTO_CORRECT, "$field asked for auto-correct back")
         }
     }
 
     /**
-     * The negative control, and the defect itself: what Compose hands the
-     * IME is exactly the two types measured live, and neither of them
-     * refuses suggestions on its own. Without this, the assertions above
-     * would pass against an unchanged input type on any platform whose
-     * `KeyboardOptions` already set the flag.
+     * The negative control, and the defect itself. The first fix's type
+     * ([flagOnly]) was measured being corrected, so a free-text field that
+     * still edits under it is the bug, not the fix -- and both types
+     * Compose derives carry no variation of their own, so without this the
+     * assertions above would pass against an unamended input type.
      */
     @Test
-    fun `neither measured input type refuses suggestions on its own`() {
-        for (measured in listOf(plainText, emailText)) {
-            assertEquals(
-                0,
-                measured and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
-                "0x${measured.toString(16)} already refused suggestions, so the fix is untested",
+    fun `nothing measured as corrected is what a free-text field ends up with`() {
+        for (field in listOf(RuleField.SUBJECT, RuleField.BODY)) {
+            assertNotEquals(
+                flagOnly,
+                ruleConditionInputType(field, plainText),
+                "$field edits under the type Gboard 18.5.4 was measured correcting",
             )
         }
+        assertEquals(
+            0,
+            plainText and InputType.TYPE_MASK_VARIATION,
+            "0x1 already had a variation, so the fix is untested",
+        )
+        assertEquals(
+            0,
+            flagOnly and InputType.TYPE_MASK_VARIATION,
+            "0x80001 already had a variation, so the fix is untested",
+        )
     }
 
     @Test
     fun `amending an already-amended type changes nothing`() {
-        val once = withoutImeSuggestions(plainText)
-        assertEquals(once, withoutImeSuggestions(once))
+        for (field in RuleField.entries) {
+            val derived = if (field.holdsAddresses) emailText else plainText
+            val once = ruleConditionInputType(field, derived)
+            assertEquals(once, ruleConditionInputType(field, once), "$field is not idempotent")
+        }
     }
 }
