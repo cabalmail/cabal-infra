@@ -23,7 +23,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Session 1, R2. #2042, the Mac quit hook | Not started (2026-10-15) |
 | Session 1, R4. #2028, the warm notification | Not started (2026-10-15) |
 | Session 1, R5. Compose routing residue, decisions 1 and 5 | Not started (2026-10-15) |
-| Session 2, W1. #2036, iPad window titles | Not started (2026-10-15) |
+| Session 2, W1. #2036, iPad window titles | Done (2026-10-22) |
 | Session 2, W2. Mac File > New Window (decision 2), and two stale comments | Not started (2026-10-15) |
 | Session 2, W3. #2039, tree expansion (decision 3) | Not started (2026-10-15) |
 | Session 2, W4. #2016, the reader's toolbar stand-ins | Not started (2026-10-15) |
@@ -163,7 +163,7 @@ Wave 3 made restore, links and compose per window (3.3 B to G2, PRs #2003 to #20
 - Verify: Mini iPad simulator, Window menu and switcher, one and two windows. visionOS: CI build only.
 - Risk: low; whether the scene title survives SwiftUI is inferred.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-22). Built as scoped: a pure `MainWindowTitle` rule plus a `namesMainWindowScene(_:)` hook on `SignedInRootView` that writes `UIWindowScene.title`. The scene title does survive SwiftUI on iPadOS 27 — measured on the iPad Pro 11-inch (M5) simulator, where the app-switcher card read `Cabalmail / Addresses` on INBOX before and `Cabalmail / INBOX`, then `Cabalmail / Archive`, after, with the Addresses inspector open for the last arm. The root-level-title fallback was not needed. Still unmeasured, for the harness reason #2036 and #2035 both record: the Window menu itself, and two windows.
 
 **W2. Mac File > New Window (decision 2), and two stale comments.**
 - Scope: a New Window item that opens a fresh main window with `openWindow(id: mainWindowID)`, not `MainMailWindow.bringToFront()`. Correct the mailto comment at `CabalmailMacApp.swift:71-78` and the deleted-`requestCompose()` comment at `CabalmailCommands.swift:40-47`. Then run the Mac "exactly one composer" check (the Wave 3 TestFlight checklist's "A mailto: link opens one composer", under "Background from the rearchitecture") on the Mini.
