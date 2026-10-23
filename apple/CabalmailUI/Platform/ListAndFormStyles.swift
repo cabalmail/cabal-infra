@@ -82,6 +82,10 @@ extension View {
 /// and a zero-width label there leaves the toggle's own `Spacer` free to
 /// push the switch across the row it shares.
 struct RowSwitch: View {
+    /// The gap a toggle leaves between its label and its control, which a
+    /// zero-width label does not remove.
+    static let labelGap: CGFloat = 8
+
     let label: String
     @Binding var isOn: Bool
 
@@ -96,6 +100,12 @@ struct RowSwitch: View {
         }
         .accessibilityLabel(label)
         .miniSwitchStyleOnMac()
+        // A zero-width label still gets the toggle's label-to-control gap,
+        // which would move the switch 8 pt along the row it shares — 20 pt
+        // from the leading edge before, 28 after (measured, macOS 27).
+        // Taking the gap back keeps the row's footprint exactly where
+        // `.labelsHidden()` drew it; `RowSwitchAccessibilityTests` pins it.
+        .padding(.leading, -Self.labelGap)
         #else
         Toggle(label, isOn: $isOn)
             .labelsHidden()

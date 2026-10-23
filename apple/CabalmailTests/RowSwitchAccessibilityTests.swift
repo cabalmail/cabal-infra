@@ -27,17 +27,30 @@ final class RowSwitchAccessibilityTests: XCTestCase {
 
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
-                RowSwitch(label: "Enabled", isOn: $isOn)
-                    .accessibilityIdentifier("rowSwitch")
-                Toggle("Enabled", isOn: $isOn)
-                    .miniSwitchStyleOnMac()
-                    .accessibilityIdentifier("labelled")
-                Toggle("Enabled", isOn: $isOn)
-                    .labelsHidden()
-                    .miniSwitchStyleOnMac()
-                    .accessibilityIdentifier("labelsHidden")
+                // Each switch in the row shape it lives in, so the leading
+                // edge the test compares is the one a rule row draws.
+                row { RowSwitch(label: "Enabled", isOn: $isOn).accessibilityIdentifier("rowSwitch") }
+                row {
+                    Toggle("Enabled", isOn: $isOn)
+                        .miniSwitchStyleOnMac()
+                        .accessibilityIdentifier("labelled")
+                }
+                row {
+                    Toggle("Enabled", isOn: $isOn)
+                        .labelsHidden()
+                        .miniSwitchStyleOnMac()
+                        .accessibilityIdentifier("labelsHidden")
+                }
             }
             .padding(20)
+        }
+
+        /// A rule row: the switch, then the summary that takes the rest.
+        private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+            HStack(spacing: 12) {
+                content()
+                Text("rule summary").frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
     }
 
@@ -46,6 +59,7 @@ final class RowSwitchAccessibilityTests: XCTestCase {
         var subrole = "-"
         var roleDescription = "-"
         var label = "-"
+        var minX = CGFloat.nan
     }
 
     func testRowSwitchSpeaksAsASwitchAndKeepsItsName() throws {
@@ -61,7 +75,7 @@ final class RowSwitchAccessibilityTests: XCTestCase {
         )
 
         let row = try XCTUnwrap(readings["rowSwitch"], "RowSwitch is absent from the accessibility tree")
-        XCTAssertEqual(row.subrole, "AXSwitch", "RowSwitch reads as \\(row.roleDescription), not a switch (#2040)")
+        XCTAssertEqual(row.subrole, "AXSwitch", "RowSwitch reads as " + row.roleDescription + ", not a switch (#2040)")
         XCTAssertEqual(row.roleDescription, "switch")
         XCTAssertEqual(row.label, "Enabled", "RowSwitch has no name for VoiceOver to read")
 
@@ -71,6 +85,26 @@ final class RowSwitchAccessibilityTests: XCTestCase {
         let labelled = try XCTUnwrap(readings["labelled"], "the labelled toggle is absent from the accessibility tree")
         XCTAssertEqual(labelled.subrole, "AXSwitch")
         XCTAssertEqual(row.subrole, labelled.subrole, "RowSwitch and a plain labelled switch disagree on what they are")
+    }
+
+    /// The fix must not move the control. A zero-width label still gets the
+    /// toggle's label-to-control gap, so without `RowSwitch`'s take-back
+    /// the switch sits 8 pt further along the row than `.labelsHidden()`
+    /// drew it (28 against 20, measured on macOS 27). The pre-fix stand-in
+    /// in the same window is the reference edge, and the labelled toggle —
+    /// which really does carry its label — is the control that the
+    /// comparison can tell a shift at all.
+    func testRowSwitchKeepsTheLeadingEdgeTheHiddenLabelDrew() throws {
+        let readings = try hostAndRead()
+        let row = try XCTUnwrap(readings["rowSwitch"])
+        let hidden = try XCTUnwrap(readings["labelsHidden"])
+        let labelled = try XCTUnwrap(readings["labelled"])
+
+        XCTAssertEqual(row.minX, hidden.minX, accuracy: 0.5, "RowSwitch moved the row's switch")
+        XCTAssertGreaterThan(
+            labelled.minX, hidden.minX + 1,
+            "control: a visibly labelled switch no longer sits further along the row, so this test cannot see a shift"
+        )
     }
 
     // MARK: - Oracle
@@ -107,13 +141,25 @@ final class RowSwitchAccessibilityTests: XCTestCase {
             found[identifier] = Reading(
                 subrole: string(element, kAXSubroleAttribute as String),
                 roleDescription: string(element, kAXRoleDescriptionAttribute as String),
-                label: string(element, kAXDescriptionAttribute as String)
+                label: string(element, kAXDescriptionAttribute as String),
+                minX: position(element).x
             )
         }
         var children: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children) == .success,
               let list = children as? [AXUIElement] else { return }
         for child in list { walk(child, depth: depth + 1, into: &found) }
+    }
+
+    /// `element`'s screen position, or a zero point when it has none.
+    private static func position(_ element: AXUIElement) -> CGPoint {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXValueGetTypeID() else { return .zero }
+        var point = CGPoint.zero
+        // swiftlint:disable:next force_cast
+        AXValueGetValue(value as! AXValue, .cgPoint, &point)
+        return point
     }
 
     private static func string(_ element: AXUIElement, _ attribute: String) -> String {
