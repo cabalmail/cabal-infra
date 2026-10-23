@@ -68,16 +68,45 @@ final class SidebarCollapseTests: XCTestCase {
         XCTAssertEqual(SidebarCollapse.decodeDevice(""), [])
     }
 
+    // MARK: - The seed is taken once per window
+
+    func testAWindowWithNothingStoredSeedsOnMount() {
+        XCTAssertEqual(
+            SidebarCollapse.seed(scene: "", device: "Tech", for: account),
+            SidebarCollapse.scene(["Tech"], for: account)
+        )
+    }
+
+    func testAWindowThatAlreadyHasItsOwnSetIsNotReseeded() {
+        let scene = SidebarCollapse.scene([], for: account)
+        XCTAssertNil(SidebarCollapse.seed(scene: scene, device: "Tech", for: account),
+                     "a window that expanded everything must not have the device-wide set written back in")
+    }
+
+    func testAWindowHoldingAnotherAccountsSetIsSeededAfresh() {
+        let scene = SidebarCollapse.scene(["Archive"], for: other)
+        XCTAssertEqual(
+            SidebarCollapse.seed(scene: scene, device: "Tech", for: account),
+            SidebarCollapse.scene(["Tech"], for: account)
+        )
+    }
+
     // MARK: - The defect
 
-    // Two windows, one device-wide value: collapsing in one must leave the
-    // other's tree alone. This is #2039's arm 2 as arithmetic — the pre-fix
-    // rule (both windows read the device-wide value) answers
-    // `["Tech"]` for the background window and fails here.
+    // Two windows, neither having touched its own tree yet — #2039's arm 2,
+    // as the live arm of 2026-10-23 drove it: each window takes its seed on
+    // mount, then the front one collapses the feed folder.
+    //
+    // Without the seed this is the defect, measured live: the background
+    // window has nothing of its own, so it falls back to the device-wide
+    // value the front window just moved and collapses with it. The second
+    // assertion is the one that fails that way, which is why the seed is
+    // taken rather than left as a running default.
     func testCollapsingInOneWindowLeavesAnotherWindowsTreeAlone() {
-        var front = SidebarCollapse.scene([], for: account)
-        var background = SidebarCollapse.scene([], for: account)
         var device = ""
+        var front = SidebarCollapse.seed(scene: "", device: device, for: account) ?? ""
+        let background = SidebarCollapse.seed(scene: "", device: device, for: account) ?? ""
+        XCTAssertEqual(SidebarCollapse.effective(scene: background, device: device, for: account), [])
 
         // The front window collapses the feed folder.
         let collapsed = SidebarTreeExpansion.collapsed(all: ["Tech"], collapse: true)
@@ -90,15 +119,20 @@ final class SidebarCollapseTests: XCTestCase {
 
         // And the other way: expanding in the background window does not
         // re-expand the front one.
-        background = SidebarCollapse.scene([], for: account)
+        let expanded = SidebarCollapse.scene([], for: account)
         device = SidebarCollapse.device([])
+        XCTAssertEqual(SidebarCollapse.effective(scene: expanded, device: device, for: account), [])
         XCTAssertEqual(SidebarCollapse.effective(scene: front, device: device, for: account), ["Tech"])
     }
 
     // A window opened after that change inherits where the tree was left,
-    // which is what the device-wide write-back is for.
+    // which is what the device-wide write-back is for. Its own set is taken
+    // from that value, so a later change elsewhere no longer reaches it.
     func testANewWindowOpensTheWayTheLastChangeLeftTheTree() {
         let device = SidebarCollapse.device(["Tech"])
         XCTAssertEqual(SidebarCollapse.effective(scene: "", device: device, for: account), ["Tech"])
+        let seeded = SidebarCollapse.seed(scene: "", device: device, for: account) ?? ""
+        XCTAssertEqual(SidebarCollapse.effective(scene: seeded, device: "", for: account), ["Tech"],
+                       "and it keeps it when the device-wide value moves again")
     }
 }

@@ -158,6 +158,23 @@ struct FolderListView: View {
         }
     }
 
+    /// Takes this window's copy of the two collapsed sets, once, when it
+    /// first mounts. Both storage properties are file-private, so this lives
+    /// here rather than in an extension.
+    private func seedCollapsedSets() {
+        let account = appState.routeAccount
+        if let seed = SidebarCollapse.seed(
+            scene: collapsedPathsScene, device: collapsedPathsDevice, for: account
+        ) {
+            collapsedPathsScene = seed
+        }
+        if let seed = SidebarCollapse.seed(
+            scene: feedsCollapsedScene, device: feedsCollapsedDevice, for: account
+        ) {
+            feedsCollapsedScene = seed
+        }
+    }
+
     private var folderList: some View {
         let collapsedSet = collapsedPaths
         return List(selection: $selection) {
@@ -218,6 +235,7 @@ struct FolderListView: View {
                 feedsSection(selection: feedSelection)
             }
         }
+        .onAppear { seedCollapsedSets() }
         .task { await loadFeedModelIfNeeded() }
         // The Feeds section's tree and badges follow the store while it is up.
         .task(id: feedModel.map(ObjectIdentifier.init)) { await feedModel?.observe() }

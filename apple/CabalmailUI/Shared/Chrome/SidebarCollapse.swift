@@ -48,6 +48,24 @@ struct SidebarCollapse: Codable, Equatable {
         return Set(stored.collapsed)
     }
 
+    /// What a window writes into its own scene storage when it first mounts:
+    /// the device-wide set it seeds from. Nil when the window already has a
+    /// set of its own for this account.
+    ///
+    /// The seed has to be taken **once per window**, not left as a running
+    /// default: `effective` falls back to the device-wide value, and that
+    /// value moves every time any window changes its tree, so a window that
+    /// had never touched its own would follow the others' changes for its
+    /// whole life — measured live on 2026-10-23, two Mac windows, both back
+    /// to 4 feed rows. Writing the seed is what makes a window's set its own.
+    ///
+    /// A window holding another account's set seeds afresh, so it renders
+    /// the device-wide value until this runs rather than that account's.
+    static func seed(scene: String, device: String, for account: StoredRoute.Account) -> String? {
+        guard stored(in: scene, for: account) == nil else { return nil }
+        return self.scene(decodeDevice(device), for: account)
+    }
+
     /// `set` encoded for this window's scene storage, tagged with `account`.
     static func scene(_ set: Set<String>, for account: StoredRoute.Account) -> String {
         let payload = SidebarCollapse(account: account, collapsed: set.sorted())

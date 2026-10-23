@@ -130,6 +130,13 @@ struct FeedSidebarList: View {
             guard case .sidebarTree(let tree) = command, !tree.isMail else { return }
             setAllCollapsed(tree.collapses)
         }
+        .onAppear {
+            if let seed = SidebarCollapse.seed(
+                scene: collapsedScene, device: collapsedDevice, for: appState.routeAccount
+            ) {
+                collapsedScene = seed
+            }
+        }
         .task {
             if model == nil, let client = appState.client {
                 management = FeedManagementViewModel(client: client)
