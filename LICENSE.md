@@ -3,22 +3,24 @@
 Cabalmail is licensed under the GNU Affero General Public License,
 version 3 (AGPL-3.0). The full text of the license follows below.
 
-## Carve-out: native client applications
+## Carve-out: Apple and Android clients
 
-The native client code under the `apple/` directory of this repository
-(iOS, iPadOS, and visionOS targets, including `apple/Cabalmail`,
-`apple/CabalmailKit`, `apple/CabalmailMac`, and supporting build files)
-is licensed instead under the Apache License, version 2.0
-(Apache-2.0). The full text of that license is in `apple/LICENSE`.
+The client code under the following directories of this repository is
+licensed instead under the Apache License, version 2.0 (Apache-2.0):
+
+- `apple/` - the iOS, iPadOS, macOS, visionOS, and watchOS clients,
+  including `apple/Cabalmail`, `apple/CabalmailKit`,
+  `apple/CabalmailMac`, and supporting build files. The full text of
+  the license is in `apple/LICENSE`.
+- `android/` - the Android client, including `android/app`,
+  `android/kit`, and supporting build files. The full text of the
+  license is in `android/LICENSE`.
 
 This carve-out exists because the AGPL-3.0 (and GPL-3.0 generally) is
 incompatible with the Apple App Store and similar app distribution
 platforms whose terms of service add usage restrictions that the GPL
-family does not permit. The Apache-2.0 license keeps the native
-clients distributable through those channels.
-
-If a future Android client is added (under, e.g., an `android/`
-directory), it will fall under the same Apache-2.0 carve-out.
+family does not permit. The Apache-2.0 license keeps these clients
+distributable through those channels.
 
 ## Copyright
 

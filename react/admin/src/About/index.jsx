@@ -54,8 +54,8 @@ function About({ loggedIn, onBackToLogin }) {
             GNU Affero General Public License, version 3
           </a>{' '}
           (AGPL-3.0). The native client applications under the{' '}
-          <code>apple/</code> directory of the source tree are licensed
-          separately under the{' '}
+          <code>apple/</code> and <code>android/</code> directories of the
+          source tree are licensed separately under the{' '}
           <a
             href="https://www.apache.org/licenses/LICENSE-2.0"
             target="_blank"
