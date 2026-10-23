@@ -191,9 +191,15 @@ writes. The three readers of the two keys all go through it — the wide
 sidebar's mail and feed trees (`FolderListView.swift`) and the compact Feeds
 tab (`FeedSidebarSection.swift`) — rather than two of them per window and one
 not. The pills and the Mail/Feeds section disclosures stay device-wide as
-planned. Not yet verified live: the two-window Mac arm the item asks for is
-the retest's, and `@SceneStorage`'s per-window scoping is the one claim the
-unit tests cannot reach.
+planned. Verified live on the Mini: two tiled Mac windows, Feeds ▸ Collapse
+All Folders with one in front took that window's feed tree from 6 rows to 4
+and left the other at 6 (the inverse of #2039's verified pre-fix arm), and
+the in-sidebar Expand all button reads the same way. That arm is what found
+the seeding half: scene storage alone was a measured no-op, because a window
+that had never changed its own tree kept reading the device-wide value, which
+every change moves. The two iPad windows the verify line also asks for are
+not driven, and Mailbox ▸ Collapse All Folders stays undriven for want of a
+nested mail folder on the test account.
 
 **W4. #2016, the reader's toolbar stand-ins.**
 - Scope: build each stand-in from the same control kind as its live twin, as #2016 suggests: a disabled `Menu` with the same indicator for Reply, dispose, read and Flag, and for the feed's More; Flag reads the palette state to pick its shape. The spacing cause is untraced; measure it first.
