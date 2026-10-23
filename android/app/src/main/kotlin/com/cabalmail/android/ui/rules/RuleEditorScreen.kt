@@ -268,20 +268,20 @@ private fun ConditionRow(
                 }
             }
         }
-        OutlinedTextField(
-            value = condition.value,
-            onValueChange = { onChange(condition.copy(value = it)) },
-            placeholder = { Text(stringResource(R.string.rules_condition_value_hint)) },
-            singleLine = true,
-            // A value is a literal substring, so nothing may rewrite it.
-            keyboardOptions =
-                KeyboardOptions(
-                    keyboardType = if (condition.field.holdsAddresses) KeyboardType.Email else KeyboardType.Text,
-                    capitalization = KeyboardCapitalization.None,
-                    autoCorrectEnabled = false,
-                ),
-            modifier = Modifier.weight(0.58f),
-        )
+        // A value is a literal substring, so nothing may rewrite it: no
+        // capitalization, no auto-correct and -- the half `KeyboardOptions`
+        // cannot ask for -- an input-type variation the IME declines to
+        // correct (#2038).
+        WithoutImeRewrites(condition.field) {
+            OutlinedTextField(
+                value = condition.value,
+                onValueChange = { onChange(condition.copy(value = it)) },
+                placeholder = { Text(stringResource(R.string.rules_condition_value_hint)) },
+                singleLine = true,
+                keyboardOptions = ruleConditionKeyboardOptions(condition.field),
+                modifier = Modifier.weight(0.58f),
+            )
+        }
         IconButton(onClick = onRemove) {
             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.rules_remove_condition))
         }

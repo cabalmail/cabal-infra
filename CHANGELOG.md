@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.4] - 2026-10-23
+
+### Changed
+- **Android client named in the Apache-2.0 carve-out.** `LICENSE.md`
+  now lists `android/` alongside `apple/` as licensed under Apache-2.0,
+  replacing the 0.9.8 note that a future Android client would fall
+  under the carve-out, and `android/LICENSE` carries the Apache-2.0
+  text the way `apple/LICENSE` does. The web app's About page names
+  both directories, and the carve-out's Apple platform list now
+  includes macOS and watchOS, which `apple/` already covered.
+- **Folder-subscription endpoints share one request path.** `subscribe_folder`
+  and `unsubscribe_folder` were line-for-line twins apart from the helper each
+  called; both now hand the body parse, the folder validation and the `200` to
+  `helper.folder_subscription_response`, passing the subscribe or unsubscribe
+  operation, so the two endpoints cannot drift apart.
+
+### Fixed
+- **Apple CI simulator setup survives device-specific runtimes.** The
+  simulator test jobs chose the newest iOS runtime and the first iPhone device
+  type separately, so on the 2026-10-22 runner image, which preinstalls an
+  iOS 27.1 runtime that supports only the iPhone Duo, `simctl create` refused
+  the pair before any build ran. Both resolvers now share
+  `.github/scripts/resolve-sim-destination.sh`, which takes the device type
+  first and pairs it with the newest runtime that lists it as supported (so
+  iPhone 18 Pro on iOS 27.0 today), and logs the pair before creating the
+  device. `scripts/tests/test_select_sim_pair.py` pins the choice against
+  fixtures of that image.
+- Apple: **Reader lets go of a message removed elsewhere.** A refresh that
+  finds the open message moved or expunged by another client now clears the
+  selection and the reading pane, instead of leaving its header, body and
+  live action toolbar on screen until another row was picked.
+- Android: **Rule values keep what you typed.** A Subject or Body condition
+  value is a literal substring, but Gboard went on auto-correcting it as
+  each word ended and the editor's auto-save carried the rewrite to the
+  server, so the rule stopped matching what was meant. The value now edits
+  under an input-type variation the keyboard declines to correct; clearing
+  the auto-correct flag and then refusing suggestions outright were both
+  measured being corrected anyway.
+
 ## [1.39.3] - 2026-10-22
 
 ### Fixed
