@@ -209,19 +209,18 @@ private struct RuleRow: View {
     }
 
     private var enabledToggle: some View {
-        Toggle("Enabled", isOn: Binding(
+        // `RowSwitch`, not a bare `Toggle(...).labelsHidden()`: it carries
+        // the Mac's mini switch style (the automatic toggle drew a checkbox
+        // in the old list) and the label that keeps the control speaking as
+        // a switch rather than a toggle button (#2040).
+        RowSwitch(label: "Enabled", isOn: Binding(
             get: { rule.enabled },
             set: { model.setEnabled(rule.id, $0) }
         ))
-        .labelsHidden()
         // Enabling is an edit like any other, and the model refuses one on
         // a rule it can't render, so the switch reads as broken unless it
         // is disabled with it.
         .disabled(!rule.isEditable)
-        // The grouped form's mini switch on the Mac, where an automatic
-        // toggle sharing its row drew a checkbox in the old list. iOS and
-        // visionOS draw this switch already.
-        .miniSwitchStyleOnMac()
     }
 
     private var summary: some View {
