@@ -154,14 +154,10 @@ extension FolderListView {
         await model.refreshIfNeeded()
     }
 
-    var feedsCollapsed: Set<String> {
-        Set(feedsCollapsedRawAccessor.split(separator: "\n").map(String.init))
-    }
-
     func toggleFeedCollapse(_ folderId: String) {
         var set = feedsCollapsed
         if set.contains(folderId) { set.remove(folderId) } else { set.insert(folderId) }
-        feedsCollapsedRawAccessor = set.sorted().joined(separator: "\n")
+        feedsCollapsed = set
     }
 
     /// Raises the "New folder" sheet from an empty form. The form outlives
@@ -172,29 +168,20 @@ extension FolderListView {
         showNewFolderSheet = true
     }
 
-    func decodeCollapsed() -> Set<String> {
-        guard !collapsedPathsRaw.isEmpty else { return [] }
-        return Set(collapsedPathsRaw.split(separator: "\n").map(String.init))
-    }
-
-    func encodeCollapsed(_ set: Set<String>) -> String {
-        set.sorted().joined(separator: "\n")
-    }
-
     func toggleCollapse(_ path: String) {
-        var set = decodeCollapsed()
+        var set = collapsedPaths
         if set.contains(path) { set.remove(path) } else { set.insert(path) }
-        collapsedPathsRaw = encodeCollapsed(set)
+        collapsedPaths = set
     }
 
     func autoExpandAncestors(of path: String?) {
         guard let path else { return }
-        var set = decodeCollapsed()
+        var set = collapsedPaths
         var changed = false
         for ancestor in FolderTree.ancestors(of: path) where set.remove(ancestor) != nil {
             changed = true
         }
-        if changed { collapsedPathsRaw = encodeCollapsed(set) }
+        if changed { collapsedPaths = set }
     }
 
     /// Fire a one-shot STATUS for an unsubscribed folder the user just
