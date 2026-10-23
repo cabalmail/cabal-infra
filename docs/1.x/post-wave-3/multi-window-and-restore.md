@@ -25,7 +25,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Session 1, R5. Compose routing residue, decisions 1 and 5 | Not started (2026-10-15) |
 | Session 2, W1. #2036, iPad window titles | Done (2026-10-22) |
 | Session 2, W2. Mac File > New Window (decision 2), and two stale comments | Not started (2026-10-15) |
-| Session 2, W3. #2039, tree expansion (decision 3) | Not started (2026-10-15) |
+| Session 2, W3. #2039, tree expansion (decision 3) | Per window, done (2026-10-23) |
 | Session 2, W4. #2016, the reader's toolbar stand-ins | Not started (2026-10-15) |
 | Session 2, W5. #2041, one attempt | Not started (2026-10-15) |
 | Session 2, R6 (decision 6 Now only). Placement before the refresh | Not started (2026-10-15); built only if decision 6 is Now |
@@ -181,7 +181,19 @@ Wave 3 made restore, links and compose per window (3.3 B to G2, PRs #2003 to #20
 - Verify: Mini, two Mac windows, #2039's steps (menu, in-sidebar buttons, a chevron); two iPad windows.
 - Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done, per window (2026-10-23), PR #PRNUM. Decision 3 was still
+unanswered, so the item took the plan's default. Both keys moved into a
+`DefaultsKey` enum (`CabalmailUI/Shared/Primitives/DefaultsKey.swift`), which
+closes audit 06 F16; the per-window rule is `SidebarCollapse`
+(`Shared/Chrome/SidebarCollapse.swift`), scene storage tagged with
+`StoredRoute.Account`, seeded from the device-wide value every change also
+writes. The three readers of the two keys all go through it — the wide
+sidebar's mail and feed trees (`FolderListView.swift`) and the compact Feeds
+tab (`FeedSidebarSection.swift`) — rather than two of them per window and one
+not. The pills and the Mail/Feeds section disclosures stay device-wide as
+planned. Not yet verified live: the two-window Mac arm the item asks for is
+the retest's, and `@SceneStorage`'s per-window scoping is the one claim the
+unit tests cannot reach.
 
 **W4. #2016, the reader's toolbar stand-ins.**
 - Scope: build each stand-in from the same control kind as its live twin, as #2016 suggests: a disabled `Menu` with the same indicator for Reply, dispose, read and Flag, and for the feed's More; Flag reads the palette state to pick its shape. The spacing cause is untraced; measure it first.
