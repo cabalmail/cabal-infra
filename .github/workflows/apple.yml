@@ -17,6 +17,8 @@ on:
     paths:
       - 'apple/**'
       - '.github/workflows/apple.yml'
+      - '.github/scripts/resolve-sim-destination.sh'
+      - '.github/scripts/select-sim-pair.jq'
   # The PR gate: every PR touching Apple code builds and tests before merge,
   # so a regression is caught on its own PR instead of on the stage push
   # after it lands. A PR run stops at the test and build jobs: `approval`
@@ -28,6 +30,8 @@ on:
     paths:
       - 'apple/**'
       - '.github/workflows/apple.yml'
+      - '.github/scripts/resolve-sim-destination.sh'
+      - '.github/scripts/select-sim-pair.jq'
 
 # A new push to a PR supersedes the run on its previous head, so that run is
 # cancelled. Push runs on main/stage are never cancelled: they end in an
@@ -145,48 +149,18 @@ jobs:
         id: dest
         # Runner images ship simulator runtimes without any devices created
         # on them, so `xcodebuild test` with a bare `platform=iOS Simulator`
-        # specifier fails ("Unable to find a destination..."). We pick the
-        # newest installed runtime for the matrix platform, create a fresh
-        # device against it, and pass that device's UDID as the destination.
+        # specifier fails ("Unable to find a destination..."). The script
+        # creates a fresh device and passes its UDID as the destination,
+        # choosing the runtime and device type together so `simctl create`
+        # can't refuse the pair (select-sim-pair.jq has the policy).
         run: |
           set -euo pipefail
-          if [ "${{ matrix.platform }}" = "macOS" ]; then
-            echo "destination=platform=macOS" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          FAMILY='${{ matrix.platform }}'
-          case "$FAMILY" in
-            iOS)       DEVICE_PREFIX="iPhone" ;;
-            visionOS)  DEVICE_PREFIX="Apple Vision" ;;
+          case '${{ matrix.platform }}' in
+            macOS)     echo "destination=platform=macOS" >> "$GITHUB_OUTPUT" ;;
+            iOS)       .github/scripts/resolve-sim-destination.sh iOS "iPhone" ci-iOS ;;
+            visionOS)  .github/scripts/resolve-sim-destination.sh visionOS "Apple Vision" ci-visionOS ;;
+            *)         echo "::error::No destination rule for ${{ matrix.platform }}."; exit 1 ;;
           esac
-          RUNTIME_ID=$(xcrun simctl list runtimes --json | \
-            jq -r --arg fam "$FAMILY" '
-              .runtimes
-              | map(select(.isAvailable and (.name | startswith($fam + " "))))
-              | sort_by(.version | split(".") | map(tonumber))
-              | reverse | .[0].identifier // empty
-            ')
-          if [ -z "$RUNTIME_ID" ]; then
-            echo "::error::No installed $FAMILY runtime."
-            xcrun simctl list runtimes
-            exit 1
-          fi
-          DEVICE_TYPE_ID=$(xcrun simctl list devicetypes --json | \
-            jq -r --arg pfx "$DEVICE_PREFIX" '
-              .devicetypes
-              | map(select(.name | startswith($pfx)))
-              | .[0].identifier // empty
-            ')
-          if [ -z "$DEVICE_TYPE_ID" ]; then
-            echo "::error::No device type matching '$DEVICE_PREFIX'."
-            xcrun simctl list devicetypes
-            exit 1
-          fi
-          UDID=$(xcrun simctl create "ci-$FAMILY" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
-          echo "Created $FAMILY simulator $UDID"
-          echo "  runtime:    $RUNTIME_ID"
-          echo "  devicetype: $DEVICE_TYPE_ID"
-          echo "destination=platform=$FAMILY Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Cache Swift packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
@@ -392,36 +366,7 @@ jobs:
 
       - name: Resolve iOS simulator destination
         id: dest
-        run: |
-          set -euo pipefail
-          RUNTIME_ID=$(xcrun simctl list runtimes --json | \
-            jq -r '
-              .runtimes
-              | map(select(.isAvailable and (.name | startswith("iOS "))))
-              | sort_by(.version | split(".") | map(tonumber))
-              | reverse | .[0].identifier // empty
-            ')
-          if [ -z "$RUNTIME_ID" ]; then
-            echo "::error::No installed iOS runtime."
-            xcrun simctl list runtimes
-            exit 1
-          fi
-          DEVICE_TYPE_ID=$(xcrun simctl list devicetypes --json | \
-            jq -r '
-              .devicetypes
-              | map(select(.name | startswith("iPhone")))
-              | .[0].identifier // empty
-            ')
-          if [ -z "$DEVICE_TYPE_ID" ]; then
-            echo "::error::No iPhone device type."
-            xcrun simctl list devicetypes
-            exit 1
-          fi
-          UDID=$(xcrun simctl create "ci-iOS-app" "$DEVICE_TYPE_ID" "$RUNTIME_ID")
-          echo "Created iOS simulator $UDID"
-          echo "  runtime:    $RUNTIME_ID"
-          echo "  devicetype: $DEVICE_TYPE_ID"
-          echo "destination=platform=iOS Simulator,id=$UDID" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/resolve-sim-destination.sh iOS "iPhone" ci-iOS-app
 
       - name: Cache Swift packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0

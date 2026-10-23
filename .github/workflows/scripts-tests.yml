@@ -18,9 +18,12 @@ name: Scripts Tests
 # Another compares the native sign-up's SMS consent text with the webmail's
 # word for word, so those two source files are listed too.
 #
+# And one drives select-sim-pair.jq, the jq program that picks apple.yml's
+# simulator runtime and device type, so that file is listed as well.
+#
 # The suites are stdlib-only (scripts/apple-release-dashboard.py imports its
 # third-party ASC deps lazily), so no pip install is needed — just a pinned
-# interpreter and git, both provided by the runner.
+# interpreter, git, and jq, all provided by the runner.
 
 on:
   pull_request:
@@ -33,6 +36,7 @@ on:
       - '.github/scripts/assign-testflight-group.py'
       - '.github/scripts/set-testflight-notes.py'
       - '.github/scripts/mail-probe.py'
+      - '.github/scripts/select-sim-pair.jq'
       - 'changelog.d/**'
       - 'design/**'
       # test_sms_consent_text.py: the native sign-up's SMS consent text
@@ -54,6 +58,7 @@ on:
       - '.github/scripts/assign-testflight-group.py'
       - '.github/scripts/set-testflight-notes.py'
       - '.github/scripts/mail-probe.py'
+      - '.github/scripts/select-sim-pair.jq'
       - 'changelog.d/**'
       - 'design/**'
       # test_sms_consent_text.py: the native sign-up's SMS consent text
