@@ -3,8 +3,8 @@ import SwiftUI
 /// Where the global search field is hosted on a given layout.
 enum GlobalSearchFieldHost: Equatable {
     /// Nowhere: compact iPhone reaches search through its own bottom tab
-    /// (`SignedInRootView`'s `Tab(role: .search)`), so the wide-layout field
-    /// isn't mounted at all.
+    /// (`TabShell`'s `Tab(role: .search)`), so the wide-layout field isn't
+    /// mounted at all.
     case none
     /// Right-aligned in the message-list column's toolbar section, sized by
     /// `ToolbarSearchFieldWidth`.

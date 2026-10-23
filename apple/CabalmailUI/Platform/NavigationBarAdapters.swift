@@ -28,4 +28,14 @@ extension View {
         toolbar { EditButton() }
         #endif
     }
+
+    /// No navigation bar over this screen: `.toolbar(.hidden, for:
+    /// .navigationBar)` on iOS and visionOS.
+    func hiddenNavigationBar() -> some View {
+        #if os(macOS)
+        self
+        #else
+        toolbar(.hidden, for: .navigationBar)
+        #endif
+    }
 }
