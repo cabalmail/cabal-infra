@@ -129,12 +129,53 @@ private struct MainSceneSessionRecording: View {
     }
 }
 
+/// Empty `UIViewRepresentable` that names the hosting `UIWindowScene`, so
+/// the Window menu and the app switcher call the window what it shows
+/// rather than what its deepest navigation title happens to say (#2036).
+///
+/// SwiftUI writes the inherited navigation title onto the same property
+/// during its own update, so the title is re-applied on the next runloop
+/// tick as well — last writer wins, and SwiftUI's write is the one already
+/// in flight. The tick is skipped while the title is unchanged, which is
+/// almost every update.
+private struct MainSceneTitling: UIViewRepresentable {
+    let title: String
+
+    @MainActor
+    final class Coordinator {
+        var applied: String?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        UIView(frame: .zero)
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        let coordinator = context.coordinator
+        uiView.window?.windowScene?.title = title
+        guard coordinator.applied != title else { return }
+        coordinator.applied = title
+        DispatchQueue.main.async { [weak uiView] in
+            uiView?.window?.windowScene?.title = title
+        }
+    }
+}
+
 extension View {
     /// Records the hosting scene session as the main mail scene so a
     /// closing compose window can re-activate it. Apply on the main
     /// window's root content.
     public func recordsMainSceneSession() -> some View {
         background(MainSceneSessionRecording())
+    }
+
+    /// Names the hosting window scene `title` (`MainWindowTitle`). Apply on
+    /// the signed-in root, which is the lowest view that knows the window's
+    /// route. No-op off iOS: the Mac names its scene in the `WindowGroup`.
+    public func namesMainWindowScene(_ title: String) -> some View {
+        background(MainSceneTitling(title: title))
     }
 }
 #else
@@ -143,5 +184,9 @@ extension View {
     /// macOS and visionOS activate a sibling window on their own when a
     /// compose window closes; no scene bookkeeping needed.
     public func recordsMainSceneSession() -> some View { self }
+
+    /// macOS names its main scene in the `WindowGroup` itself, and visionOS
+    /// shows no window list to name one in.
+    public func namesMainWindowScene(_ title: String) -> some View { self }
 }
 #endif
