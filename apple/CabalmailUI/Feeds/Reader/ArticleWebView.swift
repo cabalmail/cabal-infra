@@ -18,6 +18,10 @@ struct ArticleWebView: View {
     let dataStoreID: UUID?
     let readerMode: Bool
     let isOffline: Bool
+    /// Reports that a link tapped in the reader has opened its page, so the
+    /// view model can leave the reader for that page without touching the
+    /// feed's saved styling (#2060).
+    let onLeftReader: @MainActor () -> Void
 
     /// The last top-level load error, cleared when a load finishes.
     @State private var failure: String?
@@ -28,7 +32,7 @@ struct ArticleWebView: View {
     var body: some View {
         ArticleWebViewRepresentable(url: url, dataStoreID: dataStoreID, readerMode: readerMode,
                                     textScale: dynamicTypeSize.bodyTextScale,
-                                    onFailure: { failure = $0 })
+                                    onFailure: { failure = $0 }, onLeftReader: onLeftReader)
             .id(attempt)
             .overlay {
                 if failure != nil { failureNotice }
@@ -62,8 +66,11 @@ private struct ArticleWebViewRepresentable: NSViewRepresentable {
     let readerMode: Bool
     let textScale: Double
     let onFailure: @MainActor (String?) -> Void
+    let onLeftReader: @MainActor () -> Void
 
-    func makeCoordinator() -> ArticleWebCoordinator { ArticleWebCoordinator(onFailure: onFailure) }
+    func makeCoordinator() -> ArticleWebCoordinator {
+        ArticleWebCoordinator(onFailure: onFailure, onLeftReader: onLeftReader)
+    }
 
     func makeNSView(context: Context) -> WKWebView {
         context.coordinator.makeWebView(url: url, dataStoreID: dataStoreID)
@@ -80,8 +87,11 @@ private struct ArticleWebViewRepresentable: UIViewRepresentable {
     let readerMode: Bool
     let textScale: Double
     let onFailure: @MainActor (String?) -> Void
+    let onLeftReader: @MainActor () -> Void
 
-    func makeCoordinator() -> ArticleWebCoordinator { ArticleWebCoordinator(onFailure: onFailure) }
+    func makeCoordinator() -> ArticleWebCoordinator {
+        ArticleWebCoordinator(onFailure: onFailure, onLeftReader: onLeftReader)
+    }
 
     func makeUIView(context: Context) -> WKWebView {
         context.coordinator.makeWebView(url: url, dataStoreID: dataStoreID)
@@ -120,12 +130,28 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     /// once its page commits, so a link that opens nothing here (a new-window
     /// link, a download) leaves the reader as it was.
     private var linkOutOfReader = false
+    /// The page on screen was reached by a link out of the reader, so it
+    /// stays as the publisher served it however the toolbar's toggle reads
+    /// (#2060). Cleared when the reader is asked for again, and by any load
+    /// that puts the reader back on screen. Holds on its own: the view
+    /// model's own per-page state arrives a render later, after this page
+    /// may already have finished loading.
+    private var leftReaderThroughLink = false
     /// Reports a top-level load failure (or nil once a load finishes) to the
     /// SwiftUI layer, which draws the notice.
     private let onFailure: @MainActor (String?) -> Void
+    /// Reports a link out of the reader to the view model (#2060).
+    private let onLeftReader: @MainActor () -> Void
 
-    init(onFailure: @escaping @MainActor (String?) -> Void) {
+    init(onFailure: @escaping @MainActor (String?) -> Void,
+         onLeftReader: @escaping @MainActor () -> Void) {
         self.onFailure = onFailure
+        self.onLeftReader = onLeftReader
+    }
+
+    /// What the view asks for, with #2060's rule applied.
+    private var rendersReader: Bool {
+        ArticleNavigationPolicy.showsReader(wantsReader: wantsReader, leftThroughLink: leftReaderThroughLink)
     }
 
     func makeWebView(url: URL, dataStoreID: UUID?) -> WKWebView {
@@ -151,6 +177,9 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     }
 
     func apply(readerMode: Bool, textScale: Double, on webView: WKWebView) {
+        // The toolbar's toggle moving is the user asking again, which is what
+        // ends a link-out's hold on this page (#2060).
+        if readerMode != wantsReader { leftReaderThroughLink = false }
         wantsReader = readerMode
         self.textScale = textScale
         reconcile(on: webView)
@@ -158,14 +187,15 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
 
     private func reconcile(on webView: WKWebView) {
         guard pageLoaded, !extracting else { return }
-        if wantsReader, showingReader {
+        let rendersReader = self.rendersReader
+        if rendersReader, showingReader {
             if readerTextScale != textScale, let article {
                 showReader(article, on: webView)
             }
             return
         }
-        guard wantsReader != showingReader else { return }
-        if wantsReader {
+        guard rendersReader != showingReader else { return }
+        if rendersReader {
             if let article {
                 showReader(article, on: webView)
             } else {
@@ -176,6 +206,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
             pageLoaded = false
             loadingReader = false
             linkOutOfReader = false
+            leftReaderThroughLink = false
             webView.load(URLRequest(url: pageURL))
         }
     }
@@ -207,6 +238,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         pageLoaded = false
         loadingReader = true
         linkOutOfReader = false
+        leftReaderThroughLink = false
         readerTextScale = textScale
         let document = ArticleReaderDocument.html(
             for: article, sourceHost: pageURL?.host() ?? "", textScale: textScale)
@@ -218,13 +250,16 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         loadingReader = false
         if linkOutOfReader {
-            // The link's page is on screen but not loaded, so nothing
-            // extracts it yet: `didFinish` adopts its URL, then `reconcile`
-            // extracts it again while the toolbar asks for the reader.
+            // The link's page is on screen but not loaded: `didFinish`
+            // adopts its URL and reconciles. It stays the publisher's page
+            // rather than being extracted again, which is what the reader's
+            // links are for (#2060).
             linkOutOfReader = false
+            leftReaderThroughLink = true
             showingReader = false
             pageLoaded = false
             article = nil
+            onLeftReader()
         }
     }
 

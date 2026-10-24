@@ -64,6 +64,12 @@ fun ArticleWebView(
     modifier: Modifier = Modifier,
     /** The reader toggle's state; ignored when the script is not in this build. */
     wantsReader: Boolean = false,
+    /**
+     * Reports that a link tapped in the reader has opened its page, so the
+     * view model can leave the reader for that page without touching the
+     * feed's saved styling (#2060).
+     */
+    onLeftReader: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val darkMode = isSystemInDarkTheme()
@@ -77,7 +83,14 @@ fun ArticleWebView(
     BackHandler(enabled = canGoBack) { webView?.goBack() }
 
     fun reconcile(view: WebView) {
-        val wants = wantsReader && script != null
+        val asked = wantsReader && script != null
+        // The toggle moving is the user asking again, which is what ends a
+        // link-out's hold on this page (#2060).
+        if (reader.askedForReader != asked) {
+            if (reader.askedForReader != null) reader.leftThroughLink = false
+            reader.askedForReader = asked
+        }
+        val wants = FeedDetailPolicy.showsReader(asked, reader.leftThroughLink)
         if (wants == reader.showingReader || !reader.pageLoaded || reader.extracting) return
         if (wants) {
             val cached = reader.readerDocument
@@ -105,6 +118,7 @@ fun ArticleWebView(
         } else {
             reader.showingReader = false
             reader.pageLoaded = false
+            reader.leftThroughLink = false
             view.loadUrl(reader.pageUrl)
         }
     }
@@ -131,12 +145,16 @@ fun ArticleWebView(
                                 val target = request?.url ?: return false
                                 val scheme = target.scheme?.lowercase()
                                 if (scheme != "http" && scheme != "https") return true
-                                // A link followed from the reader leaves reader mode for the live page.
+                                // A link followed from the reader leaves reader mode for the live
+                                // page, and that page stays as served rather than being extracted
+                                // again when it finishes loading (#2060).
                                 if (reader.showingReader && request.hasGesture()) {
                                     reader.showingReader = false
                                     reader.readerDocument = null
                                     reader.pageUrl = target.toString()
                                     reader.pageLoaded = false
+                                    reader.leftThroughLink = true
+                                    onLeftReader()
                                     view?.loadUrl(reader.pageUrl)
                                     return true
                                 }
@@ -178,6 +196,7 @@ fun ArticleWebView(
                     view.tag = loadKey
                     reader.showingReader = false
                     reader.pageLoaded = false
+                    reader.leftThroughLink = false
                     view.loadUrl(url)
                 } else {
                     reconcile(view)
@@ -237,11 +256,23 @@ private class ReaderState(
     var extracting = false
     var readerDocument: String? = null
 
+    /**
+     * The page on screen was reached by a link out of the reader, so it stays
+     * as the publisher served it however the toggle reads (#2060). Holds on
+     * its own: the view model's own per-page state arrives a recomposition
+     * later, after this page may already have finished loading.
+     */
+    var leftThroughLink = false
+
+    /** What the toggle last asked for, so a move of it can be told from a recomposition. */
+    var askedForReader: Boolean? = null
+
     fun show(
         view: WebView,
         document: String,
     ) {
         showingReader = true
+        leftThroughLink = false
         pageLoaded = false
         view.loadDataWithBaseURL(pageUrl, document, "text/html", "utf-8", pageUrl)
     }

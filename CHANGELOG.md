@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.6] - 2026-10-24
+
+### Fixed
+- Android: **Reader links open the live page.** A link followed inside a feed
+  article's reader rendering loaded the linked page and then extracted it into
+  the reader again. The followed page now stays as the publisher served it, and
+  the reader menu item reports that page rather than the feed, so one tap puts
+  it in the reader. The feed's own styling setting is untouched, so the next
+  item still opens the way the feed is set.
+- Apple: **A link followed in the feed reader opens the live page.** Tapping a
+  link inside a reader rendering loaded the linked page and then extracted it
+  into the reader again, because the feed's reader setting was still asking for
+  it. The followed page now stays as the publisher served it, and the reader
+  toggle reports that page rather than the feed, so one tap puts it in the
+  reader. The feed's own setting is untouched, so the next item still opens the
+  way the feed is set.
+- Apple: **Each window's folder and feed trees expand on their own.** On
+  the Mac, Collapse All Folders, Expand All Folders, the sidebar's own
+  collapse and expand buttons and a folder's chevron changed the tree in
+  every open window at once, which is what the menu items have claimed to
+  act on the window in front since they were added. Each window now keeps
+  its own collapsed folders and feed folders; a window you open afresh
+  starts from however you last left a tree in any window.
+
 ## [1.39.5] - 2026-10-23
 
 ### Changed

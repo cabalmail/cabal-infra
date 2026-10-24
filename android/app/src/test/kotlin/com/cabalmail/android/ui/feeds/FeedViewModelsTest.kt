@@ -383,6 +383,71 @@ class FeedViewModelsTest {
         }
 
     @Test
+    fun `a link out of the reader shows the followed page as served and leaves the feed's styling alone`() =
+        runTest(dispatcher) {
+            store.upsertSubscription(subscription.copy(defaultStyling = RssStyling.READER))
+            store.upsertItems(listOf(item(1)))
+            val model = detailModel(item(1))
+            advanceUntilIdle()
+            assertTrue(model.state.value.effectiveReaderMode, "the feed opens in the reader")
+
+            model.leftReaderThroughLink()
+
+            assertFalse(model.state.value.effectiveReaderMode, "the followed page shows as served")
+            assertTrue(model.state.value.readerMode, "the feed's own setting has not moved")
+            advanceUntilIdle()
+            assertTrue(client.subscriptionUpdates.isEmpty(), "and nothing was written back")
+            assertEquals(RssStyling.READER, store.subscription("s1")?.defaultStyling)
+        }
+
+    @Test
+    fun `the reader toggle on a followed page asks for the reader in one tap, and leaving the article drops it`() =
+        runTest(dispatcher) {
+            store.upsertSubscription(subscription.copy(defaultStyling = RssStyling.READER))
+            store.upsertItems(listOf(item(1)))
+            val model = detailModel(item(1))
+            advanceUntilIdle()
+
+            model.leftReaderThroughLink()
+            model.toggleReaderMode()
+            advanceUntilIdle()
+
+            assertTrue(model.state.value.effectiveReaderMode, "one tap, not two")
+            assertNull(model.state.value.pageReaderOverride, "the page follows the feed again")
+            assertTrue(client.subscriptionUpdates.isEmpty(), "the feed already stored reader")
+
+            model.leftReaderThroughLink()
+            assertFalse(model.state.value.effectiveReaderMode)
+            model.toggleArticle()
+            advanceUntilIdle()
+            assertNull(model.state.value.pageReaderOverride, "the article view was rebuilt")
+            assertTrue(model.state.value.effectiveReaderMode)
+        }
+
+    @Test
+    fun `a link out changes nothing with the feed on the publisher's own styling`() =
+        runTest(dispatcher) {
+            store.upsertSubscription(subscription)
+            store.upsertItems(listOf(item(1)))
+            val model = detailModel(item(1))
+            advanceUntilIdle()
+            assertFalse(model.state.value.readerMode)
+
+            model.leftReaderThroughLink()
+            assertNull(model.state.value.pageReaderOverride, "there is no reader to leave")
+
+            model.toggleReaderMode()
+            advanceUntilIdle()
+            assertTrue(model.state.value.effectiveReaderMode)
+            assertEquals(
+                RssSubscriptionUpdate(defaultStyling = RssStyling.READER),
+                client.subscriptionUpdates
+                    .map { it.second }
+                    .last(),
+            )
+        }
+
+    @Test
     fun `an item without a link never writes the open mode, and a failed write keeps the reader's state`() =
         runTest(dispatcher) {
             store.upsertSubscription(subscription)

@@ -25,6 +25,12 @@ final class FeedItemDetailViewModel {
     /// Reader styling (the mail reader's stylesheet for the body; Readability
     /// for the article) versus the author's own.
     var readerMode: Bool
+    /// Reader styling for the article page on screen, when it differs from
+    /// the feed's: a link followed out of the reader opens the publisher's
+    /// page and stays there (#2060). nil means "whatever the feed says", and
+    /// `readerMode` — the feed's own setting — never moves for a link-out,
+    /// so the next item still opens in the reader.
+    private(set) var pageReaderOverride: Bool?
     var remoteContentAllowed: Bool
 
     private let engine: RssSyncEngine?
@@ -96,14 +102,35 @@ final class FeedItemDetailViewModel {
         subscription.flatMap { UUID(uuidString: $0.dataStoreUuid) }
     }
 
+    /// What the article view renders and the reader toggle reports: the
+    /// page's own styling when a link out of the reader has set one, else
+    /// the feed's (#2060).
+    var effectiveReaderMode: Bool { pageReaderOverride ?? readerMode }
+
     func toggleArticle() {
         showingArticle.toggle()
+        // The article view is rebuilt from scratch either way, so the page
+        // that held a link-out's styling is gone with it.
+        pageReaderOverride = nil
         persistDefault(.article(showing: showingArticle))
     }
 
     func toggleReaderMode() {
-        readerMode.toggle()
-        persistDefault(.styling(readerMode: readerMode))
+        // Flips what is on screen, which is the override while a link-out
+        // holds one: asking for the reader on the followed page is one tap,
+        // and it writes the feed's default as any other flip does.
+        let reader = !effectiveReaderMode
+        pageReaderOverride = nil
+        readerMode = reader
+        persistDefault(.styling(readerMode: reader))
+    }
+
+    /// A link tapped in the reader has opened the publisher's page: that
+    /// page shows as served, the toggle says so, and the feed's saved
+    /// styling is left alone (#2060).
+    func leftReaderThroughLink() {
+        guard readerMode else { return }
+        pageReaderOverride = false
     }
 
     func toggleRemoteContent() {
