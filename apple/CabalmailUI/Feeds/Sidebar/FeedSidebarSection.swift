@@ -76,10 +76,14 @@ struct FeedSidebarList: View {
     @State private var model: FeedSidebarViewModel?
     @State private var management: FeedManagementViewModel?
     @State private var actions = FeedManagementActions()
-    @AppStorage("cabalmail.feeds.collapsedFolders") private var collapsedRaw = ""
+    /// The collapsed folder ids, per window (`SidebarCollapse`) as the wide
+    /// sidebar's Feeds section keeps them — one set per window, seeded from
+    /// the device-wide value every change also writes.
+    @SceneStorage("cabalmail.window.feeds.collapsedFolders") private var collapsedScene = ""
+    @AppStorage(DefaultsKey.feedsCollapsedFolders) private var collapsedDevice = ""
     /// The Unread pill (`FeedListFilter`): sticky per device, never synced;
     /// the wide sidebar's Feeds section reads the same key.
-    @AppStorage("cabalmail.feeds.filter") private var filterRaw = FeedListFilter.defaultForFeeds.rawValue
+    @AppStorage(DefaultsKey.feedsFilter) private var filterRaw = FeedListFilter.defaultForFeeds.rawValue
     @State private var filter = ""
 
     private var listFilter: FeedListFilter {
@@ -125,6 +129,13 @@ struct FeedSidebarList: View {
         .answersCommands(SidebarTreeCommand.allCases.map(WindowCommand.sidebarTree), whileBehind: true) { command in
             guard case .sidebarTree(let tree) = command, !tree.isMail else { return }
             setAllCollapsed(tree.collapses)
+        }
+        .onAppear {
+            if let seed = SidebarCollapse.seed(
+                scene: collapsedScene, device: collapsedDevice, for: appState.routeAccount
+            ) {
+                collapsedScene = seed
+            }
         }
         .task {
             if model == nil, let client = appState.client {
@@ -188,18 +199,24 @@ struct FeedSidebarList: View {
     }
 
     private func setAllCollapsed(_ collapse: Bool) {
-        collapsedRaw = SidebarTreeExpansion.collapsed(all: collapsible, collapse: collapse)
-            .sorted()
-            .joined(separator: "\n")
+        collapsed = SidebarTreeExpansion.collapsed(all: collapsible, collapse: collapse)
     }
 
     private var collapsed: Set<String> {
-        Set(collapsedRaw.split(separator: "\n").map(String.init))
+        get {
+            SidebarCollapse.effective(
+                scene: collapsedScene, device: collapsedDevice, for: appState.routeAccount
+            )
+        }
+        nonmutating set {
+            collapsedScene = SidebarCollapse.scene(newValue, for: appState.routeAccount)
+            collapsedDevice = SidebarCollapse.device(newValue)
+        }
     }
 
     private func toggleCollapse(_ folderId: String) {
         var set = collapsed
         if set.contains(folderId) { set.remove(folderId) } else { set.insert(folderId) }
-        collapsedRaw = set.sorted().joined(separator: "\n")
+        collapsed = set
     }
 }

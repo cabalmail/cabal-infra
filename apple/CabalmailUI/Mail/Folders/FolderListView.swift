@@ -42,14 +42,26 @@ struct FolderListView: View {
     @State var feedFilter = ""
     @AppStorage("cabalmail.folder.section.feeds.expanded")
     private var feedsExpanded: Bool = true
-    @AppStorage("cabalmail.feeds.collapsedFolders")
-    private var feedsCollapsedRaw = ""
+    // The Feeds tree's collapsed folder ids, per window (`SidebarCollapse`):
+    // the window's own set, seeded from the device-wide value a new window
+    // inherits and that every change here keeps current.
+    @SceneStorage("cabalmail.window.feeds.collapsedFolders")
+    private var feedsCollapsedScene = ""
+    @AppStorage(DefaultsKey.feedsCollapsedFolders)
+    private var feedsCollapsedDevice = ""
     /// Accessors for the `+Helpers` extension (the storage properties are
     /// file-private, like the mail sections').
     var feedsExpandedBinding: Binding<Bool> { $feedsExpanded }
-    var feedsCollapsedRawAccessor: String {
-        get { feedsCollapsedRaw }
-        nonmutating set { feedsCollapsedRaw = newValue }
+    var feedsCollapsed: Set<String> {
+        get {
+            SidebarCollapse.effective(
+                scene: feedsCollapsedScene, device: feedsCollapsedDevice, for: appState.routeAccount
+            )
+        }
+        nonmutating set {
+            feedsCollapsedScene = SidebarCollapse.scene(newValue, for: appState.routeAccount)
+            feedsCollapsedDevice = SidebarCollapse.device(newValue)
+        }
     }
     /// Called at most once, when the first load returns the server's list.
     /// A saved copy drawn offline doesn't count, and neither does a later
@@ -84,11 +96,27 @@ struct FolderListView: View {
     /// the Unread pill (see `FolderListFilter.needsEveryCount`). Toggling
     /// the pill again does not walk again; a manual refresh does, by itself.
     @State var didWalkAllCounts = false
-    // Per-folder collapse state. Stored as a newline-joined string because
-    // @AppStorage doesn't natively support Set; folder paths cannot contain
-    // newlines so this is unambiguous.
+    // Per-folder collapse state, per window (`SidebarCollapse`) for the same
+    // reason as the Feeds tree's: one device-wide set made Collapse All in
+    // one Mac window collapse the tree in all of them (#2039). The
+    // device-wide half keeps the newline-joined encoding it always had.
+    @SceneStorage("cabalmail.window.folder.collapsedPaths")
+    private var collapsedPathsScene = ""
     @AppStorage("cabalmail.folder.collapsedPaths")
-    var collapsedPathsRaw: String = ""
+    private var collapsedPathsDevice: String = ""
+    /// The paths this window has collapsed. Non-private for the `+Helpers`
+    /// and `+Filter` extensions, like the rest of this view's state.
+    var collapsedPaths: Set<String> {
+        get {
+            SidebarCollapse.effective(
+                scene: collapsedPathsScene, device: collapsedPathsDevice, for: appState.routeAccount
+            )
+        }
+        nonmutating set {
+            collapsedPathsScene = SidebarCollapse.scene(newValue, for: appState.routeAccount)
+            collapsedPathsDevice = SidebarCollapse.device(newValue)
+        }
+    }
     // Folder path currently under a message drag, or nil. Drives the drop-
     // target border in `folderRow` and is toggled by each selectable folder's
     // `.onDrop(isTargeted:)` binding. Non-private so the `+Helpers` extension
@@ -130,8 +158,25 @@ struct FolderListView: View {
         }
     }
 
+    /// Takes this window's copy of the two collapsed sets, once, when it
+    /// first mounts. Both storage properties are file-private, so this lives
+    /// here rather than in an extension.
+    private func seedCollapsedSets() {
+        let account = appState.routeAccount
+        if let seed = SidebarCollapse.seed(
+            scene: collapsedPathsScene, device: collapsedPathsDevice, for: account
+        ) {
+            collapsedPathsScene = seed
+        }
+        if let seed = SidebarCollapse.seed(
+            scene: feedsCollapsedScene, device: feedsCollapsedDevice, for: account
+        ) {
+            feedsCollapsedScene = seed
+        }
+    }
+
     private var folderList: some View {
-        let collapsedSet = decodeCollapsed()
+        let collapsedSet = collapsedPaths
         return List(selection: $selection) {
             if let model {
                 if model.isLoading && model.folders.isEmpty {
@@ -190,6 +235,7 @@ struct FolderListView: View {
                 feedsSection(selection: feedSelection)
             }
         }
+        .onAppear { seedCollapsedSets() }
         .task { await loadFeedModelIfNeeded() }
         // The Feeds section's tree and badges follow the store while it is up.
         .task(id: feedModel.map(ObjectIdentifier.init)) { await feedModel?.observe() }
