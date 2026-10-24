@@ -13,6 +13,16 @@ enum ArticleNavigationPolicy {
         !(loadingReader && inMainFrame && type == .other)
     }
 
+    /// Whether a finished page is rendered in the reader. The toolbar can
+    /// still be asking for the reader after a link out of it: that page is
+    /// the one the user followed a link to, and it stays as the publisher
+    /// served it until the reader is asked for again (#2060). The feed's
+    /// saved styling is untouched either way, so the next item still opens
+    /// in the reader.
+    static func showsReader(wantsReader: Bool, leftThroughLink: Bool) -> Bool {
+        wantsReader && !leftThroughLink
+    }
+
     /// Whether a navigation is a link tapped in the reader rendering that
     /// opens a web page in this view. A link that opens a new window has no
     /// main frame here, so it does not count.
