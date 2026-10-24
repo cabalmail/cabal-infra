@@ -115,6 +115,18 @@ class FeedPoliciesTest {
     }
 
     @Test
+    fun `a page reached through a link in the reader is not put back in it`() {
+        // The toggle asks for the reader for the whole feed, so the request
+        // is still on after a link out of it (#2060).
+        assertFalse(FeedDetailPolicy.showsReader(wantsReader = true, leftThroughLink = true))
+        // The negative control: the same request on a page nobody linked out
+        // to still renders the reader, so "never show the reader" cannot pass.
+        assertTrue(FeedDetailPolicy.showsReader(wantsReader = true, leftThroughLink = false))
+        assertFalse(FeedDetailPolicy.showsReader(wantsReader = false, leftThroughLink = false))
+        assertFalse(FeedDetailPolicy.showsReader(wantsReader = false, leftThroughLink = true))
+    }
+
+    @Test
     fun `item ids split back into feed and sort key`() {
         assertEquals("f1" to "2026-01-01T00:00:00+00:00#i1", FeedRoutes.splitItemId("f1#2026-01-01T00:00:00+00:00#i1"))
         assertNull(FeedRoutes.splitItemId("nohash"))

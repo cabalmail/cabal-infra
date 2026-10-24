@@ -120,7 +120,7 @@ fun FeedItemDetailScreen(
                                     text = {
                                         Text(
                                             stringResource(
-                                                if (state.readerMode) {
+                                                if (state.effectiveReaderMode) {
                                                     R.string.feed_show_original
                                                 } else {
                                                     R.string.feed_show_reader
@@ -220,7 +220,8 @@ fun FeedItemDetailScreen(
                         online = online,
                         onLeave = viewModel::toggleArticle,
                         modifier = Modifier.fillMaxSize(),
-                        wantsReader = state.readerMode,
+                        wantsReader = state.effectiveReaderMode,
+                        onLeftReader = viewModel::leftReaderThroughLink,
                     )
                 } else {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {

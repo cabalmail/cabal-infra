@@ -111,6 +111,64 @@ final class FeedItemDetailStickyDefaultsTests: XCTestCase {
         XCTAssertEqual(model.subscription?.defaultStyling, .native)
     }
 
+    /// #2060: the page a link in the reader leads to shows as the publisher
+    /// served it. That is this item's page only — the feed's saved styling
+    /// is what the next item opens with, so nothing is written.
+    func testALinkOutOfTheReaderLeavesTheFeedsStylingAlone() async {
+        let persister = RecordingPersister()
+        let sub = RssSubscription(subscriptionId: "s", feedId: "f", defaultStyling: .reader)
+        let model = makeModel(subscription: sub, persister: persister)
+        XCTAssertTrue(model.effectiveReaderMode, "the feed opens in the reader")
+        model.leftReaderThroughLink()
+        XCTAssertFalse(model.effectiveReaderMode, "the followed page shows as served")
+        XCTAssertTrue(model.readerMode, "the feed's own setting has not moved")
+        await settle(persister, expecting: 1)
+        XCTAssertTrue(persister.calls.isEmpty, "and nothing was written back")
+        XCTAssertEqual(model.subscription?.defaultStyling, .reader)
+    }
+
+    /// One tap on the toggle puts the followed page in the reader: it flips
+    /// what is on screen, not the feed's setting, which already says reader.
+    func testTheToggleOnAFollowedPageAsksForTheReaderInOneTap() async {
+        let persister = RecordingPersister()
+        let sub = RssSubscription(subscriptionId: "s", feedId: "f", defaultStyling: .reader)
+        let model = makeModel(subscription: sub, persister: persister)
+        model.leftReaderThroughLink()
+        model.toggleReaderMode()
+        XCTAssertTrue(model.effectiveReaderMode)
+        XCTAssertNil(model.pageReaderOverride, "the page follows the feed again")
+        await settle(persister, expecting: 1)
+        XCTAssertTrue(persister.calls.isEmpty, "the feed already stored reader, so there is nothing to write")
+    }
+
+    /// Leaving the article view and coming back rebuilds the web view on the
+    /// item's own page, so the followed page's styling goes with it.
+    func testLeavingTheArticleViewDropsTheFollowedPagesStyling() {
+        let sub = RssSubscription(subscriptionId: "s", feedId: "f", defaultOpenMode: .article,
+                                  defaultStyling: .reader)
+        let model = makeModel(subscription: sub, persister: RecordingPersister())
+        model.leftReaderThroughLink()
+        XCTAssertFalse(model.effectiveReaderMode)
+        model.toggleArticle()
+        XCTAssertNil(model.pageReaderOverride)
+        XCTAssertTrue(model.effectiveReaderMode)
+    }
+
+    /// With the feed's styling already the publisher's own there is no reader
+    /// to leave, so a link-out changes nothing and the toggle still turns the
+    /// reader on in one tap.
+    func testALinkOutChangesNothingWithTheReaderOff() async {
+        let persister = RecordingPersister()
+        let sub = RssSubscription(subscriptionId: "s", feedId: "f", defaultStyling: .native)
+        let model = makeModel(subscription: sub, persister: persister)
+        model.leftReaderThroughLink()
+        XCTAssertNil(model.pageReaderOverride)
+        model.toggleReaderMode()
+        XCTAssertTrue(model.effectiveReaderMode)
+        await settle(persister, expecting: 1)
+        XCTAssertEqual(persister.calls.first?.1.defaultStyling, .reader)
+    }
+
     func testOpenModeIsNotWrittenForAnItemWithoutALink() async {
         let persister = RecordingPersister()
         let sub = RssSubscription(subscriptionId: "s", feedId: "f", defaultOpenMode: .article)

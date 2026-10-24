@@ -101,9 +101,7 @@ extension FolderListView {
     /// tree in one consistent state. The open folder's ancestors are still
     /// forced open by `FolderTree.visibleFolders`, so it never disappears.
     func setAllFoldersCollapsed(_ collapse: Bool) {
-        collapsedPathsRaw = encodeCollapsed(
-            SidebarTreeExpansion.collapsed(all: collapsibleFolderPaths, collapse: collapse)
-        )
+        collapsedPaths = SidebarTreeExpansion.collapsed(all: collapsibleFolderPaths, collapse: collapse)
     }
 
     /// A Mailbox / Feeds menu request. The mail pair is always ours; the
@@ -152,8 +150,6 @@ extension FolderListView {
     }
 
     func setAllFeedFoldersCollapsed(_ collapse: Bool) {
-        feedsCollapsedRawAccessor = SidebarTreeExpansion.collapsed(all: collapsibleFeedFolderIds, collapse: collapse)
-            .sorted()
-            .joined(separator: "\n")
+        feedsCollapsed = SidebarTreeExpansion.collapsed(all: collapsibleFeedFolderIds, collapse: collapse)
     }
 }

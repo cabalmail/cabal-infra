@@ -30,12 +30,27 @@ data class FeedItemDetailUiState(
     val subscription: RssSubscription? = null,
     val showingArticle: Boolean = false,
     val readerMode: Boolean = true,
+    /**
+     * Reader styling for the article page on screen, when it differs from
+     * the feed's: a link followed out of the reader opens the publisher's
+     * page and stays there (#2060). null means "whatever the feed says", and
+     * [readerMode] — the feed's own setting — never moves for a link-out, so
+     * the next item still opens in the reader.
+     */
+    val pageReaderOverride: Boolean? = null,
     val remoteContentAllowed: Boolean = false,
     val loaded: Boolean = false,
     val error: String? = null,
     /** Where the reader left off last time, as a fraction; null = the top. */
     val restoreFraction: Float? = null,
 ) {
+    /**
+     * What the article view renders and the reader toggle reports: the page's
+     * own styling when a link out of the reader has set one, else the feed's.
+     */
+    val effectiveReaderMode: Boolean
+        get() = pageReaderOverride ?: readerMode
+
     /** The article link, when it is a web address. */
     val articleUrl: String?
         get() =
@@ -174,7 +189,9 @@ class FeedItemDetailViewModel(
     fun toggleArticle() {
         val current = mutableState.value
         val showing = !current.showingArticle
-        mutableState.update { it.copy(showingArticle = showing) }
+        // The article view is rebuilt from scratch either way, so the page
+        // that held a link-out's styling is gone with it (#2060).
+        mutableState.update { it.copy(showingArticle = showing, pageReaderOverride = null) }
         current.subscription?.let { sub ->
             persistDefault(FeedDetailPolicy.articleUpdate(sub, showing, current.articleUrl != null))
         }
@@ -183,9 +200,22 @@ class FeedItemDetailViewModel(
     /** Reader or original styling; writes `default_styling`. */
     fun toggleReaderMode() {
         val current = mutableState.value
-        val reader = !current.readerMode
-        mutableState.update { it.copy(readerMode = reader) }
+        // Flips what is on screen, which is the override while a link-out
+        // holds one (#2060): asking for the reader on the followed page is
+        // one tap, and it writes the feed's default as any other flip does.
+        val reader = !current.effectiveReaderMode
+        mutableState.update { it.copy(readerMode = reader, pageReaderOverride = null) }
         current.subscription?.let { persistDefault(FeedDetailPolicy.stylingUpdate(it, reader)) }
+    }
+
+    /**
+     * A link tapped in the reader has opened the publisher's page: that page
+     * shows as served, the toggle says so, and the feed's saved styling is
+     * left alone (#2060).
+     */
+    fun leftReaderThroughLink() {
+        if (!mutableState.value.readerMode) return
+        mutableState.update { it.copy(pageReaderOverride = false) }
     }
 
     /** Remote content on or off for this feed; writes an explicit `default_remote_content`. */

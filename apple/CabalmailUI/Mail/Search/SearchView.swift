@@ -4,8 +4,11 @@ import CabalmailKit
 /// Global, cross-folder search surface for compact iPhone and visionOS — the
 /// content of their search tab (`Tab(role: .search)` on iPhone).
 ///
-/// `.searchable` here drives the iOS 26 tab-bar morph (the bar collapses to a
-/// dismiss button and the search button expands into a focused field).
+/// `.searchable` here is the field the iPhone's search tab morphs into: on
+/// iOS 26 and later, tapping Search turns the button into this field at the
+/// bottom and collapses the rest of the bar to one button for the tab the
+/// user came from (`TabShell`). Until a search runs, the tab shows that tab's
+/// screen, dimmed (`backdrop`); the results take over once one is submitted.
 /// The field binds a `.search`-scope `MessageListViewModel`, which renders
 /// results with the folder list's row machinery (`MessageListView` in
 /// `.search` scope). Tapping a result pushes the reader against that result's
@@ -26,17 +29,37 @@ struct SearchView: View {
     /// The list's selection count, for the Message menu (`wideList` reports it).
     @State private var selectionCount = 0
 
+    /// The tab that was in front when Search was tapped, shown until a search
+    /// runs (`SearchBackdrop`). Nil on visionOS, and on the phone when Search
+    /// opened some other way (a fold or a narrowing that carried a search
+    /// across).
+    let backdrop: SearchBackdrop?
+
     /// Drives the `.searchable` field so the tab arrives ready to type (#1425).
     @FocusState private var searchFieldFocused: Bool
+
+    init(backdrop: SearchBackdrop? = nil) {
+        self.backdrop = backdrop
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if let model {
+                if let backdrop, backdropStandsIn {
+                    backdropView(backdrop)
+                } else if let model {
                     searchList(model: model)
                 } else {
                     ProgressView()
                 }
+            }
+            // On the group, not the list, so the field is there whichever of
+            // the three is showing: the backdrop is what the field opens over.
+            .searchable(text: query, prompt: "Search all mail")
+            .searchFocused($searchFieldFocused)
+            .onSubmit(of: .search) {
+                guard let model else { return }
+                Task { await model.runSearch() }
             }
             .navigationDestination(item: $selectedEnvelope) { envelope in
                 if let model {
@@ -85,17 +108,42 @@ struct SearchView: View {
         }
     }
 
-    @ViewBuilder
+    /// The field's text: the model's query, once the model is in.
+    private var query: Binding<String> {
+        Binding(get: { model?.searchQuery ?? "" }, set: { model?.searchQuery = $0 })
+    }
+
+    private var backdropStandsIn: Bool {
+        SearchBackdrop.standsIn(
+            submittedQuery: model?.search.submittedQuery ?? "",
+            isSearchActive: model?.isSearchActive ?? false
+        )
+    }
+
+    /// The tab the user came from, as it last looked, dimmed. It has its own
+    /// bar in the picture, so this screen draws none; a tap goes back to it.
+    private func backdropView(_ backdrop: SearchBackdrop) -> some View {
+        backdrop.image
+            .resizable()
+            .overlay { Color.black.opacity(SearchBackdrop.dimming) }
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { backdrop.returnToTab() }
+            .accessibilityElement()
+            .accessibilityLabel("Back to \(backdrop.tabTitle)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { backdrop.returnToTab() }
+            .accessibilityIdentifier("search.backdrop")
+            .hiddenNavigationBar()
+    }
+
     private func searchList(model: MessageListViewModel) -> some View {
-        @Bindable var model = model
         MessageListView(
             scope: .search,
             injectedSearchModel: model,
             selection: $selectedEnvelope,
             onSelectionCountChanged: { selectionCount = $0 }
         )
-        .searchable(text: $model.searchQuery, prompt: "Search all mail")
-        .searchFocused($searchFieldFocused)
         .onAppear {
             // The tab has one thing to type into, so opening it is the whole
             // of the intent — unless a previous search is still on screen,
@@ -103,9 +151,6 @@ struct SearchView: View {
             searchFieldFocused = SearchFieldFocusPolicy.focusesOnAppear(
                 query: model.searchQuery
             )
-        }
-        .onSubmit(of: .search) {
-            Task { await model.runSearch() }
         }
     }
 }

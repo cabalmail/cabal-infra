@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.5] - 2026-10-23
+
+### Changed
+- Apple: **Search opens over the tab you're on.** On iPhone (iOS 26 and
+  later), the Search button sits apart from the rest of the tab bar.
+  Tapping it turns the button into the search field at the bottom of the
+  screen and folds the other tabs into one button for the tab you were on,
+  which takes you back to it. Until a search runs, that tab stays on screen,
+  dimmed, where an empty Search screen with its field at the top used to
+  open; the results replace it once you press Return, and the field's X
+  ends the search. The dimmed screen is a still of the tab, so tapping it
+  goes back to the live one.
+
+### Fixed
+- Apple: **iPad windows named after what they show.** Each main window now
+  takes its Window-menu and app-switcher title from its own route — the open
+  folder, "Feeds", or the tab it is parked on — instead of inheriting the
+  Addresses inspector's navigation title, which named every window
+  "Addresses" whatever folder it had open.
+- Apple: **Rule switches speak as switches.** On macOS, each rule's Enabled
+  control in Settings > Rules read to VoiceOver as a "toggle button" while
+  every other pane's switch read as a "switch". It now reads as a switch,
+  and keeps the name "Enabled" that the panes it matches do not carry.
+
 ## [1.39.4] - 2026-10-23
 
 ### Changed

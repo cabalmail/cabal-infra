@@ -78,6 +78,12 @@ struct SignedInRootView: View {
             .environment(navigator)
             .environment(\.windowCommands, windowCommands)
             .environment(\.shellLayout, shellLayout)
+            // The window names itself from its route, or the inspector's
+            // "Addresses" is what the Window menu and the app switcher call
+            // every window (#2036). Here, the lowest view that holds the
+            // navigator, rather than on `ContentView` beside
+            // `recordsMainSceneSession()`, which is above it.
+            .namesMainWindowScene(windowTitle)
             // A new navigator — a new sign-in — gets new trees, which land
             // on it rather than keep the last account's.
             .id(ObjectIdentifier(navigator))
@@ -183,6 +189,18 @@ struct SignedInRootView: View {
         #else
         ShellLayout.resolve(on: .current, isCompactWidth: false, isCompactHeight: false, measuredWidth: measuredWidth)
         #endif
+    }
+
+    /// This window's name in the Window menu and the app switcher
+    /// (`MainWindowTitle`). Keyed on the drawn layout rather than the raw
+    /// size class, as `bannerBottomInset` is.
+    private var windowTitle: String {
+        MainWindowTitle.title(
+            isWide: shellLayout.isWideSplit,
+            splitShowsFeeds: navigator.splitShowsFeeds,
+            compactTab: navigator.compactTab,
+            folderName: navigator.selectedFolder?.name
+        )
     }
 
     @ViewBuilder

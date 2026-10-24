@@ -60,9 +60,10 @@ enum CompactTab: Hashable {
     }
 
     /// The tab's role on `layout`. The phone's Search tab takes the search
-    /// role, which detaches it to the bar's trailing end and, on iOS 26 and
-    /// later, morphs it into the search field. visionOS keeps a plain Search
-    /// tab in its ornament.
+    /// role, which on iOS 26 and later — with its field activating on
+    /// selection (`TabShell`) — sets it apart at the bar's trailing end and
+    /// morphs it into the search field. visionOS keeps a plain Search tab in
+    /// its ornament.
     func role(in layout: ShellLayout) -> Role? {
         self == .search && layout == .tabs ? .search : nil
     }
