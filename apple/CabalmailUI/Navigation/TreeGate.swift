@@ -13,11 +13,16 @@ struct TreeGate: Equatable {
     private(set) var mounted: UUID?
     /// The tree that appeared last.
     private(set) var appearing: UUID?
+    /// The tree the one appearing replaced. Its views are still in the
+    /// hierarchy while they are torn down, and they still see the window's
+    /// parked restores.
+    private(set) var superseded: UUID?
 
     /// `tree` appeared. Returns whether it replaces another tree, which is a
     /// layout swap's rebuild rather than a first appearance or a tab switch
     /// bringing the same tree back.
     mutating func appear(_ tree: UUID) -> Bool {
+        if appearing != tree { superseded = appearing }
         appearing = tree
         return mounted != nil && mounted != tree
     }
@@ -42,5 +47,11 @@ struct TreeGate: Equatable {
     /// await may have built another.
     func isAppearing(_ tree: UUID) -> Bool {
         tree == appearing
+    }
+
+    /// Whether `tree` is the one the tree now appearing replaced — a tree
+    /// being torn down, whose views outlive the swap by a frame or two.
+    func isSuperseded(_ tree: UUID) -> Bool {
+        tree != appearing && tree == superseded
     }
 }

@@ -334,6 +334,10 @@ extension View {
     func wideMailBehaviour(_ mail: WideMail) -> some View {
         modifier(WideMailReporting(mail: mail))
             .modifier(WideMailLifecycle(mail: mail))
+            // Which tree the columns beneath belong to, so a list in a tree
+            // a swap has replaced doesn't take a restore parked for the list
+            // replacing it (`SceneNavigator.listMayTakeRestore`, #1988).
+            .environment(\.mailTree, mail.tree)
     }
 }
 
