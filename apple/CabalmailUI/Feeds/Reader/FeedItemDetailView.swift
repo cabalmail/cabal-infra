@@ -111,8 +111,9 @@ struct FeedItemDetailView: View {
     @ViewBuilder
     private func content(_ model: FeedItemDetailViewModel) -> some View {
         if model.showingArticle, let url = model.articleURL {
-            ArticleWebView(url: url, dataStoreID: model.dataStoreID, readerMode: model.readerMode,
-                           isOffline: isOffline)
+            ArticleWebView(url: url, dataStoreID: model.dataStoreID,
+                           readerMode: model.effectiveReaderMode, isOffline: isOffline,
+                           onLeftReader: { model.leftReaderThroughLink() })
                 .id(url)
         } else {
             VStack(alignment: .leading, spacing: 0) {

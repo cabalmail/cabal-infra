@@ -92,6 +92,19 @@ object FeedDetailPolicy {
         return if (subscription.defaultOpenMode == mode) null else RssSubscriptionUpdate(defaultOpenMode = mode)
     }
 
+    /**
+     * Whether a finished page is rendered in the reader. The toggle asks for
+     * the reader for the whole feed, so the request is still on after a link
+     * out of it: the page the user followed a link to stays as the publisher
+     * served it until the reader is asked for again (#2060). The feed's saved
+     * styling is untouched either way, so the next item still opens in the
+     * reader. The Apple `ArticleNavigationPolicy.showsReader`.
+     */
+    fun showsReader(
+        wantsReader: Boolean,
+        leftThroughLink: Boolean,
+    ): Boolean = wantsReader && !leftThroughLink
+
     /** The styling toggle writes `default_styling`. */
     fun stylingUpdate(
         subscription: RssSubscription,

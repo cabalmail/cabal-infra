@@ -93,7 +93,9 @@ struct FeedReaderBarItem: View {
         Button {
             model.toggleReaderMode()
         } label: {
-            ReaderToggleFace.readerView(isOn: model.readerMode).label
+            // What is on screen, which a link out of the reader moves for
+            // that page alone (#2060), rather than the feed's own setting.
+            ReaderToggleFace.readerView(isOn: model.effectiveReaderMode).label
         }
         .accessibilityIdentifier(FeedReaderAction.readerMode.identifier)
     }
