@@ -5,6 +5,7 @@ import com.cabalmail.android.ui.feeds.FeedRoutes
 import com.cabalmail.kit.models.NavState
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemScope
+import com.cabalmail.kit.models.RssSubscription
 import com.cabalmail.kit.rss.RssStore
 
 /** One navigation the launch restore performs, in order. */
@@ -149,13 +150,19 @@ object HandoffPosition {
  *
  * The item is read from the store first and fetched second, the same
  * ladder the tap itself follows, so resolving the name also warms the item
- * Resume will open.
+ * Resume will open. The *subscription* takes the same ladder (#2109): the
+ * local catalogue is only as fresh as the last visit to Feeds, and on a
+ * cold launch that has never opened Feeds there is no catalogue at all, so
+ * a store-only lookup can never name the feed and the fallback always
+ * wins. Resolving it over the network costs one request, and only on the
+ * launch that actually offers a feed cursor.
  */
 object ResumeDestination {
     suspend fun name(
         cursor: NavState,
         store: RssStore,
         fetchItem: suspend (feedId: String, sortKey: String) -> RssItem?,
+        fetchSubscription: suspend (feedId: String) -> RssSubscription? = { null },
     ): String? {
         if (!cursor.isFeed) return cursor.folder?.takeIf { it.isNotBlank() }
         val (feedId, sortKey) = cursor.rssItem?.let(FeedRoutes::splitItemId) ?: return null
@@ -165,10 +172,14 @@ object ResumeDestination {
                     runCatching { store.upsertItems(listOf(it)) }
                 }
                 ?: return null
-        val feedTitle =
+        val local =
             item.subscriptionId
                 .takeIf { it.isNotEmpty() }
-                ?.let { id -> runCatching { store.subscription(id) }.getOrNull()?.displayTitle }
+                ?.let { id -> runCatching { store.subscription(id) }.getOrNull() }
+        // The item's feed id, not the cursor's: a cursor naming a feed the
+        // server has merged still resolves to the feed the item came back on.
+        val subscription = local ?: runCatching { fetchSubscription(item.feedId) }.getOrNull()
+        val feedTitle = subscription?.displayTitle
         return feedTitle?.takeIf { it.isNotBlank() } ?: item.title.takeIf { it.isNotBlank() }
     }
 }

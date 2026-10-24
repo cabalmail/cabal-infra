@@ -203,6 +203,14 @@ sessions out of known potholes:
   `.accessibilityElement(children: .contain)` — a bare identifier merges
   the row's subtree into one accessibility element, which hides revealed
   swipe buttons from both XCUITest and VoiceOver.
+- **Message rows across folders.** A UID is unique only inside one
+  folder, so a message row's identifier is `message.row.<uid>` in a
+  folder list and `message.row.<folder>/<uid>` on the global search
+  surface, whose results span folders (`MessageRowIdentifier`, #1991).
+  `<folder>` is the row's own `/`-delimited path, so a search result in
+  Sent is `message.row.Sent/316` and one in a nested folder is
+  `message.row.Archive/2026/7`. A folder list's Unread / Flagged pills
+  are searches narrowed to that list's folder and keep the bare form.
 - **Secure fields.** A SwiftUI `SecureField` does not accept the
   keyboard assistant bar's Paste button, but does accept hardware Cmd-V.
   Seed the simulator pasteboard host-side and paste:

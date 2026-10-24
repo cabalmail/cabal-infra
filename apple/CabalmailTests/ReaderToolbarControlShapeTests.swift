@@ -76,12 +76,15 @@ final class ReaderToolbarControlShapeTests: XCTestCase {
     }
 
     func testTheFeedStandInSetIsTheFullestWideBar() {
-        // The stand-ins reserve the fullest set, so `.more` — the one menu —
-        // is among them and its shape is the one that matters.
+        // A summary-opening scope reserves the fullest set, so `.more` — the
+        // one menu — is among them and its shape is the one that matters.
         XCTAssertEqual(
-            FeedReaderToolbarLayout.standIns,
+            FeedReaderToolbarLayout.standIns(showingArticle: false),
             [.read, .favorite, .readerMode, .remoteContent, .article, .more]
         )
+        // And it is still the trailing item once an article-opening scope
+        // drops Remote content, so the menu's width stays the last slot's.
+        XCTAssertEqual(FeedReaderToolbarLayout.standIns(showingArticle: true).last, .more)
     }
 
     private func shape(

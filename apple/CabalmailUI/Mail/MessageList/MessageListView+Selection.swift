@@ -269,7 +269,9 @@ extension MessageListView {
         // accessibility.md). The container form names the row while
         // keeping its children individually reachable.
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("message.row.\(envelope.uid)")
+        // Folder-qualified on the search surface, where a UID alone can name
+        // two rows (#1991); bare in a folder list, which the recipes address.
+        .accessibilityIdentifier(MessageRowIdentifier.identifier(for: envelope, scope: scope))
     }
 
     /// The live message row. The normal row wraps in `SwipeActionRow` for

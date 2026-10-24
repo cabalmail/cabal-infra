@@ -25,6 +25,68 @@ final class FeedDetailPolicyTests: XCTestCase {
             .remoteContentAllowed)
     }
 
+    // MARK: - What a scope opens with (#2144)
+
+    func testASingleFeedScopeAnswersForItself() {
+        let summary = RssSubscription(subscriptionId: "s", feedId: "f")
+        let article = RssSubscription(subscriptionId: "a", feedId: "g", defaultOpenMode: .article)
+        let subs = [summary, article]
+        XCTAssertFalse(FeedDetailPolicy.opensArticle(in: .subscription("s"), folders: [], subscriptions: subs))
+        XCTAssertTrue(FeedDetailPolicy.opensArticle(in: .subscription("a"), folders: [], subscriptions: subs))
+    }
+
+    /// A folder answers for every feed under it, its descendants' included —
+    /// the rollup its badge counts already do.
+    func testAFolderScopeAnswersForItsWholeSubtree() {
+        let folders = [
+            RssFolder(folderId: "tech", name: "Tech"),
+            RssFolder(folderId: "langs", parentFolderId: "tech", name: "Languages"),
+            RssFolder(folderId: "other", name: "Other")
+        ]
+        func sub(_ id: String, _ folder: String, _ mode: RssOpenMode) -> RssSubscription {
+            RssSubscription(subscriptionId: id, feedId: id, folderId: folder, defaultOpenMode: mode)
+        }
+        let allArticle = [sub("a", "tech", .article), sub("b", "langs", .article),
+                          sub("c", "other", .summary)]
+        XCTAssertTrue(
+            FeedDetailPolicy.opensArticle(in: .folder("tech"), folders: folders, subscriptions: allArticle),
+            "a feed in a subfolder shares the folder's answer"
+        )
+        XCTAssertFalse(
+            FeedDetailPolicy.opensArticle(in: .folder("other"), folders: folders, subscriptions: allArticle),
+            "a sibling folder answers for its own feeds only"
+        )
+        // The load-bearing case: flip the descendant alone and the folder
+        // stops agreeing, which is what makes the subtree walk the rule
+        // rather than the top folder's own rows.
+        let mixed = [sub("a", "tech", .article), sub("b", "langs", .summary)]
+        XCTAssertFalse(
+            FeedDetailPolicy.opensArticle(in: .folder("tech"), folders: folders, subscriptions: mixed)
+        )
+    }
+
+    func testAllFeedsNeedsEveryFeedToAgree() {
+        let article = RssSubscription(subscriptionId: "a", feedId: "a", defaultOpenMode: .article)
+        let summary = RssSubscription(subscriptionId: "b", feedId: "b")
+        XCTAssertTrue(FeedDetailPolicy.opensArticle(in: .all, folders: [], subscriptions: [article]))
+        XCTAssertFalse(
+            FeedDetailPolicy.opensArticle(in: .all, folders: [], subscriptions: [article, summary]),
+            "with the open modes mixed the fuller stand-in set stands"
+        )
+    }
+
+    /// Nothing to read is the fullest set, not an article answer — an empty
+    /// scope, a scope whose feeds have not synced, and an unknown id all
+    /// land here.
+    func testAnEmptyScopeKeepsTheFullestStandIns() {
+        XCTAssertFalse(FeedDetailPolicy.opensArticle(in: .all, folders: [], subscriptions: []))
+        XCTAssertFalse(FeedDetailPolicy.opensArticle(in: .folder("gone"), folders: [], subscriptions: []))
+        let article = RssSubscription(subscriptionId: "a", feedId: "a", defaultOpenMode: .article)
+        XCTAssertFalse(
+            FeedDetailPolicy.opensArticle(in: .subscription("missing"), folders: [], subscriptions: [article])
+        )
+    }
+
     func testStickyUpdateWritesOnlyTheToggledField() {
         let sub = RssSubscription(subscriptionId: "s", feedId: "f")
         let article = FeedDetailPolicy.stickyUpdate(for: sub, toggle: .article(showing: true), hasArticleURL: true)

@@ -18,6 +18,9 @@ import CabalmailKit
 /// re-fires for the new folder or message.
 struct DesktopShell: View {
     @Environment(SceneNavigator.self) private var navigator
+    /// Read for one thing too: the local feed catalogue behind the feed
+    /// reader's stand-in set (`feedStandInsShowArticle`).
+    @Environment(AppState.self) private var appState
     /// Read for one thing: whether the reader's flag control will draw a
     /// palette menu, which decides the shape — and so the width — of its
     /// disabled stand-in (`EmptyDetailToolbar`, #2016).
@@ -43,6 +46,13 @@ struct DesktopShell: View {
     /// stands while the search surface (whose leading item is a plain title
     /// of similar size) has the column. Zero until measured.
     @State private var listLeadingToolbarWidth: CGFloat = 0
+    /// Whether an item opened in the selected feed scope will come up on the
+    /// publisher's page, which decides the feed reader's stand-in set
+    /// (`EmptyFeedDetailToolbar`, #2144). False until resolved, which is the
+    /// fullest set and what the pane drew before: the read is a local store
+    /// hit while the pane is empty, so a scope that answers "article"
+    /// settles its own slots well before an item is picked.
+    @State private var feedStandInsShowArticle = false
 
     /// Whether the reader's flag control offers palette rows, i.e. whether
     /// it draws as a split button. The reader asks
@@ -118,10 +128,37 @@ struct DesktopShell: View {
                 mailPlaceholder: ReaderPlaceholderToolbar(
                     items: EmptyDetailToolbar(flagMenuHasRows: flagMenuHasRows)
                 ),
-                feedPlaceholder: ReaderPlaceholderToolbar(items: EmptyFeedDetailToolbar())
+                feedPlaceholder: ReaderPlaceholderToolbar(
+                    items: EmptyFeedDetailToolbar(showsArticle: feedStandInsShowArticle)
+                )
             )
+            .task(id: feedStandInKey) { await resolveFeedStandIns() }
         }
         .wideMailBehaviour(mail)
+    }
+
+    /// What a re-resolve of the stand-in set keys on: the scope, and the
+    /// open item. The item is in it because closing one is when the
+    /// stand-ins come back, and the reader's own Open article toggle writes
+    /// that feed's saved open mode on the way (`FeedDetailPolicy`), so the
+    /// answer can have changed while the item was up.
+    private var feedStandInKey: String {
+        "\(mail.selectedFeedScope?.token ?? "-")|\(mail.selectedFeedItem?.id ?? "-")"
+    }
+
+    /// Reads the scope's saved open mode out of the local feed store. Scope
+    /// and catalogue are both needed, so anything missing falls back to the
+    /// fullest set.
+    private func resolveFeedStandIns() async {
+        guard let scope = mail.selectedFeedScope, let store = appState.client?.rssStore else {
+            feedStandInsShowArticle = false
+            return
+        }
+        let folders = (try? await store.folders()) ?? []
+        let subscriptions = (try? await store.subscriptions()) ?? []
+        feedStandInsShowArticle = FeedDetailPolicy.opensArticle(
+            in: scope, folders: folders, subscriptions: subscriptions
+        )
     }
 
     /// Toolbar host for the search field: a stated width so it right-aligns
