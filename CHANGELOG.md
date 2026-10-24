@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.7] - 2026-10-24
+
+### Changed
+- Apple: **Folder-qualified identifiers for search result rows.** A UID is
+  unique only within one folder, so two unrelated messages in different
+  folders could share one accessibility identifier in cross-folder search
+  results, leaving one of the two rows with no identifier that addressed
+  it. Rows on the global search surface are now
+  `message.row.<folder>/<uid>`; folder lists, and a folder list's
+  Unread/Flagged pills, keep `message.row.<uid>`.
+
+### Fixed
+- Apple: **Feed reader stand-ins follow the feed's saved open mode.** On
+  macOS, a feed scope whose items open on the publisher's page no longer
+  reserves a greyed Remote-content slot in the empty reader: it is not a
+  button an article-showing item draws, so reserving it slid Open article
+  and More 42 pt left the moment an item opened. The stand-in row is now
+  the bar the first item opened in that scope will draw — read from the
+  feed's own default, from every feed under a folder, or from all of them
+  for All Feeds.
+- Android: **Resume prompt names the feed.** The cross-device resume offer
+  for a feed cursor named the article rather than the feed it came from
+  whenever this install's feed catalogue had not been synced: a launch that
+  has never opened Feeds has no local catalogue at all, so the lookup behind
+  the name could never hit. The subscription now takes the same store-first,
+  server-second ladder the item already took.
+
 ## [1.39.6] - 2026-10-24
 
 ### Fixed
