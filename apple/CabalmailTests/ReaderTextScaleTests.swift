@@ -153,7 +153,7 @@ final class ReaderTextScaleTests: XCTestCase {
             + "</article></body></html>"
         let url = try XCTUnwrap(URL(string: "data:text/html;charset=utf-8,"
             + (page.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")))
-        let coordinator = ArticleWebCoordinator(onFailure: { _ in })
+        let coordinator = ArticleWebCoordinator(onFailure: { _ in }, onLeftReader: {})
         let view = coordinator.makeWebView(url: url, dataStoreID: nil)
         view.frame = NSRect(x: 0, y: 0, width: 400, height: 600)
         window.contentView = view

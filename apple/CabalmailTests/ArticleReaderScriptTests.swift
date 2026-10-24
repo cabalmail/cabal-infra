@@ -29,6 +29,25 @@ final class ArticleNavigationPolicyTests: XCTestCase {
         }
     }
 
+    /// #2060: the toolbar asks for the reader for the whole feed, so the
+    /// request is still on after a link out of it. The page reached that way
+    /// is not extracted again.
+    func testAPageReachedThroughALinkIsNotPutBackInTheReader() {
+        XCTAssertFalse(ArticleNavigationPolicy.showsReader(wantsReader: true, leftThroughLink: true))
+    }
+
+    /// The negative control for the rule above: the same request, on a page
+    /// nobody linked out to, still renders the reader. Without it the rule
+    /// "never show the reader" would pass the test above.
+    func testTheReaderStillRendersOnAPageReachedAnyOtherWay() {
+        XCTAssertTrue(ArticleNavigationPolicy.showsReader(wantsReader: true, leftThroughLink: false),
+                      "the item's own page, opened with the reader on")
+        XCTAssertFalse(ArticleNavigationPolicy.showsReader(wantsReader: false, leftThroughLink: false),
+                       "the reader off, as the feed asks")
+        XCTAssertFalse(ArticleNavigationPolicy.showsReader(wantsReader: false, leftThroughLink: true),
+                       "the reader off and a link followed")
+    }
+
     func testALinkTappedInTheReaderLeavesIt() {
         for url in ["https://example.com/next", "http://example.com/next"] {
             XCTAssertTrue(ArticleNavigationPolicy.leavesReader(
@@ -49,6 +68,55 @@ final class ArticleNavigationPolicyTests: XCTestCase {
             XCTAssertFalse(ArticleNavigationPolicy.leavesReader(
                 type: type, url: next, inMainFrame: true, showingReader: true), "\(type.rawValue)")
         }
+    }
+
+    // MARK: - The coordinator's wiring (#2060)
+
+    /// The suppression itself lives in the coordinator's navigation
+    /// callbacks, which need a real link navigation in a real web view to
+    /// drive: `WKNavigationAction` cannot be built, and a `data:` page's
+    /// links are not the http(s) the rule is about. These scans pin the
+    /// three lines the live behaviour rests on, so a revert fails here
+    /// rather than only in a hands-on check.
+    func testTheCoordinatorAsksThePolicyWhetherToRenderTheReader() throws {
+        let body = try Self.coordinatorSource()
+        XCTAssertTrue(
+            body.contains("ArticleNavigationPolicy.showsReader("),
+            "`reconcile` decides through the policy, not from `wantsReader` alone (#2060)"
+        )
+        // The anchor is the binding, not the policy call: a `reconcile` that
+        // read `wantsReader` directly left the policy call standing in the
+        // computed property above it and passed a scan for the call alone.
+        XCTAssertTrue(
+            body.contains("let rendersReader = self.rendersReader"),
+            "`reconcile` reconciles against the rule's answer, not the raw request (#2060)"
+        )
+    }
+
+    /// The committed link-out is what sets the hold and tells the view model,
+    /// which is what moves the toolbar's toggle with the page.
+    func testACommittedLinkOutHoldsThePageAndReportsIt() throws {
+        let body = try Self.coordinatorSource()
+        XCTAssertTrue(body.contains("leftReaderThroughLink = true"),
+                      "the committed link-out holds this page out of the reader (#2060)")
+        XCTAssertTrue(body.contains("onLeftReader()"),
+                      "and is reported to the view model, which owns the toggle's face (#2060)")
+    }
+
+    /// Floor: a mis-rooted scan reads an empty file and passes both scans
+    /// above vacuously.
+    func testTheCoordinatorSourceIsReadable() throws {
+        XCTAssertTrue(try Self.coordinatorSource().contains("final class ArticleWebCoordinator"),
+                      "the coordinator did not load — the scans would be vacuous")
+    }
+
+    private static func coordinatorSource() throws -> String {
+        let apple = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // CabalmailTests
+            .deletingLastPathComponent()   // apple
+        return try String(
+            contentsOf: apple.appendingPathComponent("CabalmailUI/Feeds/Reader/ArticleWebView.swift"),
+            encoding: .utf8)
     }
 
     private struct Navigation {
