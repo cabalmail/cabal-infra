@@ -94,10 +94,18 @@ enum FeedReaderToolbarLayout {
         }
     }
 
-    /// The macOS empty pane's disabled stand-ins: the wide bar of an item
-    /// showing its feed content with an article link, which is its fullest
-    /// set, so a button never moves under the pointer when an item opens.
-    static var standIns: [FeedReaderAction] {
-        wideBar(showingArticle: false, hasArticle: true)
+    /// The macOS empty pane's disabled stand-ins: the wide bar an item
+    /// opened in this scope will draw, so a button never moves under the
+    /// pointer when one opens.
+    ///
+    /// `hasArticle` is true, which reserves Open article and More at the
+    /// trailing end: an item with no link drops them off the end, where
+    /// nothing follows to shift. `showingArticle` is the scope's saved open
+    /// mode (`FeedDetailPolicy.opensArticle(in:folders:subscriptions:)`) and
+    /// it has to follow it, because Remote content sits in the MIDDLE of the
+    /// bar: reserving a slot an article-showing item does not draw slides
+    /// Open article and More 42 pt left as the item opens (#2144).
+    static func standIns(showingArticle: Bool) -> [FeedReaderAction] {
+        wideBar(showingArticle: showingArticle, hasArticle: true)
     }
 }

@@ -214,6 +214,45 @@ enum FeedDetailPolicy {
         )
     }
 
+    /// Whether an item opened in this scope will come up on the publisher's
+    /// page, which is what the macOS empty pane's stand-in set has to follow
+    /// (#2144): Remote content sits in the middle of the wide bar and an
+    /// article-showing item does not draw it, so a stand-in row that
+    /// reserves it slides Open article and More 42 pt left when the item
+    /// opens.
+    ///
+    /// A single feed answers for itself. A folder answers for every feed
+    /// under it, descendants included, as its badge counts do; All Feeds
+    /// answers for all of them. Only unanimity counts: with the open modes
+    /// mixed, one of the two sets has to shift whichever is reserved, and
+    /// the fuller set is what the reader has always reserved and what a feed
+    /// with no stored preference opens on. An empty scope is the same
+    /// answer, for want of anything to read.
+    static func opensArticle(
+        in scope: RssItemScope,
+        folders: [RssFolder],
+        subscriptions: [RssSubscription]
+    ) -> Bool {
+        let inScope: [RssSubscription]
+        switch scope {
+        case .subscription(let id):
+            inScope = subscriptions.filter { $0.subscriptionId == id }
+        case .folder(let id):
+            let foldersByParent = Dictionary(grouping: folders, by: \.parentFolderId)
+            var wanted: Set<String> = [id]
+            var frontier = [id]
+            while let next = frontier.popLast() {
+                for child in foldersByParent[next] ?? [] where wanted.insert(child.folderId).inserted {
+                    frontier.append(child.folderId)
+                }
+            }
+            inScope = subscriptions.filter { wanted.contains($0.folderId) }
+        case .all:
+            inScope = subscriptions
+        }
+        return !inScope.isEmpty && inScope.allSatisfy { $0.defaultOpenMode == .article }
+    }
+
     /// The one field a reader toggle would change on the feed's stored
     /// defaults, or nil when it already matches. The open mode is only
     /// written when the item has an article to show — without one
