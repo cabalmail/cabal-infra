@@ -351,11 +351,23 @@ fun CabalmailNavHost(
                         cursor.state.updatedAt?.let { container.navCursor.markOffered(it) }
                         // Say where Resume lands: the folder, or the feed
                         // behind the item (#1931). An unresolvable feed
-                        // keeps the unnamed sentence.
+                        // keeps the unnamed sentence. Both halves fall back
+                        // to the server, because a launch that has not been
+                        // to Feeds has neither the item nor the catalogue
+                        // locally (#2109).
                         val destination =
-                            ResumeDestination.name(cursor.state, container.rssStore) { feedId, sortKey ->
-                                runCatching { container.requireApi().getItem(feedId, sortKey) }.getOrNull()
-                            }
+                            ResumeDestination.name(
+                                cursor = cursor.state,
+                                store = container.rssStore,
+                                fetchItem = { feedId, sortKey ->
+                                    runCatching { container.requireApi().getItem(feedId, sortKey) }.getOrNull()
+                                },
+                                fetchSubscription = { feedId ->
+                                    runCatching {
+                                        container.requireApi().listSubscriptions().subscriptions
+                                    }.getOrNull()?.firstOrNull { it.feedId == feedId }
+                                },
+                            )
                         val result =
                             snackbarHostState.showSnackbar(
                                 message = destination?.let { resumeMessageIn.format(it) } ?: resumeMessage,
