@@ -11,6 +11,8 @@
 **Duo groundwork:** This is the Duo plan: one fold adapter, the maintainer's Oct 7 spec built on the Wave 3 shells, a CI guard that keeps Duo code compiled, and the first proof on hardware.
 **Written:** 2026-10-12 against stage 50e6022. **Revised 2026-10-13** against the Oct 7 spec and stage 271e2e16 (1.31.1); the first version was written without the spec and re-landed several `duo` branch fixes the spec replaces. Re-check line numbers before starting.
 
+> **Erratum (2026-10-25):** The maintainer does not have a Duo yet: it is back-ordered until December 2026. Session 1 runs until it arrives, every release before then promotes on simulator evidence (Decision 7's default), and the Duo problems under **Priority** reach the maintainer only once the device is in hand. Session 2 starts then, not about 2026-10-23. The work order is unchanged.
+
 ## Progress
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
@@ -31,7 +33,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Session 1, PR 10: compact row drag (#1681; R2) | Not started (2026-10-15) |
 | Session 1, PR 12: drops into compose (R2) | Not started (2026-10-15) |
 | Session 1: the Studio simulator pass | Not started (2026-10-15) |
-| Session 2: with the device | Not started (2026-10-15); the device ships about 2026-10-23 |
+| Session 2: with the device | Not started (2026-10-25); waits for the maintainer's device, back-ordered until December 2026 |
 | Session 3: the one-tree merge (with Decision 9), or the reader-bar refactor alone | Not started (2026-10-15) |
 
 ## Words used here
@@ -91,6 +93,8 @@ Each R1 PR changes the stage TestFlight app on a Duo as soon as it merges, becau
 
 Session 2: one device checklist for you, findings filed as issues, and #1962, #1651 and #1652 closed. Then, bugs first: open portrait becomes the overlay (the message full width, the list sliding over it), on the Duo and in iPad portrait; the laptop layout; sheets placed by window shape; the empty reader shows the folder's unread count; Select mode per Decision 11; the inspector per Decision 10; and the one-tree spike per Decision 9. Session 3 (with Decision 9's merge): the same four tabs on both displays and on iPad, Settings as a sheet everywhere, folders in the system sidebar.
 
+> **Erratum (2026-10-25):** #1652 was closed as not planned on 2026-10-25, at the maintainer's request, because the `duo` branch merge it gated will not happen. Session 2 closes #1962 and #1651.
+
 ## Why
 
 The Duo is the long-term target of the rearchitecture, and nothing Duo-specific has shipped. Waves 2 and 3 built the pieces a close and open need (2.3's per-window `SceneNavigator`, 3.2's `ShellLayout`, 3.3's per-window restore), but every brief from 2.3 on called Duo behaviour best-effort because there was no device. None of them read the Oct 7 spec, a Claude Doc in the maintainer's account that the rearchitecture's sessions did not have.
@@ -112,6 +116,8 @@ The Duo is the long-term target of the rearchitecture, and nothing Duo-specific 
 - Deployment targets are iOS 18, macOS 15, visionOS 2, watchOS 11 (`apple/project.yml:28-32`). So every Duo API stays behind `#if os(iOS) && canImport(SwiftUICore, _version: 8.0.85)` plus `#available(iOS 27.1, *)`, because "The compiler version cannot tell 27.0 from 27.1" (`FoldRegionQuery.swift` on origin/duo). The ratchet counts any `#if` containing `os(` outside `Shell/` and `Platform/` (`scripts/check-platform-conditionals.py:16-21`), so guarded code lives only there.
 
 **The device.** It ships about 2026-10-23: #1652 ("ships 2026-10-23") and press headlines.
+
+> **Erratum (2026-10-25):** The device shipped, but the maintainer's is back-ordered until December 2026. #1652 was closed as not planned on 2026-10-25.
 
 **The shells today** (stage 271e2e16; paths under `apple/CabalmailUI/`).
 - **Two trees.** `SignedInRootView` draws `SplitShell` or `TabShell` (`Shell/SignedInRootView.swift:145-168`), chosen from both size classes and a 600 pt measured floor (`Shell/SectionLayoutPolicy.swift:78, 91-95`). Above the swap: the `SceneNavigator` (route, open message, search, selection and list place through `FolderListHold`), the toast overlay and compose's sheet (`Compose/Windows/ComposeRequestRouter.swift:66`). Below it, and lost on a close or open: the reader's model and web view, the folder panel, the inspector, and every other sheet (Move, Filters, New Folder, New Address, invite, Source, Contact editor). `ShellHandOff` turns the Settings sheet into the Settings tab and back (`Navigation/ShellHandOff.swift:49-62`).
@@ -139,9 +145,13 @@ The Studio also holds `claude/duo-fold-diag` (two diagnostic commits, never push
 
 **Issue notes (GitHub, 2026-10-13).** #1962 passes on the Duo simulator at stage 73175cac ("Not checked on a physical Duo", 2026-10-10). #1647's triage found the reader and compose bar order right; what is left is Select mode's bar and the 27.1 vertical-bar modifiers. #1651 section E is unchecked (tab-bar shield with a side tab bar; toasts in book and laptop poses; every sheet on both displays and a partial fold; a feed article in book pose; a push tap with two windows; reader HTML at inner width); the spec already answers several of its placements. #1651's Sept 19 notes asked for columns split exactly 50/50 on the crease; the Oct 7 spec replaces that with a stored width when flat and the pin in book pose only. #1652's first gate ("the GitHub runner image ... carries Xcode 27.1") is met by accident; its second (a physical device) is Session 2. #1682 stays an accepted limitation.
 
+> **Erratum (2026-10-25):** On 2026-10-25 the open Duo issues were brought in line with this plan. At the maintainer's request, #1652 (the `duo` branch merge gates; the merge is dropped) and #1682 (an accepted limitation) were closed as not planned; the device pass still records address drag direction. Nine that stay open got new titles and a "Current scope" section at the top that points here: #1647, #1648, #1649, #1651, #1666, #1667, #1680, #1686 and #1692. #1686 now tracks the open-portrait overlay and #1649 the laptop layout. #1681, #1962 and #1963 got status comments only.
+
 ## The plan
 
 ### Session 1: before the device (now to about 2026-10-23)
+
+> **Erratum (2026-10-25):** Session 1 now runs until the maintainer's device arrives, December 2026 at the earliest.
 
 Rules for every PR: if a release PR is open, nothing merges to `stage` until it has merged. Build with the Xcode CI actually selects (read "Xcode is set to" in the latest Apple run; 27.1 beta 1 today), chosen per command with `DEVELOPER_DIR`, never `xcode-select`. At most two open Apple PRs, and only PR 1 may run beside another. Never edit a source scan's text or anchor without the maintainer's yes up front. Layout follows size class, window shape and the active fold region, never the device: no `hostHasFold`, no idiom check, no pose names in code 〔.7625〕〔.19772〕. Cabalmail adds no animation of its own on a close, open or fold, except the divider's 〔.22320〕.
 
@@ -155,6 +165,8 @@ Priority for the R1 cut: PR 2, PR 5, PR 7, PR 3, PR 4, PR 6, PR 8, PR 9, PR 11. 
 - any posture or fold command in `xcrun simctl help`.
 
 Then one of two outcomes. If a 27.1 runtime can be had in about ten minutes, replace the probe with an `ios-duo` leg: Xcode by path (`/Applications/Xcode_27.1.app`, the image's symlink), the Duo by explicit name (through `create-sim.sh` if apple-ci-and-build-config.md has landed it, otherwise an inline parameter for this leg only), then build and run the iOS-hosted app tests. No Kit tests. Trigger per Decision 1, `continue-on-error`, outside `apple-gate`. Verify with a throwaway commit that breaks code inside the 27.1 guard. If no runtime is attainable, close the PR, comment the probe's findings on #1652, and re-probe when the image version changes. PR 2's tripwire is then the only guard. Risk: medium; the missing runtime is the likely case.
+
+> **Erratum (2026-10-25):** #1652 is closed. If no runtime is attainable, record the probe's findings in PR 1's **Status:** line; a comment on the closed #1652 is optional.
 
 **Status:** Not started (2026-10-15).
 
@@ -247,11 +259,16 @@ Write the consolidated device checklist from this pass, the spec's "What needs h
 
 ### Session 2: with the device (from about 2026-10-23)
 
+> **Erratum (2026-10-25):** Session 2 starts when the maintainer's device arrives, December 2026 at the earliest; it is back-ordered.
+
 **Status:** Not started (2026-10-15).
 
 1. **Device pass, part a (on arrival, on whatever TestFlight build is current).** The maintainer runs the checklist; the session prepares builds and files issues. The spec's hardware questions come first: the inner display's point size and fold frame (every number here assumes 951 × 669 pt); the keyboard in book, laptop, open wide and open portrait (height, hide key, formatting row, and whether it keeps the caret off the fold); tap accuracy at 20, 32, 44, 56 and 64 pt from the crease; whether taps on a laptop's upright half rock the device and how many list rows fit below the fold; fold-region timing for the hinge hold; tent; StandBy; flipping; Split View halves; a pinned video; leading swipes and the edge Back swipe with the strip on the left. Also record without re-proposing: duplicate toasts with two scenes; the list showing its top until the refresh after a close or open; the inspector and folder panel closing; address drag direction (#1682); notifications with two windows; a fold mid-gesture. Note whether two closed iPhone issues show up on the Duo, without reopening them: #2029 (a stray Reply after Command-R on the iPhone tab layout) and #1669 (a safe-area shift after rotation).
 2. **Part b (once R1 is on a stage TestFlight build).** Re-run R1's rows: the columns, toasts, Search, the reader bar, compose, margins.
 3. Pass list-place findings to multi-window-and-restore.md and sqlite-mail-store.md. Close #1962 on a pass, #1651 when section E is covered, #1652 when both gates are met. Ask the maintainer whether to delete `origin/duo`.
+
+   > **Erratum (2026-10-25):** #1652 was closed as not planned on 2026-10-25, so only #1962 and #1651 close here.
+
 4. Ask Decisions 10 and 11 in one batch, then one PR each, bugs first:
    - the issues the pass filed;
    - **open portrait as the overlay** (#1686): in any tall regular window, the Duo's open portrait and iPad portrait alike, the message takes the full width and the list slides over it from a back button or an edge swipe, shown first when nothing is selected 〔.49274〕;
@@ -334,11 +351,15 @@ What the Studio pass and the device checklist take from the Wave 2 and 3 scope d
 
 **Read:** this plan and `00-working-agreements.md` from `docs/1.x/post-wave-3/`. What the session needs from the 3.2 and 3.3 scope docs and the Wave 3 TestFlight checklist is in "Background from the rearchitecture", and the Studio's Duo refs are listed under "The `duo` branch". Link the spec doc. Point at #1651, #1652 and #1963.
 
+> **Erratum (2026-10-25):** #1652 is closed; point at #1651 and #1963.
+
 **Session 2 brief (paste when the device is in hand):** "Run Session 2 of duo-support.md. Here are Session 1's device checklist and its PR list. Start with part a of the device pass on the current TestFlight build, then ask Decisions 10 and 11 in one batch." Give it the same files plus Session 1's scope doc and checklist, and point it at `../platform-conditionals-followups.md`, FU-12.
 
 > **Erratum (2026-10-16):** Session 1's scope doc, answers and device checklist are not files a later session can be handed. Session 2 reads the answers under this plan's decisions, the PR list in its Progress table, and the device checklist from the `needs-verification` issues its Status lines link (00-working-agreements.md, "Working from the repo"). If Session 1 did not record them there, ask the maintainer for them first.
 
 **Rigs:** the Mac Studio (the Duo simulator, Device Hub, the stage-credential helper); the Mac mini for soaks and iPad and iPhone simulators; CI; the maintainer's Duo from about 2026-10-23.
+
+> **Erratum (2026-10-25):** The maintainer's Duo arrives in December 2026 at the earliest; it is back-ordered.
 
 ## Risks and checks
 
