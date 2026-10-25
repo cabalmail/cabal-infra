@@ -218,7 +218,10 @@ fun MessageDetailScreen(
                         onClick = { viewModel.setFlag("\\Seen", state.envelope?.isSeen != true) },
                         enabled = !state.busy,
                     ) {
-                        Icon(Icons.Default.Email, contentDescription = stringResource(R.string.toggle_read))
+                        Icon(
+                            Icons.Default.Email,
+                            contentDescription = stringResource(readerReadToggleLabel(state.envelope?.isSeen == true)),
+                        )
                     }
                     IconButton(
                         onClick = { viewModel.setFlag("\\Flagged", state.envelope?.isFlagged != true) },
@@ -615,6 +618,18 @@ internal fun readerFlagToggle(isFlagged: Boolean): ReaderFlagToggle =
     } else {
         ReaderFlagToggle(label = R.string.add_flag, filledStar = false)
     }
+
+/**
+ * What the reader's read toggle says for the message's state (#2171). Its
+ * label was the constant "Toggle read" in both states, so TalkBack never
+ * named what a tap would do, while the flag toggle beside it and the feed
+ * reader's matching button both do. The strings are the mail surface's own
+ * `mark_read` / `mark_unread` -- what the message list's menu, its row
+ * actions and its swipes already say -- rather than the feed reader's
+ * `feed_mark_as_*` wording. Pure, so it unit-tests without Compose.
+ */
+@StringRes
+internal fun readerReadToggleLabel(isSeen: Boolean): Int = if (isSeen) R.string.mark_unread else R.string.mark_read
 
 /** SPF/DKIM/DMARC verdicts and the priority marker (plan §4.3). */
 @Composable
