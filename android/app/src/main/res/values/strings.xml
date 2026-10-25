@@ -17,7 +17,6 @@
     <string name="no_subject">(no subject)</string>
     <string name="flagged">Flagged</string>
     <string name="auth_warning">Authentication failed</string>
-    <string name="toggle_read">Toggle read</string>
     <string name="archive">Archive</string>
     <string name="dispose_to_trash">Move to Trash</string>
     <string name="purge">Delete permanently</string>
