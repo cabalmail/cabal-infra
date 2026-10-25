@@ -27,6 +27,8 @@ The roadmap parks this under `0.10.x` because the per-phase changes are individu
 
 - Public ingress to IMAP (143, 993) and SMTP submission (465, 587) is closed at the NLB *and* at the security group. A scan of the NLB's public ENIs returns no listener on those ports.
 - Public DNS no longer resolves `imap.<control_domain>` or `smtp-out.<control_domain>`. Inside the VPC, both names continue to resolve via the private Route 53 zone *or* via Cloud Map private DNS.
+
+> **Erratum (2026-10-25):** there is no longer a private Route 53 zone for the control domain to fall back on. It was named for the whole control domain, which made it authoritative inside the VPC for every address subdomain too and 553-rejected those addresses as envelope senders at `smtp-in` (#2064); it was removed rather than narrowed. Cloud Map remains, and is what every in-VPC IMAP caller already uses. A phase that deletes the public `imap`/`smtp-out` records and still wants those names resolvable inside the VPC must create a private zone named for that one name (`imap.<control_domain>`), not for the control domain.
 - Every Lambda that reaches IMAP, SMTP submission, S3, DynamoDB, SSM, SNS, Cognito, or CloudWatch Logs runs in private subnets (`vpc_config { subnet_ids = var.private_subnet_ids, ... }`).
 - High-volume / per-request AWS API traffic from those Lambdas (S3, DynamoDB, SSM, CloudWatch Logs, Cognito, SNS) goes through VPC endpoints, not the NAT instance. Low-volume / global-service traffic (Route 53) keeps egressing through NAT.
 - Lambda code stops trusting client-supplied `body['host']` / `body['smtp_host']` for IMAP/SMTP target selection. The container host is pinned server-side, derived from configuration (env var or Cloud Map name).
@@ -88,6 +90,8 @@ From [`terraform/infra/modules/vpc`](../../terraform/infra/modules/vpc):
 - One VPC. Public and private subnets, one of each per AZ, derived by `cidrsubnet(var.cidr_block, local.bit_offset, ...)`.
 - A single NAT (instance, by default; gateway optional). Private route tables point `0.0.0.0/0` at it. Quiesce removes that route.
 - A private Route 53 zone for `<control_domain>`; private records for `smtp-out` and `smtp-in` exist (mirrored from the public NLB aliases). `imap` is *intentionally absent* from the private zone — the comment in [`modules/elb/dns.tf:24-39`](../../terraform/infra/modules/elb/dns.tf) explains: the NLB's port-25 listener forwards to smtp-in, not imap, so an NLB alias for `imap` here would misdirect mail delivery. Internal IMAP access uses Cloud Map (`imap.cabal.internal`).
+
+> **Erratum (2026-10-25):** two claims here are wrong. `imap` was *not* absent from the private zone -- the zone held A aliases for all three tiers, each byte-identical to its public sibling, and `modules/elb/dns.tf` said so in the comment on the private record. And the zone itself is gone as of #2064: it was named for the control domain, so it shadowed every address subdomain and made `smtp-in` refuse those addresses as envelope senders. The three tier names now resolve from the public zone, inside the VPC as well as outside it.
 - A Cloud Map private DNS namespace `cabal.internal` is registered for the IMAP service ([`modules/ecs/service_discovery.tf`](../../terraform/infra/modules/ecs/service_discovery.tf)). There is no Cloud Map registration for `smtp-out` yet.
 - No `aws_vpc_endpoint` resources exist anywhere in the stack. Lambda-to-AWS traffic from the VPC today goes over NAT.
 

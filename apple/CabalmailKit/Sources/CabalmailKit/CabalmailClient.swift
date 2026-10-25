@@ -332,8 +332,11 @@ public actor CabalmailClient {
     ///
     /// Returns the new copy's server coordinates for the caller to thread
     /// into its next save (and into `send(_:discardingDraft:)`). Nil means
-    /// the server couldn't report UIDPLUS coordinates; the draft saved,
-    /// but the next save will create a fresh copy instead of replacing.
+    /// the draft saved but its coordinates are unknown: the server couldn't
+    /// report UIDPLUS, or the reply was unreadable and the copy could not be
+    /// resolved. Either way the next save creates a fresh copy instead of
+    /// replacing, and the caller must drop the ref it was holding — that
+    /// save retired it (#2102).
     ///
     /// Errors propagate to the caller — the compose UI surfaces them as a
     /// banner rather than silently retrying, because losing draft text to a
@@ -346,12 +349,28 @@ public actor CabalmailClient {
         replacing prior: DraftServerRef? = nil
     ) async throws -> DraftServerRef? {
         let stamped = message.stampingMessageId()
-        let response = try await Self.submitDraft(
-            stamped,
-            api: apiClient,
-            imapHost: configuration.imapHost,
-            replacing: prior
-        )
+        let response: ApiSaveDraftResponse
+        do {
+            response = try await Self.submitDraft(
+                stamped,
+                api: apiClient,
+                imapHost: configuration.imapHost,
+                replacing: prior
+            )
+        } catch CabalmailError.decoding {
+            // The Lambda APPENDs the new copy and expunges the one it
+            // supersedes before it builds its reply, so a 200 whose body
+            // won't decode is a save that landed with only its coordinates
+            // lost. Throwing told the compose session the save had failed,
+            // and it went on quoting the UID this save had already retired:
+            // the retry replaced nothing and left the user two copies
+            // (#2102). Go and find the copy we just wrote instead.
+            return await Self.resolveSavedDraft(
+                messageId: stamped.messageId,
+                api: apiClient,
+                imapHost: configuration.imapHost
+            )
+        }
         guard let uid = response.uid, let uidValidity = response.uidValidity else { return nil }
         return DraftServerRef(uid: uid, uidValidity: uidValidity)
     }

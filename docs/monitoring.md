@@ -60,7 +60,7 @@ Kick off the **Build and Deploy Infrastructure** workflow (same process as in [s
 - The `backup_heartbeat` Lambda + EventBridge rule.
 - The `cabal-healthchecks-iac` Lambda in private subnets.
 - Three CloudWatch metric filters per mail tier emitting to `Cabalmail/Logs`.
-- Route 53 records `uptime.<control-domain>`, `ntfy.<control-domain>`, `heartbeat.<control-domain>`, `metrics.<control-domain>` (in both the public zone and the VPC private zone, since the private zone shadows the public zone for the control domain).
+- Route 53 records `uptime.<control-domain>`, `ntfy.<control-domain>`, `heartbeat.<control-domain>`, `metrics.<control-domain>` in the public zone. (Through 1.25.1 each was published twice, because the VPC held a Route 53 private zone named for the control domain that shadowed the public zone for every name below it. That zone is gone -- see #2064 -- so one copy is all a VPC-internal caller needs.)
 
 Note the Terraform output `alert_sink_function_url` -- you will need it in step 9 and step 14.
 
@@ -523,7 +523,7 @@ Notes below are lessons from the actual deploy. Each is also reflected in code; 
 - **Monitoring ALB needs >=2 AZs.** ALBs require subnets in at least two availability zones. Production has two AZs in `TF_VAR_AVAILABILITY_ZONES`; dev and stage have one each, and the per-AZ `cidrsubnet` math in the VPC module makes adding a second AZ destructive (every subnet is renumbered). The monitoring stack was deployed directly to prod for that reason.
 - **ALB SG needs egress to Cognito.** The `authenticate-cognito` action calls Cognito's hosted UI domain to swap the auth code for tokens. Without an HTTPS egress rule on the ALB SG, the call drops and the ALB returns 500 on `/oauth2/idpresponse`. Egress to `0.0.0.0/0:443` is the minimum.
 - **Lambda Function URLs need TWO resource-policy statements.** With `authorization_type = NONE`, AWS requires both `lambda:InvokeFunctionUrl` (auth-layer check) and `lambda:InvokeFunction` scoped to URL callers via `lambda:InvokedViaFunctionUrl=true` (execute layer). Missing either returns 403 at the URL gateway. The aws Terraform provider >= **6.28.0** added `invoked_via_function_url = true` on `aws_lambda_permission`; earlier versions can't express this condition declaratively.
-- **VPC private hosted zone shadows the public zone for the control domain.** Records that exist only in the public zone don't resolve from inside the VPC. The monitoring module mirrors `admin.`, `uptime.`, `ntfy.`, `heartbeat.`, `metrics.` into the private zone so VPC-internal callers (Kuma probes, the IaC Lambda) can resolve them. Mail-tier hosts (`imap.`, `smtp-in.`, `smtp-out.`) are intentionally not mirrored -- Kuma's TCP probes for those tiers point at the NLB's public DNS name directly.
+- **There is no VPC private hosted zone for the control domain any more.** There used to be, and it was authoritative inside the VPC for every name below the control domain, so each monitoring record needed a private mirror or a Kuma probe could not resolve it. That zone also shadowed every address subdomain of the control domain, which 553-rejected those addresses as envelope senders at `smtp-in` (#2064), so it was retired and the mirrors with it. VPC-internal callers now get the public answer. If a name ever needs a different answer inside the VPC, give it a private zone named for THAT name -- never one named for the control domain.
 
 ### EFS access points
 

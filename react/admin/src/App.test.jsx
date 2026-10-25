@@ -522,6 +522,46 @@ describe('sign-up', () => {
     ]);
   });
 
+  // Issue #2141: the form took `+1 (555) 555-0123` and `doRegister` sent it
+  // as typed, so Cognito answered InvalidParameterException and the screen
+  // said only "Registration failed.". Both halves are read here: what
+  // reaches the wire, and what the user is told when a refusal does arrive.
+  async function fillSmsSignUp(phone) {
+    config = { ...CONFIG, sms_enabled: true };
+    await renderSignedOut();
+    fireEvent.click(screen.getAllByText('Create an account')[0]);
+    await screen.findByLabelText('Phone number');
+    const set = (label, name, value) => fireEvent.change(screen.getByLabelText(label), { target: { name, value } });
+    set('Username', 'userName', 'newbie');
+    set('Phone number', 'phone', phone);
+    set('Invitation code', 'inviteCode', 'right');
+    set('Password', 'password', 'Long-enough-pw1');
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'Long-enough-pw1' } });
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+  }
+
+  it('sends a typed phone number as E.164', async () => {
+    cognito({
+      SignUp: [reply(200, { UserConfirmed: false, CodeDeliveryDetails: { DeliveryMedium: 'SMS', Destination: '+*******0123' } })],
+    });
+    await fillSmsSignUp('+1 (555) 555-0123');
+
+    await screen.findByText('Check your phone for a verification code.');
+    expect(sentTo('SignUp')[0].UserAttributes).toEqual([
+      { Name: 'preferred_username', Value: 'newbie' },
+      { Name: 'phone_number', Value: '+15555550123' },
+    ]);
+  });
+
+  it("names the phone number when Cognito refuses its format", async () => {
+    cognito({ SignUp: [cognitoError(400, 'InvalidParameterException', 'Invalid phone number format.')] });
+    await fillSmsSignUp('+15555550123');
+
+    await screen.findByText('Invalid phone number format.');
+    expect(screen.queryByText('Registration failed.')).not.toBeInTheDocument();
+  });
+
   it('reports an auto-confirmed account as pending approval', async () => {
     cognito({ SignUp: [reply(200, { UserConfirmed: true, UserSub: 's' })] });
     await fillSignUp('right');

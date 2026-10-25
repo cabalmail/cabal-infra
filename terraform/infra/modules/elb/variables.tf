@@ -31,8 +31,9 @@ variable "ecs_relay_target_group_arn" {
 # front of them.
 
 # -- Private DNS -------------------------------------------------
-
-variable "private_zone_id" {
-  type        = string
-  description = "Route 53 private zone ID for the control domain. Records here let containers inside the VPC resolve tier hostnames (imap, smtp-in, smtp-out) without hitting the public zone."
-}
+#
+# There is deliberately no private zone variable. The VPC used to hold a
+# Route 53 private zone named for the whole control domain, and these tier
+# names were mirrored into it because that zone shadowed the public one for
+# every name below it. The zone is gone (#2064); inside the VPC the public
+# records in dns.tf are what resolve, so there is nothing to mirror.

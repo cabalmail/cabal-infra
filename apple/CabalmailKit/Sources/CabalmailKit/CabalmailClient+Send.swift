@@ -71,6 +71,60 @@ extension CabalmailClient {
         ))
     }
 
+    /// How far down `Drafts` to look for the copy a save with an unreadable
+    /// reply wrote. It is the newest arrival there, so offset 0 is the
+    /// answer; the rest of the window is slack for copies another device
+    /// appended in between.
+    static let draftResolveWindow: UInt32 = 20
+
+    /// Resolves the coordinates of the draft copy `/save_draft` has just
+    /// written, by the Message-ID this client stamped on it, after a 200
+    /// whose body could not be decoded (#2102).
+    ///
+    /// The stamp is a fresh UUID per save and the Lambda writes the header
+    /// verbatim, so at most one copy in `Drafts` can carry it: this is an
+    /// exact match on identity, not a guess about which copy is newest.
+    ///
+    /// Returns nil on anything that goes wrong rather than throwing. The
+    /// save itself committed, so the one thing this must never do is turn a
+    /// landed save back into a reported failure; nil leaves the caller in
+    /// `saveDraft`'s documented coordinates-unknown state.
+    static func resolveSavedDraft(
+        messageId: String?,
+        api: ApiClient,
+        imapHost: String
+    ) async -> DraftServerRef? {
+        guard let messageId, let wanted = angleWrapped(messageId) else { return nil }
+        let folder = FolderTree.draftsPath
+        do {
+            // UIDVALIDITY comes from STATUS: `/list_envelopes` reports uids
+            // only, and a ref without both halves is one the replace guard
+            // would decline.
+            let status = try await api.folderStatus(host: imapHost, folder: folder)
+            guard let uidValidity = status.uidValidity else { return nil }
+            let ids = try await api.listMessageIds(
+                host: imapHost,
+                folder: folder,
+                sortOrder: SortCriterion.default.direction.wireOrder,
+                sortField: SortCriterion.default.field.wireField,
+                page: MessageIdPage(offset: 0, limit: draftResolveWindow)
+            )
+            // Offset 0, so a defensive prefix is always correct — and it
+            // bounds an older Lambda that ignores the page and answers with
+            // the whole folder.
+            let head = Array(ids.prefix(Int(draftResolveWindow)))
+            guard !head.isEmpty else { return nil }
+            let envelopes = try await api.listEnvelopes(host: imapHost, folder: folder, ids: head)
+            let match = envelopes.first { envelope in
+                envelope.messageId?.compactMap(angleWrapped).contains(wanted) == true
+            }
+            guard let match else { return nil }
+            return DraftServerRef(uid: match.id, uidValidity: uidValidity)
+        } catch {
+            return nil
+        }
+    }
+
     /// Slots requested per `/upload_url` call. The endpoint refuses more
     /// than 32 files in one request, but that bound is about the shape of a
     /// single request rather than how many attachments a message may carry

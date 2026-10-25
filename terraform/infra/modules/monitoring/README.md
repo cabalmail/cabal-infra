@@ -70,7 +70,7 @@ Defined in [`docker/prometheus/rules/alerts.yml`](../../../../docker/prometheus/
 | `control_domain` | yes | Used to derive the four hostnames (`uptime`, `ntfy`, `heartbeat`, `metrics`). |
 | `region` | yes | AWS region. |
 | `vpc_id`, `vpc_cidr_block`, `public_subnet_ids`, `private_subnet_ids` | yes | VPC inputs. |
-| `zone_id`, `private_zone_id` | yes | Public + private hosted zones for the control domain. |
+| `zone_id` | yes | Public hosted zone for the control domain. |
 | `cert_arn` | yes | ACM cert ARN for `*.<control-domain>`. |
 | `ecs_cluster_id`, `ecs_cluster_capacity_provider`, `efs_id` | yes | Cluster + EFS inputs. |
 | `tier_log_group_names` | yes | Map of mail-tier CloudWatch log group names from `module.ecs.tier_log_group_names`; metric filters target these. |
