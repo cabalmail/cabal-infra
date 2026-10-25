@@ -429,9 +429,10 @@ are expanded in the sections further down.
 
 ## GitHub secrets for CI
 
-`.github/workflows/apple.yml` has four jobs. The `kit-test` and `app-build`
-jobs run unsigned (`CODE_SIGNING_ALLOWED=NO`) and require **no** secrets —
-PRs from any branch get green CI out of the box.
+The test and build jobs in `.github/workflows/apple.yml` (`kit-test`,
+`app-test`, `ios-app-test`, `app-build`) run unsigned
+(`CODE_SIGNING_ALLOWED=NO`) and require **no** secrets — PRs from any
+branch get green CI out of the box.
 
 The `upload-ios` and `upload-mac` jobs sign and push to TestFlight using
 **manual code signing**: no `-allowProvisioningUpdates`, no auto-creation of
@@ -711,19 +712,25 @@ TestFlight upload and skips the notarization steps.
 
 ## CI workflow
 
-`.github/workflows/apple.yml` has four jobs:
+`.github/workflows/apple.yml` runs on PRs that touch `apple/**` or its
+own CI files, on pushes to `main` and `stage` that do, and on
+`workflow_dispatch`. Its jobs:
 
 | Job | Runs when | What it does |
 |---|---|---|
-| `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint and the platform-conditionals check, then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) across macOS / iOS / visionOS destinations |
-| `app-build` | Same | Unsigned `xcodebuild build`, one leg per scheme: `Cabalmail` (iOS), `CabalmailVision` (visionOS), `CabalmailMac` (macOS), `CabalmailWatch` (watchOS) |
-| `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload → attach to the branch's internal test group |
-| `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
+| `kit-test` | Every run | SwiftLint and the platform-conditionals check (macOS leg only), then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) on macOS and iOS, and on visionOS too except on a PR |
+| `app-test` | Every run | The `CabalmailMacTests` app-layer suite, hosted by `CabalmailMac` |
+| `ios-app-test` | Every run | The `CabalmailiOSTests` app-layer suite, hosted by the iOS app on a simulator |
+| `app-build` | PRs, and `workflow_dispatch` from a branch other than `main` or `stage` | Unsigned `xcodebuild build`: `CabalmailVision` (visionOS) and `CabalmailWatch` (watchOS) on a PR, where the two test suites already build the iOS and Mac apps; all four schemes, adding `Cabalmail` (iOS) and `CabalmailMac` (macOS), from another branch. Skipped on `main` and `stage` runs, whose upload archives are the device builds |
+| `apple-gate` | Every run | The one check that sums up the four jobs above |
+| `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass |
+| `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → attach to the branch's internal test group |
+| `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
 
-`upload-ios` gracefully no-ops (with a workflow warning) when its
-required secrets are missing. `upload-mac` fails the workflow in the
-same situation — treat a missing Mac signing secret as a release-blocking
-bug. Build and test jobs never require secrets.
+Both upload jobs no-op, with a workflow warning, when their required
+secrets are missing. Because `app-build` skips `main` and `stage` runs,
+such a run then builds nothing for a device. Build and test jobs never
+require secrets.
 
 Manual signing installs a pre-created provisioning profile from a GitHub
 secret via `.github/actions/install-provisioning-profile` (a small
@@ -1104,7 +1111,8 @@ difference goes in one of two places:
   their view-controller forms) is an adapter too, wherever it lives.
 
 `scripts/check-platform-conditionals.py` holds the line in CI, beside
-SwiftLint (`lint.yml`'s swift job and `apple.yml`). In every file under
+SwiftLint in `apple.yml`'s `kit-test` macOS leg, and on its own in
+`lint.yml`'s `platform-conditionals` job. In every file under
 `apple/CabalmailUI/` outside `Shell/` and `Platform/`, the wrapper files
 aside, it counts the lines that start with `#if` and test `os(...)` or
 `canImport` of UIKit, AppKit or EventKitUI. The files that still hold
