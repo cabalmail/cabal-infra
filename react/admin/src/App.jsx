@@ -15,6 +15,7 @@ const Security = React.lazy(() => import('./Security'));
 
 // Pre-login Components
 import SignUp from './SignUp';
+import { normalizePhone } from './SignUp/signUpFields';
 import Login from './Login';
 import Verify from './Verify';
 import MfaChallenge from './MfaChallenge';
@@ -451,7 +452,10 @@ function App() {
       // Phone number is only collected when the pool is wired for SMS
       // (a 10DLC campaign registration id is configured). See issue #712
       // and terraform/infra/modules/user_pool/main.tf.
-      phone: state.sms_enabled ? state.phone : null,
+      // Normalized to E.164 here, because that is what `signUp` documents
+      // and what Cognito takes: the form accepts the punctuation people
+      // type, and sending it as typed was refused unactionably (#2141).
+      phone: state.sms_enabled ? normalizePhone(state.phone) : null,
       // Shared-secret invitation code, validated by the check_invite
       // Cognito pre-signup Lambda. The client sends it as validation
       // data so it never lands on the user record.
