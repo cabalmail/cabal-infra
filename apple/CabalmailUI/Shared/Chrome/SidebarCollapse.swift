@@ -67,9 +67,13 @@ struct SidebarCollapse: Codable, Equatable {
     }
 
     /// `set` encoded for this window's scene storage, tagged with `account`.
+    /// Keys are sorted too: `JSONEncoder` otherwise emits them in an order
+    /// that varies from one encode to the next within a process.
     static func scene(_ set: Set<String>, for account: StoredRoute.Account) -> String {
         let payload = SidebarCollapse(account: account, collapsed: set.sorted())
-        guard let data = try? JSONEncoder().encode(payload),
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        guard let data = try? encoder.encode(payload),
               let encoded = String(bytes: data, encoding: .utf8)
         else { return "" }
         return encoded

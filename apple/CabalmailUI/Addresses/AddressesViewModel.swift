@@ -6,7 +6,7 @@ import CabalmailKit
 /// `CabalmailClient.addresses` and `revokeAddress` with list state, loading
 /// indicators, and an error banner.
 ///
-/// Mirrors the React app's `react/admin/src/Addresses/List.jsx` behavior:
+/// Mirrors the React app's `react/admin/src/Addresses/Rail.jsx` behavior:
 /// one round-trip on open, a force-refresh on pull-to-refresh, and an
 /// immediate in-place removal on revoke so the UI doesn't wait on the API
 /// round-trip to hide the row.

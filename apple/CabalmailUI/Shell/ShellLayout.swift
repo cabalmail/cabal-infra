@@ -91,4 +91,8 @@ extension EnvironmentValues {
     /// This window's layout shell (`ShellLayout`), published by
     /// `SignedInRootView`.
     @Entry var shellLayout: ShellLayout = .standalone
+    /// Which of the window's view trees the views beneath this belong to
+    /// (`TreeGate`). The wide shells publish theirs (`wideMailBehaviour`);
+    /// nil where there is no swap to be on the wrong side of.
+    @Entry var mailTree: UUID?
 }

@@ -42,6 +42,9 @@ struct SplitShell: View {
     @State private var folderPanelPresented = false
     /// Live width of the content (message list) column.
     @State private var contentColumnWidth: CGFloat = 0
+    /// Whether the split view was first laid out too narrow to tile, and so
+    /// has to be built again at the window's real width (#1988).
+    @State private var retile = SplitRetilePolicy()
     /// Persisted width of the message-list (content) column.
     /// `NavigationSplitView` doesn't report where a user drags the native
     /// list-reader divider, so the column is pinned to this width and a
@@ -108,6 +111,29 @@ struct SplitShell: View {
         }
         .wideMailBehaviour(mail)
         .settingsSheetPresenter()
+        // Each width the split view is laid out at, which during a Zoom out
+        // of compact is not the window's: UIKit lays the split out once at an
+        // intermediate width (534 pt inside an 834 pt window, measured on
+        // iPadOS 27), decides against tiling there, and keeps that decision
+        // at full width. The new identity is what makes it decide again
+        // (`SplitRetilePolicy`, #1988).
+        //
+        // `splitWidth` is the right reading and this is the only place that
+        // has it: the narrow pass is the split view's own, and a geometry
+        // reader hung outside the shell's modifiers — one modifier further
+        // out than the reporting one that writes this — measures 834
+        // throughout and never sees it.
+        .onChange(of: mailState.splitWidth) { _, newWidth in
+            let generation = retile.generation
+            retile.recordLayout(width: newWidth)
+            guard retile.generation != generation else { return }
+            // The rebuilt split is a new tree of this window's, as a fold's
+            // is: the navigator hands it the route — the folder, and the open
+            // message parked for its list to reselect — and the list it
+            // replaces cannot write while it is torn down (`TreeGate`).
+            mailState.tree = UUID()
+        }
+        .id(retile.generation)
     }
 
     /// Column-header host for the search field, where the list column's own
