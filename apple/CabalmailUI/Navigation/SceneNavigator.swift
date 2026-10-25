@@ -234,6 +234,15 @@ final class SceneNavigator {
         listHold.handOff(isWide: isWide, folderPath: selectedFolder?.path, parkingIn: restores)
         selectedEnvelope = nil
         compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
+        // A result the window was reading in search when its layout changed:
+        // the split draws search in place of its list, so its reader takes it
+        // (#2184). The tab layouts' Search tab takes its own on appear
+        // (`SearchView`). Taken before the landing below, so a window with no
+        // folder open loses it to the folder the landing picks, as any open
+        // message is lost to a folder pick.
+        if isWide, let result = shellHandOff.takeSearchResult() {
+            applyMessage(result, isSearching: true)
+        }
         guard let coordinator = coordinator() else { return }
         if isWide, route.section == .feeds {
             if feeds.scope != nil {
@@ -511,6 +520,9 @@ final class SceneNavigator {
         guard envelope != selectedEnvelope else { return }
         selectedEnvelope = envelope
         compactColumn = CompactColumnPolicy.column(hasSelectedMessage: envelope != nil, current: compactColumn)
+        // What a later layout swap hands to the layout's search surface
+        // (#2184); a message opened outside search is not a result.
+        shellHandOff.searchResultChanged(isSearching ? envelope : nil)
         // While searching, the open message is a result with no single folder
         // to anchor the cursor to.
         guard !isSearching, let folderPath = selectedFolder?.path else { return }
@@ -740,6 +752,20 @@ extension SceneNavigator {
             search?.filterTab = .all
             search?.search.clear()
         }
+    }
+
+    /// The Search tab reports the result it has open, so the next layout
+    /// swap can hand it to the split's reader (#2184). The split's own open
+    /// result is reported by `applyMessage`.
+    func searchTabResultChanged(_ envelope: Envelope?) {
+        shellHandOff.searchResultChanged(envelope)
+    }
+
+    /// The result a swap kept for the Search tab, taken once
+    /// (`ShellHandOff.takeSearchResult`). The split's reader takes its own in
+    /// `rehand`.
+    func takeHandedOffSearchResult() -> Envelope? {
+        shellHandOff.takeSearchResult()
     }
 
     /// The split's Settings sheet was dismissed.
