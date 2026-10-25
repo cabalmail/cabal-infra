@@ -260,9 +260,9 @@ extension ComposeViewModel {
     func pushDraftToServer(_ message: OutgoingMessage) async -> Bool {
         do {
             try await serverDraftQueue.runThrowing {
-                if let ref = try await self.client.saveDraft(message, replacing: self.serverDraftRef) {
-                    self.adoptServerDraftRef(ref)
-                }
+                self.adoptServerDraftRef(
+                    try await self.client.saveDraft(message, replacing: self.serverDraftRef)
+                )
             }
             try? await draftStore.remove(id: draftId)
             stop()
@@ -296,9 +296,9 @@ extension ComposeViewModel {
         let message = buildOutgoingMessage(from: fromEmail, bodies: bodies)
         await serverDraftQueue.run {
             do {
-                if let ref = try await self.client.saveDraft(message, replacing: self.serverDraftRef) {
-                    self.adoptServerDraftRef(ref)
-                }
+                self.adoptServerDraftRef(
+                    try await self.client.saveDraft(message, replacing: self.serverDraftRef)
+                )
             } catch {
                 // Swallowed: see the doc comment. A failed replace server-side
                 // already degrades to save-as-new, so the worst outcome here is
@@ -408,8 +408,14 @@ extension ComposeViewModel {
     /// Takes on the ref `/save_draft` just returned, remembering the UID it
     /// replaced. The old copy is expunged server-side by the replace, so
     /// its row in an open Drafts list is already a phantom (#1071).
-    func adoptServerDraftRef(_ ref: DraftServerRef) {
-        if let previous = serverDraftRef?.uid, previous != ref.uid {
+    ///
+    /// Nil is a save that landed with unknown coordinates, and the prior ref
+    /// still has to go: that save retired the UID either way, so holding on
+    /// to it makes the next save quote a copy the server no longer has —
+    /// which replaces nothing and leaves the user two drafts (#2102). The
+    /// next save then creates a fresh copy, which is what nil means.
+    func adoptServerDraftRef(_ ref: DraftServerRef?) {
+        if let previous = serverDraftRef?.uid, previous != ref?.uid {
             replacedServerDraftUIDs.append(previous)
         }
         serverDraftRef = ref

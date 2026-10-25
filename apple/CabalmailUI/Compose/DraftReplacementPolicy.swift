@@ -68,7 +68,8 @@ enum DraftReplacementPolicy {
 
     /// What a closing compose session leaves for an open Drafts list, given
     /// the chain of server copies it retired: nil when the session left
-    /// nothing on the server at all.
+    /// nothing on the server at all — which, on the save path, means it
+    /// retired nothing, not merely that it has no surviving ref (#2102).
     ///
     /// The two closing exits that touch the server differ only in whether
     /// anything is left afterwards. Save Draft replaces, so the copies
@@ -91,8 +92,17 @@ enum DraftReplacementPolicy {
         currentUID: UInt32?
     ) -> DraftReplacement? {
         guard discarded else {
-            guard let currentUID else { return nil }
-            return DraftReplacement(retiredUIDs: replacedUIDs, survivingUID: currentUID)
+            if let currentUID {
+                return DraftReplacement(retiredUIDs: replacedUIDs, survivingUID: currentUID)
+            }
+            // A save that landed without reporting its coordinates still
+            // retired the copies before it, and the list may be rendering
+            // one of them (#2102). There is nothing to repoint at, so
+            // `resolve` drops the reader rather than leaving it on a copy
+            // the server has expunged. An empty chain is still silence: that
+            // is a session which never reached the server at all.
+            guard !replacedUIDs.isEmpty else { return nil }
+            return DraftReplacement(retiredUIDs: replacedUIDs, survivingUID: nil)
         }
         let chain = replacedUIDs + (currentUID.map { [$0] } ?? [])
         guard !chain.isEmpty else { return nil }
