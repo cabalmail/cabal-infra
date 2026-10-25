@@ -5,7 +5,7 @@ import Foundation
 /// Dovecot separates hierarchy with `.` on the wire; `ImapClient` translates
 /// to and from `/` at the package boundary so views never have to special-case
 /// the delimiter (mirroring the existing Lambda's `.replace("/", ".")` pattern
-/// in `lambda/api/python/python/helper.py`).
+/// in `lambda/api/_shared/helper.py`).
 public struct Folder: Sendable, Codable, Hashable, Identifiable {
     /// Canonical, `/`-delimited path.
     public let path: String
