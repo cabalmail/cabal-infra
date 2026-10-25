@@ -84,6 +84,12 @@ jobs:
             # The user-mail-rules procmail compiler and its corpus tests
             # live with the container sources but gate here.
             - 'docker/shared/**'
+            # Several suites under lambda/api/_shared/tests are cross-tree
+            # invariant scans that READ terraform/infra (the API Gateway
+            # method overrides and log-group split, the MFA-exempt service
+            # users, and the #2064 private-zone scan). Without this filter
+            # entry a terraform-only PR cannot fail any of them.
+            - 'terraform/infra/**'
             - '.github/workflows/lint.yml'
           swift:
             - 'apple/**'

@@ -172,7 +172,7 @@ Deploy workflows select environment based on branch: `main`=prod, `stage`=stage,
 
 | Module | Purpose |
 |---|---|
-| `vpc` | VPC, subnets (public/private), NAT instance, Route 53 private zone |
+| `vpc` | VPC, subnets (public/private), NAT instance |
 | `ecs` | ECS cluster, task definitions, services, target groups, SNS/SQS for reconfiguration |
 | `elb` | Network Load Balancer: IMAP (993), SMTP relay (25), submission (587/465) |
 | `app` | CloudFront distribution, API Gateway, Lambda functions, SSM parameters |

@@ -174,7 +174,6 @@ module "front_door" {
   source             = "./modules/front_door"
   control_domain     = var.control_domain
   zone_id            = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  private_zone_id    = module.vpc.private_zone.zone_id
   cert_arn           = module.cert.cert_arn
   access_logs_bucket = module.s3_access_logs.bucket
 }
@@ -224,7 +223,6 @@ module "admin" {
   region               = var.aws_region
   cert_arn             = module.cert.cert_arn
   zone_id              = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  private_zone_id      = module.vpc.private_zone.zone_id
   domains              = module.domains.domains
   bucket               = module.bucket.bucket
   bucket_arn           = module.bucket.bucket_arn
@@ -287,7 +285,6 @@ module "load_balancer" {
   source            = "./modules/elb"
   public_subnet_ids = module.vpc.public_subnets[*].id
   zone_id           = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  private_zone_id   = module.vpc.private_zone.zone_id
 
   ecs_relay_target_group_arn = module.ecs.relay_target_group_arn
 }
@@ -459,7 +456,6 @@ module "monitoring" {
   public_subnet_ids  = module.vpc.public_subnets[*].id
   private_subnet_ids = module.vpc.private_subnets[*].id
   zone_id            = data.terraform_remote_state.zone.outputs.control_domain_zone_id
-  private_zone_id    = module.vpc.private_zone.zone_id
   cert_arn           = module.cert.cert_arn
 
   ecs_cluster_id                = module.ecs.cluster_arn
