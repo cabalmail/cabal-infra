@@ -1,4 +1,5 @@
 import XCTest
+import os
 @testable import CabalmailUI
 
 // A sidebar tree's collapsed set is per window (#2039): each window keeps its
@@ -57,6 +58,29 @@ final class SidebarCollapseTests: XCTestCase {
     func testAWindowsSetRoundTrips() {
         let set: Set<String> = ["Archive", "Archive/2025", "Sent"]
         XCTAssertEqual(SidebarCollapse.stored(in: SidebarCollapse.scene(set, for: account), for: account), set)
+    }
+
+    // A set encodes to one string, keys sorted, however often it is encoded.
+    // Without sorted keys `JSONEncoder` writes keys in its internal
+    // dictionaries' iteration order, whose hash seed follows the address each
+    // dictionary lands at, so two encodes of one value could differ and the
+    // seed tests below compared unequal strings holding the same set now and
+    // then.
+    //
+    // A loop on one thread gets the same block back every time and never
+    // moves the order, so the encodes run across threads, whose allocations
+    // come from different places. Pinning the sorted string as well catches
+    // a run whose order holds still but is not the sorted one.
+    func testAWindowsSetAlwaysEncodesToTheSameString() {
+        let account = account
+        let encodings = OSAllocatedUnfairLock<Set<String>>(initialState: [])
+        DispatchQueue.concurrentPerform(iterations: 400) { _ in
+            let encoded = SidebarCollapse.scene(["Tech", "Archive"], for: account)
+            encodings.withLock { _ = $0.insert(encoded) }
+        }
+        XCTAssertEqual(encodings.withLock { $0 }, [
+            #"{"account":{"controlDomain":"admin.example.test","username":"someone"},"collapsed":["Archive","Tech"]}"#
+        ])
     }
 
     // The device-wide half keeps the encoding the key has always used, so a
