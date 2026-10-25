@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.8] - 2026-10-25
+
+### Changed
+- **Four Apple-client doc comments now name files that exist.** The IMAP
+  delimiter note cited the shared Lambda layer's `helper.py` path, deleted with
+  the layer; `RawMessage` said MIME parsing happens outside `CabalmailKit`, in a
+  `MessageDetailView.swift` that has since moved; the address view model mirrored
+  a React `List.jsx` dropped when the left rail was rebuilt; and the endpoint-URL
+  note pointed at an `apigw.tf` that never existed. Comments only, no code
+  change.
+- **visionOS app built from its own Xcode target.** `CabalmailVision` in
+  `apple/project.yml` compiles the same `apple/Cabalmail/` sources for
+  visionOS, with the same bundle identifier, entitlements and App Store
+  profile as the iPhone/iPad target but none of its embedded targets (the
+  watch app, the Notification Service Extension, the Safari web
+  extension). The one target that served both platforms had to
+  destination-filter those three embeds to iOS, and an embed phase present
+  with every member filtered out made the `CodeSign` task depend on its own
+  output: a second signed visionOS-simulator build into one DerivedData
+  failed with `error: Cycle inside Cabalmail` and the directory never
+  recovered. `apple.yml`'s visionOS build and upload legs now archive the
+  new scheme.
+
+### Fixed
+- Apple: **iPad list floating over the reader after a Zoom.** Narrowing an
+  iPad window to compact and zooming it back left the message list floating
+  over a dimmed, full-width reader, with the reader's text running underneath
+  it and no control to bring the list back. The split is rebuilt once when
+  UIKit lays it out at an intermediate width during the zoom and so decides
+  against tiling, and the message open in the reader carries across that
+  rebuild.
+
 ## [1.39.7] - 2026-10-24
 
 ### Changed
