@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UIKit lays it out at an intermediate width during the zoom and so decides
   against tiling, and the message open in the reader carries across that
   rebuild.
+- **Flaky sidebar-collapse seed tests.** `SidebarCollapse.scene` encoded a
+  window's collapsed set with a plain `JSONEncoder`, which writes keys in an
+  order that can change from one encode to the next within a process, so
+  `testAWindowHoldingAnotherAccountsSetIsSeededAfresh` and
+  `testAWindowWithNothingStoredSeedsOnMount` now and then compared two
+  strings holding the same set and failed. The encoder now sorts keys, as
+  the type already promised for the set itself, and a new test encodes one
+  set across threads and pins the single sorted string it must produce.
 
 ## [1.39.7] - 2026-10-24
 
