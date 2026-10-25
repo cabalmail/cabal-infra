@@ -225,6 +225,7 @@
     <string name="folders_delete">Delete folder</string>
     <string name="folders_delete_confirm_title">Delete folder?</string>
     <string name="folders_delete_confirm_body">%1$s is removed from your mailbox. Only empty folders can be deleted.</string>
+    <string name="folders_subscribe_switch">Subscribe to %1$s</string>
     <string name="folders_subscribed">Subscribed</string>
     <string name="folders_unsubscribed">Not subscribed</string>
     <plurals name="folders_message_count">
