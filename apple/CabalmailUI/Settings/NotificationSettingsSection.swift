@@ -1,6 +1,6 @@
 // Push notifications ship on iOS and macOS only (see PushRegistrar.swift);
-// the visionOS build of the shared Cabalmail target must not compile this,
-// so the Settings form on visionOS simply has no Notifications section.
+// the CabalmailVision target must not compile this, so the Settings form on
+// visionOS simply has no Notifications section.
 #if os(iOS) || os(macOS)
 import SwiftUI
 import UserNotifications

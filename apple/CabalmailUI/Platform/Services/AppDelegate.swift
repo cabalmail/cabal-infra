@@ -1,7 +1,7 @@
 // Push notifications ship on iOS and macOS; visionOS is deliberately
-// excluded (project.yml destination-filters the NSE the same way), so the
-// guards are explicit `os(...)` checks rather than `canImport(...)` — the
-// visionOS build of the shared Cabalmail target must not compile this.
+// excluded (the CabalmailVision target embeds no NSE at all), so the guards
+// are explicit `os(...)` checks rather than `canImport(...)` — the visionOS
+// build of these shared sources must not compile this.
 #if os(iOS) || os(macOS)
 #if os(iOS)
 import UIKit

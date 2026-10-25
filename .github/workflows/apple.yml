@@ -404,10 +404,11 @@ jobs:
   # -----------------------------------------------------------------------
   # Build the app targets for the three product platforms. Unsigned — this
   # job only verifies the code compiles and links; signing happens in the
-  # upload jobs below. visionOS gets its own leg because the Cabalmail
-  # scheme's iOS and xros compilations diverge (`#if os(visionOS)` paths,
-  # per-SDK availability): an API that is compile-time unavailable on
-  # visionOS builds green for iOS and only breaks here.
+  # upload jobs below. visionOS gets its own leg, and since #1865 its own
+  # scheme and target (CabalmailVision, same sources), because the iOS and
+  # xros compilations diverge (`#if os(visionOS)` paths, per-SDK
+  # availability): an API that is compile-time unavailable on visionOS
+  # builds green for iOS and only breaks here.
   # -----------------------------------------------------------------------
   app-build:
     name: Build ${{ matrix.scheme }} (${{ matrix.platform }})
@@ -421,7 +422,7 @@ jobs:
       # open at once, eight macOS jobs per PR run starved the runner pool.
       # Pushes still build all four, including the iOS device SDK.
       matrix:
-        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"scheme":"Cabalmail","platform":"visionOS","destination":"generic/platform=visionOS"},{"scheme":"CabalmailWatch","platform":"watchOS","destination":"generic/platform=watchOS"}]' || '[{"scheme":"Cabalmail","platform":"iOS","destination":"generic/platform=iOS"},{"scheme":"Cabalmail","platform":"visionOS","destination":"generic/platform=visionOS"},{"scheme":"CabalmailMac","platform":"macOS","destination":"generic/platform=macOS"},{"scheme":"CabalmailWatch","platform":"watchOS","destination":"generic/platform=watchOS"}]') }}
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"scheme":"CabalmailVision","platform":"visionOS","destination":"generic/platform=visionOS"},{"scheme":"CabalmailWatch","platform":"watchOS","destination":"generic/platform=watchOS"}]' || '[{"scheme":"Cabalmail","platform":"iOS","destination":"generic/platform=iOS"},{"scheme":"CabalmailVision","platform":"visionOS","destination":"generic/platform=visionOS"},{"scheme":"CabalmailMac","platform":"macOS","destination":"generic/platform=macOS"},{"scheme":"CabalmailWatch","platform":"watchOS","destination":"generic/platform=watchOS"}]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -551,9 +552,14 @@ jobs:
       matrix:
         include:
           - platform: iOS
+            scheme: Cabalmail
             destination: 'generic/platform=iOS'
             altool_type: ios
+          # visionOS archives its own target (same bundle ID, same App Store
+          # record and profile): the iOS target stopped supporting visionOS
+          # when the platforms were split in project.yml (#1865).
           - platform: visionOS
+            scheme: CabalmailVision
             destination: 'generic/platform=visionOS'
             altool_type: visionos
     steps:
@@ -584,23 +590,23 @@ jobs:
           [ -z "$S6" ] && MISSING+=("APP_STORE_CONNECT_API_KEY_P8")
           [ -z "$S7" ] && MISSING+=("IOS_APP_STORE_PROFILE")
           # The iOS archive embeds the watch app, so it also needs the watch
-          # profile. The visionOS leg does not (the embed dependency is
-          # destination-filtered to iOS in project.yml).
+          # profile. The visionOS leg does not (CabalmailVision has no watch
+          # dependency at all in project.yml).
           [ "$PLATFORM" = "iOS" ] && [ -z "$S8" ] && MISSING+=("WATCHOS_APP_STORE_PROFILE")
           # The NSE profile gates BOTH legs even though only the iOS archive
           # embeds the extension: the push entitlements (aps-environment,
-          # app group, keychain sharing) live on the shared Cabalmail target,
-          # so every leg's archive needs profiles regenerated with the new
-          # capabilities. The operator does that portal work in one sitting
+          # app group, keychain sharing) live on the app targets' shared
+          # entitlements file, so every leg's archive needs profiles
+          # regenerated with the new capabilities. The operator does that portal work in one sitting
           # with the NSE App ID/profile creation, making this secret the
           # "push signing assets are ready" sentinel — until it exists, both
           # legs skip cleanly instead of failing codesign against stale
           # profiles.
           [ -z "$S9" ] && MISSING+=("IOS_NSE_APP_STORE_PROFILE")
           # The embedded Safari web extension signs with its own profile.
-          # iOS leg only, like the watch: the embed is destination-filtered
-          # to iOS, and unlike the NSE it adds no entitlement to the shared
-          # host target (the App Group is already there).
+          # iOS leg only, like the watch: only the iOS target embeds it, and
+          # unlike the NSE it adds no entitlement to the shared entitlements
+          # file (the App Group is already there).
           [ "$PLATFORM" = "iOS" ] && [ -z "$S10" ] && MISSING+=("IOS_WEBEXT_APP_STORE_PROFILE")
           if [ ${#MISSING[@]} -gt 0 ]; then
             echo "::warning::Apple signing secrets missing: ${MISSING[*]}. Skipping upload."
@@ -703,8 +709,8 @@ jobs:
           env-name: WATCHOS_APP_STORE_PROFILE_UUID
 
       - name: Install NSE App Store provisioning profile
-        # iOS leg only: the Notification Service Extension embed is
-        # destination-filtered to iOS in project.yml, same as the watch app.
+        # iOS leg only: only the iOS target embeds the Notification Service
+        # Extension, same as the watch app.
         if: steps.check.outputs.enabled == 'true' && matrix.platform == 'iOS'
         uses: ./.github/actions/install-provisioning-profile
         with:
@@ -713,8 +719,8 @@ jobs:
           env-name: IOS_NSE_APP_STORE_PROFILE_UUID
 
       - name: Install web-extension App Store provisioning profile
-        # iOS leg only: the Safari web extension embed is destination-filtered
-        # to iOS in project.yml (plan Phase 8.3).
+        # iOS leg only: only the iOS target embeds the Safari web extension
+        # (plan Phase 8.3).
         if: steps.check.outputs.enabled == 'true' && matrix.platform == 'iOS'
         uses: ./.github/actions/install-provisioning-profile
         with:
@@ -774,16 +780,16 @@ jobs:
           # references `$(IOS_APP_STORE_PROFILE_UUID)`; we inject it below
           # as a user-defined setting so it only resolves on the app target.
           # WATCHOS_APP_STORE_PROFILE_UUID is set only on the iOS leg (the
-          # watch app embeds in the iOS archive; the visionOS archive
-          # filters the watch target out entirely, so the empty value is
-          # never consulted there).
+          # watch app embeds in the iOS archive; CabalmailVision does not
+          # depend on it at all, so the empty value is never consulted
+          # there).
           if [ -z "${CABALMAIL_CONTROL_DOMAIN:-}" ]; then
             echo "::warning::TF_VAR_CONTROL_DOMAIN is unset; the associated-domains entitlement keeps its placeholder and password managers will not match this build to the web app."
             CABALMAIL_CONTROL_DOMAIN=cabalmail.invalid
           fi
           xcodebuild archive \
             -workspace Cabalmail.xcworkspace \
-            -scheme Cabalmail \
+            -scheme ${{ matrix.scheme }} \
             -configuration Release \
             -destination '${{ matrix.destination }}' \
             -archivePath "$RUNNER_TEMP/Cabalmail.xcarchive" \
