@@ -134,14 +134,16 @@ jobs:
         run: scripts/sync-vendored.sh
 
       - name: SwiftLint
+        # The repo's only SwiftLint gate (lint.yml spends no macOS runner on
+        # it), so a PR's lint result arrives a few minutes into this run.
         if: matrix.platform == 'macOS'
         working-directory: apple
         run: swiftlint lint --strict --quiet
 
       - name: Platform conditionals
-        # The ratchet lint.yml's swift job also runs: no platform `#if` in
-        # apple/CabalmailUI outside Shell/ and Platform/ beyond the allowlist
-        # (docs/apple.md, "Platform conditionals").
+        # The ratchet lint.yml's platform-conditionals job also runs: no
+        # platform `#if` in apple/CabalmailUI outside Shell/ and Platform/
+        # beyond the allowlist (docs/apple.md, "Platform conditionals").
         if: matrix.platform == 'macOS'
         run: python3 scripts/check-platform-conditionals.py
 
@@ -409,9 +411,19 @@ jobs:
   # xros compilations diverge (`#if os(visionOS)` paths, per-SDK
   # availability): an API that is compile-time unavailable on visionOS
   # builds green for iOS and only breaks here.
+  #
+  # Skipped on every main and stage run (the runs where the upload jobs
+  # fire). Those jobs archive the same apps for the same device SDKs, in
+  # Release: upload-ios archives Cabalmail, which embeds CabalmailWatch, and
+  # CabalmailVision, and upload-mac archives CabalmailMac. A device-only
+  # compile break therefore fails an archive instead of this job, after
+  # `approval` rather than before it, and nothing uploads from a leg that
+  # did not build. An environment missing its signing secrets skips the
+  # archives with a warning, and with them that run's device builds.
   # -----------------------------------------------------------------------
   app-build:
     name: Build ${{ matrix.scheme }} (${{ matrix.platform }})
+    if: ${{ github.event_name == 'pull_request' || (github.ref_name != 'main' && github.ref_name != 'stage') }}
     runs-on: xcode-27
     strategy:
       fail-fast: false
@@ -420,7 +432,8 @@ jobs:
       # compile and link those same app targets (for the iOS simulator and
       # native macOS), and each leg holds a macOS runner: with several PRs
       # open at once, eight macOS jobs per PR run starved the runner pool.
-      # Pushes still build all four, including the iOS device SDK.
+      # A workflow_dispatch from any other branch, where nothing archives,
+      # builds all four, including the iOS device SDK.
       matrix:
         include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"scheme":"CabalmailVision","platform":"visionOS","destination":"generic/platform=visionOS"},{"scheme":"CabalmailWatch","platform":"watchOS","destination":"generic/platform=watchOS"}]' || '[{"scheme":"Cabalmail","platform":"iOS","destination":"generic/platform=iOS"},{"scheme":"CabalmailVision","platform":"visionOS","destination":"generic/platform=visionOS"},{"scheme":"CabalmailMac","platform":"macOS","destination":"generic/platform=macOS"},{"scheme":"CabalmailWatch","platform":"watchOS","destination":"generic/platform=watchOS"}]') }}
     steps:
@@ -492,7 +505,10 @@ jobs:
   # One stable check that reflects every test and build job, for branch
   # protection to require: green only when all of them passed, red if any
   # failed, was cancelled, or was skipped. Runs on pushes too, so the check
-  # name means the same thing everywhere.
+  # name means the same thing everywhere. The one skip it accepts is
+  # app-build's on a main or stage run, where the upload archives are the
+  # device builds; the gate does not wait for them, since they come after
+  # the `approval` environment gate.
   # -----------------------------------------------------------------------
   apple-gate:
     needs: [kit-test, app-test, ios-app-test, app-build]
@@ -505,9 +521,14 @@ jobs:
         APP_TEST: ${{ needs.app-test.result }}
         IOS_APP_TEST: ${{ needs.ios-app-test.result }}
         APP_BUILD: ${{ needs.app-build.result }}
+        # The negation of app-build's `if`.
+        ARCHIVES_BUILD: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
       run: |
         set -euo pipefail
-        echo "[apple-gate] kit-test=$KIT_TEST app-test=$APP_TEST ios-app-test=$IOS_APP_TEST app-build=$APP_BUILD"
+        echo "[apple-gate] kit-test=$KIT_TEST app-test=$APP_TEST ios-app-test=$IOS_APP_TEST app-build=$APP_BUILD archives-build=$ARCHIVES_BUILD"
+        if [ "$ARCHIVES_BUILD" = "true" ] && [ "$APP_BUILD" = "skipped" ]; then
+          APP_BUILD=success
+        fi
         for result in "$KIT_TEST" "$APP_TEST" "$IOS_APP_TEST" "$APP_BUILD"; do
           if [ "$result" != "success" ]; then
             echo "::error::an Apple test or build job did not succeed ($result)"
@@ -517,9 +538,11 @@ jobs:
 
   # The environment gate in front of the uploads. Never on a pull_request:
   # a PR run ends at apple-gate. ios-app-test is a dependency so a red
-  # iOS-hosted suite stops TestFlight like the other suites do.
+  # iOS-hosted suite stops TestFlight like the other suites do. app-build
+  # is not: it is skipped on every run that uploads, and the archives below
+  # are those runs' device builds.
   approval:
-    needs: [kit-test, app-test, ios-app-test, app-build]
+    needs: [kit-test, app-test, ios-app-test]
     if: ${{ github.event_name != 'pull_request' }}
     environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     runs-on: ubuntu-latest

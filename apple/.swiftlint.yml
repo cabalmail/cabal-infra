@@ -1,6 +1,6 @@
 # SwiftLint configuration for the Apple client.
-# CI runs `swiftlint lint --strict --quiet` from this directory (lint.yml and
-# apple.yml), so every warning fails the build. Every directory that holds
+# CI runs `swiftlint lint --strict --quiet` from this directory (apple.yml's
+# kit-test macOS leg), so every warning fails the build. Every directory that holds
 # Swift compiled into a shipped target is listed, plus the test suites and
 # the SimDrive simulator driver; Tools/SimDrive/.swiftlint.yml relaxes the
 # size rules for that tool.
