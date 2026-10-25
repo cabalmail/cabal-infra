@@ -91,7 +91,7 @@ build_scheme() {
 
 macos()    { build_scheme CabalmailMac 'platform=macOS'; }
 ios()      { build_scheme Cabalmail    'generic/platform=iOS'; }
-visionos() { build_scheme Cabalmail    'generic/platform=visionOS'; }
+visionos() { build_scheme CabalmailVision 'generic/platform=visionOS'; }
 watchos()  { build_scheme CabalmailWatch 'generic/platform=watchOS'; }
 
 kit_test() {

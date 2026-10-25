@@ -13,8 +13,10 @@ apple/
   Cabalmail.xcworkspace/     # Workspace referencing the generated project + kit package
   CabalmailUI/               # Shared app layer (views, view models, app state) as one
                              #   module, linked by both apps; see "Shared app layer" below
-  Cabalmail/                 # iOS / iPadOS / visionOS app target: entry point, App Intents,
-                             #   Info.plist, entitlements, asset catalogs
+  Cabalmail/                 # iOS / iPadOS and visionOS app sources: entry point, App
+                             #   Intents, Info.plists, entitlements, asset catalogs. Two
+                             #   targets compile this folder — `Cabalmail` (iPhone / iPad)
+                             #   and `CabalmailVision` (see "visionOS is its own target")
   CabalmailMac/              # Native macOS app target: entry point, menus, Settings
                              #   window, menu-bar extra, asset catalogs
   CabalmailWatch/            # Watch companion app (address management only),
@@ -714,7 +716,7 @@ TestFlight upload and skips the notarization steps.
 | Job | Runs when | What it does |
 |---|---|---|
 | `kit-test` | Any push touching `apple/**` or the workflow file | SwiftLint and the platform-conditionals check, then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) across macOS / iOS / visionOS destinations |
-| `app-build` | Same | Unsigned `xcodebuild build` for `Cabalmail` (iOS) and `CabalmailMac` (macOS) |
+| `app-build` | Same | Unsigned `xcodebuild build`, one leg per scheme: `Cabalmail` (iOS), `CabalmailVision` (visionOS), `CabalmailMac` (macOS), `CabalmailWatch` (watchOS) |
 | `upload-ios` | Pushes to `main` or `stage`, with the seven signing secrets configured | Manual-signed archive → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | Same | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
 
@@ -939,13 +941,12 @@ runtime.
 
 ### visionOS uses the layered `AppIconVision.solidimagestack`
 
-The `Cabalmail` target's visionOS destination is served by a layered
+The `CabalmailVision` target is served by a layered
 `AppIconVision.solidimagestack` (back / middle / front layers, composited
-with parallax on gaze focus), wired via a per-SDK icon-name override in
-`project.yml`:
+with parallax on gaze focus), named on that target in `project.yml`:
 
 ```yaml
-"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=xros*]": AppIconVision
+ASSETCATALOG_COMPILER_APPICON_NAME: AppIconVision
 ```
 
 iOS / iPadOS and macOS use the shared `AppIcon.icon` instead; visionOS is
@@ -965,6 +966,29 @@ catalog and entitlements. Everything it shares with the iOS app comes
 from the `CabalmailUI` module (below). Where the platforms diverge there,
 the difference lives in a layout shell or a platform adapter (see
 "Platform conditionals").
+
+### visionOS is its own target
+
+`Cabalmail` builds for iPhone and iPad; `CabalmailVision` builds the same
+`apple/Cabalmail/` sources for visionOS. One target served both until
+#1865: because a visionOS product can embed neither the watch app nor the
+iOS app extensions, those three dependencies had to be destination-filtered
+to iOS — and an embed phase that *exists* with every member filtered out
+makes the `CodeSign` task take the app wrapper directory as an input. The
+second signed xrsimulator build into one DerivedData then fails with
+`error: Cycle inside Cabalmail`, and the directory never recovers (only a
+`rm -rf` does). Splitting the platforms removes the filtered phase: the
+embeds are unconditional on `Cabalmail` and absent from `CabalmailVision`.
+
+The two targets are one App Store app — same `PRODUCT_BUNDLE_IDENTIFIER`,
+same entitlements file, same App Store provisioning profile (modern
+profiles list iOS and xrOS together) — and `VisionAppTargetScanTests`
+holds that, the absent embeds, and `apple.yml`'s visionOS legs to the
+shape above. What differs is only what the platform forces: the layered
+app icon, the device family, and a separate generated `Info.plist`
+(`Cabalmail/InfoVision.plist`, which carries no launch screen or
+orientation list). Each target excludes the other's generated plist from
+the shared source folder; XcodeGen auto-excludes only a target's own.
 
 ### Shared app layer: the `CabalmailUI` module
 
