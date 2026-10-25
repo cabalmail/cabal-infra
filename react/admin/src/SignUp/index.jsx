@@ -4,6 +4,7 @@ import EmailField from '../Login/EmailField';
 import PasswordField from '../Login/PasswordField';
 import UsernameField from '../Login/UsernameField';
 import { useAuth } from '../contexts/AuthContext';
+import { PASSWORD_HINT, PASSWORD_MINIMUM, isE164Phone, normalizePhone } from './signUpFields';
 
 /**
  * Strength meter per §2: four segments, each lights as a zxcvbn-style
@@ -72,8 +73,11 @@ function SignUp({
   // When SMS is off (no 10DLC campaign registration id is configured on the
   // pool), the phone field is not rendered and its value is not required.
   // See issue #712 and docs/sms-10dlc.md.
-  const phoneValid = !sms_enabled || /^\+?[0-9\s-]{7,}$/.test(phone || '');
-  const passwordValid = (password || '').length >= 12;
+  // Validated as E.164, which is the only shape Cognito's `phone_number`
+  // takes; the punctuation people type is stripped first, and `doRegister`
+  // sends the same normalized value (#2141).
+  const phoneValid = !sms_enabled || isE164Phone(normalizePhone(phone));
+  const passwordValid = (password || '').length >= PASSWORD_MINIMUM;
   const confirmValid = confirm.length > 0 && confirm === password;
   const inviteCodeValid = !invitation_required || (inviteCode || '').length > 0;
   // SMS consent is a mandatory, affirmative opt-in whenever the phone field
@@ -126,7 +130,7 @@ function SignUp({
           <div className="auth__field">
             <div className="auth__field-header">
               <label className="auth__field-label" htmlFor="phone">Phone number</label>
-              <span className="auth__field-hint">For verification and recovery</span>
+              <span className="auth__field-hint">With country code, for verification and recovery</span>
             </div>
             <input
               id="phone"
@@ -134,7 +138,7 @@ function SignUp({
               type="tel"
               className="mono"
               autoComplete="tel"
-              placeholder="+1 555 123 4567"
+              placeholder="+15551234567"
               onChange={onPhoneChange}
               value={phone || ''}
               required
@@ -188,7 +192,7 @@ function SignUp({
             ))}
           </div>
           <p className="auth__field-help">
-            At least 12 characters. A passphrase is better than a clever one.
+            {PASSWORD_HINT}
           </p>
         </PasswordField>
         <div className="auth__field">

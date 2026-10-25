@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import SignUp from './index';
 import AuthContext from '../contexts/AuthContext';
+import { PASSWORD_HINT } from './signUpFields';
 
 const withAuth = (
   ui,
@@ -102,6 +103,48 @@ describe('SignUp', () => {
   it('disables submit until all fields are valid', () => {
     render(withAuth(<SignUp {...defaultProps} />));
     expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+  });
+
+  // Issue #2141: the field used to accept `/^\+?[0-9\s-]{7,}$/`, so a local
+  // number with no country code enabled Create account and was then refused
+  // by Cognito as an unexplained "Registration failed.". It is validated as
+  // E.164 now — the shape the pool's `phone_number` attribute requires.
+  describe('the phone number is validated as E.164 (#2141)', () => {
+    const enable = () => fireEvent.change(screen.getByLabelText('Confirm password'), {
+      target: { value: validProps.password },
+    });
+
+    it('keeps submit disabled without a country code', () => {
+      render(withAuth(<SignUp {...defaultProps} {...validProps} phone="555-123-4567" inviteCode="" />));
+      enable();
+      fireEvent.click(screen.getByLabelText(/I agree to receive/));
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled();
+    });
+
+    it('accepts the punctuation people type around a country code', () => {
+      // The report's own example. It is normalized on the way to Cognito,
+      // so the form has no reason to turn it away.
+      render(withAuth(<SignUp {...defaultProps} {...validProps} phone="+1 555 123 4567" inviteCode="" />));
+      enable();
+      fireEvent.click(screen.getByLabelText(/I agree to receive/));
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
+    });
+
+    it('teaches the shape it wants rather than one the pool refuses', () => {
+      render(withAuth(<SignUp {...defaultProps} />));
+      const field = screen.getByLabelText('Phone number');
+      expect(field.placeholder).toBe('+15551234567');
+      expect(field.placeholder).not.toMatch(/\s/);
+    });
+  });
+
+  // The hint used to recommend a passphrase, which is what the pool refuses:
+  // no `password_policy` is set, so Cognito's default wants upper and lower
+  // case, a digit and a symbol (#2141).
+  it('tells the user which character classes the pool wants', () => {
+    render(withAuth(<SignUp {...defaultProps} />));
+    expect(screen.getByText(PASSWORD_HINT)).toBeInTheDocument();
+    expect(screen.queryByText(/passphrase/i)).not.toBeInTheDocument();
   });
 
   it('calls onPhoneChange when phone input changes', () => {
