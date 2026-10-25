@@ -2,9 +2,9 @@ import Foundation
 
 /// Raw RFC 822 message as returned by `UID FETCH BODY.PEEK[]`.
 ///
-/// MIME parsing happens in Phase 4 (`Cabalmail/Views/MessageDetailView.swift`),
-/// not in `CabalmailKit` — the transport layer stays byte-accurate so the
-/// renderer sees exactly what the server sent.
+/// MIME parsing happens in `CabalmailKit/MIME/MimeParser.swift`, not here —
+/// this type stays byte-accurate so the parser and the renderer see exactly
+/// what the server sent.
 public struct RawMessage: Sendable, Codable, Hashable {
     public let uid: UInt32
     public let bytes: Data

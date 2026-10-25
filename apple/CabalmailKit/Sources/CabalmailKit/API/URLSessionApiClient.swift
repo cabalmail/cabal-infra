@@ -216,8 +216,9 @@ extension URLSessionApiClient {
 
 extension URLSessionApiClient {
     private func endpointURL(_ path: String) -> URL {
-        // `invokeUrl` is the API Gateway stage URL; paths in the Lambda layer
-        // sit directly under it (see `terraform/infra/modules/app/apigw.tf`).
+        // `invokeUrl` is the API Gateway stage URL; every endpoint path sits
+        // directly under its root, one Terraform `call` module instance per
+        // endpoint (`terraform/infra/modules/app/modules/call/main.tf`).
         configuration.invokeUrl.appendingPathComponent(
             path.hasPrefix("/") ? String(path.dropFirst()) : path
         )
