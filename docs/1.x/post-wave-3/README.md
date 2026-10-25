@@ -122,7 +122,7 @@ Each plan's Depends and Unblocks lines are the detailed record.
 
   > **Erratum (2026-10-16):** Posting before taking a screen worked because the rearchitecture's sessions shared threads. A session started from this repo cannot see other sessions, so it tells you instead, as `00-working-agreements.md` "Working from the repo" says.
 
-- **Still open, with recommendations:** duo-support.md Decision 9 (one view tree or two shells; a spike first, recommended), SQLite decision 7 (do SQLite before the Kit split; recommended), and apple-ci decision 6 (retire `lint.yml`'s macOS swift job; recommended, but the default keeps it). Where test-debt's ratchet step and a platform-conditionals docs fix land depends on decision 6. Both plans are worded either way.
+- **Still open, with recommendations:** duo-support.md Decision 9 (one view tree or two shells; a spike first, recommended) and SQLite decision 7 (do SQLite before the Kit split; recommended). apple-ci decision 6 (retire `lint.yml`'s macOS swift job) was answered yes on 2026-10-25 and is done: the platform-conditionals checker runs in an Ubuntu `lint.yml` job and in `apple.yml`, and SwiftLint in `apple.yml` only. test-debt's ratchet step and platform-conditionals' docs fix take the decision-6-yes wording of their plans.
 
 ## Not planned, recorded so they aren't lost
 
