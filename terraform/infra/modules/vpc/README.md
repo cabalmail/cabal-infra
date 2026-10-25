@@ -4,7 +4,7 @@
 <p><a href="/README.md">Main documentation</a></p>
 </div><div style="padding-left: 11em;">
 
-Creates a VPC, subnets, NAT Gateways, and private Route 53 zone for the control domain.
+Creates a VPC, subnets, and NAT Gateways.
 
 ## Inputs
 
@@ -22,7 +22,6 @@ No modules.
 | Name | Description |
 |------|-------------|
 | <a name="output_private_subnets"></a> [private\_subnets](#output\_private\_subnets) | List of private subnets |
-| <a name="output_private_zone"></a> [private\_zone](#output\_private\_zone) | Route 53 Zone ID for the private zone for the control domain |
 | <a name="output_public_subnets"></a> [public\_subnets](#output\_public\_subnets) | List of public subnets |
 | <a name="output_relay_ips"></a> [relay\_ips](#output\_relay\_ips) | List of egress IP addresses |
 | <a name="output_vpc"></a> [vpc](#output\_vpc) | VPC |
@@ -47,7 +46,6 @@ No modules.
 | [aws_route.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route) | resource |
 | [aws_route.public](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route) | resource |
 | [aws_route53_record.smtp](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_record) | resource |
-| [aws_route53_zone.private_dns](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route53_zone) | resource |
 | [aws_route_table.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route_table) | resource |
 | [aws_route_table.public](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route_table) | resource |
 | [aws_route_table_association.private](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route_table_association) | resource |

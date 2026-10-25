@@ -1,49 +1,21 @@
+# The tier hostnames. These are the only records for these names: the VPC no
+# longer has a private zone covering the control domain (#2064), so queries
+# from inside the VPC resolve here as well. An internal-only answer for one of
+# these names needs a private zone named for THAT name, never for the control
+# domain - a zone named for the control domain is authoritative for every
+# address subdomain too, which is the defect #2064 records.
+#
+# imap is in the set even though the NLB carries no IMAP listener: the name
+# must still RESOLVE (the API Lambdas' fallback path dials imap.<control
+# _domain> when IMAP_INTERNAL_HOST is unset, and a resolvable name that
+# refuses the connection beats one that fails DNS). Container-to-container
+# IMAP delivery uses Cloud Map's imap.cabal.internal and bypasses the NLB;
+# see modules/ecs/service_discovery.tf.
 resource "aws_route53_record" "cname" {
   for_each = toset(["imap", "smtp-out", "smtp-in"])
   zone_id  = var.zone_id
   name     = each.key
   type     = "A"
-
-  alias {
-    name                   = aws_lb.elb.dns_name
-    zone_id                = aws_lb.elb.zone_id
-    evaluate_target_health = false
-  }
-}
-
-# -- Private zone records ----------------------------------------
-#
-# The VPC has a private Route 53 zone for the control domain.
-# When a query for e.g. imap.<control_domain> originates inside the
-# VPC, Route 53 Resolver checks the private zone first and returns
-# NXDOMAIN if the record is missing - it never falls through to the
-# public zone.  These records mirror the public aliases above so
-# that containers (and anything else in the VPC) can resolve the
-# tier hostnames.
-
-resource "aws_route53_record" "private" {
-  # imap is included even though the NLB carries no IMAP listener: the
-  # name must still RESOLVE inside the VPC (the private zone shadows the
-  # public one, so a missing record here is NXDOMAIN, not a fall-through),
-  # and the API Lambdas' fallback path dials imap.<control_domain> when
-  # IMAP_INTERNAL_HOST is unset. A resolvable name that refuses the
-  # connection beats one that fails DNS - the failure is legible.
-  #
-  # Container-to-container IMAP delivery (smtp-out -> imap LMTP/SMTP) still
-  # uses Cloud Map's imap.cabal.internal, which routes directly to the
-  # container's private IP on port 143 and bypasses the NLB. See
-  # modules/ecs/service_discovery.tf.
-  #
-  # allow_overwrite covers a legacy drift case: prod's private zone has
-  # historically held a manually-added A record for imap pointing at a
-  # since-decommissioned container IP. With this flag set, the apply
-  # replaces that drift with the alias instead of failing on a "record
-  # already exists" conflict.
-  for_each        = toset(["imap", "smtp-out", "smtp-in"])
-  zone_id         = var.private_zone_id
-  name            = each.key
-  type            = "A"
-  allow_overwrite = true
 
   alias {
     name                   = aws_lb.elb.dns_name

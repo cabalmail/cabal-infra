@@ -180,17 +180,6 @@ resource "aws_route53_record" "this" {
   records = [aws_cloudfront_distribution.this.domain_name]
 }
 
-# Mirror into the private zone so VPC-internal callers can resolve
-# www.<control_domain>. Matches the pattern used by the admin CNAME
-# in modules/app/cloudfront.tf.
-resource "aws_route53_record" "this_private" {
-  zone_id = var.private_zone_id
-  name    = local.site_host
-  type    = "CNAME"
-  ttl     = "300"
-  records = [aws_cloudfront_distribution.this.domain_name]
-}
-
 # Release the previously-managed front door content from Terraform
 # state without deleting the live objects out of the bucket. The
 # initial drop of this module (under its earlier name, marketing_site)
