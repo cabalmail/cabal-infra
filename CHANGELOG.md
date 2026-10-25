@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.9] - 2026-10-25
+
+### Changed
+- **Fewer macOS runners per Apple CI run.** `lint.yml`'s macOS `swift`
+  job repeated the SwiftLint and platform-conditionals steps that
+  `apple.yml`'s `kit-test` macOS leg runs on every Apple PR; it is now an
+  Ubuntu `platform-conditionals` job, and SwiftLint runs only in
+  `apple.yml`. The unsigned `app-build` legs no longer run on `main` and
+  `stage` pushes, whose `upload-ios` and `upload-mac` archives build the
+  same apps for the same device SDKs in Release; `approval` no longer
+  waits on them, and `apple-gate` accepts their skip on those runs. An
+  Apple PR now holds six macOS runners instead of seven, and a stage or
+  main push eight instead of twelve.
+
+### Security
+- **tokio past the `AsyncFd` I/O-safety advisory in the Linux client.**
+  `tokio` moves from 1.53.1 to 1.53.3 in `linux/Cargo.lock`
+  (RUSTSEC-2026-0386). The older version's safe `AsyncFd` constructors
+  accepted any raw file descriptor without proof of ownership, which could
+  break I/O safety; the workspace never calls them, but the advisory turned
+  the `supply-chain` gate red for every PR that runs the Rust checks.
+
 ## [1.39.8] - 2026-10-25
 
 ### Changed
