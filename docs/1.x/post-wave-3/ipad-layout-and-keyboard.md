@@ -17,7 +17,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Work item | Status |
 |---|---|
 | Session 1, PR A. Wide-path selection (#2032, #2034, #2033's second half) | Mostly landed (2026-10-22): #2032 in PR #2165, #2034 and #2033's second half in PR #2182; decision 2 (Select entry) not started |
-| Session 1, PR B. The open search result across a layout swap (#2033's first half) | Not started (2026-10-15) |
+| Session 1, PR B. The open search result across a layout swap (#2184, split out of #2033) | In review (2026-10-25): PR #2228 |
 | Session 1, PR G. The first key after launch (#1929) | Not started (2026-10-15) |
 | Session 1, PR C. iPad menu commands (#2027, #2024, #2026) | Not started (2026-10-15) |
 | Session 1, PR D. The mid-width Settings sheet (#2004) | Not started (2026-10-15) |
@@ -108,14 +108,14 @@ Issue states read on GitHub on 2026-10-12. Paths are under `apple/CabalmailUI/` 
 
 **Status:** Mostly landed (2026-10-22). #2032 shipped in PR #2165 as `ReadingPaneSelectionPolicy.shown` plus `MailReaderChoice`'s singular count label. #2034 and #2033's second half shipped in PR #2182 as `ReadingPaneSelectionPolicy.reopens`, asked by `selectRow` before it writes `selectedRefs`: an equal set is no longer a dead tap, measured pre and post on the visionOS and iPad simulators. Decision 2 (what is checked when Select mode is entered with a message open) is **not started**, and neither is the visionOS pop-clears-the-selection half of this item's scope line - the re-open rule covers the reported symptom without it. #2033 keeps `accepted` for PR B's half.
 
-**PR B. The open search result across a layout swap (#2033's first half).**
+**PR B. The open search result across a layout swap (#2184, split out of #2033).**
 - Scope: narrowing or folding mid-search opens the Search tab with the result pushed; widening or unfolding with a result open shows it in the split's reader. Hold the result in the `ShellHandOff` value beside the search hand-off it already makes, so the navigator gains no stored property, and let `SearchView` take it on appear, as the feed reader takes `takeItemForHandOff()` (`Navigation/FeedNavigationState.swift:73`). If mail-correctness.md's PR 2 left a search re-run that drops the open result to this plan (its line 83), fix it here.
 - Files: `ShellHandOff.swift`, `SceneNavigator.swift` (inside the `ShellHandOff` extension at :700-728), `SearchView.swift`, `Shell/WideMail.swift` only if the split's reader needs the seed. Count class-body lines before writing. If B needs more than about five, stop and tell the maintainer: mail-navigation-refactors.md's PR 1 goes first (its line 112) and B rebases on it.
 - Tests: `ShellHandOffTests` for both directions, and a leftover search behind another tab still ends (#1989's rule).
 - Verify: iPad simulator narrow and widen, 2 of 2 each way; Studio Duo simulator fold and unfold mid-search with a result open (ask before driving the Studio's GUI).
 - Risk: medium; the navigator is a shared hotspot.
 
-**Status:** Not started (2026-10-15).
+**Status:** In review (2026-10-25), PR #2228, against #2184 — #2033's first half, split out under the maintainer's partial-delivery rule. Taken as the plan asks: `ShellHandOff` holds the open result (`searchResult`, with `searchResultChanged` / `takeSearchResult`), so the navigator gains no stored property; the split's reader takes it in `rehand` and the Search tab takes it in `SearchView.onAppear`, as the feed list takes `takeItemForHandOff()`. Two of the Duo spec's three additions are left out and named in the PR: the focused search field winning a narrow (the navigator is not told about the field's focus, and `SignedInRootView`'s layout report has no focus state to pass), and the re-presented result not being refetched, which the hand-off neither causes nor prevents — it re-presents the same `Envelope`, and the reader's own cache-first load is the folder path's. No live simulator arm yet: the plan's 2-of-2 narrow and widen is owed on retest.
 
 **PR G. The first key after launch (#1929). Investigation first; may ship nothing.**
 - Run it on the Mini while B is in CI. Reproduce with #2001's steps. Since the repro's tap already requests focus, test the cheap question first: after the tap, press Down or Esc, then Command-A, and see whether the first press is lost whatever the key. Then the same in a text field (#1929's tester control). Lost everywhere means iPadOS's own: record it and apply decision 5b. Lost only in the list: try focus on appear, without taking the search field's focus (`SearchFieldFocusPolicy`, #1425).
