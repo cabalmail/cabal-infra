@@ -253,13 +253,35 @@ final class SceneNavigator {
             // unless the window's own stored folder was never opened.
             coordinator.didConsumeLaunchSession = true
             if hasClient() { landOnSessionFolder(coordinator, stored: route.mail) }
-        } else if let message = route.mail.message, !restores.hasPendingRestore(in: message.folder) {
-            // Unless a restore for the folder is already waiting: a
-            // navigation or a landing the list has not applied yet, newer
-            // than the open message and carrying any reading position with
-            // it, which a bare re-park would replace.
+        } else if let message = route.mail.message, !restores.pendingRestoreSupersedes(message) {
+            // Unless a restore for the folder is already waiting on a
+            // *different* message: a navigation or a landing the list has not
+            // applied yet, newer than the open message and carrying any
+            // reading position with it, which a bare re-park would replace.
+            // One waiting on this same message is the tree before this one
+            // handing the same message off, for a list that is going away
+            // before it can select it — two trees inside one swap, which a
+            // split rebuilt to re-tile makes (`SplitRetilePolicy`, #1988) —
+            // so this tree takes it over.
             restores.schedule(coordinator.restoreCursor(for: message), priming: recorder.recording)
         }
+    }
+
+    /// Whether a message list belonging to `tree` may take a parked restore.
+    ///
+    /// The list in the tree a swap replaced may not. It is being torn down,
+    /// but it is still mounted and still sees the window's parked restores,
+    /// and its own initial load can finish first — measured at ~70 ms ahead
+    /// of the list that replaces it. Taking the restore there applies it in a
+    /// view that is going away, and the tree that replaced it finds the
+    /// pop-once slot empty: the open message is lost across a Zoom that
+    /// rebuilt the split to re-tile (`SplitRetilePolicy`, #1988).
+    ///
+    /// A list with no tree is not in a swap — the compact tab trees, or a
+    /// list hosted outside a main window — and takes a restore as before.
+    func listMayTakeRestore(in tree: UUID?) -> Bool {
+        guard let tree else { return true }
+        return !mailTrees.isSuperseded(tree)
     }
 
     /// Whether `tree` is still the one taking the window over, in the layout

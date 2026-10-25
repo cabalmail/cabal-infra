@@ -127,9 +127,24 @@ final class WindowRestores {
         pendingScrollRestore = nil
     }
 
-    /// Whether a restore for `folderPath` is waiting for its list.
-    func hasPendingRestore(in folderPath: String) -> Bool {
-        pendingRestore?.folderPath == folderPath
+    /// Whether parking a restore of `ref` would replace a restore of some
+    /// *other* message: a navigation or a landing the list has not applied
+    /// yet, newer than the open message and carrying any reading position
+    /// with it (`SceneNavigator.rehand`).
+    ///
+    /// A restore of the same message is not that. It is the previous tree's
+    /// own hand-off of the same open message, waiting for a list that is
+    /// being torn down — so a tree appearing after it takes it over rather
+    /// than standing off and leaving the message to the list that will never
+    /// select it (#1988). Matched on Message-ID where both carry one (durable
+    /// across a move), else on UID, as a scroll restore is.
+    func pendingRestoreSupersedes(_ ref: MessageRef) -> Bool {
+        guard let restore = pendingRestore, restore.folderPath == ref.folder else { return false }
+        if let waiting = restore.messageID, let arriving = ref.messageId { return waiting != arriving }
+        if let waiting = restore.uid { return waiting != ref.uid }
+        // A restore that names no message at all is not one this can read as
+        // the same message, so it stands, as it did before this query.
+        return true
     }
 
     /// Returns and clears the parked restore if it targets `folderPath`. The

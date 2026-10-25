@@ -58,6 +58,10 @@ struct MessageListView: View {
     // shell rather than the size class, because this is a narrow split
     // column and reports compact even on a regular-width iPad (#1985).
     @Environment(\.shellLayout) var shellLayout
+    /// Which of the window's trees this list is in, where a shell publishes
+    /// one: a list in the tree a layout swap replaced takes no parked
+    /// restore (`SceneNavigator.listMayTakeRestore`).
+    @Environment(\.mailTree) private var mailTree
     // Drives the background-snapshot optimization: while the scene isn't
     // `.active`, `messageRow` (in `+Selection`) renders cheap placeholder
     // rows instead of the per-row `List` that backs the swipe actions, so
@@ -622,7 +626,7 @@ extension MessageListView {
     /// then by the restore's ref. A miss (deleted, or not in the loaded
     /// window) leaves the list unselected — the graceful-degradation path.
     private func applyPendingRestore(model: MessageListViewModel) {
-        guard let folder,
+        guard let folder, navigator?.listMayTakeRestore(in: mailTree) != false,
               let restore = navigator?.restores.consumePendingRestore(for: folder.path)
         else { return }
         let match = restore.messageID.flatMap { messageID in
