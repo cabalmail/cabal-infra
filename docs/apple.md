@@ -718,12 +718,13 @@ own CI files, on pushes to `main` and `stage` that do, and on
 
 | Job | Runs when | What it does |
 |---|---|---|
-| `kit-test` | Every run | SwiftLint and the platform-conditionals check (macOS leg only), then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) on macOS and iOS, and on visionOS too except on a PR |
-| `app-test` | Every run | The `CabalmailMacTests` app-layer suite, hosted by `CabalmailMac` |
-| `ios-app-test` | Every run | The `CabalmailiOSTests` app-layer suite, hosted by the iOS app on a simulator |
+| `promotion-verdict` | Pushes to `main` | `.github/scripts/apple-promotion-verdict.py`: reports the push as already tested when it is a merge whose tree is the stage tip's and the release PR's run on that tip passed every test leg. Anything it cannot show, an API error included, reports untested |
+| `kit-test` | Every run but a `main` push reported tested | SwiftLint and the platform-conditionals check (macOS leg only), then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) on macOS and iOS, and on visionOS too except on a PR into a branch other than `main` |
+| `app-test` | Same | The `CabalmailMacTests` app-layer suite, hosted by `CabalmailMac` |
+| `ios-app-test` | Same | The `CabalmailiOSTests` app-layer suite, hosted by the iOS app on a simulator |
 | `app-build` | PRs, and `workflow_dispatch` from a branch other than `main` or `stage` | Unsigned `xcodebuild build`: `CabalmailVision` (visionOS) and `CabalmailWatch` (watchOS) on a PR, where the two test suites already build the iOS and Mac apps; all four schemes, adding `Cabalmail` (iOS) and `CabalmailMac` (macOS), from another branch. Skipped on `main` and `stage` runs, whose upload archives are the device builds |
-| `apple-gate` | Every run | The one check that sums up the four jobs above |
-| `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass |
+| `apple-gate` | Every run | The one check that sums up the test and build jobs above |
+| `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass, or straight after `promotion-verdict` on a `main` push it reports tested |
 | `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
 
