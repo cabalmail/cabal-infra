@@ -58,7 +58,7 @@ enum StatusBannerPlacement {
     }
 
     /// The part of a window a status banner hangs from the bottom of.
-    enum Slot: Hashable, Sendable {
+    enum Slot: Hashable, Sendable, CaseIterable {
         /// The whole overlay: no fold crosses it.
         case whole
         /// The leading piece of a book fold (the list's).
