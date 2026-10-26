@@ -19,9 +19,10 @@ This table and the **Status:** line under each work item are updated in the same
 
 | Work item | Status |
 |---|---|
-| Decisions 1 to 9 (start of Session 1); 10 and 11 (Session 2) | None asked yet (2026-10-15) |
-| Session 1, PR 1: CI probe, then the leg | Not started (2026-10-15) |
-| Session 1, PR 2: fold adapter | Not started (2026-10-15) |
+| Decisions 1 to 9 (start of Session 1); 10 and 11 (Session 2) | 1 to 9 answered 2026-10-26 (6 to 8 on their defaults; 9: a trimmed spike in Session 1) |
+| Session 1, PR 1: CI probe, then the leg | In review (2026-10-26), #2235: the runner already has a Duo runtime, so it goes straight to the leg |
+| Session 1, PR 2: fold adapter | In review (2026-10-26) |
+| Session 1: the Decision 9 spike (trimmed) | Not started (2026-10-26); answer 9 moved it here from the end of Session 2 |
 | Session 1, PR 3: columns by the spec (#1666) | Not started (2026-10-15) |
 | Session 1, PR 4: toasts and banners on the fold rule (#1648) | Not started (2026-10-15) |
 | Session 1, PR 5: Search on the vertical tab bar (#1963) | Not started (2026-10-15) |
@@ -48,21 +49,39 @@ The spec's terms, which earlier plans used loosely:
 Asked at the start of Session 1, in its scope doc:
 
 1. **The Duo CI leg (only if the runner can boot a Duo simulator).** (a) Runs on stage pushes and on PRs labelled `duo`, and never blocks a merge. **Recommended.** (b) As (a), and it joins `apple-gate` after two weeks green. (c) Every Apple PR. Consequence of (a): ordinary PRs keep their six macOS jobs, and a red Duo leg is visible but advisory. Default: (a).
+
+   - **Answered 2026-10-26: (a).** The PR opt-in is a branch name containing `duo`, not a label: no `duo` label exists, and labels drive the repository's bots (see PR 1's erratum).
 2. **Device Hub clicks.** May Studio sessions click Device Hub's device row and its Closed, Book and Open posture buttons, and its hinge slider, with a screen capture before each click, as you allowed for the 3.2 layout-shells session? Yes **(recommended)** / No. Consequence of yes: the Studio pass folds the simulator without you. Default: the session checks whether those click rules are still in the Studio's permission settings; if not, it asks you to click when it needs a fold.
 
    > **Erratum (2026-10-16):** The plan does not record which permission settings hold those click rules or how to read them. So the default becomes: the session asks the maintainer whether the click permission given to the 3.2 layout-shells session still stands, and if it does not, asks the maintainer to click when it needs a fold.
 
+   - **Answered 2026-10-26: yes.** Studio sessions may click Device Hub as needed.
+
 3. **The Studio's Xcode.** When CI moves to the 27.1 release candidate or final build, may a Studio session install that same build beside the others? Yes **(recommended)** / No. Consequence of yes: Studio builds keep matching CI's compiler. Default: no install.
+
+   - **Answered 2026-10-26: yes.** CI had moved to Xcode 27.2 (27B48) by then; the maintainer installs it beside the others, since a download needs the maintainer's Apple ID, and Studio sessions select it per command with `DEVELOPER_DIR`.
 4. **A fact.** Did you already run the Wave 3 TestFlight checklist's "At the Studio" Duo fold check ("Duo fold keeps the list's place", under "Background from the rearchitecture") in the open pose? Yes / No. Default: no, and the Studio pass runs it.
+
+   - **Answered 2026-10-26: no.** The Studio pass runs it.
 5. **#1667 timing.** Put the mail reader's actions into system bars in R1 (bottom placement, so they join the side strip and sit below a laptop fold, per the spec), or wait for the reader-bar refactor? R1 **(recommended)**. Consequence of R1: the first TestFlight build after R1 merges shows the reader's actions in the strip on your Duo. Default: R1.
+
+   - **Answered 2026-10-26: now, in R1.**
 6. **#1681, compact row drag, which changes every iPhone.** Its own release after R1 **(recommended)**, or inside R1? Consequence of its own release: a long-press regression on any iPhone traces to one release, and drag reaches prod one promotion later. Default: own release.
+
+   - **Answered 2026-10-26: the default, its own release after R1.**
 7. **Do Duo device checks hold Promote once you have the device?** Yes, for Duo PRs merged after it arrives **(recommended)**. No: Duo stays best-effort. Consequence of yes: an open Duo `needs-verification` issue also holds every other plan's changes on `stage` until you check it, so each session hands you its device checks in one batch. Default: yes from arrival; R1 promotes on simulator evidence.
+
+   - **Answered 2026-10-26: the default, yes from the device's arrival.** Until then every release promotes on simulator evidence.
 8. **Compose as a sheet (#1680) in R1?** Your spec makes compose a sheet in every layout, with a window only on request, and gives iPad the same sheet 〔.47994〕〔.17848〕. That is not Duo-only: iPad Reply and New Message stop opening a window. In R1 **(recommended)**, because Reply on today's open Duo takes the whole display. Or its own release after R1. Consequence of R1: iPad and the Duo change together, and a compose regression on iPad traces to R1. Default: R1, as R1's last PR so it can be cut.
+
+   - **Answered 2026-10-26: the default, in R1 as its last PR.**
 9. **One view tree (the spec's structure) or the two Wave 3 shells?** The spec asks for one tree: a root tab view (Mail, Feeds, Addresses, Search) on both displays, split views inside that the system collapses on the outer display, Settings as a sheet, and folders as the system sidebar 〔.9897〕〔.18738〕〔.19069〕. You accepted the iPad tab bar that comes with it 〔.19772〕. Wave 3 shipped the Oct 2 proposal's design instead: `TabShell` and `SplitShell`, swapped on a close or open, with the window's state held above the swap (the proposal: "a fold or unfold swaps only the layout shell, while the route, selection and search live in the window's navigator above it"; `Shell/SectionLayoutPolicy.swift:32-36`). The swap was chosen because a `NavigationSplitView` expanding and collapsing inside the tabs caused the "wider screen" bugs (the reader not pushed, the inspector stuck as a sheet; `SectionLayoutPolicy.swift:38-60`). It still loses what sits below it: the reader is rebuilt, sheets other than compose close, the folder panel and inspector close, and the list shows its top until its refresh.
    - (a) **A timeboxed one-tree spike on the Studio in Session 2, then a yes or no on a merge session.** **Recommended.** The spike builds the spec's root on a branch and runs the spec's Device Hub chain plus the two "wider screen" bugs. Consequence: about a day of session time; no app change; you decide with evidence.
    - (b) **Commit to the merge now** as Session 3. Consequence: the iPad gets the tab bar and Settings becomes a sheet everywhere in that release; `ShellHandOff`, the shell hand-off code and several sibling-plan items go away.
    - (c) **Keep the two shells** and fix each loss in place (sheets hoisted to the root, the reader kept across the swap). Consequence: no iPad tab bar, and the spec's four tabs stay unbuilt.
    Default: (a). Decision 10 and the folder-sidebar choice follow from it.
+
+   - **Answered 2026-10-26: (a), as a trimmed spike run now, in Session 1, not at the end of Session 2.** The scope is the Claude Doc "Duo Decision 9: one layout or two, and what the spike costs" (private to the maintainer's account), sections "What the spike has to prove" and "The trimmed spike": on a throwaway branch off `stage`, draw `TabShell` at regular width too and lift its compact size-class pin there (keeping it at compact height), drop the host's `navigator.layoutChanged` call, port the #1679 reader floor, and log reader-model and web-view creation and sheet dismissals. Then about 20 closes and opens on the Duo simulator with checks stacked, opening straight into book among them, and scripted rotations on a Pro Max simulator; no book and laptop chain; test #1679 and #1988; Mail and Feeds only. Stop early only on a framework-level loss; record bugs, fix none, and build no folder-sidebar prototype. If Decision 3 brings Xcode 27.2 onto the Studio, run it after that install. PR 8 waits for its outcome, since it adds a hand-off across the swap.
 
 Asked at the start of Session 2, after the device pass:
 
@@ -92,6 +111,8 @@ Session 1. R1 is everything below except the CI probe and the two R2 items; each
 Each R1 PR changes the stage TestFlight app on a Duo as soon as it merges, because CI builds that app with the 27.1 SDK.
 
 Session 2: one device checklist for you, findings filed as issues, and #1962, #1651 and #1652 closed. Then, bugs first: open portrait becomes the overlay (the message full width, the list sliding over it), on the Duo and in iPad portrait; the laptop layout; sheets placed by window shape; the empty reader shows the folder's unread count; Select mode per Decision 11; the inspector per Decision 10; and the one-tree spike per Decision 9. Session 3 (with Decision 9's merge): the same four tabs on both displays and on iPad, Settings as a sheet everywhere, folders in the system sidebar.
+
+> **Erratum (2026-10-26):** Decision 9's answer moved the one-tree spike, trimmed, into Session 1. Session 2 reads its outcome and runs no spike.
 
 > **Erratum (2026-10-25):** #1652 was closed as not planned on 2026-10-25, at the maintainer's request, because the `duo` branch merge it gated will not happen. Session 2 closes #1962 and #1651.
 
@@ -155,6 +176,8 @@ The Studio also holds `claude/duo-fold-diag` (two diagnostic commits, never push
 
 Rules for every PR: if a release PR is open, nothing merges to `stage` until it has merged. Build with the Xcode CI actually selects (read "Xcode is set to" in the latest Apple run; 27.1 beta 1 today), chosen per command with `DEVELOPER_DIR`, never `xcode-select`. At most two open Apple PRs, and only PR 1 may run beside another. Never edit a source scan's text or anchor without the maintainer's yes up front. Layout follows size class, window shape and the active fold region, never the device: no `hostHasFold`, no idiom check, no pose names in code 〔.7625〕〔.19772〕. Cabalmail adds no animation of its own on a close, open or fold, except the divider's 〔.22320〕.
 
+> **Erratum (2026-10-26):** CI's `latest-stable` now selects Xcode 27.2 (27B48, at `/Applications/Xcode_27.2_Release_Candidate.app`), not 27.1 beta 1 (stage's Apple run of 2026-10-26, "Test app layer (iOS)": "Xcode is set to 27.2.0 (27B48)"). The Studio has 27.1 GA (27A9275) and the old 27.1 beta, and no 27.2, so Studio builds use 27.1 GA, the closest it has, until Decision 3 brings 27.2; each PR's own CI run covers 27.2. The Duo guard still holds on 27.1 GA, whose iOS SDK carries SwiftUICore 8.0.85.29.
+
 Priority for the R1 cut: PR 2, PR 5, PR 7, PR 3, PR 4, PR 6, PR 8, PR 9, PR 11. Whatever has not merged when R1 is cut moves to R2.
 
 **PR 1, CI probe, then the leg (`apple.yml` only; `no-changelog`).** A draft PR whose first push adds a throwaway job that prints:
@@ -166,9 +189,11 @@ Priority for the R1 cut: PR 2, PR 5, PR 7, PR 3, PR 4, PR 6, PR 8, PR 9, PR 11. 
 
 Then one of two outcomes. If a 27.1 runtime can be had in about ten minutes, replace the probe with an `ios-duo` leg: Xcode by path (`/Applications/Xcode_27.1.app`, the image's symlink), the Duo by explicit name (through `create-sim.sh` if apple-ci-and-build-config.md has landed it, otherwise an inline parameter for this leg only), then build and run the iOS-hosted app tests. No Kit tests. Trigger per Decision 1, `continue-on-error`, outside `apple-gate`. Verify with a throwaway commit that breaks code inside the 27.1 guard. If no runtime is attainable, close the PR, comment the probe's findings on #1652, and re-probe when the image version changes. PR 2's tripwire is then the only guard. Risk: medium; the missing runtime is the likely case.
 
+> **Erratum (2026-10-26):** The runtime is already there. The `xcode-27` image carries iOS 27.0 (24A434) and iOS 27.1 (24A94425), and the 27.1 runtime supports one device type, the iPhone Duo (stage's Apple run of 2026-10-26, "Resolve iOS simulator destination" in "Test app layer (iOS)"). #2196 already landed the runtime and device-type picker (`.github/scripts/resolve-sim-destination.sh` with `select-sim-pair.jq`), which takes a device-name prefix, so the leg needs no probe, no download and no `create-sim.sh`: it calls that script with "iPhone Duo". The leg also uses the workflow's own `latest-stable` Xcode rather than a pinned path, so it tests what the uploads build. No `duo` label exists, and labels drive the repository's bots, so Decision 1's PR opt-in becomes a branch name containing `duo` instead of a label.
+
 > **Erratum (2026-10-25):** #1652 is closed. If no runtime is attainable, record the probe's findings in PR 1's **Status:** line; a comment on the closed #1652 is optional.
 
-**Status:** Not started (2026-10-15).
+**Status:** In review (2026-10-26), #2235: the advisory `ios-duo-test` job, on stage pushes, manual runs and PRs whose branch name contains `duo`. The guard-break check waits for PR 2's guarded code to reach `stage`.
 
 **PR 2, fold adapter (`no-changelog`).** New `Platform/FoldGeometry.swift`, behind the guards:
 - The active `.division` regions, filtered to active explicitly, because Apple's reference says inactive ones come back too while the runtime returns only active ones 〔row .27350〕.
@@ -178,7 +203,7 @@ Then one of two outcomes. If a 27.1 runtime can be had in about ten minutes, rep
 - The pure rules as plain types with Mac-host tests: a region to a fold state, the hold's timing with an injected clock, and the two-pass rule.
 - A `foldAPICompiled` flag and an iOS-hosted test that asserts it, so CI turns red if its Xcode stops compiling the guarded code.
 
-**Status:** Not started (2026-10-15).
+**Status:** In review (2026-10-26). `Platform/FoldState.swift` (`FoldState`, `FoldPieces`), `Platform/FoldHold.swift` (`FoldSample`, `HingeReading`, the two-pass `FoldSettler`, the `FoldHold` hinge hold) and `Platform/FoldGeometry.swift` (`FoldAPI.isCompiled`, the guarded region and hinge reads, `FoldTracker`, `\.foldState`, `foldGeometry()` and `onFoldPiecesChange(_:)`), installed once on `SignedInRootView`. The regions are read from a clear reader behind the root that ignores every safe area, because in laptop pose the keyboard covers the bottom half from the crease and the root, shrunk above it, would stop overlapping the region. The two-pass rule is a geometry callback plus one confirming pass 50 ms later, since a change-driven callback never repeats a value; `onFoldPiecesChange(_:)` also waits while the root's own reading is settling (`\.foldIsSettling`), so a rotation cannot pair a view's new frame with the old crease. The region wins over the hinge: a fully open hinge, or losing the hinge, ends only a fold whose region has dropped out, and a closed status counts as motion, since the window's move to the outer display ends the fold. The delay and the 0.6 s grace are starting values for the Studio to tune. Mac-hosted tests: `FoldStateTests`, `FoldHoldTests` (with `FoldSettlerTests`) and `FoldTrackerTests`; iOS-hosted: `FoldAPICompiledTests` (the tripwire, and an unfolded hosted window publishing no fold, whose guarded region read runs only on PR 1's Duo leg). Studio, Xcode 27.1 GA: the iOS-hosted suite passed on a fresh iPhone Duo simulator (iOS 27.1) and an iPhone 18 Pro (iOS 27.0), 39 tests each, and the fold tests on the Mac host. Not checked yet: any folded reading, which needs Device Hub (the Studio simulator pass).
 
 **PR 3, columns by the spec (#1666; `Apple:`).** In `SplitShell`, reading PR 2's `FoldState`; it does not use `WideMail.swift`'s width, which the Mac shares.
 - **Flat.** The list keeps a stored width per tab (Mail, Feeds, Search) and per window, in scene storage, replacing the app-wide `@AppStorage` key (an iPad behaviour change: two iPad windows stop sharing a width). With no stored width, the list sits at the fold when the window has one, else at today's default. The range is 320 pt (the spec's proposed floor; stage's is 300) up to the split width less the 360 pt reader floor; the Studio confirms whether the measured split width already excludes the 84 pt side strip, since the spec computes a 507 pt ceiling and stage's rule gives 575 pt if it does not. The #1716 slack rule stays.
@@ -216,6 +241,8 @@ Then one of two outcomes. If a 27.1 runtime can be had in about ten minutes, rep
 
 **PR 8, nothing re-marked on a close or open (`Apple:`).** A reader rebuilt by a shell swap does not run mark-as-read again and keeps the message's Load Images state; a feed list's restored selection does not mark read. Carry an "already opened" mark with the parked message in `SceneNavigator`'s hand-off; only an explicit open marks read 〔.15446〕. Behaviour tests: Mark Unread, then a layout change, stays unread. Verify on the iPad simulator (resize across compact) and the Duo simulator (close and open). Decision 9's merge would make this unnecessary, and the merge PR deletes it.
 
+> **Erratum (2026-10-26):** PR 8 waits for the Decision 9 spike's outcome (Decision 9's answer), because it adds a hand-off across the shell swap that a merge would delete.
+
 **Status:** Not started (2026-10-15).
 
 **PR 9, crease margins in book pose (`Apple:`).** The spec's 44 pt rule 〔row .53420〕, while a vertical fold is active:
@@ -240,6 +267,10 @@ Verify by measuring each against the crease on the Studio simulator.
 **PR 12, drops into compose (`Apple:`; R2).** Images and files dropped onto the compose sheet become attachments, through the same path as the photo and file pickers 〔.14407〕. Verify a drag from Photos and Files in a Duo Split View half and on iPad.
 
 **Status:** Not started (2026-10-15).
+
+**The Decision 9 spike (trimmed; no `stage` PR).** Added 2026-10-26 by Decision 9's answer, which holds its scope. It runs on a throwaway branch on the Studio, with the Duo closes and opens and the Pro Max rotations, and its result is a yes or no on the merge, with the evidence, recorded under Decision 9.
+
+**Status:** Not started (2026-10-26).
 
 **The Studio simulator pass (no code, in Session 1, before and after PRs 3 to 9).** Ask before taking the Studio's screen. Triage the Studio's Duo refs read-only first and hand the maintainer a one-line delete list. Then run, filing one issue per finding:
 - the spec's Device Hub chain on every screen, with a sheet open, the keyboard up and Select mode on: closed, Book, Open, rotate, Book (laptop), rotate back, closed; plus a cold launch while open, two windows, and closing with a draft in a background window 〔.28681〕;
@@ -279,6 +310,8 @@ Write the consolidated device checklist from this pass, the spec's "What needs h
    - #1692 per Decision 10;
    - turning on detached-reader-window.md's open-Duo entry point if it has landed (regular width, on request, falling back in place).
    Then Decision 9's spike on a branch.
+
+   > **Erratum (2026-10-26):** The spike runs in Session 1, per Decision 9's answer. Session 2 runs no spike.
 5. Releases R3 (and R4 if the filed issues are many), each soaked on the Mini and the Studio simulator, and checked on the device per Decision 7. Open portrait and sheet placement change iPad too, so each says so in its fragment. If a fix needs `Navigation/SceneNavigator.swift`, wait for mail-navigation-refactors.md PR 1, since the type body is at 241 of 250 lines.
 
 ### Session 3: the one-tree merge (with Decision 9), or the reader-bar refactor alone
@@ -286,6 +319,8 @@ Write the consolidated device checklist from this pass, the spec's "What needs h
 **Status:** Not started (2026-10-15).
 
 **With the merge.** After platform-conditionals.md's FU-1 and Session 2. One root on iOS: a tab view with Mail, Feeds, Addresses and Search on both displays and on iPad, split views inside Mail, Feeds and Search that the system collapses on the outer display, Settings as a sheet from a gear on each tab's first screen, and folders as the system sidebar with one control for it (Cabalmail's folder button in book and laptop poses) 〔.18737〕〔.19068〕. Whether the folder sidebar overlays or the leading column becomes a stack is the spec's open choice 〔.19313〕, decided by prototyping both in Decision 9's spike. The merge deletes `ShellHandOff`, the tab and split shells' hand-off rules and PR 8's carry, hoists every sheet to the root, and keeps the split view's preferred column current so a collapse lands where the narrowing rule says 〔.20662〕. It carries FU-12 with it: the reader reads layout and window shape, not the size class. Several PRs, its own release or two; the source scans on `SplitShell.swift`, `TabShell.swift` and `ShellHandOff.swift` need the maintainer's yes. Risk: high.
+
+> **Erratum (2026-10-26):** The trimmed spike builds no folder-sidebar prototype (Decision 9's answer), so it does not settle overlay against stack; the merge session prototypes and settles that choice.
 
 **Without it (optional).** FU-12 alone, as `../platform-conditionals-followups.md`, FU-12 ("Reader action bar on ShellLayout") describes, renamed "the reader bar on layout and window shape": the reader reads `ShellLayout` and the window's shape instead of the size class, `ReaderToolbarPolicy.Placement` gains `.desktop`, and 15 blocks leave the allowlist. It must keep PR 6's inputs and the tall-window Message menu. Screenshots before and after on iPad (26 and 27 behaviour), narrow iPad, iPhone, Mac, visionOS and the Duo simulator. Risk: medium-high. If it never runs, nothing breaks.
 
