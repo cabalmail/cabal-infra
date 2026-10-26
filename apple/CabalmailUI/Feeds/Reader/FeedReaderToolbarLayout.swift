@@ -66,14 +66,29 @@ enum FeedReaderToolbarLayout {
         return [display, [.article, .openInBrowser, .shareLink, .copyLink]]
     }
 
-    /// The wide bar (macOS and visionOS), in drawn order: Read, Flag and
-    /// Reader view always; Remote content while the feed's own content
-    /// shows; Open article and the More menu for an item with a link.
-    static func wideBar(showingArticle: Bool, hasArticle: Bool) -> [FeedReaderAction] {
-        var actions: [FeedReaderAction] = [.read, .favorite, .readerMode]
-        if !showingArticle { actions.append(.remoteContent) }
+    /// The wide bar (macOS and visionOS), in drawn order: Read, Flag,
+    /// Reader view and Remote content always; Open article and the More
+    /// menu for an item with a link.
+    ///
+    /// Remote content keeps its slot while the publisher's page shows, and
+    /// the bar disables it there (the page loads its own), rather than
+    /// dropping it. It sits in the MIDDLE of the bar, so dropping it slid
+    /// Open article and More 42 pt left under the pointer that had just
+    /// pressed Open article, and a second click there opened More (#2206).
+    /// Only the trailing pair ever comes and goes, where nothing follows it
+    /// to shift.
+    static func wideBar(hasArticle: Bool) -> [FeedReaderAction] {
+        var actions: [FeedReaderAction] = [.read, .favorite, .readerMode, .remoteContent]
         if hasArticle { actions += [.article, .more] }
         return actions
+    }
+
+    /// Whether the Remote content control does anything: only over the
+    /// feed's own content, and only when there is some. The publisher's page
+    /// loads its own, so the control is disabled there, in the slot the wide
+    /// bar keeps for it (#2206).
+    static func remoteContentEnabled(showingArticle: Bool, hasFeedContent: Bool) -> Bool {
+        hasFeedContent && !showingArticle
     }
 
     /// The More menu on the wide bar: the link rows.
@@ -96,16 +111,14 @@ enum FeedReaderToolbarLayout {
 
     /// The macOS empty pane's disabled stand-ins: the wide bar an item
     /// opened in this scope will draw, so a button never moves under the
-    /// pointer when one opens.
+    /// pointer when one opens (#2144).
     ///
     /// `hasArticle` is true, which reserves Open article and More at the
     /// trailing end: an item with no link drops them off the end, where
-    /// nothing follows to shift. `showingArticle` is the scope's saved open
-    /// mode (`FeedDetailPolicy.opensArticle(in:folders:subscriptions:)`) and
-    /// it has to follow it, because Remote content sits in the MIDDLE of the
-    /// bar: reserving a slot an article-showing item does not draw slides
-    /// Open article and More 42 pt left as the item opens (#2144).
-    static func standIns(showingArticle: Bool) -> [FeedReaderAction] {
-        wideBar(showingArticle: showingArticle, hasArticle: true)
+    /// nothing follows to shift. Whether the item opens on the publisher's
+    /// page no longer matters, because the bar keeps Remote content's slot
+    /// either way (#2206).
+    static func standIns() -> [FeedReaderAction] {
+        wideBar(hasArticle: true)
     }
 }

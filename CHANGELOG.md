@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.12] - 2026-10-26
+
+### Changed
+- **A main push no longer re-runs the Apple tests the release PR passed.**
+  main receives only stage promotions, whose tree is the stage tip's, and
+  the release PR's `apple.yml` run tests that tree first. A new
+  `promotion-verdict` job (`.github/scripts/apple-promotion-verdict.py`)
+  checks that the push is such a merge and that the run on the stage tip
+  passed every test leg; when it did, `kit-test`, `app-test` and
+  `ios-app-test` skip and the run goes straight to the `gate-prod`
+  approval and the uploads, which still archive every app. Anything it
+  cannot show, an API error included, runs the full suite. A PR into main
+  now keeps `kit-test`'s visionOS leg so its run covers every leg the main
+  push would, and the upload jobs pin themselves to `approval`'s result so
+  the skips above them don't skip them too. A promotion's main push now
+  holds three macOS runners instead of eight, and its approval no longer
+  waits on a test pass that took 6 to 9 minutes plus runner queueing.
+
+### Fixed
+- Apple: **Composer text follows the system text size.** The rich-text
+  editor on iPhone, iPad and Vision Pro drew its text at a fixed size
+  while the fields around it grew with Dynamic Type; it now scales by the
+  same ratio the message reader uses, and updates live when the setting
+  changes. The size is display only: the HTML a message is sent or saved
+  with is unchanged.
+- Apple: **Feed reader buttons stay put when you open the article.** On
+  macOS and Vision Pro, pressing Open article (or Show feed content)
+  dropped or restored the Remote content button in the middle of the
+  bar, sliding Open article and More sideways under the pointer, so a
+  second click landed on More. Remote content now keeps its place and is
+  dimmed while the publisher's page shows.
+
 ## [1.39.11] - 2026-10-25
 
 ### Fixed
