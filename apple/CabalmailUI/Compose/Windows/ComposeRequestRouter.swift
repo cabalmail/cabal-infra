@@ -127,6 +127,8 @@ struct ComposeRequestRouter: ViewModifier {
             ))
             .environment(appState)
             .environment(preferences)
+            .onAppear { SpikeLog.note("sheet compose appeared") }
+            .onDisappear { SpikeLog.note("sheet compose DISAPPEARED") }
         }
     }
 }

@@ -15,16 +15,14 @@ extension View {
     ///
     /// A runtime check, not a compile-time one: one binary serves iOS 18
     /// through 27.
-    @ViewBuilder
     func underBottomGlass(_ enabled: Bool) -> some View {
+        // SPIKE DIAGNOSTIC: one modifier whose edge set varies, instead of an
+        // if/else whose branch flip (on a size-class change) replaces the
+        // web view's host and so rebuilds the WKWebView.
+        var edges: Edge.Set = []
         #if os(iOS)
-        if enabled, #available(iOS 26.0, *) {
-            ignoresSafeArea(.container, edges: .bottom)
-        } else {
-            self
-        }
-        #else
-        self
+        if enabled, #available(iOS 26.0, *) { edges = .bottom }
         #endif
+        return ignoresSafeArea(.container, edges: edges)
     }
 }
