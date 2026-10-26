@@ -37,6 +37,10 @@ on:
       - '.github/scripts/set-testflight-notes.py'
       - '.github/scripts/mail-probe.py'
       - '.github/scripts/select-sim-pair.jq'
+      # test_apple_promotion_verdict.py: the script, and the apple.yml job
+      # names and kit-test matrix it depends on.
+      - '.github/scripts/apple-promotion-verdict.py'
+      - '.github/workflows/apple.yml'
       - 'changelog.d/**'
       - 'design/**'
       # test_sms_consent_text.py: the native sign-up's SMS consent text
@@ -59,6 +63,10 @@ on:
       - '.github/scripts/set-testflight-notes.py'
       - '.github/scripts/mail-probe.py'
       - '.github/scripts/select-sim-pair.jq'
+      # test_apple_promotion_verdict.py: the script, and the apple.yml job
+      # names and kit-test matrix it depends on.
+      - '.github/scripts/apple-promotion-verdict.py'
+      - '.github/workflows/apple.yml'
       - 'changelog.d/**'
       - 'design/**'
       # test_sms_consent_text.py: the native sign-up's SMS consent text
