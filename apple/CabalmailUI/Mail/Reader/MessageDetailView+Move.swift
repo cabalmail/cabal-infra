@@ -32,7 +32,7 @@ extension MessageDetailView {
         await model.move(
             to: destination,
             onFailure: { error in
-                appState.showToast(Toast(
+                showToast(Toast(
                     kind: .error,
                     message: "Couldn't move message: \(error.localizedDescription)"
                 ))

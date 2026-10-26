@@ -1256,7 +1256,10 @@ coordinates. On the way:
 - `onFoldPiecesChange(_:)` hands a view its bounds less the crease
   (`FoldPieces`), for placing floating elements, and waits while the
   root's own reading is settling (`\.foldIsSettling`) so a rotation
-  never pairs a view's new frame with the old crease.
+  never pairs a view's new frame with the old crease. The status banners
+  place themselves with it (`StatusBannerOverlay`): in book pose in the
+  half of the column that raised them (`Toast.Origin`), the reader's for
+  the window's own; in laptop pose, anything tappable below the crease.
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are

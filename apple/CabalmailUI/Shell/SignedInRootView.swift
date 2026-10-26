@@ -93,12 +93,18 @@ struct SignedInRootView: View {
                 measuredWidth = width
             }
             // Bottom-anchored since #1426: at the top the banners covered the
-            // filter pills and clipped the first message row.
-            .overlay(alignment: .bottom) {
-                statusBanners
-                    .animation(.default, value: isOffline)
-                    .animation(.default, value: appState.toast)
-                    .animation(.default, value: failedSends.visible.map(\.id))
+            // filter pills and clipped the first message row. Kept off the
+            // fold on an iPhone Duo (`StatusBannerOverlay`).
+            .overlay {
+                StatusBannerOverlay(
+                    isOffline: isOffline,
+                    failedSends: failedSends,
+                    bottomInset: bannerBottomInset,
+                    action: actionHandler(for:)
+                )
+                .animation(.default, value: isOffline)
+                .animation(.default, value: appState.toast)
+                .animation(.default, value: failedSends.visible.map(\.id))
             }
             // The window's fold (`\.foldState`), for the shells and the
             // banners above alike: after the overlay so both are beneath it,
@@ -205,36 +211,6 @@ struct SignedInRootView: View {
             compactTab: navigator.compactTab,
             folderName: navigator.selectedFolder?.name
         )
-    }
-
-    @ViewBuilder
-    private var statusBanners: some View {
-        VStack(spacing: 8) {
-            if isOffline {
-                BannerView(
-                    icon: "wifi.slash",
-                    text: "Offline — some actions will retry automatically.",
-                    tint: ColorTokens.warningFg
-                )
-            }
-            if !failedSends.visible.isEmpty, let client = appState.client {
-                FailedSendBanner(monitor: failedSends, client: client)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            if let toast = appState.toast {
-                // The offline banner above carries no dismissal: it reports a
-                // state that is still true, so hiding it would only make the
-                // app quieter about being offline (#1426).
-                ToastBanner(
-                    toast: toast,
-                    onAction: actionHandler(for: toast),
-                    onDismiss: { appState.toast = nil }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .padding(.bottom, bannerBottomInset)
-        .padding(.horizontal, 12)
     }
 
     /// Lift the banners above the tab bar wherever one occupies that band —

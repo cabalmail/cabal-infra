@@ -207,7 +207,7 @@ extension MessageDetailView {
             onFailure: { error in
                 // Every list has already put the row back; surface a toast
                 // so the user knows the move didn't take.
-                appState.showToast(Toast(
+                showToast(Toast(
                     kind: .error,
                     message: failureMessage(for: action, error: error)
                 ))
@@ -223,7 +223,7 @@ extension MessageDetailView {
         Task {
             await model.purge(
                 onFailure: { error in
-                    appState.showToast(Toast(
+                    showToast(Toast(
                         kind: .error,
                         message: "Couldn't delete message: \(error.localizedDescription)"
                     ))
