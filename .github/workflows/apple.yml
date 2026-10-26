@@ -452,6 +452,103 @@ jobs:
         run: .github/scripts/dump-xcodebuild-raw.sh
 
   # -----------------------------------------------------------------------
+  # The iOS-hosted app-layer suite again, on an iPhone Duo simulator: the
+  # one leg that executes the code behind `#available(iOS 27.1, *)`. Every
+  # other iOS leg runs on the iOS 27.0 runtime, where those branches
+  # compile but never run (ios-app-test's pair picker keeps the iPhone 18
+  # Pro there on purpose; see select-sim-pair.jq). The image's iOS 27.1
+  # runtime supports exactly one device type, the iPhone Duo, so the same
+  # resolver finds it by name.
+  #
+  # Advisory, per the Duo plan's Decision 1 (docs/1.x/post-wave-3/
+  # duo-support.md): `continue-on-error`, and in neither apple-gate's nor
+  # approval's needs, so a red leg is visible on the run but blocks no merge
+  # and no upload. It runs on stage pushes, on a manual dispatch, and on a
+  # PR whose branch name contains `duo`; ordinary PRs keep their macOS job
+  # count. Not on main: a main push's tests are the release PR's, and the
+  # release PR's branch is `stage`.
+  #
+  # What it cannot do: fold. No simctl or Xcode command changes the Duo's
+  # posture, so the simulator stays closed (the outer display) and every
+  # fold check is a hand click in Device Hub or a real device. It also
+  # cannot see an Xcode fallback on its own: an Xcode without the 27.1 SDK
+  # compiles the Duo code out, and FoldAPICompiledTests in ios-app-test
+  # (the required leg) is what fails then.
+  # -----------------------------------------------------------------------
+  ios-duo-test:
+    name: Test app layer (iPhone Duo)
+    # See kit-test for why it needs promotion-verdict; on the runs this leg
+    # takes, promotion-verdict is always skipped.
+    needs: promotion-verdict
+    if: >-
+      ${{ !cancelled() && needs.promotion-verdict.outputs.tested != 'true'
+      && (github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push' && github.ref_name == 'stage')
+      || (github.event_name == 'pull_request' && contains(github.head_ref, 'duo'))) }}
+    runs-on: xcode-27
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
+        with:
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Install XcodeGen + xcbeautify
+        run: |
+          brew untap aws/tap >/dev/null 2>&1 || true
+          for pkg in xcodegen xcbeautify coreutils; do
+            brew list "$pkg" >/dev/null 2>&1 || brew install "$pkg"
+          done
+
+      - name: Generate Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Sync vendored CabalmailKit resources (marked + turndown)
+        working-directory: apple
+        run: scripts/sync-vendored.sh
+
+      - name: Resolve iPhone Duo simulator destination
+        id: dest
+        run: .github/scripts/resolve-sim-destination.sh iOS "iPhone Duo" ci-iOS-duo
+
+      - name: Cache Swift packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-iOS-${{ hashFiles('apple/CabalmailKit/Package.swift', 'apple/CabalmailKit/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-iOS-
+            spm-${{ runner.os }}-
+
+      - name: Test Cabalmail scheme on the iPhone Duo (iOS-hosted app-layer unit tests)
+        working-directory: apple
+        run: |
+          set -o pipefail
+          gtimeout -v --kill-after=2m 30m \
+            xcodebuild test \
+            -workspace Cabalmail.xcworkspace \
+            -scheme Cabalmail \
+            -destination '${{ steps.dest.outputs.destination }}' \
+            -skipPackagePluginValidation \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 180 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-test.log" \
+            | xcbeautify --renderer github-actions
+
+      - name: Surface raw xcodebuild output on failure
+        if: failure()
+        run: .github/scripts/dump-xcodebuild-raw.sh
+
+  # -----------------------------------------------------------------------
   # Build the app targets for the three product platforms. Unsigned — this
   # job only verifies the code compiles and links; signing happens in the
   # upload jobs below. visionOS gets its own leg, and since #1865 its own
