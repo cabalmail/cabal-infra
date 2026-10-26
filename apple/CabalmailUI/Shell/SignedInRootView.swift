@@ -100,6 +100,10 @@ struct SignedInRootView: View {
                     .animation(.default, value: appState.toast)
                     .animation(.default, value: failedSends.visible.map(\.id))
             }
+            // The window's fold (`\.foldState`), for the shells and the
+            // banners above alike: after the overlay so both are beneath it,
+            // and after the `.id` so a new sign-in keeps the fold it is in.
+            .foldGeometry()
             .task { await observeReachability() }
             .task(id: appState.client.map { ObjectIdentifier($0) }) { await failedSends.observe(appState.client) }
             // The cross-device "pick up where you left off" probe, at launch
