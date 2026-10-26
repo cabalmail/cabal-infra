@@ -285,6 +285,45 @@ sessions out of known potholes:
   of the same bundle id on the same simulator — keep one designated
   signed-in simulator per runtime and record which.
 
+### The iPhone Duo simulator
+
+The Duo simulator ships with Xcode 27.1 and later. It runs on the iOS
+27.1 runtime, which supports no other device type, and its device type
+is installed machine-wide, so every Xcode from 27.1 on lists it.
+
+- **Headless, it stays closed.** A booted Duo sits in its closed posture,
+  on the outer display (466 x 678 pt, compact width, regular height, its
+  bars in a strip at the side). Neither `simctl` nor SimDrive has a
+  posture command, and `simctl io screenshot` only ever returns the outer
+  display. Everything in this section past the closed display needs the
+  simulator UI.
+- **Folding takes Device Hub.** Xcode 27.1 has no `Simulator.app`; the
+  simulator UI is `Xcode.app/Contents/Applications/DeviceHub.app`. Open it
+  on a booted device with `open -a <that path> --args -CurrentDeviceUDID
+  <udid>`. The posture buttons are the device icons at the right of the
+  canvas's bottom bar: **Closed** (0 degrees), **Book** (130 degrees,
+  the fold active) and **Open** (180 degrees, flat), with a hinge slider
+  for other angles. There is no laptop or tent preset: for laptop pose,
+  rotate the opened device with the bar's rotate control, then press
+  Book. Device Hub has no accessibility tree, so scripted clicks go by
+  screen coordinates. Screenshots and recordings of a freshly booted Duo
+  can be black for a few minutes, and accessibility tools cannot read its
+  content in Device Hub.
+- **The software keyboard is off by default.** With Device > Keyboard >
+  Simulate Hardware Keyboard checked, the software keyboard never
+  appears. Uncheck it to see the keyboard in book or laptop pose, or use
+  ⌥⌘K to toggle it for one field, and check it again afterwards.
+- **What the simulator cannot settle.** Every reading taken in it may
+  differ on hardware. Note as provisional anything that depends on the
+  software keyboard or on a true laptop angle (the Book preset on a
+  rotated device is 130 degrees, not 90), and anything about tent pose,
+  StandBy or Split View halves.
+- **Sizes, measured on Xcode 27.1:** the inner display is 951 x 669 pt
+  (669 x 951 turned upright), regular in both size classes in every
+  orientation. A book or laptop fold is a 40 pt division region around
+  the crease at 475.5 pt, which turns active 0.05 to 0.4 s after the
+  hinge comes to rest and drops out while it moves.
+
 ## Apple Developer account setup
 
 This is the one-time manual setup required to enable CI uploads to
@@ -722,8 +761,9 @@ own CI files, on pushes to `main` and `stage` that do, and on
 | `kit-test` | Every run but a `main` push reported tested | SwiftLint and the platform-conditionals check (macOS leg only), then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) on macOS and iOS, and on visionOS too except on a PR into a branch other than `main` |
 | `app-test` | Same | The `CabalmailMacTests` app-layer suite, hosted by `CabalmailMac` |
 | `ios-app-test` | Same | The `CabalmailiOSTests` app-layer suite, hosted by the iOS app on a simulator |
+| `ios-duo-test` | `stage` pushes, `workflow_dispatch`, and PRs whose branch name contains `duo` | The same suite on an iPhone Duo simulator (closed), the one leg that runs code behind `#available(iOS 27.1, *)`. Advisory: `continue-on-error`, and in neither `apple-gate`'s nor `approval`'s `needs` (see [iPhone Duo](#iphone-duo-the-fold-and-the-side-strip)) |
 | `app-build` | PRs, and `workflow_dispatch` from a branch other than `main` or `stage` | Unsigned `xcodebuild build`: `CabalmailVision` (visionOS) and `CabalmailWatch` (watchOS) on a PR, where the two test suites already build the iOS and Mac apps; all four schemes, adding `Cabalmail` (iOS) and `CabalmailMac` (macOS), from another branch. Skipped on `main` and `stage` runs, whose upload archives are the device builds |
-| `apple-gate` | Every run | The one check that sums up the test and build jobs above |
+| `apple-gate` | Every run | The one check that sums up the test and build jobs above, `ios-duo-test` aside |
 | `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass, or straight after `promotion-verdict` on a `main` push it reports tested |
 | `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
@@ -1142,6 +1182,85 @@ The script is standard-library Python and runs anywhere
 ```sh
 python3 scripts/check-platform-conditionals.py
 ```
+
+### iPhone Duo: the fold and the side strip
+
+Nothing in the app asks whether it runs on an iPhone Duo. Layout follows
+the window's size classes, its shape (wider or taller than it is wide)
+and the active fold region, never the device, its idiom, or a pose name.
+Closing and opening a Duo is a size-class change, so it swaps
+`TabShell` and `SplitShell` like any narrowing or widening
+(`SectionLayoutPolicy`). Book and laptop pose draw the same window as
+the device lying flat; only the fold region differs.
+
+The design is the maintainer's Duo spec (a private Claude Doc, "Cabalmail
+on iPhone Duo: Poses and Transitions"); the work plan that follows it,
+with the spec's rules and what has landed, is
+[`docs/1.x/post-wave-3/duo-support.md`](1.x/post-wave-3/duo-support.md).
+Its rules for the app's own controls: none above a laptop fold or within
+44 pt of a book crease; floating elements (toasts, banners) in the piece
+of the window that belongs to the column that raised them; and no
+animation of Cabalmail's own on a close, open or fold, except the column
+divider's.
+
+**Where Duo API code may live.** Every iPhone Duo API (reserved
+regions, the hinge, the vertical bar edge) is iOS 27.1. The deployment
+target is iOS 18, and the compiler cannot tell the 27.0 SDK from 27.1
+(both are Swift 6.4), so each use sits behind the SwiftUICore module
+version as well as availability:
+
+```swift
+#if os(iOS) && canImport(SwiftUICore, _version: 8.0.85)
+if #available(iOS 27.1, *) { ... }
+#endif
+```
+
+That is an `os(` conditional, so it may only appear in `Shell/` and
+`Platform/` (see "Platform conditionals"). An API that is iOS 27.0 rather
+than 27.1, such as `presentationPlacement(_:)`, swaps only the
+module-version test for the compiler's: `#if os(iOS) && compiler(>=6.4)`
+with `#available(iOS 27.0, *)`, in the same places. Keep the `os(iOS)`:
+the SDK marks these APIs `anyAppleOS 27.0`, so without it the macOS 15
+and visionOS 2 builds of the same module fail on the call. A call meant
+for more than one platform names each in `#available`, as
+`Shared/Chrome/ToolbarVisibility.swift` does.
+
+**The tripwire.** `FoldAPI.isCompiled` is true only when the guard
+compiled, and `FoldAPICompiledTests` in the iOS-hosted suite asserts it.
+An Xcode without the iOS 27.1 SDK would compile every Duo change out
+without a word and run the app boxed in on both displays; the required
+`ios-app-test` leg fails first. The advisory `ios-duo-test` leg runs the
+same suite on a closed Duo simulator, the only place the code behind
+`#available(iOS 27.1, *)` actually runs in CI. Neither leg can fold.
+
+**The fold: `Platform/FoldGeometry.swift`.** `foldGeometry()`, applied
+once at `SignedInRootView`, publishes `\.foldState`: `.none`, or a
+`.vertical` (book) or `.horizontal` (laptop) crease in the window's own
+coordinates. On the way:
+
+- The active `.division` regions are read on every layout pass from a
+  clear reader behind the root that ignores every safe area. The root
+  itself shrinks above the keyboard, which in laptop pose fills the
+  bottom half from the crease, and the query returns only regions that
+  overlap the view it is asked of.
+- A reading counts only once a confirming pass 50 ms later still reads
+  it (`FoldSettler`), because the first frame after a change can be
+  stale.
+- `FoldHold` holds a fold while the hinge moves, since the region drops
+  out during any motion. A fold whose region has dropped out ends on a
+  fully open hinge, after 0.6 s at rest, when the window changes size, or
+  when the hinge reading goes away. The region always wins: hinge data
+  never enters a fold or ends one the region still backs. The hinge is
+  read only while a fold is held; that and the hold are the app's only
+  uses of it.
+- `onFoldPiecesChange(_:)` hands a view its bounds less the crease
+  (`FoldPieces`), for placing floating elements, and waits while the
+  root's own reading is settling (`\.foldIsSettling`) so a rotation
+  never pairs a view's new frame with the old crease.
+
+The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
+tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
+starting values to tune on hardware.
 
 ### Extension-shared values: the `CabalmailShared` module
 
