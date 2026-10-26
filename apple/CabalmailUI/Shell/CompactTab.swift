@@ -64,8 +64,15 @@ enum CompactTab: Hashable {
     /// selection (`TabShell`) — sets it apart at the bar's trailing end and
     /// morphs it into the search field. visionOS keeps a plain Search tab in
     /// its ornament.
-    func role(in layout: ShellLayout) -> Role? {
-        self == .search && layout == .tabs ? .search : nil
+    ///
+    /// Not while the bars are vertical (`\.barsAreVertical`, iPhone Duo's
+    /// outer display): there the system can hand the search role's button to
+    /// the selected tab's own search field instead, so from Addresses it
+    /// opened "Filter addresses" (#1963; measured in both landscapes, while
+    /// portrait opened Search). A plain Search tab in the strip opens the
+    /// Search screen from every tab.
+    func role(in layout: ShellLayout, barsAreVertical: Bool = false) -> Role? {
+        self == .search && layout == .tabs && !barsAreVertical ? .search : nil
     }
 
     /// The tabs `layout` draws, in order. The phone has no Folders tab: its
