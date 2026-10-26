@@ -8,14 +8,14 @@ import CabalmailKit
 /// visionOS, where each action is its own item. Every control carries its
 /// `FeedReaderAction` identifier (`feed.reader.<action>`).
 ///
-/// The bar takes the two values that decide its set (`showingArticle`,
-/// `hasArticle`) from the reader's view, which reads them from the model, so
-/// the set follows them. Each item is a `FeedReaderBarItem` view, which reads
+/// The bar takes the value that decides its set (`hasArticle`) from the
+/// reader's view, which reads it from the model, so the set follows it.
+/// `showingArticle` only changes what the items draw, never which slots the
+/// wide bar holds (#2206). Each item is a `FeedReaderBarItem` view, which reads
 /// the item's state itself: a toolbar content type's body did not refresh
 /// for the model's reads (measured: Flag kept reading "Flag" after a flag).
 struct FeedReaderToolbar: ToolbarContent {
     let model: FeedItemDetailViewModel
-    let showingArticle: Bool
     let hasArticle: Bool
     /// The article control says when it needs a connection.
     let isOffline: Bool
@@ -34,7 +34,7 @@ struct FeedReaderToolbar: ToolbarContent {
         ToolbarItem { item(actions[2]) }
             .keepsInBarFirst()
         #else
-        let actions = FeedReaderToolbarLayout.wideBar(showingArticle: showingArticle, hasArticle: hasArticle)
+        let actions = FeedReaderToolbarLayout.wideBar(hasArticle: hasArticle)
         ForEach(actions, id: \.self) { action in
             ToolbarItem { item(action) }
         }
@@ -106,7 +106,9 @@ struct FeedReaderBarItem: View {
         } label: {
             ReaderToggleFace.remoteContent(isShown: model.remoteContentAllowed).label
         }
-        .disabled(model.item.bodyHtml.isEmpty)
+        .disabled(!FeedReaderToolbarLayout.remoteContentEnabled(
+            showingArticle: model.showingArticle, hasFeedContent: !model.item.bodyHtml.isEmpty
+        ))
         .accessibilityIdentifier(FeedReaderAction.remoteContent.identifier)
     }
 

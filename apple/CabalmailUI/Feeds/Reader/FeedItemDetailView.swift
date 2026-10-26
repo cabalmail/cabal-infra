@@ -30,8 +30,7 @@ struct FeedItemDetailView: View {
             if let model {
                 content(model)
                     .toolbar {
-                        FeedReaderToolbar(model: model, showingArticle: model.showingArticle,
-                                          hasArticle: model.articleURL != nil, isOffline: isOffline)
+                        FeedReaderToolbar(model: model, hasArticle: model.articleURL != nil, isOffline: isOffline)
                     }
             } else {
                 ProgressView()
