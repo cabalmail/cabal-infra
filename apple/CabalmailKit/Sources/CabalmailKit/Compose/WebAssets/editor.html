@@ -27,7 +27,10 @@
     background: var(--editor-bg);
     color: var(--editor-fg);
     font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-    font-size: 14px;
+    /* The system text size (Dynamic Type) arrives as a ratio through
+       `window.cabal.setTextScale`. It lives on the root element, never in
+       the editor's markup, so what `getHTML()` sends is unscaled. */
+    font-size: calc(14px * var(--editor-text-scale, 1));
     line-height: 1.4;
     -webkit-text-size-adjust: 100%;
   }
