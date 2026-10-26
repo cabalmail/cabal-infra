@@ -11,9 +11,12 @@ extension EnvironmentValues {
     /// the window's shape, and an app on the left of Split View gets it on
     /// the left (the spec's "read the bar edge, never assume right").
     @Entry var barsAreVertical = false
-    /// The edge the strip is on while `barsAreVertical`, in the layout's own
-    /// terms (it stays on the hardware's side in a right-to-left language,
-    /// which is then the leading edge); nil otherwise.
+    /// The edge the strip is on while `barsAreVertical`, as the system
+    /// reports it (`toolbarVerticalEdge`); nil otherwise. The strip stays on
+    /// the same physical side in a right-to-left language, so the same side
+    /// reads as the opposite edge there: take this value, never derive a
+    /// side from the layout direction or assume the right. Right-to-left has
+    /// not been measured.
     @Entry var verticalBarEdge: HorizontalEdge?
 }
 
