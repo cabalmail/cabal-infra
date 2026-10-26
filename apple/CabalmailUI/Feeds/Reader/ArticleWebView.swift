@@ -173,6 +173,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         #endif
         pageURL = url
         webView.load(URLRequest(url: url))
+        SpikeLog.note("article.webview CREATED \(SpikeLog.id(webView))")
         return webView
     }
 

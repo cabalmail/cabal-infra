@@ -127,6 +127,10 @@ final class MessageDetailViewModel {
         let fileURL: URL
     }
 
+    deinit {
+        SpikeLog.note("reader.model freed \(SpikeLog.id(self))")
+    }
+
     init(folder: Folder, envelope: Envelope, client: CabalmailClient, preferences: Preferences) {
         self.folder = folder
         self.envelope = envelope

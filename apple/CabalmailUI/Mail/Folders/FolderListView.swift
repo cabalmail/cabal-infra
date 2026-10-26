@@ -278,7 +278,11 @@ struct FolderListView: View {
         .refreshable {
             await manualRefresh()
         }
-        .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
+        .sheet(isPresented: $showNewFolderSheet) {
+            newFolderSheet
+                .onAppear { SpikeLog.note("sheet newFolder appeared") }
+                .onDisappear { SpikeLog.note("sheet newFolder DISAPPEARED") }
+        }
         .confirmationDialog(
             deleteDialogTitle,
             isPresented: deleteDialogBinding,

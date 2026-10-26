@@ -205,7 +205,12 @@ private struct MobileHTMLView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let view = makeReaderWebView(coordinator: context.coordinator)
         view.isOpaque = true
+        SpikeLog.note("webview CREATED \(SpikeLog.id(view)) remote=\(allowRemote)")
         return view
+    }
+
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: HTMLBodyCoordinator) {
+        SpikeLog.note("webview dismantled \(SpikeLog.id(uiView))")
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
@@ -502,6 +507,7 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
             textScale: textScale
         )
         guard signature != renderedSignature else { return }
+        SpikeLog.note("webview render \(SpikeLog.id(webView)) remote=\(allowRemote)")
         renderedSignature = signature
         let rewritten = rewrite(
             html: html,

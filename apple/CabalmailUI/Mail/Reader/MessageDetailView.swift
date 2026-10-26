@@ -206,9 +206,13 @@ struct MessageDetailView: View {
         #endif
         .sheet(isPresented: $moveSheetPresented) {
             moveSheet
+                .onAppear { SpikeLog.note("sheet reader.move appeared") }
+                .onDisappear { SpikeLog.note("sheet reader.move DISAPPEARED") }
         }
         .sheet(item: $sourceSheetTab) { tab in
             sourceSheet(initialTab: tab)
+                .onAppear { SpikeLog.note("sheet reader.source appeared") }
+                .onDisappear { SpikeLog.note("sheet reader.source DISAPPEARED") }
         }
         #if os(iOS) || os(visionOS)
         .sheet(item: $contactEditorRequest) { request in
@@ -256,6 +260,7 @@ struct MessageDetailView: View {
             let activeModel: MessageDetailViewModel
             if let existing = model {
                 activeModel = existing
+                SpikeLog.note("reader.model reused \(SpikeLog.id(existing)) uid=\(envelope.uid)")
             } else {
                 guard let client = appState.client else { return }
                 let newModel = MessageDetailViewModel(
@@ -267,9 +272,11 @@ struct MessageDetailView: View {
                 Self.relayOutcomes(of: newModel, to: appState.mailStore, from: commandWindowID)
                 model = newModel
                 activeModel = newModel
+                SpikeLog.note("reader.model CREATED \(SpikeLog.id(newModel)) uid=\(envelope.uid) seen=\(newModel.isSeen)")
             }
             activeModel.startLoadIfNeeded()
         }
+        .onDisappear { SpikeLog.note("reader.view disappeared uid=\(envelope.uid)") }
     }
 
     @ViewBuilder

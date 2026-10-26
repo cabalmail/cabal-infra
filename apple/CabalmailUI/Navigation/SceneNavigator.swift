@@ -202,6 +202,7 @@ final class SceneNavigator {
     /// window has landed. A wide tree hosts the feed reader too.
     func mailTreeAppeared(_ tree: UUID, isWide: Bool) async {
         let isRebuild = mailTrees.appear(tree)
+        SpikeLog.note("nav.mailTreeAppeared tree=\(tree) rebuild=\(isRebuild)")
         layoutIsWide = isWide
         if isWide {
             hasShownMail = true
@@ -457,6 +458,7 @@ final class SceneNavigator {
     /// opened again.
     func setCompactColumn(_ column: NavigationSplitViewColumn, isSearching: Bool, from tree: UUID) {
         guard canWrite(from: tree), column != compactColumn else { return }
+        SpikeLog.note("nav.setCompactColumn \(compactColumn) -> \(column) open=\(selectedEnvelope?.uid ?? 0)")
         compactColumn = column
         if column == .sidebar { listHold.backOut(from: restores) }
         if CompactColumnPolicy.dropsMessage(movingTo: column) {
@@ -518,6 +520,7 @@ final class SceneNavigator {
 
     private func applyMessage(_ envelope: Envelope?, isSearching: Bool) {
         guard envelope != selectedEnvelope else { return }
+        SpikeLog.note("nav.applyMessage \(selectedEnvelope?.uid ?? 0) -> \(envelope?.uid ?? 0) search=\(isSearching)")
         selectedEnvelope = envelope
         compactColumn = CompactColumnPolicy.column(hasSelectedMessage: envelope != nil, current: compactColumn)
         // What a later layout swap hands to the layout's search surface
@@ -611,6 +614,7 @@ extension SceneNavigator {
 
     /// The collapsed Feeds split moved column from `tree` (the back gesture).
     func setFeedColumn(_ column: NavigationSplitViewColumn, from tree: UUID) {
+        SpikeLog.note("nav.setFeedColumn -> \(column)")
         record(feeds.setColumn(column, from: tree))
     }
 

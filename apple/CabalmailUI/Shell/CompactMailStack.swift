@@ -26,6 +26,23 @@ struct CompactMailStack: View {
     /// How many messages the list has selected: Select mode's "N Messages
     /// Selected" in the reader.
     @State private var listSelectionCount = 0
+    /// SPIKE: the split's own width, for SplitShell's column math (#1679).
+    @State private var splitWidth: CGFloat = 0
+    @AppStorage("cabalmail.layout.listColumnWidth") private var listColumnWidthStored: Double = 360
+    @Environment(\.horizontalSizeClass) private var spikeSizeClass
+
+    private var listColumnBounds: (minimum: CGFloat, maximum: CGFloat) {
+        guard splitWidth > 0 else { return (ListColumnWidth.minimum, 640) }
+        return ListColumnWidth.pinnedBounds(splitWidth: splitWidth)
+    }
+
+    private var listColumnWidth: CGFloat {
+        min(max(CGFloat(listColumnWidthStored), listColumnBounds.minimum), listColumnBounds.maximum)
+    }
+
+    private var readerColumnMinWidth: CGFloat {
+        ListColumnWidth.pinnedReaderFloor(splitWidth: splitWidth, listWidth: listColumnWidth)
+    }
 
     private var selectedFolder: Folder? { navigator.folder(in: tree) }
     private var selectedEnvelope: Envelope? { navigator.envelope(in: tree) }
@@ -66,6 +83,9 @@ struct CompactMailStack: View {
                 onFoldersLoaded: { navigator.foldersLoaded($0) },
                 header: { EmptyView() }
             )
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                SpikeLog.note("mail.sidebar frame \(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))")
+            }
         } content: {
             MailContentColumn(
                 folder: selectedFolder,
@@ -74,12 +94,27 @@ struct CompactMailStack: View {
                 onSwitchFolder: { navigator.selectFolder($0) },
                 header: { EmptyView() }
             )
+            .navigationSplitViewColumnWidth(listColumnWidth)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                SpikeLog.note("mail.list frame \(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))")
+            }
         } detail: {
             MailReaderColumn(
                 selectionCount: listSelectionCount,
                 envelope: selectedEnvelope,
                 sidebarFolder: selectedFolder
             )
+            .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                SpikeLog.note("mail.reader frame \(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))")
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            splitWidth = width
+            SpikeLog.note("mail.split width \(Int(width)) list=\(Int(listColumnWidth)) floor=\(Int(readerColumnMinWidth))")
+        }
+        .onChange(of: spikeSizeClass, initial: true) { _, sizeClass in
+            SpikeLog.note("mail.stack sizeClass=\(sizeClass == .compact ? "compact" : "regular") tree=\(tree)")
         }
         // Keep the Message menu's commands validated against what they'd
         // actually act on (see `MessageMenuAvailability`).

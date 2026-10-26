@@ -131,8 +131,9 @@ struct SignedInRootView: View {
             }
             .onDisappear { appState.deepLinks.unregister(navigator) }
             .modifier(WindowPlaceKeeper(navigator: navigator, storedRoute: $storedRoute))
-            .onChange(of: shellLayout, initial: true) { old, new in
-                navigator.layoutChanged(wasWide: old.isWideSplit, isWide: new.isWideSplit)
+            // SPIKE: one tree, so no layout swap to tell the navigator about.
+            .onChange(of: spikeTraits, initial: true) { _, traits in
+                SpikeLog.note("root traits \(traits)")
             }
             // A new sign-in gets a new navigator, as it gets a new
             // coordinator: nothing of the last account's place carries over.
@@ -161,7 +162,7 @@ struct SignedInRootView: View {
             #if os(iOS)
             // The tab comes from the navigator, so a tree rebuilt mid-process
             // (a fold, an iPad window narrowing) opens on the tab it left.
-            TabShell()
+            TabShell(liftsCompactPin: liftsCompactPin)
             #endif
         case .ornament:
             #if os(visionOS)
@@ -180,16 +181,39 @@ struct SignedInRootView: View {
     /// read on the Mac.
     private var shellLayout: ShellLayout {
         #if os(iOS)
-        ShellLayout.resolve(
-            on: .current,
-            isCompactWidth: horizontalSizeClass == .compact,
-            isCompactHeight: verticalSizeClass == .compact,
-            measuredWidth: measuredWidth
-        )
+        // SPIKE (Decision 9): the tab tree at every size; see liftsCompactPin.
+        .tabs
         #else
         ShellLayout.resolve(on: .current, isCompactWidth: false, isCompactHeight: false, measuredWidth: measuredWidth)
         #endif
     }
+
+    #if os(iOS)
+    /// SPIKE: where the stage policy would draw the split, the one tree lets
+    /// its columns expand instead. The policy keeps both #1679 holds: compact
+    /// height (a Plus / Max in landscape) and the 600 pt measured floor.
+    private var liftsCompactPin: Bool {
+        // SPIKE test switch: lift at compact height too, so a Plus / Max
+        // rotation expands and collapses the split the way an open and a
+        // close of the Duo do, but scriptably (the old tap bug's stand-in).
+        if ProcessInfo.processInfo.environment["SPIKE_LIFT_AT_COMPACT_HEIGHT"] == "1" {
+            return horizontalSizeClass != .compact
+        }
+        return SectionLayoutPolicy.layout(
+            isCompactWidth: horizontalSizeClass == .compact,
+            isCompactHeight: verticalSizeClass == .compact,
+            measuredWidth: measuredWidth
+        ) == .regularSplit
+    }
+
+    private var spikeTraits: String {
+        "h=\(horizontalSizeClass == .compact ? "c" : "r") v=\(verticalSizeClass == .compact ? "c" : "r") "
+            + "w=\(Int(measuredWidth ?? -1)) lift=\(liftsCompactPin)"
+    }
+    #else
+    private var liftsCompactPin: Bool { false }
+    private var spikeTraits: String { "" }
+    #endif
 
     /// This window's name in the Window menu and the app switcher
     /// (`MainWindowTitle`). Keyed on the drawn layout rather than the raw

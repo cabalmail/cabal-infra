@@ -48,6 +48,12 @@ import CabalmailKit
 /// land.
 struct TabShell: View {
     @Environment(SceneNavigator.self) private var navigator
+    /// SPIKE: lift the compact pin (regular width and height, past the floor).
+    let liftsCompactPin: Bool
+
+    init(liftsCompactPin: Bool = false) {
+        self.liftsCompactPin = liftsCompactPin
+    }
 
     /// Captures the tab in front as Search opens over it.
     @State private var backdropCapture = SearchBackdropCapture()
@@ -89,7 +95,10 @@ struct TabShell: View {
         // must never expand into columns and collapse back. See
         // `SectionLayoutPolicy`.
         .transformEnvironment(\.horizontalSizeClass) { sizeClass in
-            sizeClass = .compact
+            if !liftsCompactPin { sizeClass = .compact }
+        }
+        .onChange(of: liftsCompactPin, initial: true) { _, lifts in
+            SpikeLog.note("tabshell pin lifted=\(lifts)")
         }
     }
 

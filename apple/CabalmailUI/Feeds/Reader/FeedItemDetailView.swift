@@ -47,7 +47,10 @@ struct FeedItemDetailView: View {
         // a store read, so it runs on an unstructured Task the modifier
         // can't cancel; `onAppear` re-firing is harmless (idempotent guard).
         .onAppear {
-            guard model == nil else { return }
+            guard model == nil else {
+                SpikeLog.note("feed.model reused item=\(item.id)")
+                return
+            }
             restoreAnchor = appState.navCoordinator?.readingPosition(key: positionKey)?.anchor
             let client = appState.client
             let preferences = preferences
@@ -66,6 +69,7 @@ struct FeedItemDetailView: View {
                 guard model == nil else { return }
                 model = FeedItemDetailViewModel(item: item, subscription: resolved,
                                                 engine: client?.rssSync, preferences: preferences)
+                SpikeLog.note("feed.model CREATED item=\(item.id)")
             }
         }
         .task { await observeReachability() }

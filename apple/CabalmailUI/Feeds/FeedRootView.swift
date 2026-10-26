@@ -18,6 +18,20 @@ struct FeedRootView: View {
     /// This view's identity as one of the window's feed trees
     /// (`SceneNavigator.feedTreeAppeared`).
     @State private var tree = UUID()
+    /// SPIKE: the split's own width, and SplitShell's column math (#1679).
+    @State private var splitWidth: CGFloat = 0
+    @AppStorage("cabalmail.layout.listColumnWidth") private var listColumnWidthStored: Double = 360
+
+    private var listColumnWidth: CGFloat {
+        let bounds: (minimum: CGFloat, maximum: CGFloat) = splitWidth > 0
+            ? ListColumnWidth.pinnedBounds(splitWidth: splitWidth)
+            : (minimum: ListColumnWidth.minimum, maximum: 640)
+        return min(max(CGFloat(listColumnWidthStored), bounds.minimum), bounds.maximum)
+    }
+
+    private var readerColumnMinWidth: CGFloat {
+        ListColumnWidth.pinnedReaderFloor(splitWidth: splitWidth, listWidth: listColumnWidth)
+    }
 
     private var selectedScope: RssItemScope? { navigator.feeds.scope(in: tree) }
     private var selectedItem: RssItem? { navigator.feeds.item(in: tree) }
@@ -35,7 +49,7 @@ struct FeedRootView: View {
     }
 
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: columnSelection) {
+        NavigationSplitView(columnVisibility: .constant(.doubleColumn), preferredCompactColumn: columnSelection) {
             FeedSidebarList(selection: scopeSelection)
         } content: {
             if let selectedScope {
@@ -45,6 +59,7 @@ struct FeedRootView: View {
                 FeedItemListView(scope: selectedScope, selection: itemSelection,
                                  onSwitchScope: { navigator.selectFeedScope($0) })
                     .id(selectedScope)
+                    .navigationSplitViewColumnWidth(listColumnWidth)
                     // A parked item (the launch restore, a tapped feed banner,
                     // a layout swap's hand-off) is applied by the list itself,
                     // once it is on screen and loaded. See `FeedItemListView`
@@ -54,13 +69,23 @@ struct FeedRootView: View {
                                        description: Text("Pick a feed or folder from the sidebar."))
             }
         } detail: {
-            if let selectedItem {
-                FeedItemDetailView(item: selectedItem)
-                    .id(selectedItem.id)
-            } else {
-                ContentUnavailableView("No item selected", systemImage: "doc.text",
-                                       description: Text("Pick an item from the list to read it."))
+            Group {
+                if let selectedItem {
+                    FeedItemDetailView(item: selectedItem)
+                        .id(selectedItem.id)
+                } else {
+                    ContentUnavailableView("No item selected", systemImage: "doc.text",
+                                           description: Text("Pick an item from the list to read it."))
+                }
             }
+            .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                SpikeLog.note("feed.reader frame \(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))")
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            splitWidth = width
+            SpikeLog.note("feed.split width \(Int(width))")
         }
         // What the Feeds menu's item commands can act on (the iPadOS
         // hardware-keyboard menu reaches this tab); the section itself is

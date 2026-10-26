@@ -417,6 +417,8 @@ extension MessageListView {
         }
         .sheet(item: $envelopeToMove) { envelope in
             moveSheet(for: envelope)
+                .onAppear { SpikeLog.note("sheet list.move appeared") }
+                .onDisappear { SpikeLog.note("sheet list.move DISAPPEARED") }
         }
         .sheet(isPresented: $bulkMoveSheetPresented) {
             if let model {

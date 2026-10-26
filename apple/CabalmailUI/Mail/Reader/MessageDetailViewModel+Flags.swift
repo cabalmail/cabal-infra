@@ -34,6 +34,7 @@ extension MessageDetailViewModel {
         case .manual:
             return
         case .onOpen:
+            SpikeLog.note("reader.markRead on open uid=\(envelope.uid)")
             Task { await setSeen(true) }
         }
     }
