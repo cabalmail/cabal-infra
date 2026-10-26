@@ -22,7 +22,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Decisions 1 to 9 (start of Session 1); 10 and 11 (Session 2) | 1 to 9 answered 2026-10-26 (6 to 8 on their defaults; 9: a trimmed spike in Session 1) |
 | Session 1, PR 1: CI probe, then the leg | Merged (2026-10-26), #2235: no probe was needed; the advisory leg passed on its first stage push |
 | Session 1, PR 2: fold adapter | Merged (2026-10-26), #2237 |
-| Session 1: the Decision 9 spike (trimmed) | Not started (2026-10-26); answer 9 moved it here from the end of Session 2 |
+| Session 1: the Decision 9 spike (trimmed) | Done (2026-10-26): yes, with the evidence under Decision 9 |
 | Session 1, PR 3: columns by the spec (#1666) | Not started (2026-10-15) |
 | Session 1, PR 4: toasts and banners on the fold rule (#1648) | Not started (2026-10-15) |
 | Session 1, PR 5: Search on the vertical tab bar (#1963) | Not started (2026-10-15) |
@@ -30,7 +30,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Session 1, PR 7: compose as a sheet (#1680) | Not started (2026-10-15) |
 | Session 1, PR 8: nothing re-marked on a close or open | Not started (2026-10-15) |
 | Session 1, PR 9: crease margins in book pose | Not started (2026-10-15) |
-| Session 1, PR 11: Duo docs | In review (2026-10-26) |
+| Session 1, PR 11: Duo docs | Merged (2026-10-26), #2238 |
 | Session 1, PR 10: compact row drag (#1681; R2) | Not started (2026-10-15) |
 | Session 1, PR 12: drops into compose (R2) | Not started (2026-10-15) |
 | Session 1: the Studio simulator pass | Not started (2026-10-15) |
@@ -82,6 +82,12 @@ Asked at the start of Session 1, in its scope doc:
    Default: (a). Decision 10 and the folder-sidebar choice follow from it.
 
    - **Answered 2026-10-26: (a), as a trimmed spike run now, in Session 1, not at the end of Session 2.** The scope is the Claude Doc "Duo Decision 9: one layout or two, and what the spike costs" (private to the maintainer's account), sections "What the spike has to prove" and "The trimmed spike": on a throwaway branch off `stage`, draw `TabShell` at regular width too and lift its compact size-class pin there (keeping it at compact height), drop the host's `navigator.layoutChanged` call, port the #1679 reader floor, and log reader-model and web-view creation and sheet dismissals. Then about 20 closes and opens on the Duo simulator with checks stacked, opening straight into book among them, and scripted rotations on a Pro Max simulator; no book and laptop chain; test #1679 and #1988; Mail and Feeds only. Stop early only on a framework-level loss; record bugs, fix none, and build no folder-sidebar prototype. If Decision 3 brings Xcode 27.2 onto the Studio, run it after that install. PR 8 waits for its outcome, since it adds a hand-off across the swap.
+   - **Spike result (2026-10-26): yes. One view tree kept what is on screen across closes and opens; the collapse dropped no sheet, and the one rebuild it caused, of the mail reader's web view, comes from app code.** Run on the Studio under Xcode 27.2 (27B48) from the throwaway branch `claude/duo-spike-one-tree` (a reference for Session 3, never for merging): about 40 Device Hub posture changes on the iPhone Duo simulator (iOS 27.1) with checks stacked, opening straight into book among them, plus cold launches while open; about 30 scripted rotations of an iPhone 17 Pro Max simulator (iOS 27.0) with the one-column hold lifted in landscape, and a control run with it kept; and about 30 size-class changes of an iPad Pro 11-inch simulator (iOS 27.0) in Stage Manager, six of them #1988's narrow-then-Zoom rounds. The Mail and Feeds stacks kept their identity through every size-class change on all three. The three things it had to prove:
+     1. **What is on screen is kept.** The reader's model was never rebuilt by a size change, so nothing was marked read again (a message marked unread stayed unread through closes, opens and rotations); the list kept its place; and a Feeds item kept its model and its article web view on all three devices. Two losses. The mail reader's `WKWebView` was rebuilt on every collapse and expand (22 times on the Pro Max, 26 on the iPad, every Duo close and open, also for the Mail tab hidden behind Feeds; none in the control), its body blank for 1 to 5 s afterwards: `underBottomGlass(_:)` in `Shared/BodyRendering/ReaderBottomGlass.swift` is an if/else whose branch flips with the size class, which replaces the web view's host. A single `ignoresSafeArea` with a varying edge set (a diagnostic commit on the spike branch) rebuilt nothing over six Duo closes and opens. And a sheet raised from the reader (Move) stays on screen through every collapse, but its content logs a disappear and an appear once per Duo close (twice per transition on the Pro Max, and per narrow on the iPad); the merge's hoist of every sheet to the root is meant to cover it, untested here (compose, opened from the open Duo, takes a window of its own, so it says nothing about a root sheet).
+     2. **The tap bug stays away.** On all three, a tapped row pushed the reader after repeated collapses, including after a close with a row tapped in the open list.
+     3. **The columns lay out after an open without a rebuild.** With #1679's floor ported, every Duo open tiled the list (340 pt) beside the reader, as did a cold launch while open on the Duo and a cold launch at regular width on the iPad; #1988's six rounds tiled every time.
+
+     Bugs recorded for the merge, none fixed: on the first close after the app launches open, the reader shows with no Back button and no actions in the side strip (two tries of two; an edge swipe still goes back, and later closes are fine); Feeds in book pose put its feed sidebar and item list either side of the fold and squeezed the article to a 30 pt strip at the trailing edge, where Mail splits its list and reader at the fold; an iPad window at 714 pt, regular width with the list under its 360 pt floor, shows the reader full width with the list over it instead of tiling, and a resize passes through that state between 680 and 778 pt (perhaps the spec's overlay rule, but its threshold is unset); the iPad's pushed reader is built twice on an open; and Pro Max landscape with the hold lifted clips the reader's header at the compact height, with the floating tab bar over the last list rows. Limits: simulators only, driven by Device Hub's buttons rather than a hinge, and the bugs in question are timing races, so this yes is weaker than a no would have been, and the 15-minute check on the maintainer's Duo before the merge starts is still owed (no install path for it exists yet); the test mailbox has no message with remote content, so Load Images surviving is inferred from the model, and with the fix the web view, surviving; and no laptop pose, which swaps nothing in either design. Whether to take the merge as Session 3 (option (b)), and so whether PR 8 is dropped, is the maintainer's call.
 
 Asked at the start of Session 2, after the device pass:
 
@@ -243,7 +249,7 @@ Then one of two outcomes. If a 27.1 runtime can be had in about ten minutes, rep
 
 > **Erratum (2026-10-26):** PR 8 waits for the Decision 9 spike's outcome (Decision 9's answer), because it adds a hand-off across the shell swap that a merge would delete.
 
-**Status:** Not started (2026-10-15).
+**Status:** Held (2026-10-26). The spike answered yes; PR 8 is dropped if the maintainer takes the merge, and built if not.
 
 **PR 9, crease margins in book pose (`Apple:`).** The spec's 44 pt rule 〔row .53420〕, while a vertical fold is active:
 - the list bar's trailing items, which on the Studio sat about 40 pt from the crease, move to its leading end, the folder-panel button included;
@@ -256,7 +262,7 @@ Verify by measuring each against the crease on the Studio simulator.
 
 **PR 11, Duo docs (`no-changelog`).** An "iPhone Duo" section in `docs/apple.md`: the guard rule and where guarded code may live; `FoldGeometry` and the hinge hold; the spec's rules, with a link to it; the Studio posture procedure, including the spec's keyboard steps (Device > Keyboard, uncheck Simulate Hardware Keyboard; ⌥⌘K for one field) 〔item .54876〕; the CI leg or tripwire; and the line in `CLAUDE.md`'s CI notes if a leg landed. `docs/apple.md` is shared with docs-and-bookkeeping.md; one open PR at a time.
 
-**Status:** In review (2026-10-26). `docs/apple.md` gains "iPhone Duo: the fold and the side strip" (the no-device rule, the spec's rules for the app's own controls, the guard and where guarded code may live, the tripwire and the CI leg, and the fold adapter with its hinge hold), "The iPhone Duo simulator" (the closed posture headless, Device Hub's posture buttons and laptop by rotation, the keyboard setting, and what the simulator cannot settle), and an `ios-duo-test` row in its CI table. `CLAUDE.md`'s CI note gained the leg in PR 1 (#2235).
+**Status:** Merged (2026-10-26), #2238. `docs/apple.md` gains "iPhone Duo: the fold and the side strip" (the no-device rule, the spec's rules for the app's own controls, the guard and where guarded code may live, the tripwire and the CI leg, and the fold adapter with its hinge hold), "The iPhone Duo simulator" (the closed posture headless, Device Hub's posture buttons and laptop by rotation, the keyboard setting, and what the simulator cannot settle), and an `ios-duo-test` row in its CI table. `CLAUDE.md`'s CI note gained the leg in PR 1 (#2235).
 
 **R1 is PRs 2 to 9 and 11, by the cut above.** Each PR says what the Duo simulator showed and what it could not check. PRs 2 to 6 and 9 change only the Duo, because each reads the fold region or vertical bars; PR 3 also makes the iPad width per window, and PRs 7 and 8 change iPad too. One caveat: if other iPhones on iOS 27.1 also get a vertical tab bar, PRs 5 and 6 change them too, which is the right fix there as well (unknown; #1963 saw a horizontal bar on iOS 27.0).
 
@@ -270,7 +276,7 @@ Verify by measuring each against the crease on the Studio simulator.
 
 **The Decision 9 spike (trimmed; no `stage` PR).** Added 2026-10-26 by Decision 9's answer, which holds its scope. It runs on a throwaway branch on the Studio, with the Duo closes and opens and the Pro Max rotations, and its result is a yes or no on the merge, with the evidence, recorded under Decision 9.
 
-**Status:** Not started (2026-10-26).
+**Status:** Done (2026-10-26): yes. The evidence and the bugs it recorded are under Decision 9. The branch keeps the one-tree build (`TabShell` at every iOS width, its compact pin lifted at regular width, the #1679 floor ported, the host's `layoutChanged` call dropped, `SpikeLog` lines for reader models, web views and sheets) and the diagnostic `underBottomGlass` change.
 
 **The Studio simulator pass (no code, in Session 1, before and after PRs 3 to 9).** Ask before taking the Studio's screen. Triage the Studio's Duo refs read-only first and hand the maintainer a one-line delete list. Then run, filing one issue per finding:
 - the spec's Device Hub chain on every screen, with a sheet open, the keyboard up and Select mode on: closed, Book, Open, rotate, Book (laptop), rotate back, closed; plus a cold launch while open, two windows, and closing with a draft in a background window 〔.28681〕;
@@ -316,7 +322,7 @@ Write the consolidated device checklist from this pass, the spec's "What needs h
 
 ### Session 3: the one-tree merge (with Decision 9), or the reader-bar refactor alone
 
-**Status:** Not started (2026-10-15).
+**Status:** Not started (2026-10-26). The spike answered yes (Decision 9); taking the merge is the maintainer's call. If taken, it carries the spike's `underBottomGlass` change and answers the bugs the spike recorded.
 
 **With the merge.** After platform-conditionals.md's FU-1 and Session 2. One root on iOS: a tab view with Mail, Feeds, Addresses and Search on both displays and on iPad, split views inside Mail, Feeds and Search that the system collapses on the outer display, Settings as a sheet from a gear on each tab's first screen, and folders as the system sidebar with one control for it (Cabalmail's folder button in book and laptop poses) 〔.18737〕〔.19068〕. Whether the folder sidebar overlays or the leading column becomes a stack is the spec's open choice 〔.19313〕, decided by prototyping both in Decision 9's spike. The merge deletes `ShellHandOff`, the tab and split shells' hand-off rules and PR 8's carry, hoists every sheet to the root, and keeps the split view's preferred column current so a collapse lands where the narrowing rule says 〔.20662〕. It carries FU-12 with it: the reader reads layout and window shape, not the size class. Several PRs, its own release or two; the source scans on `SplitShell.swift`, `TabShell.swift` and `ShellHandOff.swift` need the maintainer's yes. Risk: high.
 
