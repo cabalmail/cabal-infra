@@ -77,6 +77,40 @@ env:
 
 jobs:
   # -----------------------------------------------------------------------
+  # main receives only stage promotions, as merge commits whose tree is the
+  # stage tip's, and the release PR's run has already tested that tree with
+  # every leg a main push runs before `approval` (a PR into main keeps
+  # kit-test's visionOS leg for this). When
+  # .github/scripts/apple-promotion-verdict.py can show that for this push,
+  # kit-test, app-test and ios-app-test skip, and the run goes straight to
+  # the approval gate and the uploads, whose archives still build every app.
+  # Anything it cannot show (a push that is not a merge, a tree that
+  # differs, no green release-PR run with every leg, an API error) runs the
+  # full suite, as does every run that is not a push to main. The script is
+  # not in this workflow's paths, since it acts only on main pushes; its
+  # tests, which also pin the job names it looks for, run in
+  # scripts-tests.yml.
+  # -----------------------------------------------------------------------
+  promotion-verdict:
+    name: Promotion already tested?
+    if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      tested: ${{ steps.verdict.outputs.tested }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Look up the release PR's run on this tree
+        id: verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/apple-promotion-verdict.py
+
+  # -----------------------------------------------------------------------
   # CabalmailKit tests across platforms. Matrix of three destinations so
   # conditional code paths on any platform break CI loudly.
   #
@@ -85,15 +119,23 @@ jobs:
   # gate that hangs or flakes gets ignored. visionOS still gets compile
   # coverage on every PR from the app-build matrix's visionOS leg, which
   # compiles the Kit for xros along with the app, and its tests still run on
-  # every main/stage push.
+  # every stage push. A PR into main (a release PR) keeps the leg: that run
+  # is what lets the main push after the merge skip its own tests (see
+  # promotion-verdict), so it carries every leg the main push would run.
+  #
+  # This job, app-test and ios-app-test need promotion-verdict only for its
+  # output. `!cancelled()` lets them run when it is skipped (every run but a
+  # main push) or fails; either way its output is empty and they run.
   # -----------------------------------------------------------------------
   kit-test:
     name: Test CabalmailKit (${{ matrix.platform }})
+    needs: promotion-verdict
+    if: ${{ !cancelled() && needs.promotion-verdict.outputs.tested != 'true' }}
     runs-on: xcode-27
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(github.event_name == 'pull_request' && '["macOS","iOS"]' || '["macOS","iOS","visionOS"]') }}
+        platform: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref != 'main' && '["macOS","iOS"]' || '["macOS","iOS","visionOS"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -266,6 +308,9 @@ jobs:
   # -----------------------------------------------------------------------
   app-test:
     name: Test app layer (macOS)
+    # See kit-test for why it needs promotion-verdict.
+    needs: promotion-verdict
+    if: ${{ !cancelled() && needs.promotion-verdict.outputs.tested != 'true' }}
     runs-on: xcode-27
     steps:
       - name: Checkout
@@ -341,6 +386,9 @@ jobs:
   # -----------------------------------------------------------------------
   ios-app-test:
     name: Test app layer (iOS)
+    # See kit-test for why it needs promotion-verdict.
+    needs: promotion-verdict
+    if: ${{ !cancelled() && needs.promotion-verdict.outputs.tested != 'true' }}
     runs-on: xcode-27
     steps:
       - name: Checkout
@@ -505,13 +553,14 @@ jobs:
   # One stable check that reflects every test and build job, for branch
   # protection to require: green only when all of them passed, red if any
   # failed, was cancelled, or was skipped. Runs on pushes too, so the check
-  # name means the same thing everywhere. The one skip it accepts is
-  # app-build's on a main or stage run, where the upload archives are the
-  # device builds; the gate does not wait for them, since they come after
-  # the `approval` environment gate.
+  # name means the same thing everywhere. It accepts two skips: app-build's
+  # on a main or stage run, where the upload archives are the device builds
+  # (the gate does not wait for them, since they come after the `approval`
+  # environment gate), and the three test jobs' on a main push that
+  # promotion-verdict found already tested.
   # -----------------------------------------------------------------------
   apple-gate:
-    needs: [kit-test, app-test, ios-app-test, app-build]
+    needs: [promotion-verdict, kit-test, app-test, ios-app-test, app-build]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -523,11 +572,17 @@ jobs:
         APP_BUILD: ${{ needs.app-build.result }}
         # The negation of app-build's `if`.
         ARCHIVES_BUILD: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
+        TESTED: ${{ needs.promotion-verdict.outputs.tested == 'true' }}
       run: |
         set -euo pipefail
-        echo "[apple-gate] kit-test=$KIT_TEST app-test=$APP_TEST ios-app-test=$IOS_APP_TEST app-build=$APP_BUILD archives-build=$ARCHIVES_BUILD"
+        echo "[apple-gate] kit-test=$KIT_TEST app-test=$APP_TEST ios-app-test=$IOS_APP_TEST app-build=$APP_BUILD archives-build=$ARCHIVES_BUILD promotion-tested=$TESTED"
         if [ "$ARCHIVES_BUILD" = "true" ] && [ "$APP_BUILD" = "skipped" ]; then
           APP_BUILD=success
+        fi
+        if [ "$TESTED" = "true" ]; then
+          if [ "$KIT_TEST" = "skipped" ]; then KIT_TEST=success; fi
+          if [ "$APP_TEST" = "skipped" ]; then APP_TEST=success; fi
+          if [ "$IOS_APP_TEST" = "skipped" ]; then IOS_APP_TEST=success; fi
         fi
         for result in "$KIT_TEST" "$APP_TEST" "$IOS_APP_TEST" "$APP_BUILD"; do
           if [ "$result" != "success" ]; then
@@ -540,10 +595,19 @@ jobs:
   # a PR run ends at apple-gate. ios-app-test is a dependency so a red
   # iOS-hosted suite stops TestFlight like the other suites do. app-build
   # is not: it is skipped on every run that uploads, and the archives below
-  # are those runs' device builds.
+  # are those runs' device builds. On a main push promotion-verdict found
+  # already tested, the three test jobs skip and the gate opens on that
+  # verdict. `!cancelled()` is what lets it run past those skips and past
+  # promotion-verdict's own skip on every stage push, so the test results
+  # are checked explicitly.
   approval:
-    needs: [kit-test, app-test, ios-app-test]
-    if: ${{ github.event_name != 'pull_request' }}
+    needs: [promotion-verdict, kit-test, app-test, ios-app-test]
+    if: >-
+      ${{ !cancelled() && github.event_name != 'pull_request'
+      && (needs.promotion-verdict.outputs.tested == 'true'
+      || (needs.kit-test.result == 'success'
+      && needs.app-test.result == 'success'
+      && needs.ios-app-test.result == 'success')) }}
     environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     runs-on: ubuntu-latest
     steps:
@@ -566,7 +630,12 @@ jobs:
   upload-ios:
     name: Upload ${{ matrix.platform }} to TestFlight
     needs: approval
-    if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
+    # GitHub skips a job when any job above it in the chain was skipped,
+    # whatever its own `if` says, unless that `if` holds a status function.
+    # promotion-verdict is skipped on every stage push, and the test jobs on
+    # a main push it found already tested, so this pins the upload to
+    # approval's own result instead.
+    if: ${{ !cancelled() && needs.approval.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
     runs-on: xcode-27
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     strategy:
@@ -1001,7 +1070,8 @@ jobs:
       contents: read
       actions: write
     needs: approval
-    if: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
+    # The status function is load-bearing; see upload-ios.
+    if: ${{ !cancelled() && needs.approval.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
     runs-on: xcode-27
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     steps:

@@ -20,6 +20,9 @@
 //                                            \n -> <br> (paste w/o format)
 //   window.cabal.activeStates()           -> snapshot of bold/italic/etc.
 //                                            for the SwiftUI toolbar
+//   window.cabal.setTextScale(scale)      -> display-only text size ratio
+//                                            (Dynamic Type); never in the
+//                                            HTML getHTML() returns
 //
 // Native code talks back via window.webkit.messageHandlers.cabal when it
 // exists; outside a WKWebView (e.g. /unit tests served in a browser) the
@@ -534,6 +537,18 @@
     selection.addRange(range);
   }
 
+  // The system text size as a ratio of the default (1 = 14px). Set on the
+  // root element's style, outside the editor, so the user's markup and the
+  // wire HTML never carry it. Anything but a positive finite number resets.
+  function setTextScale(scale) {
+    var root = document.documentElement;
+    if (typeof scale === 'number' && isFinite(scale) && scale > 0) {
+      root.style.setProperty('--editor-text-scale', String(scale));
+    } else {
+      root.style.removeProperty('--editor-text-scale');
+    }
+  }
+
   function setPlaceholder(text) {
     if (text) editor.setAttribute('data-placeholder', text);
     else editor.removeAttribute('data-placeholder');
@@ -553,7 +568,8 @@
     insertPlainText: insertPlainText,
     focus: focus,
     focusAtStart: focusAtStart,
-    setPlaceholder: setPlaceholder
+    setPlaceholder: setPlaceholder,
+    setTextScale: setTextScale
   };
 
   postNative({ type: 'ready' });

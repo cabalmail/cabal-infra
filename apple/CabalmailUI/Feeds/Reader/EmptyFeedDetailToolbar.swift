@@ -10,14 +10,8 @@ import SwiftUI
 /// first item opened would swap eleven greyed mail buttons for six feed
 /// ones.
 struct EmptyFeedDetailToolbar: ToolbarContent {
-    /// Whether an item opened in this scope comes up on the publisher's
-    /// page, which drops the Remote-content slot from the middle of the bar
-    /// (#2144). The shell reads it from the scope's saved open mode
-    /// (`FeedDetailPolicy.opensArticle(in:folders:subscriptions:)`).
-    var showsArticle: Bool = false
-
     var body: some ToolbarContent {
-        ForEach(FeedReaderToolbarLayout.standIns(showingArticle: showsArticle), id: \.self) { action in
+        ForEach(FeedReaderToolbarLayout.standIns(), id: \.self) { action in
             ToolbarItem { standIn(for: action) }
         }
     }
