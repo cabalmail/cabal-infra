@@ -88,6 +88,12 @@ struct SearchView: View {
         // What the Message menu acts on while this tab is in front: the
         // results' selection and the reader pushed over them.
         .reportsMessageMenuAvailability(selectedCount: selectionCount, hasOpenMessage: selectedEnvelope != nil)
+        // What this tab has open, for the next layout swap to hand to the
+        // split's reader (#2184). Reported rather than held by the navigator:
+        // the push is this view's own `navigationDestination`.
+        .onChange(of: selectedEnvelope) { _, open in
+            navigator.searchTabResultChanged(open)
+        }
         .task {
             // The window's, shared with its regular split's search so a
             // layout swap keeps the query and results (#1654). This tab
@@ -145,6 +151,14 @@ struct SearchView: View {
             onSelectionCountChanged: { selectionCount = $0 }
         )
         .onAppear {
+            // A narrowing mid-search opens this tab with the result the
+            // split's reader had open parked for it (#2184): taking it pushes
+            // the reader, so the message survives the swap. The field's focus
+            // rule below leaves the keyboard down for it, as it does for any
+            // search already on screen.
+            if selectedEnvelope == nil, let handedOff = navigator.takeHandedOffSearchResult() {
+                selectedEnvelope = handedOff
+            }
             // The tab has one thing to type into, so opening it is the whole
             // of the intent — unless a previous search is still on screen,
             // which the keyboard would cover (#1425).

@@ -42,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 
@@ -118,10 +120,18 @@ fun FoldersAdminScreen(
                         },
                         trailingContent = {
                             androidx.compose.foundation.layout.Row {
+                                // The switch is its own accessibility focus stop -- a
+                                // `ListItem`'s trailing slot is not merged into the row --
+                                // so it needs a name of its own, carrying the folder the
+                                // row's headline would otherwise have supplied (#2210).
+                                // The name says what the switch controls and leaves the
+                                // state to the switch, which announces it.
+                                val switchName = stringResource(R.string.folders_subscribe_switch, folder)
                                 Switch(
                                     checked = subscribed,
                                     onCheckedChange = { viewModel.setSubscribed(folder, it) },
                                     enabled = !busy,
+                                    modifier = Modifier.semantics { contentDescription = switchName },
                                 )
                                 if (viewModel.canDelete(folder)) {
                                     IconButton(onClick = { menuFor = folder }) {

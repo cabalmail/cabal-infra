@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.39.11] - 2026-10-25
+
+### Fixed
+- Android: **Folders switch says which folder it subscribes.** Each row's
+  subscribe switch is its own accessibility focus stop, and it had no name at
+  all, so a screen reader could announce only "switch, on" — with nothing
+  saying what it controlled, and nothing naming the folder, since the row's
+  headline is a separate stop and its supporting line reads "22 messages"
+  once the count loads. The switch now names itself "Subscribe to <folder>"
+  and leaves the on/off to the switch.
+- Android: **Read button names what a tap does.** The mail reader's envelope
+  button described itself as "Toggle read" whatever the message's state, so a
+  screen reader never said whether a tap would mark the message read or
+  unread — the flag button beside it and the feed reader's matching button
+  both do. It now says "Mark read" or "Mark unread", the pair the message
+  list's menu, row actions and swipes already speak.
+- Apple: **No duplicate draft when the server's reply is unreadable.**
+  `/save_draft` stores the new copy and expunges the one it supersedes
+  before it answers, so a 200 whose body cannot be parsed is a save that
+  landed. The composer read it as a failure — leaving the window up with
+  "Couldn't read the server's reply" over a draft the server had already
+  stored — and went on naming the copy that save had replaced, so the next
+  save replaced nothing and left two drafts behind. The client now finds the
+  copy it wrote by the Message-Id it stamped on it; when it cannot, the save
+  is reported as saved with its coordinates unknown rather than as a
+  failure, and an open Drafts list is still told which copy went away.
+- Apple: **A search result stays open across an iPad width change.** A
+  message opened from "Search all mail" used to vanish when the window
+  narrowed: the Search tab arrived with the field, the query and the
+  results, but the reader was empty, and widening the window again did not
+  bring the message back. The window now carries the open result across the
+  swap, as it has always carried an open folder message — pushed in the
+  Search tab while the layout is compact, back in the split's reader when it
+  is wide. A search that ends at the boundary still takes its result with
+  it.
+- **Webmail sign-up refuses what the user pool refuses.** The phone field
+  accepted `+1 555 123 4567` and the sign-up sent it as typed, which Cognito
+  takes only in E.164, so the attempt came back as a bare "Registration
+  failed." with nothing said about the phone number. Numbers are normalized
+  to E.164 on the way out, the field is validated as E.164 and asks for a
+  country code, and the password hint names the character classes the pool
+  actually requires instead of recommending a passphrase it would refuse.
+  Cognito's own refusals — the phone format, which part of the password
+  policy failed, a username already taken, a rate limit — now each get their
+  own sentence, matching what the native clients say.
+
 ## [1.39.10] - 2026-10-25
 
 ### Fixed
