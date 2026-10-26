@@ -286,6 +286,17 @@ public final class RichTextEditorController: NSObject {
         await call("focusAtStart")
     }
 
+    /// Scales the editor's text by `scale`, the system text size as a
+    /// ratio of the default (`DynamicTypeSize.bodyTextScale` in the app
+    /// layer), so the composer follows Dynamic Type the way the SwiftUI
+    /// fields around it do. Display only: the ratio sits on the page's root
+    /// element, outside the editor, so `getHTML()` (what `/send` and
+    /// `/save_draft` receive) is the same at every size.
+    public func setTextScale(_ scale: Double) async {
+        await waitUntilReady()
+        await call("setTextScale", args: [scale])
+    }
+
     // MARK: - Conversions (parity with React)
 
     public func markdownToHtml(_ markdown: String) async -> String {
@@ -506,6 +517,7 @@ extension RichTextEditorController {
     private func encodeArgument(_ value: Any) -> String {
         if let int = value as? Int { return String(int) }
         if let bool = value as? Bool { return bool ? "true" : "false" }
+        if let double = value as? Double, double.isFinite { return String(double) }
         if let string = value as? String {
             let data = (try? JSONSerialization.data(withJSONObject: [string], options: [.fragmentsAllowed])) ?? Data()
             let json = String(data: data, encoding: .utf8) ?? "[\"\"]"
