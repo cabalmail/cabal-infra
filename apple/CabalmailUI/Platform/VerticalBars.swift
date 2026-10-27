@@ -29,6 +29,16 @@ extension View {
     func verticalBars() -> some View {
         modifier(VerticalBarsModifier())
     }
+
+    /// Asks a short side strip to give up tabs before this screen's own
+    /// actions (iOS 27.1 `toolbarVerticalCompressionBehavior(
+    /// .prefersToolbarItems)`), for the task screens: the message, compose
+    /// and the feed article. Lists keep the system's default, which keeps
+    /// the tabs (the Duo spec). Apply beside the screen's `.toolbar`; a no-op
+    /// without a strip, and on every other platform and SDK.
+    func stripGivesUpTabsFirst() -> some View {
+        modifier(StripCompressionModifier())
+    }
 }
 
 #if os(iOS) && canImport(SwiftUICore, _version: 8.0.85)
@@ -36,6 +46,16 @@ private struct VerticalBarsModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 27.1, *) {
             content.modifier(VerticalBarsReader())
+        } else {
+            content
+        }
+    }
+}
+
+private struct StripCompressionModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.toolbarVerticalCompressionBehavior(.prefersToolbarItems)
         } else {
             content
         }
@@ -57,6 +77,13 @@ private struct VerticalBarsReader: ViewModifier {
 #else
 /// No vertical bars on this SDK or platform.
 private struct VerticalBarsModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+    }
+}
+
+/// No strip to compress on this SDK or platform.
+private struct StripCompressionModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
     }

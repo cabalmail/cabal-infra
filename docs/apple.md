@@ -1306,6 +1306,22 @@ phone's Search tab takes no search role
 role's button to the selected tab's own search field (#1963); it is an
 ordinary tab there, and opens the Search screen with its field at the top.
 
+**The reader's actions in the strip.** While the bars are vertical the mail
+reader's actions are five separate system bottom-bar items
+(`ReaderToolbarPolicy.Placement.bottomItems`): Reply or Edit Draft, Read,
+Flag, the dispose action and More, ranked so the strip folds Read and Flag
+into its overflow before Reply, dispose and More. The strip draws them near
+the thumb and the tabs, on the closed display and in the open display's wide
+window alike. The message, the feed article and compose ask a short strip to
+give up tabs before their own actions (`stripGivesUpTabsFirst()`, the iOS
+27.1 `toolbarVerticalCompressionBehavior`); lists keep the tabs. A laptop fold
+changes nothing: its window is tall, so its bars are horizontal, and a system
+bottom bar there would span the window, under the list too, so the reader's
+own pane bar stays below the crease. Whether an HTML body runs under the
+bottom chrome follows the width alone (`bodyRunsUnderBottomBar`), since
+flipping it rebuilds the web view and the strip comes and goes without a
+shell swap.
+
 ### Extension-shared values: the `CabalmailShared` module
 
 The app extensions don't link CabalmailKit, which keeps them small and

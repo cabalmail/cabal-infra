@@ -224,9 +224,12 @@ struct SplitShell: View {
                             folderPanelPresented.toggle()
                         }
                     } label: {
-                        Image(systemName: "sidebar.leading")
-                            .accessibilityLabel("Toggle folder list")
+                        // Titled for the rows of the system overflow a
+                        // squeezed bar folds it into, which draw the title
+                        // (#1787); the bar itself draws the icon alone.
+                        Label("Folders", systemImage: "sidebar.leading")
                     }
+                    .accessibilityIdentifier("sidebar.leading")
                 }
             }
             // Pin the list column to its width and hang the drag handle on
