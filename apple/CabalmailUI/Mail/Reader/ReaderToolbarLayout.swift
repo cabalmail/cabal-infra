@@ -149,8 +149,13 @@ enum ReaderToolbarLayout {
     /// Which bar carries the mail reader's touch action set:
     /// `ReaderToolbarPolicy.placement(for: .mail, ...)`, which explains the
     /// choice.
-    static func placement(isRegularWidth: Bool, isOS27OrLater: Bool) -> Placement {
-        ReaderToolbarPolicy.placement(for: .mail, isRegularWidth: isRegularWidth, isOS27OrLater: isOS27OrLater)
+    static func placement(isRegularWidth: Bool, isOS27OrLater: Bool, barsAreVertical: Bool = false) -> Placement {
+        ReaderToolbarPolicy.placement(
+            for: .mail,
+            isRegularWidth: isRegularWidth,
+            isOS27OrLater: isOS27OrLater,
+            barsAreVertical: barsAreVertical
+        )
     }
 
     /// Compact navigation-bar items, in drawn order. The view draws each as
@@ -168,7 +173,8 @@ enum ReaderToolbarLayout {
         ]
     }
 
-    /// Bottom-bar items (the regular-width `.bottomBar` group), in drawn
+    /// Bottom-bar items (the regular-width `.bottomBar` group, and the
+    /// `.bottomItems` set the side strip draws item by item), in drawn
     /// order.
     static func bottomBar(leading: LeadingReaderAction) -> [ReaderToolbarAction] {
         [

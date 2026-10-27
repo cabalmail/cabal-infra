@@ -82,6 +82,7 @@ struct ComposeView: View {
             .navigationTitle(model.navigationTitle)
             .inlineNavigationTitle()
             .toolbar { toolbarContent }
+            .stripGivesUpTabsFirst()
             .task {
                 // Pick up the attachments the forward action sent with its
                 // compose request. They hand off out-of-band, keyed by seed

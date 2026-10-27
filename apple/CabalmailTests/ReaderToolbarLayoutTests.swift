@@ -292,4 +292,15 @@ final class ReaderToolbarLayoutTests: XCTestCase {
             "reply and dispose survive at the leading edge at any width"
         )
     }
+
+    /// The side strip's bottom items are the bottom bar's set, drawn item by
+    /// item in this order (`MessageDetailView`'s `.bottomItems` arm): Reply or
+    /// Edit Draft first.
+    func testBottomItemsOrderMatchesWhatTheViewDraws() {
+        XCTAssertEqual(
+            ReaderToolbarLayout.bottomBar(leading: .reply),
+            [.reply, .toggleRead, .toggleFlag, .dispose, .overflow]
+        )
+        XCTAssertEqual(ReaderToolbarLayout.bottomBar(leading: .editDraft).first, .editDraft)
+    }
 }

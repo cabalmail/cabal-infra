@@ -38,6 +38,8 @@ struct FeedItemDetailView: View {
         }
         .navigationTitle(model?.subscription?.displayTitle ?? "Feed")
         .inlineNavigationTitle()
+        // A reading screen: a short side strip gives up tabs before these.
+        .stripGivesUpTabsFirst()
         // Build the model from `.onAppear`, not `.task`: on an iPhone-compact
         // NavigationStack push, `.task` can fire twice for the same identity
         // and cancel both at entry (see `MessageDetailView`'s note). The
