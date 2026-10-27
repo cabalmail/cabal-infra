@@ -145,7 +145,7 @@ jobs:
     - name: check-iam-resource-scope
       run: ./.github/scripts/check-iam-resource-scope.py terraform/${{ matrix.stack }}
     - name: setup-python
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
       with:
         python-version: '3.12'
     - name: install-checkov
@@ -268,7 +268,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
     - name: setup-python
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
       with:
         python-version: '3.12'
     - name: install-pylint
@@ -398,14 +398,14 @@ jobs:
       # check that quietly did not run is the failure the step exists to
       # prevent. Pinned to the same version linux.yml installs; a test in
       # linux/xtask/tests/workflow_contract.rs fails if the two drift.
-      uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283  # v2.87.29
+      uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91  # v2.87.31
       with:
         tool: cargo-deny@0.20.2
     - name: install-cargo-llvm-cov
       # Same bargain as cargo-deny: the gate's coverage step runs this binary,
       # and a missing one is fatal wherever CI is set. Pinned to the version
       # linux.yml installs, held there by the same contract test.
-      uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283  # v2.87.29
+      uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91  # v2.87.31
       with:
         tool: cargo-llvm-cov@0.9.1
     - name: cache-cargo
