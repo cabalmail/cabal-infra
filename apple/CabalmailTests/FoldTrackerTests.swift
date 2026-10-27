@@ -64,4 +64,15 @@ final class FoldTrackerTests: XCTestCase {
         try await waitUntilOnMainActor { !tracker.isSettling }
         XCTAssertTrue(tracker.state.isFolded)
     }
+
+    /// Flat, the division settles into `division` and the window stays
+    /// unfolded; a pass at the closed display's size drops it.
+    func testAnInactiveDivisionIsPublishedWithoutFolding() async throws {
+        let tracker = FoldTracker(confirmDelay: .milliseconds(10))
+        tracker.layoutPass(FoldSample(region: nil, windowSize: wide, division: crease))
+        try await waitUntilOnMainActor { tracker.division == crease }
+        XCTAssertEqual(tracker.state, .none)
+        tracker.layoutPass(FoldSample(region: nil, windowSize: CGSize(width: 466, height: 678)))
+        try await waitUntilOnMainActor { tracker.division == nil }
+    }
 }

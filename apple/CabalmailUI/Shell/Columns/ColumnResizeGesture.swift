@@ -22,6 +22,19 @@ enum ColumnResizeGesture {
     /// rows nothing now that landing in it is no longer the same as claiming it.
     static let grabWidth: CGFloat = 22
 
+    /// Height of the grab target, centred on the visible grip (4 by 36 pt):
+    /// the smallest target Apple recommends. A drag starts only on the grip
+    /// (the Duo spec), so the rest of the column's trailing edge goes back
+    /// to the rows above and below it, their trailing swipes included. It
+    /// used to be the whole column's height (#1052, #1059).
+    static let grabHeight: CGFloat = 44
+
+    /// The handle's recognizers: the drag, and the double tap and long press
+    /// that reset the width.
+    enum Recognizer {
+        case drag, reset
+    }
+
     /// Whether a touch at `point` — in the band view's own coordinate space,
     /// whose `bounds` are the band — is the handle's to consider at all.
     ///
@@ -29,6 +42,13 @@ enum ColumnResizeGesture {
     /// them, so the rest of the column behaves as though no handle existed.
     static func acceptsTouch(at point: CGPoint, band: CGRect) -> Bool {
         band.contains(point)
+    }
+
+    /// Whether `recognizer` is offered a touch at `point` in the band: the
+    /// drag always, the reset only while there is a width to clear, so with
+    /// none a tap on the grip reaches its row with no wait for a second tap.
+    static func offersTouch(to recognizer: Recognizer, at point: CGPoint, band: CGRect, canReset: Bool) -> Bool {
+        acceptsTouch(at: point, band: band) && (recognizer == .drag || canReset)
     }
 
     /// Whether an accepted touch's opening movement is a resize rather than
@@ -56,4 +76,14 @@ enum ColumnResizeGesture {
                              maxWidth: CGFloat) -> CGFloat {
         min(max(anchor + translation, minWidth), maxWidth)
     }
+}
+
+/// What the handle reports to the split that owns the column: a drag's
+/// course, and a reset (a double tap on the grip, or Reset in its menu).
+enum ColumnResizeEvent: Equatable, Sendable {
+    case began
+    case moved(translation: CGFloat)
+    case ended
+    case cancelled
+    case reset
 }
