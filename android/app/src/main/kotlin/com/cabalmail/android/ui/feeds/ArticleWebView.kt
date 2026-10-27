@@ -1,6 +1,7 @@
 package com.cabalmail.android.ui.feeds
 
 import android.annotation.SuppressLint
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -19,9 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +36,7 @@ import androidx.core.net.toUri
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.mail.RendererRecovery
 import com.cabalmail.kit.models.readerModeHtml
 import com.cabalmail.kit.models.upgradeInsecureRequests
 import kotlinx.serialization.json.Json
@@ -53,6 +57,9 @@ import kotlinx.serialization.json.jsonPrimitive
  * extracted once it has loaded, and the result shown as a reader document
  * restyled with the mail reader's stylesheet; following a link leaves
  * reader mode for the live destination, as Safari's Reader does.
+ *
+ * A lost renderer is handled by [RendererRecovery]: a fresh WebView
+ * reloads the article, or the notice offers Retry when it keeps crashing.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -79,6 +86,8 @@ fun ArticleWebView(
     var canGoBack by remember { mutableStateOf(false) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     val reader = remember(url) { ReaderState(url) }
+    val recovery = remember(url) { RendererRecovery() }
+    val currentRecovery by rememberUpdatedState(recovery)
 
     BackHandler(enabled = canGoBack) { webView?.goBack() }
 
@@ -124,90 +133,111 @@ fun ArticleWebView(
     }
 
     Box(modifier = modifier) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    // The profile must be chosen before the first load.
-                    if (profileName.isNotEmpty() && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
-                        runCatching { WebViewCompat.setProfile(this, profileName) }
-                    }
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = false
-                    webViewClient =
-                        object : WebViewClient() {
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                            ): Boolean {
-                                val target = request?.url ?: return false
-                                val scheme = target.scheme?.lowercase()
-                                if (scheme != "http" && scheme != "https") return true
-                                // A link followed from the reader leaves reader mode for the live
-                                // page, and that page stays as served rather than being extracted
-                                // again when it finishes loading (#2060).
-                                if (reader.showingReader && request.hasGesture()) {
-                                    reader.showingReader = false
-                                    reader.readerDocument = null
-                                    reader.pageUrl = target.toString()
-                                    reader.pageLoaded = false
-                                    reader.leftThroughLink = true
-                                    onLeftReader()
-                                    view?.loadUrl(reader.pageUrl)
-                                    return true
-                                }
-                                return false
-                            }
-
-                            override fun onPageFinished(
-                                view: WebView?,
-                                finishedUrl: String?,
+        if (!recovery.gaveUp) {
+            key(recovery.generation) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            // The profile must be chosen before the first load.
+                            if (profileName.isNotEmpty() &&
+                                WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)
                             ) {
-                                canGoBack = view?.canGoBack() == true
-                                failure = null
-                                reader.pageLoaded = true
-                                // A new live page invalidates the extraction of the previous one.
-                                val current = view?.url.orEmpty()
-                                if (!reader.showingReader && current.startsWith("http") && current != reader.pageUrl) {
-                                    reader.pageUrl = current
-                                    reader.readerDocument = null
-                                }
-                                view?.let { reconcile(it) }
+                                runCatching { WebViewCompat.setProfile(this, profileName) }
                             }
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.allowFileAccess = false
+                            settings.allowContentAccess = false
+                            webViewClient =
+                                object : WebViewClient() {
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                    ): Boolean {
+                                        val target = request?.url ?: return false
+                                        val scheme = target.scheme?.lowercase()
+                                        if (scheme != "http" && scheme != "https") return true
+                                        // A link followed from the reader leaves reader mode for the live
+                                        // page, and that page stays as served rather than being extracted
+                                        // again when it finishes loading (#2060).
+                                        if (reader.showingReader && request.hasGesture()) {
+                                            reader.showingReader = false
+                                            reader.readerDocument = null
+                                            reader.pageUrl = target.toString()
+                                            reader.pageLoaded = false
+                                            reader.leftThroughLink = true
+                                            onLeftReader()
+                                            view?.loadUrl(reader.pageUrl)
+                                            return true
+                                        }
+                                        return false
+                                    }
 
-                            override fun onReceivedError(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                                error: WebResourceError?,
-                            ) {
-                                if (request?.isForMainFrame == true) {
-                                    failure = error?.description?.toString().orEmpty()
+                                    override fun onPageFinished(
+                                        view: WebView?,
+                                        finishedUrl: String?,
+                                    ) {
+                                        canGoBack = view?.canGoBack() == true
+                                        failure = null
+                                        reader.pageLoaded = true
+                                        // A new live page invalidates the extraction of the previous one.
+                                        val current = view?.url.orEmpty()
+                                        if (!reader.showingReader &&
+                                            current.startsWith("http") &&
+                                            current != reader.pageUrl
+                                        ) {
+                                            reader.pageUrl = current
+                                            reader.readerDocument = null
+                                        }
+                                        view?.let { reconcile(it) }
+                                    }
+
+                                    override fun onReceivedError(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                        error: WebResourceError?,
+                                    ) {
+                                        if (request?.isForMainFrame == true) {
+                                            failure = error?.description?.toString().orEmpty()
+                                        }
+                                    }
+
+                                    override fun onRenderProcessGone(
+                                        view: WebView?,
+                                        detail: RenderProcessGoneDetail?,
+                                    ): Boolean {
+                                        // The fresh view starts over: no history to walk back
+                                        // through, and no extraction left to answer.
+                                        canGoBack = false
+                                        reader.extracting = false
+                                        return currentRecovery.onRenderProcessGone(detail?.didCrash() == true)
+                                    }
                                 }
-                            }
+                            webView = this
                         }
-                    webView = this
-                }
-            },
-            update = { view ->
-                val loadKey = url to attempt
-                if (view.tag != loadKey) {
-                    view.tag = loadKey
-                    reader.showingReader = false
-                    reader.pageLoaded = false
-                    reader.leftThroughLink = false
-                    view.loadUrl(url)
-                } else {
-                    reconcile(view)
-                }
-            },
-            onRelease = { view ->
-                webView = null
-                view.destroy()
-            },
-        )
-        val notice = failure
+                    },
+                    update = { view ->
+                        val loadKey = url to attempt
+                        if (view.tag != loadKey) {
+                            view.tag = loadKey
+                            reader.showingReader = false
+                            reader.pageLoaded = false
+                            reader.leftThroughLink = false
+                            view.loadUrl(url)
+                        } else {
+                            reconcile(view)
+                        }
+                    },
+                    onRelease = { view ->
+                        // A remount can mount the fresh view before this releases the dead one.
+                        if (webView === view) webView = null
+                        view.destroy()
+                    },
+                )
+            }
+        }
+        val notice = failure ?: stringResource(R.string.web_renderer_gone_body).takeIf { recovery.gaveUp }
         if (notice != null) {
             Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
                 Column(
@@ -231,6 +261,7 @@ fun ArticleWebView(
                         onClick = {
                             failure = null
                             attempt += 1
+                            recovery.retry()
                         },
                     ) { Text(stringResource(R.string.retry)) }
                     TextButton(onClick = onLeave) { Text(stringResource(R.string.feed_article_back)) }
