@@ -19,7 +19,7 @@ This table and the **Status:** line under each work item are updated in the same
 
 | Work item | Status |
 |---|---|
-| Decisions 1 to 9 (start of Session 1); 10 and 11 (Session 2) | 1 to 9 answered 2026-10-26 (6 to 8 on their defaults; 9: a trimmed spike in Session 1) |
+| Decisions 1 to 9 (start of Session 1); 10 and 11 (Session 2) | 1 to 9 answered 2026-10-26 (6 to 8 on their defaults; 9: a trimmed spike in Session 1, which answered yes, and the merge taken as Session 3 on 2026-10-27) |
 | Session 1, PR 1: CI probe, then the leg | Merged (2026-10-26), #2235: no probe was needed; the advisory leg passed on its first stage push |
 | Session 1, PR 2: fold adapter | Merged (2026-10-26), #2237 |
 | Session 1: the Decision 9 spike (trimmed) | Done (2026-10-26): yes, with the evidence under Decision 9 |
@@ -28,14 +28,14 @@ This table and the **Status:** line under each work item are updated in the same
 | Session 1, PR 5: Search on the vertical tab bar (#1963) | Merged (2026-10-27), #2245 |
 | Session 1, PR 6: mail reader in system bars (#1667) | Not started (2026-10-15) |
 | Session 1, PR 7: compose as a sheet (#1680) | Not started (2026-10-15) |
-| Session 1, PR 8: nothing re-marked on a close or open | Not started (2026-10-15) |
+| Session 1, PR 8: nothing re-marked on a close or open | Dropped (2026-10-27): the merge deletes the shell swap it would carry across |
 | Session 1, PR 9: crease margins in book pose | Not started (2026-10-15) |
 | Session 1, PR 11: Duo docs | Merged (2026-10-26), #2238 |
 | Session 1, PR 10: compact row drag (#1681; R2) | Not started (2026-10-15) |
 | Session 1, PR 12: drops into compose (R2) | Not started (2026-10-15) |
 | Session 1: the Studio simulator pass | Not started (2026-10-15) |
 | Session 2: with the device | Not started (2026-10-25); waits for the maintainer's device, back-ordered until December 2026 |
-| Session 3: the one-tree merge (with Decision 9), or the reader-bar refactor alone | Not started (2026-10-15) |
+| Session 3: the one-tree merge (with Decision 9), or the reader-bar refactor alone | Not started (2026-10-27); the merge, by Decision 9's answer |
 
 ## Words used here
 
@@ -88,6 +88,7 @@ Asked at the start of Session 1, in its scope doc:
      3. **The columns lay out after an open without a rebuild.** With #1679's floor ported, every Duo open tiled the list (340 pt) beside the reader, as did a cold launch while open on the Duo and a cold launch at regular width on the iPad; #1988's six rounds tiled every time.
 
      Bugs recorded for the merge, none fixed: on the first close after the app launches open, the reader shows with no Back button and no actions in the side strip (two tries of two; an edge swipe still goes back, and later closes are fine); Feeds in book pose put its feed sidebar and item list either side of the fold and squeezed the article to a 30 pt strip at the trailing edge, where Mail splits its list and reader at the fold; an iPad window at 714 pt, regular width with the list under its 360 pt floor, shows the reader full width with the list over it instead of tiling, and a resize passes through that state between 680 and 778 pt (perhaps the spec's overlay rule, but its threshold is unset); the iPad's pushed reader is built twice on an open; and Pro Max landscape with the hold lifted clips the reader's header at the compact height, with the floating tab bar over the last list rows. Limits: simulators only, driven by Device Hub's buttons rather than a hinge, and the bugs in question are timing races, so this yes is weaker than a no would have been, and the 15-minute check on the maintainer's Duo before the merge starts is still owed (no install path for it exists yet); the test mailbox has no message with remote content, so Load Images surviving is inferred from the model, and with the fix the web view, surviving; and no laptop pose, which swaps nothing in either design. Whether to take the merge as Session 3 (option (b)), and so whether PR 8 is dropped, is the maintainer's call.
+   - **Answered 2026-10-27: (b), the merge, as Session 3.** Session 3 is the one-tree merge rather than the reader-bar refactor alone; it still follows Session 2 and platform-conditionals.md's FU-1, and it starts with the 15-minute check on the maintainer's Duo. PR 8 is dropped, since its carry across the shell swap is what the merge deletes. The working agreement against new hand-off rules across the swap now holds until the merge lands. Decision 10's default follows this answer: (a), the inspector removed on iOS once Addresses is a tab on both displays. Session 1's other PRs stay in R1 on today's shells; PR 3 keeps its width and fold rules out of `SplitShell` so the merge can carry them into the one tree's split.
 
 Asked at the start of Session 2, after the device pass:
 
@@ -249,7 +250,7 @@ Then one of two outcomes. If a 27.1 runtime can be had in about ten minutes, rep
 
 > **Erratum (2026-10-26):** PR 8 waits for the Decision 9 spike's outcome (Decision 9's answer), because it adds a hand-off across the shell swap that a merge would delete.
 
-**Status:** Held (2026-10-26). The spike answered yes; PR 8 is dropped if the maintainer takes the merge, and built if not.
+**Status:** Dropped (2026-10-27). The maintainer took the merge (Decision 9), which deletes the shell swap this carry would cross; under one tree the reader is not rebuilt, and the spike measured no mark-as-read rerun across a close and open.
 
 **PR 9, crease margins in book pose (`Apple:`).** The spec's 44 pt rule 〔row .53420〕, while a vertical fold is active:
 - the list bar's trailing items, which on the Studio sat about 40 pt from the crease, move to its leading end, the folder-panel button included;
@@ -322,7 +323,7 @@ Write the consolidated device checklist from this pass, the spec's "What needs h
 
 ### Session 3: the one-tree merge (with Decision 9), or the reader-bar refactor alone
 
-**Status:** Not started (2026-10-26). The spike answered yes (Decision 9); taking the merge is the maintainer's call. If taken, it carries the spike's `underBottomGlass` change and answers the bugs the spike recorded.
+**Status:** Not started (2026-10-27). The merge, by Decision 9's answer of 2026-10-27, after Session 2 and FU-1. It carries the spike's `underBottomGlass` change and answers the bugs the spike recorded (Decision 9), and starts with the 15-minute check on the maintainer's Duo that the spike's caveats call for.
 
 **With the merge.** After platform-conditionals.md's FU-1 and Session 2. One root on iOS: a tab view with Mail, Feeds, Addresses and Search on both displays and on iPad, split views inside Mail, Feeds and Search that the system collapses on the outer display, Settings as a sheet from a gear on each tab's first screen, and folders as the system sidebar with one control for it (Cabalmail's folder button in book and laptop poses) 〔.18737〕〔.19068〕. Whether the folder sidebar overlays or the leading column becomes a stack is the spec's open choice 〔.19313〕, decided by prototyping both in Decision 9's spike. The merge deletes `ShellHandOff`, the tab and split shells' hand-off rules and PR 8's carry, hoists every sheet to the root, and keeps the split view's preferred column current so a collapse lands where the narrowing rule says 〔.20662〕. It carries FU-12 with it: the reader reads layout and window shape, not the size class. Several PRs, its own release or two; the source scans on `SplitShell.swift`, `TabShell.swift` and `ShellHandOff.swift` need the maintainer's yes. Risk: high.
 
