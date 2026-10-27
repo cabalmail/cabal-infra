@@ -55,7 +55,7 @@ extension MessageDetailView {
             )
         }
         if loaded.count < source.count {
-            appState.showToast(Toast(
+            showToast(Toast(
                 kind: .warning,
                 message: "Some attachments couldn't be carried into the forward."
             ))

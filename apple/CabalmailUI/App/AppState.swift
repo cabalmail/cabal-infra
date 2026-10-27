@@ -102,8 +102,11 @@ public final class AppState {
 
     /// Publishes a toast and auto-clears it after `duration`. The task lives
     /// outside structured concurrency because the caller's scope (usually a
-    /// compose sheet) dismisses before the banner fades.
-    func showToast(_ toast: Toast, duration: TimeInterval = 4) {
+    /// compose sheet) dismisses before the banner fades. `origin`, when
+    /// given, records the window and column that raised it (`Toast.Origin`).
+    func showToast(_ toast: Toast, duration: TimeInterval = 4, from origin: Toast.Origin? = nil) {
+        var toast = toast
+        if let origin { toast.origin = origin }
         self.toast = toast
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))

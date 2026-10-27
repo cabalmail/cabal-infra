@@ -6,6 +6,7 @@ import CabalmailKit
 /// callers supply the icon / text / tint, and an optional Copy action that,
 /// when present, renders a trailing button.
 struct BannerView: View {
+    @Environment(\.bannerWidthLimit) private var widthLimit
     let icon: String
     let text: String
     let tint: Color
@@ -81,7 +82,8 @@ struct BannerView: View {
         // Cap the banner at ~70% of the container width so it clears the
         // toolbar/action buttons it would otherwise overlap. Text wraps within
         // this width (no lineLimit) and the capsule grows vertically to fit.
-        .containerRelativeFrame(.horizontal) { width, _ in width * 0.7 }
+        // Over half of a folded window, 70% of that half (`bannerWidthLimit`).
+        .containerRelativeFrame(.horizontal) { width, _ in min(width, widthLimit ?? width) * 0.7 }
         // A plain `.gesture` rather than a high-priority one, so the trailing
         // action and the close button keep winning their own taps.
         .gesture(dismissSwipe)
@@ -95,6 +97,13 @@ struct BannerView: View {
                 onDismiss()
             }
     }
+}
+
+extension EnvironmentValues {
+    /// The width a `BannerView` takes 70% of when it is narrower than the
+    /// banner's container: the piece of a folded window the banner sits in
+    /// (`StatusBannerOverlay`). Nil, the container's width.
+    @Entry var bannerWidthLimit: CGFloat?
 }
 
 /// Renders a `Toast` value as a `BannerView`, mapping `kind` to the standard

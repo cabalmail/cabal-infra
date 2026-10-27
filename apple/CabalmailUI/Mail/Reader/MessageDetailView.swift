@@ -367,4 +367,10 @@ extension MessageDetailView {
     ) {
         model.connect(to: mailStore, in: origin)
     }
+
+    /// Shows `toast` as raised by this window's reader, so a folded iPhone
+    /// Duo shows it on the reader's half (`StatusBannerPlacement`).
+    func showToast(_ toast: Toast) {
+        appState.showToast(toast, from: Toast.Origin(window: commandWindowID, column: .reader))
+    }
 }

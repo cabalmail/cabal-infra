@@ -24,6 +24,9 @@ import CoreGraphics
 ///
 /// The one thing the bottom band does hold is the compact-width tab bar, which
 /// is what these numbers now clear.
+///
+/// On a folded iPhone Duo the bottom of the window is not always the place:
+/// `slot(in:column:hasControls:)` keeps every banner off the crease.
 enum StatusBannerPlacement {
     /// Regular width (the iPad split, macOS, visionOS) — none of these draws
     /// a bottom tab bar in the overlay's band, so the banner takes the plain
@@ -52,5 +55,67 @@ enum StatusBannerPlacement {
     /// is a leading ornament, clear of the band.
     static func bottomInset(in layout: ShellLayout) -> CGFloat {
         bottomInset(isRegularWidth: layout != .tabs)
+    }
+
+    /// The part of a window a status banner hangs from the bottom of.
+    enum Slot: Hashable, Sendable, CaseIterable {
+        /// The whole overlay: no fold crosses it.
+        case whole
+        /// The leading piece of a book fold (the list's).
+        case leadingPiece
+        /// The trailing piece of a book fold (the reader's).
+        case trailingPiece
+        /// Above a laptop fold.
+        case aboveCrease
+        /// Below a laptop fold.
+        case belowCrease
+    }
+
+    /// Where a banner goes under the iPhone Duo spec's fold rule: nothing
+    /// Cabalmail draws sits on the crease, a floating element sits with the
+    /// column that raised it, and nothing tappable sits above a laptop fold.
+    ///
+    /// - With no fold across the overlay, the whole of it, as always.
+    /// - A vertical crease (book pose): the piece of the column that raised
+    ///   the banner. The list is the split's leading column, so its piece is
+    ///   the leading one; the reader's, and that of every banner that belongs
+    ///   to the window rather than a column (`column` nil), is the trailing
+    ///   one.
+    /// - A horizontal crease (laptop pose): below it for a banner with
+    ///   anything to tap (an action, or a close button), above it for one
+    ///   that only reports a state (offline).
+    ///
+    /// - Parameters:
+    ///   - pieces: the overlay's bounds less the window's fold, once settled
+    ///     (`onFoldPiecesChange(_:)`).
+    ///   - column: the column that raised the banner, or nil for the
+    ///     window's own.
+    ///   - hasControls: the banner has a button or can be swiped away.
+    static func slot(in pieces: FoldPieces, column: Toast.Column?, hasControls: Bool) -> Slot {
+        switch pieces {
+        case .whole: return .whole
+        case .sideBySide: return column == .list ? .leadingPiece : .trailingPiece
+        case .stacked: return hasControls ? .belowCrease : .aboveCrease
+        }
+    }
+
+    /// The frame of `slot` in the overlay's own coordinates, or nil when
+    /// `pieces` has no such part.
+    static func frame(of slot: Slot, in pieces: FoldPieces) -> CGRect? {
+        switch (slot, pieces) {
+        case (.whole, .whole(let bounds)): return bounds
+        case (.leadingPiece, .sideBySide(let leading, _)): return leading
+        case (.trailingPiece, .sideBySide(_, let trailing)): return trailing
+        case (.aboveCrease, .stacked(let top, _)): return top
+        case (.belowCrease, .stacked(_, let bottom)): return bottom
+        default: return nil
+        }
+    }
+
+    /// The gap under banners that sit on a horizontal crease: the plain gap,
+    /// since no bar comes between them and the fold. Everywhere else the
+    /// banners' bottom is the window's, and `bottomInset(in:)` holds.
+    static func bottomInset(of slot: Slot, windowBottomInset: CGFloat) -> CGFloat {
+        slot == .aboveCrease ? defaultBottomInset : windowBottomInset
     }
 }
