@@ -93,19 +93,19 @@ struct FeedManagementSheets: ViewModifier {
             .sheet(item: $actions.sheet) { sheet in
                 if let management { sheetView(sheet, management: management) }
             }
-            .confirmationDialog(deleteTitle, isPresented: deleteBinding, titleVisibility: .visible) {
+            .confirmationPrompt(deleteTitle, isPresented: deleteBinding, titleVisibility: .visible) {
                 Button("Delete Folder", role: .destructive) { deletePendingFolder() }
                 Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
             } message: {
                 Text("Feeds and folders inside it move up one level; nothing is unsubscribed.")
             }
-            .confirmationDialog(unsubscribeTitle, isPresented: unsubscribeBinding, titleVisibility: .visible) {
+            .confirmationPrompt(unsubscribeTitle, isPresented: unsubscribeBinding, titleVisibility: .visible) {
                 Button("Unsubscribe", role: .destructive) { unsubscribePending() }
                 Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
             } message: {
                 Text("Its items and your read and flag marks for it are removed from this account.")
             }
-            .confirmationDialog(markAllReadTitle, isPresented: markAllReadBinding, titleVisibility: .visible) {
+            .confirmationPrompt(markAllReadTitle, isPresented: markAllReadBinding, titleVisibility: .visible) {
                 Button("Mark All as Read") { markAllReadPending() }
                 Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
             } message: {

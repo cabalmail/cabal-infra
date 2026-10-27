@@ -302,13 +302,15 @@ struct WideMail {
 struct AddressInspectorToolbarItem: ToolbarContent {
     let addressInspectorPresented: Bool
     let toggle: () -> Void
+    /// At the bar's leading end in book pose (`\.listBarItemsLead`).
+    @Environment(\.listBarItemsLead) private var itemsLead
 
     var body: some ToolbarContent {
         if addressInspectorPresented {
-            ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
+            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) { addressInspectorToggle }
                 .keepsInBarFirst()
         } else {
-            ToolbarItem(placement: .primaryAction) { addressInspectorToggle }
+            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) { addressInspectorToggle }
                 .keepsInBar()
         }
     }

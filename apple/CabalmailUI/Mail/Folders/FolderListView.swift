@@ -279,7 +279,7 @@ struct FolderListView: View {
             await manualRefresh()
         }
         .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
-        .confirmationDialog(
+        .confirmationPrompt(
             deleteDialogTitle,
             isPresented: deleteDialogBinding,
             titleVisibility: .visible,

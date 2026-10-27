@@ -121,7 +121,7 @@ struct AddressListView: View {
             await model?.refresh(force: true)
         }
         .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
-        .confirmationDialog(
+        .confirmationPrompt(
             revokeDialogTitle,
             isPresented: revokeDialogBinding,
             titleVisibility: .visible,
@@ -129,7 +129,7 @@ struct AddressListView: View {
             actions: revokeDialogActions,
             message: revokeDialogMessage
         )
-        .confirmationDialog(
+        .confirmationPrompt(
             suspendDialogTitle,
             isPresented: suspendDialogBinding,
             titleVisibility: .visible,

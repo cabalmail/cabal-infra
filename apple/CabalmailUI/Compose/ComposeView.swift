@@ -164,7 +164,7 @@ struct ComposeView: View {
             ) { result in
                 Task { await ingestFileImport(result) }
             }
-            .confirmationDialog(
+            .confirmationPrompt(
                 "Discard draft?",
                 isPresented: $showDiscardConfirm
             ) {

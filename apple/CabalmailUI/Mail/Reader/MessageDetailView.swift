@@ -224,7 +224,7 @@ struct MessageDetailView: View {
         }
         #endif
         .task { await loadAddressMenuContext() }
-        .confirmationDialog(
+        .confirmationPrompt(
             "Delete Forever?",
             isPresented: $purgeConfirmPresented,
             titleVisibility: .visible

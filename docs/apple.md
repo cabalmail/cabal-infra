@@ -1198,7 +1198,8 @@ on iPhone Duo: Poses and Transitions"); the work plan that follows it,
 with the spec's rules and what has landed, is
 [`docs/1.x/post-wave-3/duo-support.md`](1.x/post-wave-3/duo-support.md).
 Its rules for the app's own controls: none above a laptop fold or within
-44 pt of a book crease; floating elements (toasts, banners) in the piece
+44 pt of a book crease (measured from the crease line, the middle of the
+40 pt division band); floating elements (toasts, banners) in the piece
 of the window that belongs to the column that raised them; and no
 animation of Cabalmail's own on a close, open or fold, except the column
 divider's.
@@ -1321,6 +1322,51 @@ own pane bar stays below the crease. Whether an HTML body runs under the
 bottom chrome follows the width alone (`bodyRunsUnderBottomBar`), since
 flipping it rebuilds the web view and the strip comes and goes without a
 shell swap.
+
+**Crease margins: `Shell/Columns/CreaseClearance.swift`.** In book pose
+the keep-out is the crease line plus and minus 44 pt: 431.5 to 519.5 on
+the Duo's 951 pt inner display, where the list column ends at the band's
+leading edge (455.5) and the reader starts there. `SplitShell` keeps both
+columns out of it, from the live `\.foldState`, with modifiers that are
+always present and only change their value, so a fold never rebuilds the
+reader's web view:
+
+- The list column takes a trailing safe area of 24 pt
+  (`CreaseClearance.trailingClearance`), so its search field, the folder
+  and feed filter bars' controls and its rows' content stop at 431.5. The
+  bars' backgrounds still reach the column edge, and so does a row's
+  trailing swipe, whose buttons open from the cell's own edge.
+- Its bar's trailing items (Mail's Compose, More and `@`; Feeds' Compose,
+  Refresh, Mark All as Read and Feed Settings) move to the leading end
+  beside Folders. `SplitShell` publishes `\.listBarItemsLead` on the list
+  column, and each item asks `ToolbarItemPlacement.listBar(_:leads:)`
+  (`Platform/ListBarPlacement.swift`), which answers `.topBarLeading`
+  while it leads and the item's own placement otherwise; the ranks that
+  keep Compose and `@` in a narrow bar are unchanged.
+- The reader column's content starts 64 pt in
+  (`CreaseClearance.leadingInset`), past 519.5: the message header, its
+  body and the feed article alike. Its system bar is not inset: a feed
+  article's inline title starts inside the keep-out. The mail reader
+  shows no title there.
+- Every confirmation dialog in the shared app layer goes through
+  `confirmationPrompt` (`Platform/ConfirmationPrompt.swift`), which takes
+  SwiftUI's `confirmationDialog` arguments and presents an alert instead
+  while a fold runs top to bottom through the window
+  (`ConfirmationDialogPolicy.presentsAsAlert`). The popover lands on the
+  crease; the system centres the alert on the leading page. A question
+  keeps the style it opened with if the device folds or opens while it
+  is up. Its actions are the dialog's own, so the back-out button keeps
+  `ConfirmationDialogPolicy.backOutRole`, which is no role on iOS: the
+  alert draws it, but a hardware keyboard's Escape does not press it.
+  SwiftUI runs an alert's or a dialog's action before it dismisses, so
+  actions that read the pending item still find it.
+  `ConfirmationPromptTests` fails a direct `confirmationDialog` anywhere
+  in `CabalmailUI/`.
+
+With the addresses inspector open the list ends short of the crease and
+the reader runs across it, so neither column is inset (Decision 10 in the
+plan). Laptop pose, a flat or closed Duo and every other device have no
+vertical fold, and every rule answers zero or false.
 
 ### Extension-shared values: the `CabalmailShared` module
 

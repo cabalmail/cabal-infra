@@ -53,10 +53,13 @@ final class ToolbarOverflowTitleSourceScanTests: XCTestCase {
     /// The `#else` arm of the list toolbar's platform split — the touch
     /// platforms' Compose item. Scoped, because the macOS arm above it still
     /// declares an icon-only button: the Mac's bar spans the window and its
-    /// crowding (the `»` popup, #1047) was not measured here.
+    /// crowding (the `»` popup, #1047) was not measured here. The item names
+    /// a placement since it moves to the bar's leading end in book pose on an
+    /// iPhone Duo (`ToolbarItemPlacement.listBar`), so the anchor stops at
+    /// the declaration's opening parenthesis.
     private static func touchBranchOfTheListToolbar() throws -> String {
         let body = try source("CabalmailUI/Mail/MessageList/MessageListView.swift")
-        guard let start = body.range(of: "            #else\n            ToolbarItem {"),
+        guard let start = body.range(of: "            #else\n            ToolbarItem("),
               let end = body.range(of: "            .keepsInBar()\n            #endif"),
               start.upperBound <= end.lowerBound else {
             // A scan whose anchor is gone fails rather than passing on an
