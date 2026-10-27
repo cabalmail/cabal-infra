@@ -1,3 +1,3 @@
-FROM prom/blackbox-exporter:v0.29.0@sha256:9613f2884689b6fad9f1939f6a3b0388c93a022cfaededb19545b329b5c83dea
+FROM prom/blackbox-exporter:v0.29.1@sha256:ea1c7aa3ef3f307cd03e85f34abb604478ccb90b567fc690da0cd9776da76b13
 
 COPY blackbox-exporter/blackbox.yml /etc/blackbox_exporter/config.yml
