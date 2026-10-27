@@ -110,6 +110,9 @@ struct SignedInRootView: View {
             // banners above alike: after the overlay so both are beneath it,
             // and after the `.id` so a new sign-in keeps the fold it is in.
             .foldGeometry()
+            // Whether the system draws this window's bars in a side strip
+            // (`\.barsAreVertical`), for the tab roles and the reader's bar.
+            .verticalBars()
             .task { await observeReachability() }
             .task(id: appState.client.map { ObjectIdentifier($0) }) { await failedSends.observe(appState.client) }
             // The cross-device "pick up where you left off" probe, at launch
