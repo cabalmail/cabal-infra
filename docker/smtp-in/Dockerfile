@@ -6,7 +6,7 @@
 # AL2023, so --with-spf enables OpenDMARC's internal SPF implementation
 # (consumed via SPFSelfValidate in opendmarc.conf). Phase 1 of
 # docs/0.10.x/inbound-auth-verification-plan.md.
-FROM amazonlinux:2023@sha256:8ed3c0a996841537f75607e7d1de2114d8150391f75792e8da9268738547e73f AS opendmarc-build
+FROM amazonlinux:2023@sha256:c04a1012acc483977f61f7f91c28624a39a621e56a59781319a75dec528be9b6 AS opendmarc-build
 
 # AL2023 pins $releasever to the base image's own release snapshot, so
 # dnf here only ever sees the package set frozen at base-image build
@@ -40,7 +40,7 @@ RUN curl -fsSL -o /tmp/opendmarc.tar.gz \
     && make DESTDIR=/stage install
 
 # ── Runtime stage ─────────────────────────────────────────────────────
-FROM amazonlinux:2023@sha256:8ed3c0a996841537f75607e7d1de2114d8150391f75792e8da9268738547e73f
+FROM amazonlinux:2023@sha256:c04a1012acc483977f61f7f91c28624a39a621e56a59781319a75dec528be9b6
 
 # System packages. opendkim runs in verify-only mode as the first
 # inbound-auth milter; sendmail-milter provides the libmilter shared
