@@ -8,6 +8,14 @@ import Foundation
 struct FoldSample: Equatable, Sendable {
     var region: CGRect?
     var windowSize: CGSize
+    /// The window's division region whether or not it is active, in window
+    /// coordinates: where the crease is even while the device lies flat.
+    /// Measured on the Duo simulator (iOS 27.1, 2026-10-27): flat, the
+    /// inner display reports (455.5, 0, 40, 669) inactive, the same band
+    /// book pose reports active; laptop and open portrait report
+    /// (0, 455.5, 669, 40); the closed display reports none. `FoldHold`
+    /// never reads it: an inactive region is not a fold.
+    var division: CGRect?
 }
 
 /// The hinge, as far as the fold hold cares: its status and its angle in
@@ -175,7 +183,32 @@ struct FoldHold {
 
     /// Within half a point: a size that differs by rounding is the same
     /// window.
-    private static func sameSize(_ lhs: CGSize, _ rhs: CGSize) -> Bool {
+    static func sameSize(_ lhs: CGSize, _ rhs: CGSize) -> Bool {
         abs(lhs.width - rhs.width) < 0.5 && abs(lhs.height - rhs.height) < 0.5
+    }
+}
+
+/// The division `foldGeometry()` publishes as `\.foldDivision`: the latest
+/// settled one, kept through a settled reading that loses it while the
+/// window keeps its size, and dropped by a reading at another size.
+///
+/// The hold is for the hinge. The active region drops out whenever the hinge
+/// moves; whether the inactive one does too is unmeasured, and if it did, a
+/// list sitting at the crease would jump to its default width and back on
+/// the way into book pose. A different window size is a close, an open or a
+/// rotation, after which the old crease is somewhere else, or nowhere.
+struct DivisionHold: Equatable, Sendable {
+    private(set) var division: CGRect?
+    private var windowSize: CGSize?
+
+    mutating func observe(_ sample: FoldSample) {
+        if let new = sample.division {
+            division = new
+            windowSize = sample.windowSize
+            return
+        }
+        if let held = windowSize, FoldHold.sameSize(held, sample.windowSize) { return }
+        division = nil
+        windowSize = nil
     }
 }

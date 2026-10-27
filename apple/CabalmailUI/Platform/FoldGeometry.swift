@@ -37,10 +37,19 @@ extension EnvironmentValues {
     /// not settled yet, so `onFoldPiecesChange(_:)` waits for it rather than
     /// pairing its own new frame with the window's old fold.
     @Entry var foldIsSettling = false
+    /// The window's division region whether or not it is active, in window
+    /// coordinates (`FoldSample.division`, held by `DivisionHold`): where
+    /// the crease is while an iPhone Duo lies flat as well as folded. Not a
+    /// fold (`foldState` is the one fold signal); read it only for a default
+    /// that must not move when the device folds, such as the list column's
+    /// width with none of its own (`ListColumnPolicy`). Nil on every host
+    /// without one.
+    @Entry var foldDivision: CGRect?
 }
 
 extension View {
-    /// Publishes the window's fold to everything beneath as `\.foldState`.
+    /// Publishes the window's fold to everything beneath as `\.foldState`,
+    /// and its division region, active or not, as `\.foldDivision`.
     /// Applied once, at the root of a main window (`SignedInRootView`).
     ///
     /// On iOS 27.1 it reads the active division region on every layout pass,
@@ -70,9 +79,12 @@ final class FoldTracker {
     private(set) var state: FoldState = .none
     /// The latest layout pass read something that has not settled yet.
     private(set) var isSettling = false
+    /// The window's division region, active or not (`\.foldDivision`).
+    private(set) var division: CGRect?
 
     @ObservationIgnored private var settler = FoldSettler<FoldSample>()
     @ObservationIgnored private var hold: FoldHold
+    @ObservationIgnored private var divisionHold = DivisionHold()
     @ObservationIgnored private var latest: FoldSample?
     @ObservationIgnored private var confirming: Task<Void, Never>?
     @ObservationIgnored private var waiting: Task<Void, Never>?
@@ -124,6 +136,11 @@ final class FoldTracker {
 
     private func settle(_ sample: FoldSample) {
         guard let settled = settler.pass(sample) else { return }
+        // In the same call as the fold, so one update carries both.
+        divisionHold.observe(settled)
+        if division != divisionHold.division {
+            division = divisionHold.division
+        }
         hold.observe(settled, at: now())
         publish()
     }
@@ -158,15 +175,17 @@ private struct FoldGeometryModifier: ViewModifier {
             .modifier(FoldInputs(tracker: tracker))
             .environment(\.foldState, tracker.state)
             .environment(\.foldIsSettling, tracker.isSettling)
+            .environment(\.foldDivision, tracker.division)
     }
 }
 
 #if os(iOS) && canImport(SwiftUICore, _version: 8.0.85)
-/// Where the fold readings come from on iOS 27.1: the active division
-/// regions in the window's geometry, filtered to the active ones explicitly
-/// (Apple's reference once said inactive ones come back too; the runtime
-/// returns only active ones by default, and the filter costs nothing), and
-/// the hinge, read only while a fold is held, since that is all it is for.
+/// Where the fold readings come from on iOS 27.1: the division regions in
+/// the window's geometry, inactive ones included, and the hinge, read only
+/// while a fold is held, since that is all it is for. The active region is
+/// the fold; the region whether active or not is the division. The
+/// `isActive` filter is what keeps a flat Duo from folding: flat, the query
+/// returns the inner display's band, inactive.
 ///
 /// The regions come from a clear reader behind the content that ignores
 /// every safe area, the keyboard's included, not from the content itself.
@@ -197,16 +216,19 @@ private struct FoldInputs: ViewModifier {
         }
     }
 
-    /// The region in window coordinates, and the window's size: the
+    /// The regions in window coordinates, and the window's size: the
     /// reader's own, since it spans the window whatever the keyboard or the
     /// bar strip does to the safe area.
     @available(iOS 27.1, *)
     nonisolated private static func sample(_ proxy: GeometryProxy) -> FoldSample {
         let origin = proxy.frame(in: .global).origin
-        let region = proxy.reservedRegions(kind: .division)
-            .first(where: \.isActive)
-            .map { $0.frame.offsetBy(dx: origin.x, dy: origin.y) }
-        return FoldSample(region: region, windowSize: proxy.size)
+        let regions = proxy.reservedRegions(kind: .division, options: .includeInactive)
+        let active = regions.first(where: \.isActive)?.frame
+        return FoldSample(
+            region: active?.offsetBy(dx: origin.x, dy: origin.y),
+            windowSize: proxy.size,
+            division: (active ?? regions.first?.frame)?.offsetBy(dx: origin.x, dy: origin.y)
+        )
     }
 }
 

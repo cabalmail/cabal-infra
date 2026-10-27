@@ -1105,7 +1105,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, list place, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included, and where that list is scrolled, as a `ListAnchor`: its top row by Message-ID, UID and position), its `StoredRoute` (the route its scene storage keeps, and where its folder list was scrolled, for the account they were stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, which also keeps where the last-used window's folder list was scrolled, on this device only, reading positions and the cross-device cursor); `DeepLinkRouter` (a notification, a Spotlight result or Siri's Open Folder opens in one main window: the system's target, else the window last used) with the `WindowRegistry` it finds windows in, and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
 | `Shell/` | How a window is laid out. The sign-in / signed-in router resolves the window's `ShellLayout` and draws one of four layout shells: `DesktopShell` (the Mac window), `SplitShell` (the iPad split, and iPhone Duo unfolded), `TabShell` (the iPhone tab bar, a narrowed iPad window and Duo folded) and `OrnamentShell` (the Vision Pro tabs). `WideMail` is what the two wide shells share, `CompactTab` is the tab list as data, and `CompactMailStack` is the phone's Mail tab. Also here: the layout and column policies, the split's Settings sheet presenter, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
-| `Shell/Columns/` | What the mail columns show on every layout, with no platform conditionals (`MailSidebarColumn`, `MailContentColumn`, `MailReaderColumn`, `FeedReaderColumn`); column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
+| `Shell/Columns/` | What the mail columns show on every layout, with no platform conditionals (`MailSidebarColumn`, `MailContentColumn`, `MailReaderColumn`, `FeedReaderColumn`); column and inspector widths, the pinned list column's width and fold rules (`ListColumnPolicy`, `ListColumnState`, `ListColumnTab`), the column resize handle, the macOS split-view autosave workaround |
 | `Mail/` | Mail pieces used by more than one mail column: drag and drop, Move to Folder, the sender avatar, the authentication line |
 | `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts: the unread ones are the sidebar badges and a message list's Unread pill, the flagged ones its Flagged pill; and the Inbox count behind the app badge), `MessageShields` (the one record of writes in flight and removals just confirmed, which every list's merge and every writer of a fetched STATUS asks, so a refresh can't undo a write made anywhere or count it twice), `MailEvents` (every change to mail, delivered at once and in order to every message list's and reader's view model but the one that made it, naming the window that started it when a reader did, and saying whether another list's selection may move on), and `MailMutationService` (the one place the app's writes go through: every flag change, move, dispose and purge from a list, the reader or the composer is recorded, posted and counted before it goes out, made through the writer's client, then confirmed, forgetting a removed message in the offline caches, or taken back; Mark All as Read and Empty Trash go through it too, acting once the server answers; a notification's actions are the exception, #1973); and `FolderPollers` (the change watching of the folders open in message lists: one `FolderPoller` per folder, made by the first list showing it and stopped with the last or at sign-out, whose watcher events and 60-second tick each ask one STATUS that every list on the folder takes); also saved folder counts |
 | `Mail/Folders/` | The folder sidebar and its view model, filters, rows, New Folder |
@@ -1260,6 +1260,34 @@ coordinates. On the way:
   place themselves with it (`StatusBannerOverlay`): in book pose in the
   half of the column that raised them (`Toast.Origin`), the reader's for
   the window's own; in laptop pose, anything tappable below the crease.
+- `\.foldDivision` is the division region whether or not it is active:
+  flat, the inner display reports the same 40 pt band book pose does,
+  inactive. `DivisionHold` keeps it while the window keeps its size and
+  drops it on a close, an open or a rotation. It is never a fold; read it
+  only for a default that must not move when the device folds.
+
+**The list column: `Shell/Columns/ListColumnPolicy.swift`.** `SplitShell`
+pins the message list to an explicit width, which UIKit honours in book
+pose as well (measured: it does not snap to the fold). In book pose the
+list ends at the crease band's leading edge, the point the system's own
+split snaps to, wherever its range can seat that width, and the drag
+handle hides; where it cannot (the addresses inspector open beside the
+split leaves a 567 pt split), the list keeps its own width and the reader
+crosses the crease until Decision 10 settles the inspector. Lying flat with no width of its
+own, the list ends at the same edge of the inactive band, so folding moves
+nothing; unfolding goes back to the user's width in one animation, none
+with Reduce Motion. The range is 320 pt in a split wider than tall and
+300 pt in a taller one, up to the split less the reader's 360 pt floor and
+`ListColumnWidth`'s 16 pt slack: 320 to 491 pt in the Duo's 867 pt split,
+which leaves the 84 pt side strip out. The floor follows the ceiling down
+in a narrow split, and the handle shows only where the list can move and
+no fold is active. A drag starts only on the 22 by 44 pt grip, moves the
+list as it goes and is recorded when it ends; a cancelled drag records
+nothing, and a double tap on the grip or Reset in its long-press menu
+clears the width. Widths are per window and per list, in scene storage
+(`cabalmail.window.listColumnWidth.<list>`). The pure rules are tested on
+the Mac host, and the one view tree's splits are meant to reuse them,
+passing the width of any column tiled before the list.
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are

@@ -189,3 +189,38 @@ final class FoldSettlerTests: XCTestCase {
         XCTAssertEqual(settler.settled, 0)
     }
 }
+
+/// `\.foldDivision`'s hold: the crease's place is kept while the window keeps
+/// its size, and goes with a close, an open or a rotation.
+final class DivisionHoldTests: XCTestCase {
+    private let wide = CGSize(width: 951, height: 669)
+    private let tall = CGSize(width: 669, height: 951)
+    private let closed = CGSize(width: 466, height: 678)
+    private let band = CGRect(x: 455.5, y: 0, width: 40, height: 669)
+    private let tallBand = CGRect(x: 0, y: 455.5, width: 669, height: 40)
+
+    func testABandIsKeptThroughAReadingWithoutOneAtTheSameSize() {
+        var hold = DivisionHold()
+        hold.observe(FoldSample(region: nil, windowSize: wide, division: band))
+        XCTAssertEqual(hold.division, band)
+        hold.observe(FoldSample(region: nil, windowSize: wide))
+        XCTAssertEqual(hold.division, band, "a hinge moving drops the region, not the window")
+    }
+
+    func testAReadingAtAnotherSizeReplacesOrDropsIt() {
+        var hold = DivisionHold()
+        hold.observe(FoldSample(region: nil, windowSize: wide, division: band))
+        hold.observe(FoldSample(region: nil, windowSize: closed))
+        XCTAssertNil(hold.division, "closed: no crease")
+        hold.observe(FoldSample(region: nil, windowSize: wide, division: band))
+        hold.observe(FoldSample(region: nil, windowSize: tall, division: tallBand))
+        XCTAssertEqual(hold.division, tallBand, "rotated")
+    }
+
+    /// The division is not a fold: an inactive band never folds the window.
+    func testAnInactiveBandNeverFolds() {
+        var fold = FoldHold()
+        fold.observe(FoldSample(region: nil, windowSize: wide, division: band), at: 0)
+        XCTAssertEqual(fold.state, .none)
+    }
+}
