@@ -1262,6 +1262,19 @@ The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
 starting values to tune on hardware.
 
+**The side strip: `Platform/VerticalBars.swift`.** On the Duo's outer
+display, and on its inner display in a window wider than tall, the
+system puts the navigation bar, toolbar and tab bar in one vertical strip
+at one side. `verticalBars()`, applied once at `SignedInRootView` after
+`foldGeometry()`, publishes the system's own reading
+(`toolbarVerticalEdge`) as `\.barsAreVertical` and `\.verticalBarEdge`.
+Read the edge, never assume the right: the strip moves with the window
+(in landscape it can be on the left). While the bars are vertical the
+phone's Search tab takes no search role
+(`CompactTab.role(in:barsAreVertical:)`), because the strip can hand that
+role's button to the selected tab's own search field (#1963); it is an
+ordinary tab there, and opens the Search screen with its field at the top.
+
 ### Extension-shared values: the `CabalmailShared` module
 
 The app extensions don't link CabalmailKit, which keeps them small and

@@ -31,6 +31,18 @@ final class CompactTabListTests: XCTestCase {
         }
     }
 
+    /// With the bars in iPhone Duo's vertical strip the phone's Search is a
+    /// plain tab, because the strip can hand the search role's button to the
+    /// selected tab's own field (#1963).
+    func testNoTabTakesTheSearchRoleWhileTheBarsAreVertical() {
+        for layout in [ShellLayout.desktop, .split, .tabs, .ornament] {
+            for tab in [CompactTab.mail, .folders, .feeds, .addresses, .settings, .search] {
+                XCTAssertNil(tab.role(in: layout, barsAreVertical: true), "\(tab) on \(layout)")
+            }
+        }
+        XCTAssertEqual(CompactTab.search.role(in: .tabs, barsAreVertical: false), .search)
+    }
+
     func testTheWideLayoutsHaveNoTabBar() {
         XCTAssertTrue(CompactTab.tabs(for: .desktop).isEmpty)
         XCTAssertTrue(CompactTab.tabs(for: .split).isEmpty)
