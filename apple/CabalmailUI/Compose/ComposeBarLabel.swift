@@ -12,10 +12,11 @@ import SwiftUI
 /// they have always had, so an iPhone, an iPad, the Mac and visionOS look as
 /// before.
 ///
-/// The choice reads the window's bars (`\.barsAreVertical`), not the sheet's
-/// own `toolbarVerticalEdge`. A label that followed the sheet's edge left the
-/// strip: it turned into a title, which ended the strip, which turned it back
-/// (measured on a reduction).
+/// The choice reads the window's bars (`\.barsAreVertical`, published at the
+/// root of a main window and of a compose window), not the sheet's own
+/// `toolbarVerticalEdge`. On a reduction, a label that followed the sheet's
+/// edge saw it go from trailing to nil, and Cancel and Send dropped out of
+/// the bar.
 enum ComposeBarLabel: Equatable {
     /// The symbol with its title, for a strip, which draws the symbol.
     case symbol
