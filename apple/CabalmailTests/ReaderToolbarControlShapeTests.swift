@@ -1,4 +1,5 @@
 import XCTest
+import CabalmailKit
 @testable import CabalmailUI
 
 /// The shape rule the reader's macOS toolbar stand-ins are built from
@@ -52,6 +53,47 @@ final class ReaderToolbarControlShapeTests: XCTestCase {
         XCTAssertEqual(moved, [.toggleFlag])
     }
 
+    func testSplitStandInsCarryTheirTwinsMenuRows() {
+        // Liquid glass draws a split button in a capsule of its own once its
+        // menu holds two rows, and in its neighbours' with one. Single-row
+        // stand-ins for these two shared one capsule with everything after
+        // them, and every slot after the read control moved 17pt when a
+        // message opened. The counts are the live menus' own, whichever row
+        // is checked.
+        let dispose = ReaderOptionMenuPolicy.disposeRows(
+            verbs: DisposeAction.allCases.map { (action: $0, verb: "Verb") },
+            selectedAction: .trash,
+            selectedAdvance: .firstUnread
+        )
+        XCTAssertEqual(rows(.dispose), dispose.count)
+        XCTAssertEqual(rows(.dispose), 8, "Archive and Delete, four advances each")
+        let seen = ReaderOptionMenuPolicy.seenRows(advance: .firstUnread, isSeen: true)
+        XCTAssertEqual(rows(.toggleRead), seen.count)
+        XCTAssertEqual(rows(.toggleRead), 4)
+    }
+
+    func testTheFlagStandInCarriesThePalettesRows() {
+        XCTAssertEqual(rows(.toggleFlag, flagMenuRowCount: 3), 3)
+        XCTAssertEqual(
+            rows(.toggleFlag, flagMenuRowCount: 1), 1,
+            "a one-flag palette's live menu shares its neighbours' capsule, so the stand-in must too"
+        )
+        XCTAssertEqual(
+            rows(.toggleFlag, flagMenuRowCount: 0), 1,
+            "never an empty menu, which AppKit draws as a plain button; the button shape ignores it anyway"
+        )
+    }
+
+    func testEveryOtherSlotCarriesTheOneRowAMenuNeeds() {
+        // Reply's pull-down draws alone whatever it holds, and the plain
+        // buttons have no menu; none of them follows the palette.
+        let others = ReaderToolbarLayout.macToolbar(leading: .reply)
+            + ReaderToolbarLayout.macToolbar(leading: .editDraft)
+        for action in Set(others).subtracting([.dispose, .toggleRead, .toggleFlag]) {
+            XCTAssertEqual(rows(action, flagMenuRowCount: 5), 1, "\(action.rawValue) carries one row")
+        }
+    }
+
     func testTheMacToolbarInventoryIsCovered() {
         // A new slot is visible here rather than silently drawing a plain
         // stand-in: both leading variants, eleven slots each.
@@ -89,5 +131,12 @@ final class ReaderToolbarControlShapeTests: XCTestCase {
         flagMenuHasRows: Bool = false
     ) -> ReaderToolbarControlShape {
         ReaderToolbarLayout.macControlShape(for: action, flagMenuHasRows: flagMenuHasRows)
+    }
+
+    private func rows(
+        _ action: ReaderToolbarAction,
+        flagMenuRowCount: Int = 0
+    ) -> Int {
+        ReaderToolbarLayout.macStandInMenuRows(for: action, flagMenuRowCount: flagMenuRowCount)
     }
 }

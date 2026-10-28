@@ -85,6 +85,9 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
         let mail = try Self.standInBuilder(in: "CabalmailUI/Mail/Reader/EmptyDetailToolbar.swift")
         XCTAssertTrue(mail.contains("ReaderToolbarLayout.macControlShape("))
         XCTAssertTrue(mail.contains("ToolbarStandIn("))
+        // The row count decides a split button's glass capsule, so the mail
+        // set reads it from the policy too.
+        XCTAssertTrue(mail.contains("menuRows: ReaderToolbarLayout.macStandInMenuRows("))
         let feed = try Self.standInBuilder(in: "CabalmailUI/Feeds/Reader/EmptyFeedDetailToolbar.swift")
         XCTAssertTrue(feed.contains("FeedReaderToolbarLayout.macControlShape("))
         XCTAssertTrue(feed.contains("ToolbarStandIn("))
@@ -108,6 +111,21 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
             )
             XCTAssertFalse(body.contains("Menu {"))
         }
+    }
+
+    func testTheStandInMenusDrawTheRowsTheyAreGiven() throws {
+        // `macStandInMenuRows` only matters if the menus draw that many rows:
+        // a revert to one fixed row puts the split stand-ins back into their
+        // neighbours' glass capsule.
+        let body = try Self.declaration(
+            named: "body", in: "CabalmailUI/Mail/Reader/EmptyDetailToolbar.swift"
+        )
+        XCTAssertTrue(body.contains("Menu { placeholderRows } label: { face } primaryAction: {}"))
+        XCTAssertTrue(body.contains("Menu { placeholderRows } label: { face }\n"))
+        let rows = try Self.declaration(
+            named: "placeholderRows", in: "CabalmailUI/Mail/Reader/EmptyDetailToolbar.swift", access: "private "
+        )
+        XCTAssertTrue(rows.contains("ForEach(0..<max(menuRows, 1)"), "the rows are counted, not fixed")
     }
 
     func testTheShapeDetectorReadsTheThreeSpellings() {
@@ -184,9 +202,13 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
     /// The body of a `var <name>: some View { … }` declaration, sliced to the
     /// declaration rather than the file: these files hold a dozen builders
     /// each and a neighbour's `Menu` would answer for this one (#1734).
-    private static func declaration(named name: String, in path: String) throws -> String {
+    private static func declaration(
+        named name: String,
+        in path: String,
+        access: String = ""
+    ) throws -> String {
         let body = try source(path)
-        guard let start = body.range(of: "    var \(name): some View {") else {
+        guard let start = body.range(of: "    \(access)var \(name): some View {") else {
             // A scan whose anchor is gone fails rather than passing on an
             // empty string: a rename must not turn this into a no-op.
             throw AnchorGone.declaration(name)
