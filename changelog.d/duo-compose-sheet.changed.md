@@ -8,5 +8,8 @@
   asks whether to keep it. While a reply is up, keyboard shortcuts and
   notification taps leave the message behind it alone, and a mailto
   waits for the reply to close. The Mac and visionOS still open a
-  compose window; opening one on request from the sheet comes in a later
-  change.
+  compose window. On an iPad, or an open iPhone Duo, Open in New Window
+  in the sheet moves the draft to a compose window of its own, with its
+  rich text, attachments and saved copy; if the window doesn't open, the
+  sheet stays as it was and says so. A mailto that reaches an open
+  compose window opens a second composer instead of replacing its draft.

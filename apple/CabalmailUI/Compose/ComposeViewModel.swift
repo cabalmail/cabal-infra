@@ -23,25 +23,16 @@ import CabalmailKit
 /// pane is how one message came to carry two different bodies (#1091). The
 /// provenance rule lives in `ComposeBodyPolicy`.
 ///
-/// Drafts persist locally via `DraftStore` (autosave every 5 s) and store the
-/// Markdown source plus the user's editor-mode preference. Cross-device sync
-/// layers on top: the buffer is pushed to the IMAP `Drafts` folder via
-/// `/save_draft` on close-without-send and on a long debounce, with
-/// `serverDraftRef` threading the replace chain so every device sees one
-/// copy (see `docs/draft-sync-and-threading.md`).
+/// Drafts persist locally via `DraftStore` (autosave every 5 s, run by
+/// `ComposeAutosaveLoops`) and store the Markdown source plus the user's
+/// editor-mode preference. Cross-device sync layers on top: the buffer is
+/// pushed to the IMAP `Drafts` folder via `/save_draft` on
+/// close-without-send and on a long debounce, with `serverDraftRef`
+/// threading the replace chain so every device sees one copy (see
+/// `docs/draft-sync-and-threading.md`).
 @Observable
 @MainActor
 final class ComposeViewModel {
-    /// Interval between local autosave flushes. Matches the plan.
-    static let autosaveInterval: TimeInterval = 5
-
-    /// Interval between server-side draft pushes while composing. Long on
-    /// purpose — the 5 s local autosave is the crash-recovery story, and
-    /// each server save costs a Lambda invocation plus EFS churn. Close-
-    /// without-send always pushes, so this only bounds how stale another
-    /// device's view of an *open* compose window can be.
-    static let serverAutosaveInterval: TimeInterval = 60
-
     /// Soft-warn the user when total attachment payload exceeds this size.
     /// Many mail servers reject messages over ~25 MB, so anything above 20
     /// MB is worth flagging without hard-blocking the send. Mirrors the
@@ -76,6 +67,20 @@ final class ComposeViewModel {
 
     var availableAddresses: [Address] = []
     var isSending = false
+    /// True while Cancel or Discard is closing the composer, when it may not
+    /// move to a window (`mayHandOff`).
+    var isFinishing = false
+    /// True while "Open in New Window" is handing this composer's draft to
+    /// a window (`ComposeWindowMove`). Send, Cancel and Discard do nothing
+    /// meanwhile (`holdsDraft`): the draft is the window's to finish once it
+    /// claims it.
+    var isMovingToWindow = false
+    /// Set by `ComposeView` once the composer's start has run through: the
+    /// rich pane seeded and the first focus given. Until then the draft may
+    /// not move to a window (`mayHandOff`): the snapshot would read a rich
+    /// pane not yet seeded, a reply's without its quote, and the focus would
+    /// land afterwards on the frozen sheet.
+    var hasStarted = false
     var errorMessage: String?
     /// Non-nil while the WebKit editor bridge is known to be unusable,
     /// mirroring `RichTextEditorController.bridgeFailure` — the controller
@@ -108,12 +113,14 @@ final class ComposeViewModel {
     /// preference rather than the seed. `refreshAddresses` uses this to
     /// drop a pre-fill the account can't actually send from (a revoked or
     /// leaked-in default) without touching a reply seed's deliberate
-    /// "From = original addressee" choice.
-    private let fromSeededFromPreference: Bool
+    /// "From = original addressee" choice. Internal so a move to a window
+    /// carries it (`ComposeSnapshot`), and the window drops the same pre-fill.
+    let fromSeededFromPreference: Bool
 
     /// Immutable compose-context bits; only set during init from a reply /
-    /// forward / new-message seed, never mutated after. Access defaults to
-    /// `internal` so `ComposeViewModel+Internals.swift` can read them.
+    /// forward / new-message seed (or the sheet a moved composer came from),
+    /// never mutated after. Access defaults to `internal` so
+    /// `ComposeViewModel+Internals.swift` can read them.
     let inReplyTo: String?
     let references: [String]
     let composeIntent: ComposeIntent
@@ -152,9 +159,12 @@ final class ComposeViewModel {
     /// can't race over the same copy, and so a discard closes the session
     /// against a save that would resurrect it (#1163).
     let serverDraftQueue = ServerDraftMutationQueue()
-
-    private var autosaveTask: Task<Void, Never>?
-    private var serverAutosaveTask: Task<Void, Never>?
+    /// The local and server autosave loops.
+    let autosave = ComposeAutosaveLoops()
+    /// The sheet's draft this composer takes over, when it is the window
+    /// "Open in New Window" opened; nil for every other composer. Its own
+    /// claim: another composer built for the same draft holds another.
+    let handoff: ComposeHandoffClaim?
     /// When true, the rich editor and the markdown source are in sync — the
     /// user hasn't typed in the rich pane since the last seed/import. The
     /// send logic treats them as "rich is empty" so single-mode markdown
@@ -178,47 +188,50 @@ final class ComposeViewModel {
         }
     }
 
+    /// - Parameters:
+    ///   - seed: what a new composer starts from.
+    ///   - handoff: the sheet's draft a window opened by "Open in New
+    ///     Window" takes over; every field comes from it instead of `seed`,
+    ///     which then carries only the draft's ID.
     init(
         seed: Draft = Draft(),
         client: CabalmailClient,
         draftStore: DraftStore,
         preferences: Preferences,
+        handoff: ComposeHandoffClaim? = nil,
         onClose: @escaping @MainActor () -> Void
     ) {
+        let start = handoff?.snapshot ?? ComposeSnapshot(seed: seed, preferences: preferences)
         self.client = client
-        self.draftId = seed.id
         self.draftStore = draftStore
         self.preferences = preferences
+        self.handoff = handoff
         self.onClose = onClose
-        // Default From falls back to the user's preference *only* when the
-        // seed didn't already pick one. Reply-builder's "From = original
-        // addressee" behavior (Phase 5) therefore still wins over the
-        // preferences default — the relationship-scoped-address idiom
-        // requires replies to reuse the address the correspondent already
-        // wrote to.
-        self.fromAddress = seed.fromAddress ?? preferences.defaultFromAddress
-        self.fromSeededFromPreference = seed.fromAddress == nil && preferences.defaultFromAddress != nil
-        self.toText = seed.to.joined(separator: ", ")
-        self.ccText = seed.cc.joined(separator: ", ")
-        self.bccText = seed.bcc.joined(separator: ", ")
-        self.subject = seed.subject
-        self.inReplyTo = seed.inReplyTo
-        self.references = seed.references
-        self.composeIntent = seed.composeIntent ?? .new
-        self.replySourceFolder = seed.replySourceFolder
-        self.replySourceUid = seed.replySourceUid
-        self.serverDraftRef = seed.serverRef
-        self.isResumedServerDraft = seed.serverRef != nil
-        // Append the preference signature to the seeded body, but only once.
-        // Replies / forwards seed with an attribution + quoted body; the
-        // signature goes *above* that block so the user's reply text lands
-        // with the signature on the line above the quoted original (the
-        // same shape every UNIX mail client has produced since Pine).
-        let seededBody = SignatureFormatter.seedBody(base: seed.body, signature: preferences.signature)
-        self.markdownBody = seededBody
-        self.seededMarkdownBody = seededBody
-        self.editorController = RichTextEditorController(placeholder: "Compose your message…")
-        self.editorMode = .rich
+        self.draftId = start.draftID
+        self.fromAddress = start.fromAddress
+        self.fromSeededFromPreference = start.fromSeededFromPreference
+        self.toText = start.toText
+        self.ccText = start.ccText
+        self.bccText = start.bccText
+        self.subject = start.subject
+        self.markdownBody = start.markdownBody
+        self.seededMarkdownBody = start.seededMarkdownBody
+        self.richMirrorsMarkdown = start.richMirrorsMarkdown
+        self.editorMode = start.editorMode
+        self.attachments = start.attachments
+        self.availableAddresses = start.availableAddresses
+        self.serverDraftRef = start.serverDraftRef
+        self.replacedServerDraftUIDs = start.replacedServerDraftUIDs
+        self.inReplyTo = start.inReplyTo
+        self.references = start.references
+        self.composeIntent = start.composeIntent
+        self.replySourceFolder = start.replySourceFolder
+        self.replySourceUid = start.replySourceUid
+        self.isResumedServerDraft = start.isResumedServerDraft
+        self.editorController = RichTextEditorController(
+            placeholder: "Compose your message…",
+            readyTimeout: handoff == nil ? 10 : ComposeWindowMove.editorReadyTimeout
+        )
         self.editorController.onSelectionChanged = { [weak self] selection in
             self?.richSelection = selection
         }
@@ -248,32 +261,17 @@ final class ComposeViewModel {
     /// Cancel the autosave loops. Called from the view's `onDisappear` and
     /// from every flow that dismisses the sheet (`send`, `cancel`, `discard`)
     /// so the background `Task`s always wind down deterministically.
-    /// Swift 5.10 strict concurrency makes `deinit` nonisolated, so we can't
-    /// just cancel from there — view-level lifecycle is the right hook.
     func stop() {
-        autosaveTask?.cancel()
-        autosaveTask = nil
-        serverAutosaveTask?.cancel()
-        serverAutosaveTask = nil
+        autosave.stop()
     }
 
+    /// A composer that takes over a sheet's draft (`handoff`) starts the way
+    /// `ComposeHandoffClaim.takeOver(_:)` says instead: nothing runs until
+    /// it has claimed the draft, and the rich pane is the sheet's, not
+    /// rendered again from the Markdown.
     func start() async {
-        autosaveTask?.cancel()
-        autosaveTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(Self.autosaveInterval * 1_000_000_000))
-                if Task.isCancelled { return }
-                await self?.persistCurrentDraft()
-            }
-        }
-        serverAutosaveTask?.cancel()
-        serverAutosaveTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(Self.serverAutosaveInterval * 1_000_000_000))
-                if Task.isCancelled { return }
-                await self?.autosaveToServer()
-            }
-        }
+        if let handoff { return await handoff.takeOver(self) }
+        autosave.start(for: self)
         // Load the address list concurrently with the editor seed rather
         // than after it. The seed blocks on the WebKit bridge bootstrap,
         // and a bridge that never comes up (broken editor-bridge.js, a
@@ -332,12 +330,28 @@ final class ComposeViewModel {
     /// bridge disables it too: the body can't be assembled, so the send
     /// would only be refused (#745) — better not to offer the tap (#812).
     var canSend: Bool {
-        guard editorUnavailable == nil else { return false }
+        guard editorUnavailable == nil, holdsDraft else { return false }
         guard fromAddress != nil, !subject.isEmpty else { return false }
         return !parseRecipients(toText).isEmpty
             || !parseRecipients(ccText).isEmpty
             || !parseRecipients(bccText).isEmpty
     }
+
+    /// Whether this composer holds its draft: not while it is moving to a
+    /// window, nor, in that window, until it has claimed it from the sheet.
+    /// Send, Cancel and Discard do nothing without it.
+    var holdsDraft: Bool { !isMovingToWindow && !isAwaitingClaim }
+
+    /// True in a window "Open in New Window" opened until it has claimed the
+    /// sheet's draft, while the sheet may still take the draft back. The
+    /// form is frozen meanwhile, though it already shows the draft.
+    var isAwaitingClaim: Bool { handoff?.hasClaimed == false }
+
+    /// Whether the draft may move to a window ("Open in New Window"): not
+    /// before the composer has started, nor while it is being sent, cancelled
+    /// or discarded, or moving already, nor with the editor down, when there
+    /// is no rich text to hand over.
+    var mayHandOff: Bool { hasStarted && holdsDraft && !isSending && !isFinishing && editorUnavailable == nil }
 
     /// Sum of the attached file sizes in bytes. Drives the soft-warn banner.
     var attachmentTotalBytes: Int {
@@ -403,6 +417,7 @@ final class ComposeViewModel {
     }
 
     func send() async -> Bool {
+        guard holdsDraft else { return false }
         // Checked ahead of `canSend` so a tap that races the bridge dying
         // gets the real reason instead of the generic form complaint —
         // silence here is what made a dead bridge look like a dead button.
@@ -484,6 +499,9 @@ final class ComposeViewModel {
     /// `ComposeCancelPolicy` owns the order those cases are considered in.
     @discardableResult
     func cancel() async -> Bool {
+        guard holdsDraft else { return false }
+        isFinishing = true
+        defer { isFinishing = false }
         await persistCurrentDraft()
         let fromEmail = currentFromEmail()
         // Bodies first: converting them is what makes a sick bridge report

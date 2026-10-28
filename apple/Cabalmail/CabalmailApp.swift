@@ -86,9 +86,10 @@ struct CabalmailApp: App {
             appState.appScenePhaseChanged(to: phase)
         }
         // visionOS opens compose as a real scene; iOS presents it as a sheet
-        // (`ComposeSurfacePolicy`) but keeps the group installed, so a
-        // compose scene iPadOS restores from before that change can still
-        // open and close.
+        // (`ComposeSurfacePolicy`) and opens this scene when the sheet's
+        // "Open in New Window" moves a draft to a window of its own. A
+        // compose scene iPadOS restores from before compose became a sheet
+        // opens here too, and can close.
         ComposeWindowScene(appState: appState, preferences: preferences)
     }
 }

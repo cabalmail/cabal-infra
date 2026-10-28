@@ -6,8 +6,9 @@ import Foundation
 ///
 /// On iOS compose is a sheet over the window it was asked from, in every
 /// layout: an iPhone, an iPad and an iPhone Duo open or closed alike (the
-/// Duo spec, Decision 8 in docs/1.x/post-wave-3/duo-support.md). The Mac and
-/// visionOS never present the sheet and open a compose window instead.
+/// Duo spec, Decision 8 in docs/1.x/post-wave-3/duo-support.md), and a
+/// window only on request, from the sheet. The Mac and visionOS never
+/// present the sheet and open a compose window instead.
 enum ComposeSurfacePolicy {
     /// Whether compose opens as its own window rather than the sheet.
     ///
@@ -40,6 +41,23 @@ enum ComposeSurfacePolicy {
         guard hasClient else { return .refuse }
         if opensInWindow { return .window }
         return sheetIsUp ? .refuse : .sheet
+    }
+
+    /// Whether the compose sheet offers "Open in New Window", which moves its
+    /// draft to a compose window of its own (`ComposeWindowMove`).
+    ///
+    /// Only at regular width in a scene that can open another window beside
+    /// it: an iPad, or an open iPhone Duo. Not in Slide Over or a narrow
+    /// window, where a second window would cover the first; not on a large
+    /// iPhone held wide, which is regular in width but cannot open one; not
+    /// on a closed Duo. And never where compose is a window already, the Mac
+    /// and visionOS.
+    static func offersNewWindow(
+        supportsMultipleWindows: Bool,
+        isRegularWidth: Bool,
+        alwaysWindows: Bool = platformAlwaysWindows
+    ) -> Bool {
+        !alwaysWindows && supportsMultipleWindows && isRegularWidth
     }
 
     /// Whether the compose sheet sits on the window's trailing side (the

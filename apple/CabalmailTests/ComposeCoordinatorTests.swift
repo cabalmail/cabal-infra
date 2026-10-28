@@ -286,4 +286,34 @@ final class ComposeCoordinatorTests: XCTestCase {
         XCTAssertEqual(shown.shown, [])
         XCTAssertEqual(coordinator.seedsWaiting(for: nil), [])
     }
+
+    /// A mailto: link that reaches a compose window opens a composer of its
+    /// own from that window's main window. With no main window open, as on
+    /// visionOS or an iPad whose main windows have all closed, it opens in a
+    /// compose window of its own rather than wait unseen; signed out, it
+    /// waits for the sign-in.
+    func testALinkReachingAComposeWindowOpensSomewhereItIsSeen() throws {
+        let moved = coordinator.slot(for: Draft(subject: "moved"), from: windowA)
+        let link = Draft(to: ["someone@example.com"])
+        var opened: [ComposeSlot] = []
+
+        coordinator.openLink(link, reaching: moved, isSignedIn: true) { opened.append($0) }
+
+        let slot = try XCTUnwrap(opened.first)
+        XCTAssertNotEqual(slot, moved, "the link must not replace the draft it reached")
+        XCTAssertEqual(coordinator.slots.seed(for: slot), link)
+        XCTAssertEqual(coordinator.slots.seed(for: moved)?.subject, "moved")
+
+        let signedOut = Draft(to: ["later@example.com"])
+        coordinator.openLink(signedOut, reaching: moved, isSignedIn: false) { opened.append($0) }
+        XCTAssertEqual(opened.count, 1)
+        XCTAssertEqual(coordinator.seedsWaiting(for: nil), [signedOut])
+
+        let surfaceA = surface(windowA)
+        XCTAssertEqual(surfaceA.shown, [signedOut])
+        let second = Draft(to: ["again@example.com"])
+        coordinator.openLink(second, reaching: moved, isSignedIn: true) { opened.append($0) }
+        XCTAssertEqual(opened.count, 1, "a main window is open to show it")
+        XCTAssertEqual(surfaceA.shown, [signedOut, second])
+    }
 }

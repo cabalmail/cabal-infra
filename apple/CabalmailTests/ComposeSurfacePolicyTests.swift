@@ -53,6 +53,36 @@ final class ComposeSurfacePolicyTests: XCTestCase {
         }
     }
 
+    // MARK: Open in New Window
+
+    /// The sheet offers a window of its own only where one can open beside
+    /// the window it is over, at regular width, and never where compose is a
+    /// window already.
+    func testOpenInNewWindowNeedsRegularWidthAndMultipleWindows() {
+        func offers(multiple: Bool, regular: Bool, alwaysWindows: Bool = false) -> Bool {
+            ComposeSurfacePolicy.offersNewWindow(
+                supportsMultipleWindows: multiple, isRegularWidth: regular, alwaysWindows: alwaysWindows
+            )
+        }
+        // An iPad, or an open iPhone Duo.
+        XCTAssertTrue(offers(multiple: true, regular: true))
+        // A large iPhone held wide: regular width, but one window.
+        XCTAssertFalse(offers(multiple: false, regular: true))
+        // A closed Duo, Slide Over or a narrow iPad window: compact, whatever
+        // the scene supports.
+        XCTAssertFalse(offers(multiple: true, regular: false))
+        // An iPhone.
+        XCTAssertFalse(offers(multiple: false, regular: false))
+        // The Mac and visionOS.
+        for multiple in [true, false] {
+            for regular in [true, false] {
+                XCTAssertFalse(offers(multiple: multiple, regular: regular, alwaysWindows: true))
+            }
+        }
+        // This suite runs on the Mac.
+        XCTAssertFalse(ComposeSurfacePolicy.offersNewWindow(supportsMultipleWindows: true, isRegularWidth: true))
+    }
+
     // MARK: Where the sheet sits
 
     private func trailing(wide: Bool, width regular: Bool, height regularHeight: Bool) -> Bool {

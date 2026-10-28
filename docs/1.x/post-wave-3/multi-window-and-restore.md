@@ -22,7 +22,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Session 1, R1b. #2030, a stale stored route after a foreground terminate | Not started (2026-10-15) |
 | Session 1, R2. #2042, the Mac quit hook | Not started (2026-10-15) |
 | Session 1, R4. #2028, the warm notification | Not started (2026-10-15) |
-| Session 1, R5. Compose routing residue, decisions 1 and 5 | Not started (2026-10-15) |
+| Session 1, R5. Compose routing residue, decisions 1 and 5 | Partly done (2026-10-28): the first bullet (a mailto into an open composer) came with duo-support.md's PR 7b; the rest not started |
 | Session 2, W1. #2036, iPad window titles | Done (2026-10-22) |
 | Session 2, W2. Mac File > New Window (decision 2), and two stale comments | Not started (2026-10-15) |
 | Session 2, W3. #2039, tree expansion (decision 3) | Per window, done (2026-10-23) |
@@ -153,7 +153,7 @@ Wave 3 made restore, links and compose per window (3.3 B to G2, PRs #2003 to #20
 - Verify: iPad simulator, a mailto into an open composer (two composers, draft intact); Mac, a mailto with a compose window open (#1793 saw no replace on the Mac; record it); Settings open, then a `simctl push` notification tap. Spotlight on the Mini never lists Cabalmail, so the Spotlight case goes on the maintainer's device list.
 - Risk: low; medium for decision 5's half.
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-28). The first bullet came with duo-support.md's PR 7b, which needed it so a mailto could not replace a draft moved to a window: a compose window with a slot hands the link to `appState.compose.open(seed:from:)` from its origin, and `ownSeed = mailto.draft()` stays for a window without one. Signed in with no main window open (visionOS, or an iPad whose main windows have all closed), where the link would wait unseen, it opens a compose window of its own instead (`ComposeCoordinator.openLink`). `ComposeSlotRegistry.reseed`, left with no caller, went with it. The rest is not started.
 
 ### Session 2: windows and chrome
 
