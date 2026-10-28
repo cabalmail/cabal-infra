@@ -309,8 +309,13 @@ extension ComposeViewModel {
 
     /// Delete the draft entirely (user confirmed "Discard draft") and
     /// dismiss. Also removes the server-side copy when one is recorded —
-    /// discarding on one device should discard everywhere.
+    /// discarding on one device should discard everywhere. Does nothing
+    /// without the draft (`holdsDraft`): while it is moving to a window,
+    /// which may already hold it, or in that window before it has claimed it.
     func discard() async {
+        guard holdsDraft else { return }
+        isFinishing = true
+        defer { isFinishing = false }
         try? await draftStore.remove(id: draftId)
         await discardServerDraftCopy()
         stop()

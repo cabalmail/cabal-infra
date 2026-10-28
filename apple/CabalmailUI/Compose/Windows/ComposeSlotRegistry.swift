@@ -54,15 +54,6 @@ public final class ComposeSlotRegistry {
         return ComposeSlot(index: index)
     }
 
-    /// Replaces the seed of an already-open slot, should a `mailto:` link
-    /// land in a window that has one. On macOS the system spawns a window
-    /// for each link, which has no slot and keeps its seed itself (see
-    /// `seed(forWindowWith:ownSeed:)`).
-    func reseed(_ slot: ComposeSlot, with seed: Draft) {
-        occupied.insert(slot.index)
-        seeds[slot.index] = seed
-    }
-
     /// The seed a slot should be composing from, or nil when the slot was
     /// never handed out in this process: a scene restored at launch with its
     /// value, on a platform that restores one (macOS does not).

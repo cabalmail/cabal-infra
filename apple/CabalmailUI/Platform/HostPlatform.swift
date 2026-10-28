@@ -54,7 +54,9 @@ public enum HostPlatform {
 
     /// Whether a new message always opens in a window of its own: the Mac
     /// and visionOS, which never present the compose sheet. iOS always
-    /// presents it (`ComposeSurfacePolicy.opensInWindow`).
+    /// presents it (`ComposeSurfacePolicy.opensInWindow`), and opens a
+    /// window only when the sheet's "Open in New Window" asks for one
+    /// (`ComposeSurfacePolicy.offersNewWindow`).
     var alwaysWindows: Bool {
         self == .macOS || self == .visionOS
     }

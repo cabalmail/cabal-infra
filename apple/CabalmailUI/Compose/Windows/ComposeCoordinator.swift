@@ -56,6 +56,9 @@ public final class ComposeCoordinator {
     }
 
     let slots: ComposeSlotRegistry
+    /// Drafts moving from a compose sheet to a window of their own ("Open in
+    /// New Window"), until the window claims them.
+    let handoffs: ComposeHandoffs
 
     /// In the order they registered: the last is the window opened last.
     private var presenters: [Presenter] = []
@@ -68,8 +71,9 @@ public final class ComposeCoordinator {
     private var isDelivering = false
     private var deliverAgain = false
 
-    init(slots: ComposeSlotRegistry) {
+    init(slots: ComposeSlotRegistry, handoffs: ComposeHandoffs = ComposeHandoffs()) {
         self.slots = slots
+        self.handoffs = handoffs
     }
 
     // MARK: Requests
@@ -150,6 +154,18 @@ public final class ComposeCoordinator {
 
     func openNewWindow(seed: Draft, open: (ComposeSlot) -> Void) {
         open(slot(for: seed, from: nil))
+    }
+
+    /// A mailto: link that reached the compose window holding `slot`, which
+    /// is composing a draft already, a moved one among them, and must not
+    /// lose it to the link. The link opens a composer of its own from the
+    /// main window that one came from. With no main window open to show it,
+    /// on visionOS or an iPad whose main windows have all closed, it would
+    /// wait unseen, so it opens in a compose window of its own; signed out,
+    /// it waits for the sign-in, as any request does.
+    func openLink(_ seed: Draft, reaching slot: ComposeSlot, isSignedIn: Bool, open: (ComposeSlot) -> Void) {
+        guard isSignedIn, presenters.isEmpty else { return self.open(seed: seed, from: origin(of: slot)) }
+        openNewWindow(seed: seed, open: open)
     }
 
     // MARK: Delivery

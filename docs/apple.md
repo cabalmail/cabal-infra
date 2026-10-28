@@ -1114,8 +1114,8 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Mail/Search/` | `MailSearchSession`, a list's search (query, filters, results and their paging), the search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
 | `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
-| `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
-| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene), and on iPad each main window's scene session, so a notification finds the window it was shown over and a compose window iPadOS restores lands on a main window (the one last used) when it closes |
+| `Compose/` | `ComposeView`, `ComposeViewModel` (with its autosave loops, `ComposeAutosaveLoops`, and what it starts from, `ComposeSnapshot`), the From picker, drafts, the failed-send banner, and what a closed composer reports (`ComposeOutcomeReport`) |
+| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene; and the move from a sheet to a window, `ComposeWindowMove` and its hand-off table, `ComposeHandoffs`), and on iPad each main window's scene session, so a notification finds the window it was shown over and a compose window iPadOS restores lands on a main window (the one last used) when it closes |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Admin/` | Administrator screens, listed in Settings only when the session's token names the `admin` group (`SessionManager.isAdmin`): the Users list, each account's page (confirm, enable or disable, delete, domain access) and `UsersViewModel`. The server refuses every admin call to anyone else; a 403 shows as "Administrators only" |
@@ -1716,6 +1716,12 @@ best-effort expunges the Drafts copy once delivery succeeds.
   `docs/README.md`'s primary-action framing). Attachments land via
   `PhotosPicker` (images) and `fileImporter` (arbitrary documents);
   mime-type derived from `UTType` for file imports.
+- `CabalmailUI/Compose/ComposeSnapshot.swift` is what a
+  `ComposeViewModel` starts from: a seed's fields
+  (`init(seed:preferences:)`, the one place the signature preference is
+  added), or a live composer's whole state when Open in New Window moves
+  it to a window (`capture(from:)`), so a moved draft is neither signed
+  again nor has its rich pane rendered again from the Markdown.
 - `CabalmailUI/Addresses/NewAddressSheet.swift` mirrors the React app's
   `Addresses/Request.jsx` — username / subdomain / domain / optional
   comment, with a **Random** button that seeds alphanumerics so the
@@ -1931,6 +1937,52 @@ first window that can. No request reaches two windows. Data-change reloads (Mark
 actions) are not commands: they bump the mail store's `listRefreshTick`,
 which every list observes (#1824). A drag names the list it lifted from,
 and only that list performs a sidebar drop.
+
+Where a second window can open beside the first, an iPad or an open
+iPhone Duo at regular width, the sheet offers Open in New Window
+(`ComposeSurfacePolicy.offersNewWindow`, read on every pass, so Slide
+Over, a narrow window or a closed Duo hides it), once its composer has
+started: a tap before the rich pane is seeded would hand over a pane
+without the reply's quote. It moves the draft to a compose window of its
+own (`ComposeWindowMove`), window first and sheet last: the window is
+asked for in the tap's own turn, before anything awaits, and the draft
+follows it. The sheet hands over a snapshot of its composer
+(`ComposeSnapshot`) rather than the composer itself, since one
+`WKWebView` cannot sit in two scenes: the same draft ID, server copy and
+replace chain, intent, attachments, threading and both panes, the rich
+one read through the checked bridge. Only the undo history, the caret
+and selection, the scroll offset and a photo still loading stay behind.
+From the tap the sheet is frozen, refuses Send, Cancel and Discard, and
+pauses its autosaves; then it flushes its local copy and reads its
+composer inside the server draft queue's close, so a save already in
+flight lands first and the window replaces the copy it landed. Until the
+snapshot comes the window shows only a frozen placeholder ("Opening in a
+new window…"), since a composer built sooner would start from nothing.
+Then it builds its composer from the snapshot, frozen the same way until
+it has loaded the rich text into its own editor and claimed the draft
+(`ComposeHandoffs`), which it does only once it is in front; then it
+starts saving. Each composer built for the draft holds a claim of its
+own: SwiftUI keeps a closed compose window mounted, and one rebuilt for
+the recycled slot composes the draft too, behind the new window and on
+its slot, so it neither claims, nor declines, nor closes. On the claim
+the sheet closes and the window's lock releases at once, and nothing a
+closing composer does runs: no cancel, discard or removal of the local
+copy, and no Drafts event. `openWindow` reports no failure on iOS, so a
+window that has not built its composer within ten seconds of the tap, or
+has not claimed the draft within thirty seconds of building it, counts
+as refused, as does a draft the sheet could not read. The second
+deadline is long because a new window's WebKit content process can take
+a while to answer (about ten seconds, measured on the iPadOS 27.0
+simulator), and the moved composer's editor waits as long for its
+bridge. On a refusal the sheet
+carries on as it was, says the window didn't open, and stops offering
+the action; the window that opened for it finds the hand-off withdrawn
+and, once it is in front, closes without saving. Closing the window
+returns to the main window the sheet was over. A mailto: link that
+reaches a compose window with a slot opens a composer of its own from
+that window's main window, rather than replacing the draft, and with no
+main window open, signed in, in a compose window of its own
+(`ComposeCoordinator.openLink`).
 
 A link from outside a window uses the same identity. A tapped
 notification, a Spotlight result and Siri's Open Folder each go to

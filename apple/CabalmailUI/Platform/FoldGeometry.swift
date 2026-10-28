@@ -50,7 +50,8 @@ extension EnvironmentValues {
 extension View {
     /// Publishes the window's fold to everything beneath as `\.foldState`,
     /// and its division region, active or not, as `\.foldDivision`.
-    /// Applied once, at the root of a main window (`SignedInRootView`).
+    /// Applied once per window, at its root: a main window's
+    /// (`SignedInRootView`) and a compose window's (`ComposeWindowScene`).
     ///
     /// On iOS 27.1 it reads the active division region on every layout pass,
     /// from a reader behind the view that spans the whole window, and the

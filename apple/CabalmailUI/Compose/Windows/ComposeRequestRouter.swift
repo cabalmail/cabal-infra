@@ -31,6 +31,15 @@ import AppKit
 /// so no menu, shortcut or deep link archives, moves or swaps the message
 /// behind it.
 ///
+/// Where a second window can open beside this one, an iPad or an open
+/// iPhone Duo at regular width, the sheet offers "Open in New Window"
+/// (`ComposeSurfacePolicy.offersNewWindow`, read on every pass, so a window
+/// narrowed into Slide Over or a closed Duo stops offering it). The move
+/// (`ComposeWindowMove`) opens the new window at the tap and freezes the
+/// sheet until that window has claimed the draft, then closes it; a move no
+/// window claimed leaves the sheet as it was, and the action gone for that
+/// sheet.
+///
 /// History: the sheet used to live on `MessageListView`. SwiftUI cannot
 /// present a sheet from a view in a background tab, so a `mailto:` that
 /// arrived while the user was on the Addresses or Settings tab set the
@@ -49,9 +58,11 @@ struct ComposeRequestRouter: ViewModifier {
     @Environment(\.commandWindowID) private var windowID
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     @State private var composeSeed: Draft?
     @State private var windowIsWide = false
     @State private var presenter: ComposeCoordinator.Presenter?
+    @State private var move = ComposeWindowMove()
 
     func body(content: Content) -> some View {
         content
@@ -81,6 +92,8 @@ struct ComposeRequestRouter: ViewModifier {
             }
             .sheet(item: $composeSeed, onDismiss: sheetClosed) { seed in
                 composeSheet(for: seed)
+                    .frozen(while: move.isMoving)
+                    .environment(\.composeWindowOffer, windowOffer)
                     .interactiveDismissDisabled()
                     .sheetPlacement(trailing: ComposeSurfacePolicy.sheetSitsTrailing(
                         windowIsWide: windowIsWide,
@@ -117,6 +130,7 @@ struct ComposeRequestRouter: ViewModifier {
             return false
         case .sheet:
             composeSeed = seed
+            move.reset()
         case .window:
             // Recycled slot, not the seed itself: keying the group by the
             // seed leaks one retained presentation per session (#1084).
@@ -139,6 +153,23 @@ struct ComposeRequestRouter: ViewModifier {
     private func sheetClosed() {
         appState.compose.presenterIsFree()
         if composeSeed == nil { navigator.composeClosed() }
+    }
+
+    /// "Open in New Window" for the sheet, or nil where no second window
+    /// can open beside this one, or once a move from this sheet was refused.
+    private var windowOffer: ComposeWindowOffer? {
+        guard ComposeSurfacePolicy.offersNewWindow(
+            supportsMultipleWindows: supportsMultipleWindows,
+            isRegularWidth: horizontalSizeClass == .regular
+        ), !move.refused else { return nil }
+        let route = ComposeWindowMove.Route(
+            compose: appState.compose,
+            origin: windowID,
+            navigator: navigator,
+            openWindow: { openWindow(id: composeWindowID, value: $0) },
+            closeSheet: { composeSeed = nil }
+        )
+        return .moving(with: move, along: route)
     }
 
     @ViewBuilder
