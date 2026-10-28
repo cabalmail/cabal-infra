@@ -59,7 +59,7 @@ final class ComposeViewModel {
     /// Internal rather than private: `+Internals` derives `signatureOnlySeed`
     /// from `signature`, and that extension is a different file.
     let preferences: Preferences
-    /// Dismisses the compose surface (sheet on iPhone, window elsewhere).
+    /// Dismisses the compose surface (sheet on iOS, window elsewhere).
     /// Internal rather than private so the close-without-send legs in
     /// `ComposeViewModel+Internals.swift` can reach it.
     let onClose: @MainActor () -> Void

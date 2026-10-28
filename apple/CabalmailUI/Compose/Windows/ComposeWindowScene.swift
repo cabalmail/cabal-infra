@@ -1,22 +1,16 @@
 import SwiftUI
 import CabalmailKit
 
-/// macOS and iPadOS open compose as a standalone scene rather than a
-/// modal sheet. This file holds the scene declaration plus a small
-/// adapter view that lets `ComposeView` build a `ComposeViewModel`
-/// inside the new window and dismiss the window when the model fires
-/// its `onClose` callback (Send / Save Draft / Discard).
+/// The compose window: macOS and visionOS open every compose as a scene
+/// of its own rather than a sheet. This file holds the scene declaration
+/// plus a small adapter view that lets `ComposeView` build a
+/// `ComposeViewModel` inside the new window and dismiss the window when
+/// the model fires its `onClose` callback (Send / Save Draft / Discard).
 ///
-/// A host that runs a single scene at a time keeps the sheet path —
-/// calling `openWindow` there would tear the user away from the mailbox
-/// they were just reading instead of layering a new window on top.
-/// `ComposeSurfacePolicy` is the single source of truth every entry point
-/// consults so the New-Message / Reply / Reply-All / Forward buttons all
-/// branch the same way, and it decides by the environment's
-/// `supportsMultipleWindows`, not by device idiom: an iPhone Duo is a
-/// phone whose inner display hosts multiple windows and whose outer
-/// display does not, so a reply opens beside the message when the device
-/// is open and as a sheet when it is closed.
+/// iOS presents compose as a sheet over the window it was asked from, on
+/// iPhone, iPad and iPhone Duo alike (`ComposeSurfacePolicy`). It still
+/// installs this scene: iPadOS restores compose scenes left open before
+/// that change, and they have to be able to close.
 ///
 /// `WindowGroup(for: ComposeSlot.self)` keys each compose scene by a
 /// recycled slot index, so the user can have a reply and a forward open
@@ -30,56 +24,6 @@ import CabalmailKit
 /// the toolbar, the message detail menus, and the macOS Commands
 /// menu.
 public let composeWindowID = "compose"
-
-/// Whether compose opens as its own window or as the modal sheet. A pure
-/// rule so it can be tested for both answers on whichever platform the
-/// tests run — the caller (`ComposeRequestRouter`) reads the environment.
-enum ComposeSurfacePolicy {
-    /// - Parameters:
-    ///   - supportsMultipleWindows: the SwiftUI environment's
-    ///     `supportsMultipleWindows` — true on iPad, on iPhone Duo's inner
-    ///     display, and on the window platforms; false on every other
-    ///     iPhone and on Duo's outer display, where Apple states new windows
-    ///     cannot be created. Measured on the iOS 27.1 simulator: the closed
-    ///     Duo reports false with a compact/regular size class.
-    ///   - alwaysWindows: `platformAlwaysWindows` — macOS and visionOS open
-    ///     a window regardless, since they never present the sheet.
-    static func opensInWindow(
-        supportsMultipleWindows: Bool,
-        alwaysWindows: Bool = platformAlwaysWindows
-    ) -> Bool {
-        alwaysWindows || supportsMultipleWindows
-    }
-
-    /// What a main window's compose surface does with a seed it is offered.
-    enum Offer: Equatable {
-        /// Opens a compose window on it.
-        case window
-        /// Presents it in the surface's sheet.
-        case sheet
-        /// Takes nothing now; the seed waits with `ComposeCoordinator`.
-        case refuse
-    }
-
-    /// - Parameters:
-    ///   - hasClient: whether a session is wired. Without one the surface
-    ///     builds no composer: its window is signing out, and the view is
-    ///     about to go, so a seed handed to it then would be lost.
-    ///   - opensInWindow: `opensInWindow(supportsMultipleWindows:)`, as the
-    ///     window is now.
-    ///   - sheetIsUp: whether the surface's sheet is showing a compose,
-    ///     which a second seed must not replace.
-    static func offer(hasClient: Bool, opensInWindow: Bool, sheetIsUp: Bool) -> Offer {
-        guard hasClient else { return .refuse }
-        if opensInWindow { return .window }
-        return sheetIsUp ? .refuse : .sheet
-    }
-
-    /// The host platform's answer (`HostPlatform.alwaysWindows`), as a value
-    /// so the rule above can be exercised for both answers on whichever
-    /// platform the tests run.
-    static let platformAlwaysWindows = HostPlatform.current.alwaysWindows
-}
 
 /// Compose scene group. Both `CabalmailApp` (iOS / iPadOS / visionOS)
 /// and `CabalmailMacApp` install this alongside their main window so
