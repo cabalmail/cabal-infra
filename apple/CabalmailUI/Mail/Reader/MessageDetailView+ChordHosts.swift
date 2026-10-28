@@ -14,9 +14,12 @@ import CabalmailKit
 extension MessageDetailView {
     /// One hidden host per chord, mirroring the disabled conditions of the
     /// visible control so a chord can't reach an action its button couldn't.
+    /// None while the window's compose sheet is up: a key press in the
+    /// composer would otherwise reach this message behind it, and ⌘U and ⌘P
+    /// are the composer's own.
     @ViewBuilder
     var readerChordHosts: some View {
-        if let model {
+        if let model, navigator?.composeLock.isUp != true {
             Group {
                 // Cmd+Shift+U — Mail.app's mark-unread chord. Toggles both
                 // ways; the seen control's face labels which direction the

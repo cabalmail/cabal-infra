@@ -16,15 +16,20 @@ import AppKit
 /// arrived before the window existed (a cold-launch mailto:, or one that
 /// waited out the sign-in) opens over the fresh session.
 ///
-/// Hosts with multiple windows (macOS, iPadOS, visionOS, an open iPhone
-/// Duo) hand off to the compose `WindowGroup`, which layers a new scene
-/// regardless of what the main window is showing. A single-window host
-/// (any other iPhone, a closed Duo) presents the compose sheet from here,
-/// the signed-in root — see `ComposeSurfacePolicy`. Which one is decided as
-/// each seed arrives, so a Duo that was folded between two requests gets
-/// the right surface for each. While the sheet is up the surface takes
-/// nothing: the coordinator keeps the next seed, in order, until the sheet
-/// closes, so an incoming mailto: never replaces a draft being typed.
+/// iOS presents the compose sheet from here, the signed-in root, on every
+/// iPhone, iPad and iPhone Duo; the Mac and visionOS hand off to the
+/// compose `WindowGroup`, which layers a new scene regardless of what the
+/// main window is showing (`ComposeSurfacePolicy`). While the sheet is up
+/// the surface takes nothing: the coordinator keeps the next seed, in
+/// order, until the sheet closes, so an incoming mailto: never replaces a
+/// draft being typed.
+///
+/// The sheet sits on the window's trailing side in a wide, regular window
+/// (`ComposeSurfacePolicy.sheetSitsTrailing`). It cannot be swiped away:
+/// Cancel is the one way out, and it asks whether to keep the draft. And
+/// while it is up the window's navigator says so (`SceneNavigator.composeLock`),
+/// so no menu, shortcut or deep link archives, moves or swaps the message
+/// behind it.
 ///
 /// History: the sheet used to live on `MessageListView`. SwiftUI cannot
 /// present a sheet from a view in a background tab, so a `mailto:` that
@@ -35,36 +40,53 @@ import AppKit
 /// user next visited the Mail tab. Hosting the sheet on the signed-in
 /// root presents from any tab, folder, or modal state.
 struct ComposeRequestRouter: ViewModifier {
-    /// What the registered presenter reads as a seed arrives. A reference,
-    /// kept current by the body: the presenter is registered once, and an
-    /// environment value it captured then would be the one from that
-    /// moment, not the surface the window has now.
-    @MainActor
-    private final class Surface {
-        var opensInWindow = false
-    }
+    /// The window's navigator, told while the sheet is up.
+    let navigator: SceneNavigator
 
     @Environment(AppState.self) private var appState
     @Environment(Preferences.self) private var preferences
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     @Environment(\.commandWindowID) private var windowID
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var composeSeed: Draft?
-    @State private var surface = Surface()
+    @State private var windowIsWide = false
     @State private var presenter: ComposeCoordinator.Presenter?
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: supportsMultipleWindows),
-                      initial: true) { _, inWindow in
-                surface.opensInWindow = inWindow
+            // The window's shape, read behind it with the keyboard's region
+            // ignored, as `SplitShell` reads its split: a docked keyboard
+            // would otherwise make a tall window read as wide the moment a
+            // field takes focus, and move the sheet while it is typed in.
+            .background {
+                Color.clear
+                    .onGeometryChange(for: Bool.self) { proxy in
+                        proxy.size.width > proxy.size.height
+                    } action: { wide in
+                        windowIsWide = wide
+                    }
+                    .ignoresSafeArea(.keyboard)
             }
             .task(id: windowID) {
                 register()
             }
             .onDisappear(perform: unregister)
+            .onChange(of: composeSeed != nil, initial: true) { _, isUp in
+                navigator.composeLock.isUp = isUp
+            }
+            // A new sign-in brings a new navigator while the sheet stays up.
+            .onChange(of: ObjectIdentifier(navigator)) {
+                navigator.composeLock.isUp = composeSeed != nil
+            }
             .sheet(item: $composeSeed, onDismiss: sheetClosed) { seed in
                 composeSheet(for: seed)
+                    .interactiveDismissDisabled()
+                    .sheetPlacement(trailing: ComposeSurfacePolicy.sheetSitsTrailing(
+                        windowIsWide: windowIsWide,
+                        isRegularWidth: horizontalSizeClass == .regular,
+                        isRegularHeight: verticalSizeClass == .regular
+                    ))
             }
     }
 
@@ -80,13 +102,15 @@ struct ComposeRequestRouter: ViewModifier {
         presenter = nil
     }
 
-    /// Shows `seed`: a compose scene on a multi-window host, else the sheet
+    /// Shows `seed`: a compose scene on the Mac and visionOS, else the sheet
     /// hosted by this modifier. False while it cannot
     /// (`ComposeSurfacePolicy.offer`), and the seed stays with the
     /// coordinator.
     private func present(_ seed: Draft) -> Bool {
         let offer = ComposeSurfacePolicy.offer(
-            hasClient: appState.client != nil, opensInWindow: surface.opensInWindow, sheetIsUp: composeSeed != nil
+            hasClient: appState.client != nil,
+            opensInWindow: ComposeSurfacePolicy.opensInWindow(),
+            sheetIsUp: composeSeed != nil
         )
         switch offer {
         case .refuse:
@@ -110,9 +134,11 @@ struct ComposeRequestRouter: ViewModifier {
     }
 
     /// The sheet that held back later seeds has fully dismissed: the
-    /// coordinator hands over the next one waiting for this window.
+    /// coordinator hands over the next one waiting for this window, and a
+    /// deep link that waited for the sheet opens.
     private func sheetClosed() {
         appState.compose.presenterIsFree()
+        if composeSeed == nil { navigator.composeClosed() }
     }
 
     @ViewBuilder
@@ -135,7 +161,7 @@ extension View {
     /// Installs the window's compose surface. Apply exactly once, on the
     /// signed-in root: a second copy would register a second presenter for
     /// the same window.
-    func composeRequestRouter() -> some View {
-        modifier(ComposeRequestRouter())
+    func composeRequestRouter(_ navigator: SceneNavigator) -> some View {
+        modifier(ComposeRequestRouter(navigator: navigator))
     }
 }

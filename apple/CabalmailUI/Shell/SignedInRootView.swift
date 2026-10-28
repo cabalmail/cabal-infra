@@ -106,9 +106,17 @@ struct SignedInRootView: View {
                 .animation(.default, value: appState.toast)
                 .animation(.default, value: failedSends.visible.map(\.id))
             }
-            // The window's fold (`\.foldState`), for the shells and the
-            // banners above alike: after the overlay so both are beneath it,
-            // and after the `.id` so a new sign-in keeps the fold it is in.
+            // This window's compose surface (its New Message, Reply and
+            // Forward, and a mailto: link). Lives here — not on
+            // MessageListView — because this view is in the visible hierarchy
+            // in every tab, folder, and modal state; see ComposeRequestRouter.
+            // Outside the `.id`, so a new navigator does not take a draft
+            // down, and inside the fold, so the sheet reads it.
+            .composeRequestRouter(navigator)
+            // The window's fold (`\.foldState`), for the shells, the
+            // banners and the compose sheet alike: after the overlay so both
+            // are beneath it, and after the `.id` so a new sign-in keeps the
+            // fold it is in.
             .foldGeometry()
             // Whether the system draws this window's bars in a side strip
             // (`\.barsAreVertical`), for the tab roles and the reader's bar.
@@ -130,12 +138,9 @@ struct SignedInRootView: View {
                       appState.navCoordinator?.hasLoadedInitial == true else { return }
                 Task { await appState.offerCrossDeviceCursor(atLaunch: false) }
             }
-            // This window's compose surface (its New Message, Reply and
-            // Forward, and a mailto: link). Lives here — not on
-            // MessageListView — because this view is in the visible hierarchy
-            // in every tab, folder, and modal state; see ComposeRequestRouter.
-            .composeRequestRouter()
-            .focusedSceneValue(\.windowCommands, windowCommands)
+            // None while the compose sheet is up, so the menus dim as they
+            // do with a compose window in front (`SceneNavigator.composeLock`).
+            .focusedSceneValue(\.windowCommands, navigator.composeLock.isUp ? nil : windowCommands)
             // The window's navigator takes the deep links aimed at it, and a
             // link parked before it existed (`DeepLinkRouter`).
             .onChange(of: commandWindowID, initial: true) { _, id in

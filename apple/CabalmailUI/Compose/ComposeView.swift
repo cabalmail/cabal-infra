@@ -8,11 +8,11 @@ import UIKit
 #endif
 import UniformTypeIdentifiers
 
-/// Compose scene. macOS, iPadOS, visionOS, and an open iPhone Duo host
-/// this in a standalone `WindowGroup` opened via `openWindow` (see
-/// `ComposeWindowScene`); a single-window host keeps it as a modal sheet
-/// so the user doesn't get torn away from the mailbox they were just
-/// reading.
+/// Compose scene. macOS and visionOS host this in a standalone
+/// `WindowGroup` opened via `openWindow` (see `ComposeWindowScene`); iOS
+/// keeps it as a modal sheet over the window it was asked from, so the
+/// user isn't torn away from the mailbox they were just reading
+/// (`ComposeSurfacePolicy`).
 ///
 /// The form is four labeled fields (From picker, To/Cc/Bcc tokens, subject,
 /// dual-mode rich-text + Markdown body) plus an attachment strip and a Send
@@ -57,7 +57,7 @@ struct ComposeView: View {
     #endif
     @State private var showFileImporter = false
     /// Compose-scoped banner. The compose surface is a separate window
-    /// (macOS / iPad regular) or a sheet (iPhone), so the root
+    /// (macOS, visionOS) or a sheet (iOS), so the root
     /// `AppState.toast` overlay can't reach it — host the post-creation
     /// "Created … / Copy" banner here instead.
     @State private var composeToast: Toast?
@@ -130,6 +130,9 @@ struct ComposeView: View {
             .onDisappear {
                 model.stop()
             }
+            // VoiceOver's escape asks what Cancel asks: the sheet cannot be
+            // swiped away, and an escape that did nothing would strand it.
+            .accessibilityAction(.escape) { Task { await cancelOrAsk() } }
             .sheet(isPresented: $showNewAddressSheet) {
                 NewAddressSheet(
                     domains: appState.client?.configuration.domains ?? [],

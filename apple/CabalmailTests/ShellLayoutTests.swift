@@ -104,7 +104,7 @@ final class ShellLayoutTests: XCTestCase {
     }
 
     /// The Mac and visionOS never present the compose sheet, so a new message
-    /// there is always a window; iOS asks its scene
+    /// there is always a window; iOS always presents the sheet
     /// (`ComposeSurfacePolicy.opensInWindow`).
     func testOnlyTheMacAndVisionOSAlwaysComposeInAWindow() {
         XCTAssertTrue(HostPlatform.macOS.alwaysWindows)

@@ -167,6 +167,20 @@ final class WindowCommandsTests: XCTestCase {
         XCTAssertEqual(window.disposeChordHost(in: .search), .reader)
     }
 
+    /// While the window's compose sheet is up, ⌘⌫ is the composer's
+    /// delete-to-line-start, never a dispose of the message behind it.
+    func testNoDisposeChordWhileTheComposeSheetIsUp() {
+        let window = makeWindow(wide: true)
+        window.report(MessageMenuAvailability(selectedCount: 1, hasOpenMessage: true), in: nil, by: UUID())
+        XCTAssertEqual(window.disposeChordHost(in: nil), .reader, "precondition")
+
+        window.navigator.composeLock.isUp = true
+        XCTAssertEqual(window.disposeChordHost(in: nil), DisposeChordHost.none)
+
+        window.navigator.composeClosed()
+        XCTAssertEqual(window.disposeChordHost(in: nil), .reader)
+    }
+
     func testEachWindowHoldsItsOwnDisposeChord() {
         let windowA = makeWindow(wide: true)
         let windowB = makeWindow(wide: true)

@@ -4,9 +4,9 @@ import CabalmailKit
 
 /// A main window's compose surface as `ComposeCoordinator` sees it, for the
 /// suites that pin where a compose request goes: it records each seed it
-/// was shown, in order, and takes none while `isBusy`. A sheet (an iPhone,
-/// a closed Duo) is busy from the seed it shows until it is freed; a
-/// surface that opens compose windows never is.
+/// was shown, in order, and takes none while `isBusy`. A sheet (any iOS
+/// window) is busy from the seed it shows until it is freed; a surface
+/// that opens compose windows (the Mac, visionOS) never is.
 @MainActor
 final class RecordingComposeSurface {
     let window: UUID?

@@ -864,8 +864,8 @@ Apple's rules forbid combining `com.apple.developer.mail-client` with
 
 Once the entitlement lands and the user picks Cabalmail in Settings,
 `mailto:` clicks in Safari and other apps open Cabalmail with a
-compose window pre-filled from the URL's recipients, subject, and
-body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
+composer (a sheet on iOS, a window on the Mac) pre-filled from the URL's
+recipients, subject, and body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
 `subject`, `body`) are honored; other headers are dropped.
 
 ### Default-app request: cover-letter template
@@ -1115,7 +1115,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
-| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene), and on iPad each main window's scene session, so closing a composer returns to the main window it came from and a notification finds the window it was shown over |
+| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene), and on iPad each main window's scene session, so a notification finds the window it was shown over and a compose window iPadOS restores lands on a main window (the one last used) when it closes |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Admin/` | Administrator screens, listed in Settings only when the session's token names the `admin` group (`SessionManager.isAdmin`): the Users list, each account's page (confirm, enable or disable, delete, domain access) and `UsersViewModel`. The server refuses every admin call to anyone else; a 403 shows as "Administrators only" |
@@ -1879,8 +1879,11 @@ Menu commands need to reach the view that owns the action, but
 and published with `focusedSceneValue`. A menu reads the front main
 window's object with `@FocusedValue(\.windowCommands)`; with a compose
 or Settings window in front, or none open, it reads nil and the Message,
-Mailbox and Feeds menus and iPadOS ⌘, dim. New Message stays live: it
-opens the compose scene itself (#1162).
+Mailbox and Feeds menus and iPadOS ⌘, dim. A main window with its
+compose sheet up publishes nil too (`SceneNavigator.composeLock`), so on
+iPad the menus dim over a reply as they did with a compose window in
+front. On the Mac, New Message stays live: it opens the compose scene
+itself (#1162).
 
 A menu, or a window's own button (the Mac toolbar's Refresh, the iPad
 Settings gear), sends a `WindowCommand`, which bumps its own count; a
@@ -1910,7 +1913,16 @@ Reply and Forward, and a mailto: link, go to `AppState.compose`
 (`ComposeCoordinator`) with the main window they are for
 (`MainWindowCommandScope`'s window identity; for a link, the window last
 in front). That window's compose surface (`ComposeRequestRouter`) shows
-the seed, as a compose window or, on a single-window host, a sheet. A
+the seed: a sheet over the window on iOS, iPad and iPhone Duo included,
+and a compose window on the Mac and visionOS (`ComposeSurfacePolicy`).
+In a wide window that is regular in both size classes the sheet sits on
+the trailing side (`sheetPlacement(trailing:)`, iOS 27's
+`presentationPlacement`); in book pose the system moves it to the
+trailing page. It cannot be swiped away, so Cancel and its
+keep-or-discard question are the way out. While it is up nothing acts on
+the message behind it (`SceneNavigator.composeLock`): the menus read no
+window, the reader's hidden chords and the ⌘⌫ host go, and a deep link
+waits for the sheet to close. A
 request that names no window, or one whose window has no compose surface
 (none is recorded as last in front, or it has closed), goes to the window
 opened last. A seed nothing can show yet waits its turn: behind its

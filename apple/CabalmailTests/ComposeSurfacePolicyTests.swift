@@ -1,41 +1,40 @@
 import XCTest
 @testable import CabalmailUI
 
-/// Pins the rule behind "window or sheet" for compose. It used to be the
-/// device idiom (iPad → window, iPhone → sheet), which Apple's iPhone Duo
-/// guidance rules out: Duo is a phone whose inner display hosts multiple
-/// windows and whose outer display cannot create one. The environment's
-/// `supportsMultipleWindows` is the value that tracks that, so it is the
-/// only input on iOS (#1645).
+/// Pins where compose opens and where its sheet sits. On iOS compose is a
+/// sheet over the window it was asked from in every layout, iPad and an open
+/// iPhone Duo included (the Duo spec's Decision 8): before, a host that could
+/// open another window (`supportsMultipleWindows`, #1645) opened compose in
+/// one, which on an open Duo took the whole display away from the message a
+/// reply answered. The Mac and visionOS still open a window.
 final class ComposeSurfacePolicyTests: XCTestCase {
 
-    func testMultiWindowHostOpensAWindow() {
-        // iPad, or iPhone Duo open.
-        XCTAssertTrue(ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: true, alwaysWindows: false))
-    }
-
-    func testSingleWindowHostPresentsTheSheet() {
-        // Any other iPhone, or iPhone Duo closed — measured false on the
-        // iOS 27.1 simulator's outer display.
-        XCTAssertFalse(ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: false, alwaysWindows: false))
+    func testIOSPresentsTheSheet() {
+        // iPhone, iPad and iPhone Duo, open or closed.
+        XCTAssertFalse(ComposeSurfacePolicy.opensInWindow(alwaysWindows: false))
     }
 
     func testWindowPlatformsNeverPresentTheSheet() {
         // macOS and visionOS have no sheet path at all.
-        XCTAssertTrue(ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: false, alwaysWindows: true))
-        XCTAssertTrue(ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: true, alwaysWindows: true))
+        XCTAssertTrue(ComposeSurfacePolicy.opensInWindow(alwaysWindows: true))
+    }
+
+    func testDefaultFollowsTheHostPlatform() {
+        XCTAssertEqual(ComposeSurfacePolicy.opensInWindow(), ComposeSurfacePolicy.platformAlwaysWindows)
+        // This suite runs on the Mac.
+        XCTAssertTrue(ComposeSurfacePolicy.opensInWindow())
     }
 
     // MARK: What a surface does with a seed
 
-    func testAMultiWindowSurfaceOpensAWindowWhateverItsSheetHolds() {
+    func testAWindowSurfaceOpensAWindowWhateverItsSheetHolds() {
         XCTAssertEqual(ComposeSurfacePolicy.offer(hasClient: true, opensInWindow: true, sheetIsUp: false), .window)
-        // A Duo unfolded with its sheet still up from before: a window.
         XCTAssertEqual(ComposeSurfacePolicy.offer(hasClient: true, opensInWindow: true, sheetIsUp: true), .window)
     }
 
     /// An incoming mailto: never replaces the draft being typed: the seed
-    /// waits until the sheet has closed.
+    /// waits until the sheet has closed. Since the sheet is every iOS
+    /// window's surface, that now holds on iPad and an open Duo too.
     func testASheetSurfaceTakesOneSeedAtATime() {
         XCTAssertEqual(ComposeSurfacePolicy.offer(hasClient: true, opensInWindow: false, sheetIsUp: false), .sheet)
         XCTAssertEqual(ComposeSurfacePolicy.offer(hasClient: true, opensInWindow: false, sheetIsUp: true), .refuse)
@@ -54,10 +53,34 @@ final class ComposeSurfacePolicyTests: XCTestCase {
         }
     }
 
-    func testDefaultFollowsTheHostPlatform() {
-        XCTAssertEqual(
-            ComposeSurfacePolicy.opensInWindow(supportsMultipleWindows: false),
-            ComposeSurfacePolicy.platformAlwaysWindows
+    // MARK: Where the sheet sits
+
+    private func trailing(wide: Bool, width regular: Bool, height regularHeight: Bool) -> Bool {
+        ComposeSurfacePolicy.sheetSitsTrailing(
+            windowIsWide: wide, isRegularWidth: regular, isRegularHeight: regularHeight
         )
+    }
+
+    /// A wide, regular window: an iPad in landscape, or an open iPhone Duo
+    /// held wide, flat or in book pose. The sheet leaves the message in view.
+    func testAWideRegularWindowPutsTheSheetOnTheTrailingSide() {
+        XCTAssertTrue(trailing(wide: true, width: true, height: true))
+    }
+
+    /// A tall window (an iPad or the Duo's inner display upright) keeps the
+    /// system's centred sheet.
+    func testATallWindowKeepsTheSystemPlacement() {
+        XCTAssertFalse(trailing(wide: false, width: true, height: true))
+    }
+
+    /// A compact window takes the sheet across its width anyway: an iPhone,
+    /// a closed Duo, a large iPhone held wide (regular width, compact
+    /// height), or a short, narrow iPad window (compact width, regular
+    /// height).
+    func testACompactWindowKeepsTheSystemPlacement() {
+        XCTAssertFalse(trailing(wide: true, width: true, height: false))
+        XCTAssertFalse(trailing(wide: true, width: false, height: true))
+        XCTAssertFalse(trailing(wide: true, width: false, height: false))
+        XCTAssertFalse(trailing(wide: false, width: false, height: true))
     }
 }

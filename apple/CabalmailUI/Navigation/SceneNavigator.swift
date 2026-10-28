@@ -56,6 +56,10 @@ final class SceneNavigator {
     /// it appears.
     var layoutIsWide = false
 
+    /// Whether this window's compose sheet is up, and the deep link waiting
+    /// for it to close (`ComposeLock`).
+    let composeLock = ComposeLock()
+
     private(set) var route: AppRoute
 
     /// The sidebar's folder: the resolved value of `route.mail.folderPath`,
@@ -689,10 +693,17 @@ extension SceneNavigator {
     /// Siri's opens at once; a Spotlight result once its Message-ID is
     /// looked up. With no session to open it in, it goes back to the router.
     func open(_ link: DeepLink) {
+        if composeLock.holds(link) { return }
         guard let coordinator = coordinator() else { return deepLinks.giveBack(link) }
         if let cursor = coordinator.immediateCursor(for: link) { return navigate(to: cursor) }
         let generation = deepLinks.generation
         opening = Task { await open(link, coordinator, ifStill: generation) }
+    }
+
+    /// The window's compose sheet has closed: a deep link that waited for it
+    /// (`open(_:)`) opens now.
+    func composeClosed() {
+        if let link = composeLock.release() { open(link) }
     }
 
     /// Opens `link` once its cursor is known, unless a later link or a

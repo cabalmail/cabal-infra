@@ -11,7 +11,7 @@ import CabalmailKit
 /// whose window has no presenter (it is signed out, or has gone), goes to
 /// the window opened last, and with no presenter at all it waits for the
 /// first. A seed its window cannot take yet, because its compose sheet is
-/// up (an iPhone, a closed Duo), waits its turn for that window, oldest
+/// up (any iOS window), waits its turn for that window, oldest
 /// first. So a mailto: on a cold launch, or while signed out, opens once a
 /// window can show it, and two links behind an open sheet both open, one
 /// after the other. A seed waiting when the session ends is kept for the
