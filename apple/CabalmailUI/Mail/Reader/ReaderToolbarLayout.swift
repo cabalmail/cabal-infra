@@ -1,4 +1,5 @@
 import Foundation
+import CabalmailKit
 
 /// One control in the reader's action set, identified by the accessibility
 /// identifier its button carries.
@@ -140,6 +141,41 @@ enum ReaderToolbarLayout {
         case .editDraft, .remoteContent, .readerMode, .move,
              .plainText, .viewSource, .viewHeaders, .printMessage:
             return .button
+        }
+    }
+
+    /// How many inert rows `EmptyDetailToolbar`'s stand-in for an action
+    /// carries in its menu: for a split button, as many as its live twin's
+    /// menu holds with no message open, because under liquid glass
+    /// (measured on macOS 27) the row count decides where the control is
+    /// drawn. A split button whose menu holds two or more rows gets a glass
+    /// capsule of its own; one with a single row shares its neighbours'
+    /// capsule. Single-row stand-ins merged into one capsule with every slot
+    /// after them, a capsule's edge padding is worth real points, and the
+    /// slots after the read control moved 17pt when a message opened.
+    /// Pull-down menus (Reply) draw alone whatever they hold, so they keep
+    /// the one row a `Menu` needs to draw as a menu at all; plain buttons
+    /// carry no menu.
+    static func macStandInMenuRows(
+        for action: ReaderToolbarAction,
+        flagMenuRowCount: Int
+    ) -> Int {
+        switch action {
+        case .dispose:
+            // Which pair is selected checks a row; it doesn't change how many
+            // there are.
+            return ReaderOptionMenuPolicy.disposeRows(
+                verbs: DisposeAction.allCases.map { (action: $0, verb: "") },
+                selectedAction: .archive,
+                selectedAdvance: .next
+            ).count
+        case .toggleRead:
+            return ReaderOptionMenuPolicy.seenRows(advance: .stay, isSeen: false).count
+        case .toggleFlag:
+            return max(flagMenuRowCount, 1)
+        case .reply, .overflow, .editDraft, .remoteContent, .readerMode, .move,
+             .plainText, .viewSource, .viewHeaders, .printMessage:
+            return 1
         }
     }
 
