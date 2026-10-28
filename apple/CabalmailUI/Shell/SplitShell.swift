@@ -107,7 +107,12 @@ struct SplitShell: View {
             // and, in a split too narrow to seat that beside the pinned list,
             // what the split has left instead, because the two declared
             // together would over-subscribe it (#2106).
+            //
+            // In book pose the reader starts its content past the crease's
+            // keep-out (`CreaseClearance`). Always present, at 0 with no fold,
+            // so a fold reflows the web view and never rebuilds it.
             mail.reader(mailPlaceholder: EmptyModifier(), feedPlaceholder: EmptyModifier())
+                .padding(.leading, readerCreaseInset)
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
         }
         // Revealing folders floats a panel OVER the message list rather than
@@ -187,6 +192,11 @@ struct SplitShell: View {
     /// header, the column's bar, and the pinned width with its drag handle.
     private func listColumn(_ mail: WideMail) -> some View {
         mail.content(header: { columnHeaderSearchField(mail) })
+            // In book pose the list's own controls (the search field, the
+            // filter and sort rows, the rows' content) stop short of the
+            // crease's keep-out (`CreaseClearance`); the bars' and rows'
+            // backgrounds still reach the column's edge. 0 with no fold.
+            .safeAreaPadding(.trailing, listCreaseClearance)
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.width
             } action: { newWidth in
@@ -247,6 +257,11 @@ struct SplitShell: View {
                     .transition(.identity)
                 }
             }
+            // In book pose the bar's trailing end sits within the crease's
+            // keep-out, so its items move to the leading end beside Folders
+            // (`ToolbarItemPlacement.listBar`). Read from the window's fold
+            // as it is now, so the move never rides the divider's animation.
+            .environment(\.listBarItemsLead, listCreaseClearance > 0)
     }
 
     /// Records the measured content-column width, as the wide layouts have
@@ -377,6 +392,23 @@ extension SplitShell {
     }
 
     private var listColumnWidth: CGFloat { listColumnLayout.width }
+
+    /// The list column's trailing edge in the window, which is where the
+    /// reader starts.
+    private var listTrailingEdge: CGFloat { listColumnLayout.listLeadingEdge + listColumnWidth }
+
+    /// How far the crease's keep-out reaches into the list column: the
+    /// window's fold as it is now, against the edge the column is going to
+    /// (`followFold` moves it to the band in the update after the fold
+    /// arrives), so neither rides the divider's animation.
+    private var listCreaseClearance: CGFloat {
+        CreaseClearance.trailingClearance(fold: foldState, columnEndingAt: listTrailingEdge)
+    }
+
+    /// The reader's leading inset past the crease's keep-out.
+    private var readerCreaseInset: CGFloat {
+        CreaseClearance.leadingInset(fold: foldState, columnStartingAt: listTrailingEdge)
+    }
 
     /// Floor the reading pane declares, which is `ListColumnWidth.readerFloor`
     /// wherever the split can seat it beside the pinned list column and the

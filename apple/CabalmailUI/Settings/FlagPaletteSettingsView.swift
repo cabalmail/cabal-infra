@@ -164,7 +164,7 @@ private struct FlagPaletteEntryEditor: View {
                 Button("Delete Flag", role: .destructive) {
                     confirmingDelete = true
                 }
-                .confirmationDialog(
+                .confirmationPrompt(
                     "Delete \u{201C}\(entry.label)\u{201D}?",
                     isPresented: $confirmingDelete,
                     titleVisibility: .visible

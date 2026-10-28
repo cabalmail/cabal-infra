@@ -19,7 +19,7 @@ extension MessageListView {
         if let folder {
             content
                 .toolbar {
-                    ToolbarItem {
+                    ToolbarItem(placement: .listBar(.automatic, leads: listBarItemsLead)) {
                         Menu {
                             markAllReadMenuItem(in: folder)
                         } label: {
@@ -31,7 +31,7 @@ extension MessageListView {
                 // Same wording as the sidebar's dialog and the feed side's
                 // `confirmMarkAllRead`: the folder is named, the verb is the
                 // button. Not destructive — a read mark is reversible.
-                .confirmationDialog("Mark all messages in \(folder.name) as read?",
+                .confirmationPrompt("Mark all messages in \(folder.name) as read?",
                                     isPresented: $markAllReadConfirmPresented, titleVisibility: .visible) {
                     Button("Mark All as Read") { Task { await model?.markAllRead() } }
                     Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}

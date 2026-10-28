@@ -32,4 +32,16 @@ public enum ConfirmationDialogPolicy {
 
     /// `backOutRole(on:)` for the platform this build is compiled for.
     public static var backOutRole: ButtonRole? { backOutRole(on: .current) }
+
+    /// Whether a confirmation dialog presents as an alert instead: on iOS
+    /// while a fold runs top to bottom through the window (an iPhone Duo in
+    /// book pose), where the dialog's popover lands within 44 pt of the
+    /// crease and an alert stays clear of it. macOS presents these dialogs
+    /// as alerts already; visionOS and watchOS have no fold.
+    ///
+    /// Takes the fold as a flag because this file is also compiled into the
+    /// watch app, which has no fold to read.
+    public static func presentsAsAlert(on platform: HostPlatform, foldIsVertical: Bool) -> Bool {
+        platform == .iOS && foldIsVertical
+    }
 }

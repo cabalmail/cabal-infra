@@ -389,7 +389,7 @@ struct FolderConfirmationDialogs: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .confirmationDialog(
+            .confirmationPrompt(
                 "Empty Trash?",
                 isPresented: $emptyTrashPresented,
                 titleVisibility: .visible
@@ -404,7 +404,7 @@ struct FolderConfirmationDialogs: ViewModifier {
             // Names the folder, like the feed side's `FeedManagementActions`
             // confirmation does for a feed or folder scope. Not destructive:
             // a read mark is reversible, so the button keeps the default role.
-            .confirmationDialog(markAllReadTitle, isPresented: markAllReadBinding, titleVisibility: .visible) {
+            .confirmationPrompt(markAllReadTitle, isPresented: markAllReadBinding, titleVisibility: .visible) {
                 Button("Mark All as Read") {
                     if let folder = pendingMarkAllRead {
                         Task { await model?.markAllRead(folderPath: folder.path) }

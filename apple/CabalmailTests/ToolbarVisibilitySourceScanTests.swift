@@ -20,9 +20,13 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
     func testTheOpenInspectorsToggleOutranksCompose() throws {
         // With the inspector open, `@` is the one item that can close it, so
         // it takes the priority above `keepsInBar()`; closed, it is unranked.
+        // Its placement is the trailing end, or the leading end in book pose
+        // on an iPhone Duo (`ToolbarItemPlacement.listBar`); the rank is the
+        // same either way.
         let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
         let ranked = "if addressInspectorPresented {\n"
-            + "            ToolbarItem(placement: .primaryAction) { addressInspectorToggle }\n"
+            + "            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) "
+            + "{ addressInspectorToggle }\n"
             + "                .keepsInBarFirst()"
         XCTAssertTrue(body.contains(ranked))
         XCTAssertEqual(body.components(separatedBy: ".keepsInBarFirst()").count - 1, 1)
@@ -41,7 +45,8 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         // pair that must survive is Compose and `@` (#1626).
         let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
         let ranked = "} else {\n"
-            + "            ToolbarItem(placement: .primaryAction) { addressInspectorToggle }\n"
+            + "            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) "
+            + "{ addressInspectorToggle }\n"
             + "                .keepsInBar()"
         XCTAssertTrue(body.contains(ranked))
     }

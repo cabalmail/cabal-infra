@@ -216,7 +216,7 @@ struct RevokeAddressConfirmation: ViewModifier {
     let perform: (Address) -> Void
 
     func body(content: Content) -> some View {
-        content.confirmationDialog(
+        content.confirmationPrompt(
             pending.map { AddressDisplay.revokeTitle($0.address) } ?? "Revoke address?",
             isPresented: Binding(
                 get: { pending != nil },

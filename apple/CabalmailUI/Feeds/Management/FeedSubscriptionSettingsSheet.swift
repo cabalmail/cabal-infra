@@ -35,7 +35,7 @@ struct FeedSubscriptionSettingsSheet: View {
                         .accessibilityIdentifier("feed.settings.save")
                     }
                 }
-                .confirmationDialog("Unsubscribe from \(subscription.displayTitle)?",
+                .confirmationPrompt("Unsubscribe from \(subscription.displayTitle)?",
                                     isPresented: $confirmUnsubscribe, titleVisibility: .visible) {
                     Button("Unsubscribe", role: .destructive) { Task { await unsubscribe() } }
                     Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
