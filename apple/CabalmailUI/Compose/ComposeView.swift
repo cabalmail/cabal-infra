@@ -40,6 +40,9 @@ struct ComposeView: View {
     var model: ComposeViewModel { deferredModel.model }
 
     @Environment(AppState.self) private var appState
+    /// Whether the window's bars are a side strip, where Cancel and Send
+    /// carry symbols (`ComposeBarLabel`).
+    @Environment(\.barsAreVertical) private var barsAreVertical
     /// Whether this composer's window is in front, which a window taking
     /// over a sheet's draft waits for before it claims it.
     @Environment(\.scenePhase) private var scenePhase
@@ -81,10 +84,12 @@ struct ComposeView: View {
     var body: some View {
         NavigationStack {
             composeContent
+            .startsPastCrease()
             .navigationTitle(model.navigationTitle)
             .inlineNavigationTitle()
             .toolbar { toolbarContent }
             .stripGivesUpTabsFirst()
+            .verticalBarsOnceShown()
             .task {
                 // Pick up the attachments the forward action sent with its
                 // compose request. They hand off out-of-band, keyed by seed
@@ -292,11 +297,14 @@ struct ComposeView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel") {
+            Button {
                 Task { await cancelOrAsk() }
+            } label: {
+                ComposeBarLabel.cancel(barsAreVertical: barsAreVertical).label("Cancel", systemImage: "xmark")
             }
             .accessibilityIdentifier("compose.cancel")
         }
+        .keepsInBar()
         ToolbarItem {
             attachMenu
         }
@@ -317,15 +325,14 @@ struct ComposeView: View {
                     if sent { outcomeReport.sent() }
                 }
             } label: {
-                if model.isSending {
-                    ProgressView()
-                } else {
-                    Text("Send")
-                }
+                ComposeBarLabel.send(barsAreVertical: barsAreVertical, isSending: model.isSending)
+                    .label("Send", systemImage: "paperplane")
             }
+            .symbolEffect(.pulse, isActive: model.isSending)
             .disabled(!model.canSend || model.isSending)
             .accessibilityIdentifier("compose.send")
         }
+        .keepsInBarFirst()
     }
 
     @ViewBuilder

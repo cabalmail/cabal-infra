@@ -39,6 +39,23 @@ extension View {
     func stripGivesUpTabsFirst() -> some View {
         modifier(StripCompressionModifier())
     }
+
+    /// Keeps this screen's bars horizontal until it has appeared, then lets
+    /// the system put them in a strip (iOS 27.1 `toolbarVerticalBehavior`).
+    ///
+    /// For a sheet on the trailing side, whose bar is a strip down its outer
+    /// edge. Presented with the strip already allowed, the sheet laid the
+    /// strip out under the status bar, its first item behind the clock, and
+    /// kept its title-only items in a horizontal bar that scrolled away with
+    /// the form, until the window next changed size (#2259; the iPhone Duo
+    /// simulator on iOS 27.1, Xcode 27.2, 2026-10-28). A plain SwiftUI app
+    /// does the same, so the fault is the system's. Allowing the strip once
+    /// the sheet is up lays it out as a size change does. Remove this once a
+    /// release lays the first strip out right. A no-op without a strip, and on
+    /// every other platform and SDK.
+    func verticalBarsOnceShown() -> some View {
+        modifier(VerticalBarsOnceShownModifier())
+    }
 }
 
 #if os(iOS) && canImport(SwiftUICore, _version: 8.0.85)
@@ -59,6 +76,31 @@ private struct StripCompressionModifier: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+private struct VerticalBarsOnceShownModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.modifier(VerticalBarsOnceShown())
+        } else {
+            content
+        }
+    }
+}
+
+@available(iOS 27.1, *)
+private struct VerticalBarsOnceShown: ViewModifier {
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .toolbarVerticalBehavior(shown ? .automatic : .disabled)
+            .task {
+                // The next turn, once the first layout is in.
+                await Task.yield()
+                shown = true
+            }
     }
 }
 
@@ -84,6 +126,13 @@ private struct VerticalBarsModifier: ViewModifier {
 
 /// No strip to compress on this SDK or platform.
 private struct StripCompressionModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+    }
+}
+
+/// No strip to hold back on this SDK or platform.
+private struct VerticalBarsOnceShownModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
     }

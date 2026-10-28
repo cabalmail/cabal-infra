@@ -1323,6 +1323,21 @@ bottom chrome follows the width alone (`bodyRunsUnderBottomBar`), since
 flipping it rebuilds the web view and the strip comes and goes without a
 shell swap.
 
+**Compose in the strip.** A strip takes only items with a symbol; an item
+with a title alone stays in a horizontal bar above the content. So while the
+window's bars are vertical, compose's Cancel and Send carry symbols
+(`ComposeBarLabel`) and sit in the sheet's strip, Send ranked last to go
+(#2259); everywhere else they keep their titles. The label reads the
+window's `\.barsAreVertical`, not the sheet's own `toolbarVerticalEdge`: a
+label that followed the sheet's edge turned into a title, which ended the
+strip, which turned it back. Send keeps its symbol while sending, pulsing,
+since a spinner in its place drops it from the strip. On iOS 27.1 a sheet
+presented with its strip allowed lays the strip out under the status bar
+and scrolls title-only items away with the form until the window next
+changes size; a plain SwiftUI app does the same. Compose holds its bars
+horizontal until it has appeared (`verticalBarsOnceShown()`), which lays
+the strip out as a size change does. Remove that once a release fixes it.
+
 **Crease margins: `Shell/Columns/CreaseClearance.swift`.** In book pose
 the keep-out is the crease line plus and minus 44 pt: 431.5 to 519.5 on
 the Duo's 951 pt inner display, where the list column ends at the band's
@@ -1358,6 +1373,10 @@ reader's web view:
   is up. Its actions are the dialog's own, so the back-out button keeps
   `ConfirmationDialogPolicy.backOutRole`, which is no role on iOS: the
   alert draws it, but a hardware keyboard's Escape does not press it.
+- The compose sheet takes the trailing page, starting 8 pt past the crease
+  line, so its form starts past the keep-out (`startsPastCrease()`,
+  `Shell/Columns/CreaseLeadingInset.swift`, from its own place in the
+  window); its Cancel and Send are in the strip at the outer edge (#2262).
   SwiftUI runs an alert's or a dialog's action before it dismisses, so
   actions that read the pending item still find it.
   `ConfirmationPromptTests` fails a direct `confirmationDialog` anywhere
