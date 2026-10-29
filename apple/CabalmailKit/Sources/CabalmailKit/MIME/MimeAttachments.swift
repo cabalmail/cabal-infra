@@ -39,10 +39,14 @@ public struct MimeAttachmentPlan: Sendable, Equatable {
 
     public let attachments: [Attachment]
     public let inlineImages: [String: URL]
+    /// The inline images' parts themselves, for a reply, forward or resumed
+    /// draft whose body shows them to carry them on (by `contentID`).
+    public let inlineParts: [Attachment]
 
-    public init(attachments: [Attachment], inlineImages: [String: URL]) {
+    public init(attachments: [Attachment], inlineImages: [String: URL], inlineParts: [Attachment] = []) {
         self.attachments = attachments
         self.inlineImages = inlineImages
+        self.inlineParts = inlineParts
     }
 }
 
@@ -74,12 +78,19 @@ public extension MimePart {
     func attachmentPlan() -> MimeAttachmentPlan {
         var attachments: [MimeAttachmentPlan.Attachment] = []
         var inlineImages: [String: URL] = [:]
+        var inlineParts: [MimeAttachmentPlan.Attachment] = []
         for leaf in leafParts where leaf.isAttachmentCandidate {
             // Register the inline `cid:` mapping so `cid:` refs in the body
             // still resolve, but only *skip* the attachment listing when the
             // part isn't explicitly flagged as an attachment. See the type doc.
             if let contentID = leaf.contentID, let dataURL = leaf.inlineImageDataURL {
                 inlineImages[contentID] = dataURL
+                inlineParts.append(MimeAttachmentPlan.Attachment(
+                    filename: leaf.contentDisposition?.filename ?? leaf.contentType.name,
+                    mimeType: leaf.contentType.mimeType,
+                    contentID: contentID,
+                    data: leaf.decodedBody
+                ))
                 if leaf.contentDisposition?.isAttachment != true { continue }
             }
             attachments.append(MimeAttachmentPlan.Attachment(
@@ -89,6 +100,6 @@ public extension MimePart {
                 data: leaf.decodedBody
             ))
         }
-        return MimeAttachmentPlan(attachments: attachments, inlineImages: inlineImages)
+        return MimeAttachmentPlan(attachments: attachments, inlineImages: inlineImages, inlineParts: inlineParts)
     }
 }

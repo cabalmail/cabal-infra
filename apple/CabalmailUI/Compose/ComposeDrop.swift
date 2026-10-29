@@ -7,10 +7,12 @@ import CabalmailKit
 /// Split View (the iPhone Duo spec), or from a Cabalmail message list in
 /// another window, as an `.eml`. They take the same path as the photo and
 /// file pickers, `ComposeViewModel.addAttachment`. On the rich-text editor
-/// the page reads the files and hands them over (`takeEditorDrops`); a drag
-/// that carries markup as well, a selection from a page or a document, is
-/// still inserted. On the Mac only the body takes drops: its compose window
-/// lays the header fields out without these rows.
+/// the page reads the files and hands them over (`takeEditorDrops`): an
+/// image dropped or pasted there shows inline instead, and goes inline on
+/// the wire (`ComposeInlineImages`), while a drag that carries markup as
+/// well, a selection from a page or a document, is still inserted. On the
+/// Mac only the body takes drops: its compose window lays the header fields
+/// out without these rows.
 ///
 /// Read through `NSItemProvider` rather than a `Transferable` drop: a
 /// `FileRepresentation` import never matched a drag whose types are only
@@ -71,44 +73,83 @@ enum DroppedAttachment {
         return mime
     }
 
-    /// Takes files dropped onto `model`'s rich-text editor as attachments.
-    /// The editor page reads them and hands them over
-    /// (`RichTextEditorController.onDroppedFile`) rather than inserting them,
+    /// Takes files dropped or pasted onto `model`'s rich-text editor. The
+    /// editor page reads them and hands them over
+    /// (`RichTextEditorController.fileDrops`) rather than inserting them,
     /// saying first how many are coming, which Send and the move to a window
     /// wait for (`pendingDrops`). That wait starts once WebKit has given the
     /// page the files, which for a message is after its source has been
     /// fetched.
     @MainActor
     static func takeEditorDrops(into model: ComposeViewModel) {
-        model.editorController.onDropStarted = { [weak model] count in
+        let drops = model.editorController.fileDrops
+        drops.onStarted = { [weak model] count in
             model?.pendingDrops += count
         }
-        model.editorController.onDroppedFile = { [weak model] name, contents in
+        drops.onFile = { [weak model] file in
             guard let model else { return }
-            model.pendingDrops -= 1
-            take(contents, named: name, into: model)
+            // A file that was not read is reported at once, in the order the
+            // page sent it: when the page's process stops, the dead-editor
+            // banner that follows stays the last word.
+            guard case .data = file.contents else {
+                model.pendingDrops -= 1
+                report(file, in: model)
+                return
+            }
+            Task { @MainActor in
+                await take(file, into: model)
+                model.pendingDrops -= 1
+            }
         }
     }
 
-    /// Attaches a file the editor page read, or says why it can't.
+    /// Says why a file the editor page could not read wasn't attached.
     @MainActor
-    static func take(_ contents: RichTextEditorController.DroppedFileContents, named name: String,
-                     into model: ComposeViewModel) {
-        let shownName = name.isEmpty ? "the dropped item" : name
-        switch contents {
+    static func report(_ file: EditorFileDrops.File, in model: ComposeViewModel) {
+        let shownName = file.name.isEmpty ? "the dropped item" : file.name
+        switch file.contents {
         case .unreadable:
             model.errorMessage = "Couldn't attach \(shownName)."
         case .tooLarge(let limit):
             let size = ByteCountFormatter.string(fromByteCount: Int64(limit), countStyle: .file)
             model.errorMessage = "Couldn't attach \(shownName): it's larger than \(size)."
+        case .data:
+            break
+        }
+    }
+
+    /// Shows an image the editor page read inline where it was dropped or
+    /// pasted, attaches any other file, or says why it can't.
+    @MainActor
+    static func take(_ file: EditorFileDrops.File, into model: ComposeViewModel) async {
+        let drops = model.editorController.fileDrops
+        switch file.contents {
+        case .unreadable, .tooLarge:
+            report(file, in: model)
         case .data(let data):
-            guard takesDrops(model) else { return }
+            guard takesDrops(model) else {
+                await drops.forget(file)
+                return
+            }
             guard !isMoveReference(data) else {
+                await drops.forget(file)
                 // The body showed it would take the drag, so say why nothing came.
                 model.errorMessage = "To attach messages, drag them one at a time."
                 return
             }
-            let filename = name.isEmpty ? "Attachment" : name
+            // Re-encoding decodes the whole image, which is no work for the
+            // main actor.
+            if let image = await Task.detached(operation: { InlineImageEncoding.encode(data) }).value {
+                let contentID = model.inlineImages.add(image)
+                if await drops.placeImage(file, contentID: contentID, alt: file.name) {
+                    model.richMirrorsMarkdown = false
+                    return
+                }
+                model.inlineImages.remove(contentID)
+            } else {
+                await drops.forget(file)
+            }
+            let filename = file.name.isEmpty ? "Attachment" : file.name
             model.addAttachment(filename: filename, mimeType: mimeType(forFilename: filename, data: data), data: data)
         }
     }

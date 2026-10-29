@@ -34,6 +34,7 @@ struct ComposeSnapshot {
     let richMirrorsMarkdown: Bool
     let editorMode: ComposeViewModel.EditorMode
     let attachments: [ComposeViewModel.ComposeAttachment]
+    let inlineImages: ComposeInlineImages
     let serverDraftRef: DraftServerRef?
     let replacedServerDraftUIDs: [UInt32]
     let inReplyTo: String?
@@ -70,6 +71,7 @@ struct ComposeSnapshot {
             richMirrorsMarkdown: model.richMirrorsMarkdown,
             editorMode: model.editorMode,
             attachments: model.attachments,
+            inlineImages: model.inlineImages,
             serverDraftRef: model.serverDraftRef,
             replacedServerDraftUIDs: model.replacedServerDraftUIDs,
             inReplyTo: model.inReplyTo,
@@ -118,6 +120,7 @@ extension ComposeSnapshot {
             richMirrorsMarkdown: true,
             editorMode: .rich,
             attachments: [],
+            inlineImages: ComposeInlineImages(),
             serverDraftRef: seed.serverRef,
             replacedServerDraftUIDs: [],
             inReplyTo: seed.inReplyTo,

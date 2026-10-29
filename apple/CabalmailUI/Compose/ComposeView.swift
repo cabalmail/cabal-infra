@@ -511,7 +511,7 @@ extension ComposeView {
                     .takesDroppedAttachments(into: model)
             }
         case .attachments:
-            if !model.attachments.isEmpty {
+            if !model.attachments.isEmpty || model.attachmentTotalExceedsWarning {
                 Section("Attachments") {
                     ForEach(model.attachments) { attachment in
                         attachmentRow(attachment)
@@ -583,7 +583,7 @@ extension ComposeView {
             )
             Divider()
             ComposerBody(model: model)
-            if !model.attachments.isEmpty {
+            if !model.attachments.isEmpty || model.attachmentTotalExceedsWarning {
                 Divider()
                 macAttachmentStrip
             }

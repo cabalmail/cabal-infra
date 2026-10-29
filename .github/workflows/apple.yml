@@ -276,10 +276,10 @@ jobs:
           set -o pipefail
           SKIP_ARGS=""
           if [ "${{ matrix.platform }}" = "visionOS" ]; then
-            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests"
-            echo "::notice title=visionOS 27 carve-out::Skipping RichTextEditorBridgeHealthTests and RichTextEditorControllerTests on visionOS: WKWebView creation wedged the visionOS 27.0 simulator pre-test (see workflow comment). Covered by the macOS and iOS legs."
+            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorFileDropTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests"
+            echo "::notice title=visionOS 27 carve-out::Skipping RichTextEditorBridgeHealthTests, RichTextEditorControllerTests and RichTextEditorFileDropTests on visionOS: WKWebView creation wedged the visionOS 27.0 simulator pre-test (see workflow comment). Covered by the macOS and iOS legs."
           elif [ "${{ matrix.platform }}" != "macOS" ]; then
-            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests/testRealEditorPageBootsInThisRunner"
+            SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorFileDropTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests/testRealEditorPageBootsInThisRunner"
             echo "::notice title=Simulator WebContent carve-out::Skipping the WKWebView-backed editor tests on ${{ matrix.platform }}: freshly created CI simulators never launch a WebContent process under a hostless runner (see workflow comment). Covered by the macOS leg."
           fi
           gtimeout -v --kill-after=2m 30m \

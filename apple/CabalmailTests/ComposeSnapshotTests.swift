@@ -30,6 +30,20 @@ final class ComposeSnapshotTests: XCTestCase {
         XCTAssertFalse(window.markdownUserEdited, "the signed seed still reads as a seed in the window")
     }
 
+    func testCaptureCarriesTheInlineImages() async throws {
+        let sheet = try TestFixtures.makeComposeModel()
+        _ = sheet.inlineImages.add(InlineImageEncoding.Encoded(data: Data([0xFF, 0xD8, 0xFF]), format: .jpeg))
+        try await TestFixtures.requireEditorBridge(sheet)
+
+        let snapshot = try await ComposeSnapshot.capture(from: sheet)
+        let handoffs = ComposeHandoffs()
+        TestFixtures.offer(snapshot, on: handoffs)
+        let window = try TestFixtures.makeMovedComposeModel(for: snapshot.draftID, from: handoffs)
+
+        XCTAssertEqual(window.inlineImages, sheet.inlineImages)
+        XCTAssertEqual(window.inlineImages.images.count, 1)
+    }
+
     func testCaptureCarriesEveryField() async throws {
         let sheet = try TestFixtures.makeComposeModel(seed: Draft(
             fromAddress: "me@reply.cabalmail.example",
