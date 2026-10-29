@@ -18,7 +18,9 @@ import XCTest
 // policy to the call sites that have to consult it.
 final class ConfirmationDialogBackOutScanTests: XCTestCase {
 
-    /// Every `confirmationDialog` in the app targets declares a button that
+    /// Every `confirmationDialog` in the app targets, and every
+    /// `confirmationPrompt` (the shared app layer's wrapper, which presents
+    /// the same actions as an alert in book pose), declares a button that
     /// backs out, and it asks the policy for its role.
     func testEveryConfirmationDialogDeclaresABackOut() throws {
         let sources = try Self.appSources()
@@ -40,23 +42,14 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
         var dialogs = 0
         var offenders: [String] = []
         for (name, body) in sources {
-            for actions in Self.dialogActions(in: body, resolvingIn: Array(sources.values)) {
+            for actions in DialogActionsScanner.actions(in: body, resolvingIn: Array(sources.values)) {
                 dialogs += 1
                 guard !actions.contains("backOutRole") else { continue }
-                if Self.choiceDrivenDialogs.contains(name) { continue }
+                if Self.choiceDrivenDialogs.contains(name) || Self.forwardingDialogs.contains(name) { continue }
                 offenders.append(name)
             }
         }
-        XCTAssertEqual(
-            Set(sources.keys).intersection(Self.choiceDrivenDialogs), Self.choiceDrivenDialogs,
-            "an exempted file left the corpus, so its exemption is no longer checked"
-        )
-        for name in Self.choiceDrivenDialogs {
-            XCTAssertTrue(
-                sources[name]?.contains("ComposeCancelChoice") ?? false,
-                "\(name) no longer builds its buttons from ComposeCancelChoice, so it owes the scan a literal back-out"
-            )
-        }
+        Self.assertExemptionsHold(in: sources)
 
         // The corpus holds more dialogs than #1201 and #1914 between them
         // touched; a scan that found a handful would be reading something
@@ -100,7 +93,7 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
         for (label, source, expected) in [
             ("missing", missing, false), ("present", present, true), ("elsewhere", elsewhere, false)
         ] {
-            let closures = Self.dialogActions(in: source)
+            let closures = DialogActionsScanner.actions(in: source)
             XCTAssertEqual(closures.count, 1, "\(label): one dialog expected")
             XCTAssertEqual(
                 closures.first?.contains("backOutRole"), expected,
@@ -114,7 +107,15 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
             Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
         }
         """
-        XCTAssertEqual(Self.dialogActions(in: awkward).first?.contains("backOutRole"), true)
+        XCTAssertEqual(DialogActionsScanner.actions(in: awkward).first?.contains("backOutRole"), true)
+
+        // The wrapper takes the same shapes, and is read the same way.
+        let prompt = missing.replacingOccurrences(of: ".confirmationDialog(", with: ".confirmationPrompt(")
+        XCTAssertEqual(DialogActionsScanner.actions(in: prompt), DialogActionsScanner.actions(in: missing))
+        let both = present + "\n" + prompt
+        let declared = DialogActionsScanner.actions(in: both).map { $0.contains("backOutRole") }
+        XCTAssertEqual(declared.count, 2, "one dialog and one prompt expected")
+        XCTAssertEqual(declared.filter { $0 }.count, 1, "the prompt's missing back-out went unread")
     }
 
     /// The other call shape in the tree: the actions are a named
@@ -138,7 +139,7 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
             Text("backOutRole")
         }
         """
-        XCTAssertEqual(Self.dialogActions(in: resolved).first?.contains("backOutRole"), true)
+        XCTAssertEqual(DialogActionsScanner.actions(in: resolved).first?.contains("backOutRole"), true)
 
         let missing = resolved.replacingOccurrences(
             of: """
@@ -147,7 +148,7 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
             with: ""
         )
         XCTAssertEqual(
-            Self.dialogActions(in: missing).first?.contains("backOutRole"), false,
+            DialogActionsScanner.actions(in: missing).first?.contains("backOutRole"), false,
             "the message builder's copy of the word satisfied the scan"
         )
 
@@ -156,7 +157,7 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
         let unresolvable = """
         .confirmationDialog(title, isPresented: $x, actions: thereIsNoSuchBuilder)
         """
-        XCTAssertEqual(Self.dialogActions(in: unresolvable), [""])
+        XCTAssertEqual(DialogActionsScanner.actions(in: unresolvable), [""])
 
         // And the builder may live one file over, as `FolderListView`'s does
         // in its `+Helpers` extension.
@@ -173,11 +174,11 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
         .confirmationDialog(title, isPresented: $x, actions: deleteDialogActions, message: m)
         """
         XCTAssertEqual(
-            Self.dialogActions(in: host, resolvingIn: [host, helper]).first?.contains("backOutRole"),
+            DialogActionsScanner.actions(in: host, resolvingIn: [host, helper]).first?.contains("backOutRole"),
             true,
             "a builder in a sibling file reads as a missing button"
         )
-        XCTAssertEqual(Self.dialogActions(in: host).first, "", "same-file resolution invented a body")
+        XCTAssertEqual(DialogActionsScanner.actions(in: host).first, "", "same-file resolution invented a body")
     }
 
     // MARK: - Corpus
@@ -190,17 +191,98 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
     /// taken on trust.
     private static let choiceDrivenDialogs: Set<String> = ["CabalmailUI/Compose/ComposeView.swift"]
 
-    /// What each `confirmationDialog` in `body` declares as its actions: the
-    /// trailing closure after the modifier's own parentheses, or — for the
-    /// `actions:` parameter form — the body of the named `@ViewBuilder` it
-    /// points at, resolved in the same file. Never the `message:` closure,
-    /// which is where a lazier scan would find the word it is looking for.
-    private static func dialogActions(in body: String, resolvingIn corpus: [String]? = nil) -> [String] {
+    /// The wrapper behind every `confirmationPrompt`: its one
+    /// `confirmationDialog` (and its `.alert`) forward the caller's actions,
+    /// which the scan reads at the caller, so it has no buttons of its own to
+    /// check. That it still forwards rather than declares is checked above.
+    private static let forwardingDialogs: Set<String> = ["CabalmailUI/Platform/ConfirmationPrompt.swift"]
+
+    /// Both exemptions are checked rather than taken on trust: each exempted
+    /// file is still in the corpus, and still has the shape that earns it.
+    private static func assertExemptionsHold(in sources: [String: String],
+                                             file: StaticString = #filePath,
+                                             line: UInt = #line) {
+        let exempted = choiceDrivenDialogs.union(forwardingDialogs)
+        XCTAssertEqual(
+            Set(sources.keys).intersection(exempted), exempted,
+            "an exempted file left the corpus, so its exemption is no longer checked",
+            file: file, line: line
+        )
+        for name in choiceDrivenDialogs {
+            XCTAssertTrue(
+                sources[name]?.contains("ComposeCancelChoice") ?? false,
+                "\(name) no longer builds its buttons from ComposeCancelChoice, so it owes the scan a literal back-out",
+                file: file, line: line
+            )
+        }
+        for name in forwardingDialogs {
+            let body = sources[name] ?? ""
+            XCTAssertTrue(
+                body.contains("ConfirmationDialogPolicy.presentsAsAlert("),
+                "\(name) no longer asks the policy which style to present, "
+                + "so it is not the fold wrapper the exemption describes",
+                file: file, line: line
+            )
+            XCTAssertFalse(
+                body.contains("Button("),
+                "\(name) declares a button of its own, so it owes the scan a back-out like any other dialog",
+                file: file, line: line
+            )
+        }
+    }
+
+    /// Every Swift source in the app targets, keyed by its path under
+    /// `apple/` — `ConfirmationDialogRoleTests`' corpus, for the same reason
+    /// it gives: a filename key would let one target's `ContentView.swift`
+    /// stand in for another's.
+    private static func appSources() throws -> [String: String] {
+        let apple = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // CabalmailTests
+            .deletingLastPathComponent()   // apple
+        var found: [String: String] = [:]
+        for target in ["Cabalmail", "CabalmailUI", "CabalmailMac", "CabalmailWatch"] {
+            let root = apple.appendingPathComponent(target)
+            guard let walker = FileManager.default.enumerator(
+                at: root,
+                includingPropertiesForKeys: nil
+            ) else { continue }
+            for case let url as URL in walker where url.pathExtension == "swift" {
+                let key = url.standardizedFileURL.path
+                    .replacingOccurrences(of: apple.standardizedFileURL.path + "/", with: "")
+                found[key] = try String(contentsOf: url, encoding: .utf8)
+            }
+        }
+        return found
+    }
+}
+
+/// The scan's parser: finds each dialog's actions in Swift source without
+/// compiling it. A type of its own so the suite above holds the
+/// invariants and this holds the reading.
+private enum DialogActionsScanner {
+    /// What each `confirmationDialog` or `confirmationPrompt` in `body`
+    /// declares as its actions: the trailing closure after the modifier's
+    /// own parentheses, or — for the `actions:` parameter form — the body of
+    /// the named `@ViewBuilder` it points at, resolved in the same file.
+    /// Never the `message:` closure, which is where a lazier scan would find
+    /// the word it is looking for.
+    static func actions(in body: String, resolvingIn corpus: [String]? = nil) -> [String] {
         let sources = corpus ?? [body]
         let chars = Array(body)
         var found: [String] = []
+        for modifier in [".confirmationDialog(", ".confirmationPrompt("] {
+            found += actions(of: modifier, in: body, chars: chars, resolvingIn: sources)
+        }
+        return found
+    }
+
+    private static func actions(of modifier: String,
+                                in body: String,
+                                chars: [Character],
+                                resolvingIn sources: [String]) -> [String] {
+        var found: [String] = []
         var index = body.startIndex
-        while let call = body.range(of: ".confirmationDialog(", range: index..<body.endIndex) {
+        while let call = body.range(of: modifier, range: index..<body.endIndex) {
             index = call.upperBound
             let open = body.distance(from: body.startIndex, to: call.upperBound) - 1
             guard let closeParen = matchingDelimiter(chars, from: open, open: "(", close: ")") else { continue }
@@ -276,29 +358,5 @@ final class ConfirmationDialogBackOutScanTests: XCTestCase {
             index += 1
         }
         return nil
-    }
-
-    /// Every Swift source in the app targets, keyed by its path under
-    /// `apple/` — `ConfirmationDialogRoleTests`' corpus, for the same reason
-    /// it gives: a filename key would let one target's `ContentView.swift`
-    /// stand in for another's.
-    private static func appSources() throws -> [String: String] {
-        let apple = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // CabalmailTests
-            .deletingLastPathComponent()   // apple
-        var found: [String: String] = [:]
-        for target in ["Cabalmail", "CabalmailUI", "CabalmailMac", "CabalmailWatch"] {
-            let root = apple.appendingPathComponent(target)
-            guard let walker = FileManager.default.enumerator(
-                at: root,
-                includingPropertiesForKeys: nil
-            ) else { continue }
-            for case let url as URL in walker where url.pathExtension == "swift" {
-                let key = url.standardizedFileURL.path
-                    .replacingOccurrences(of: apple.standardizedFileURL.path + "/", with: "")
-                found[key] = try String(contentsOf: url, encoding: .utf8)
-            }
-        }
-        return found
     }
 }

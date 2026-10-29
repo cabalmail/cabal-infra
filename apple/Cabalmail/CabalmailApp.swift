@@ -85,12 +85,11 @@ struct CabalmailApp: App {
             if phase == .active { Task { await appState.refreshWatchSession() } }
             appState.appScenePhaseChanged(to: phase)
         }
-        // iPadOS, visionOS, and an open iPhone Duo open compose as a real
-        // scene; a single-window host ignores the group because
-        // `ComposeSurfacePolicy` keeps it on the sheet path. Installing the
-        // WindowGroup on every iOS build keeps the scene available the
-        // moment the host gains windows (Stage Manager, iPad, unfolding a
-        // Duo).
+        // visionOS opens compose as a real scene; iOS presents it as a sheet
+        // (`ComposeSurfacePolicy`) and opens this scene when the sheet's
+        // "Open in New Window" moves a draft to a window of its own. A
+        // compose scene iPadOS restores from before compose became a sheet
+        // opens here too, and can close.
         ComposeWindowScene(appState: appState, preferences: preferences)
     }
 }

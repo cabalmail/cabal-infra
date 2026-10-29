@@ -135,6 +135,32 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(navigator.compactTab, .mail)
     }
 
+    /// While a window's compose sheet is up a link waits: opening it would
+    /// swap the message a reply answers for another. It opens in that window
+    /// once the sheet has closed, and no other window takes it meanwhile: a
+    /// window opening, or another window's sheet closing.
+    func testALinkWaitsForTheWindowsComposeSheet() throws {
+        let router = DeepLinkRouter()
+        let coordinator = try makeCoordinator()
+        let replying = window(coordinator, router)
+        replying.composeLock.isUp = true
+
+        router.open(archiveSeven, in: replying.windowID)
+
+        XCTAssertNil(replying.selectedFolder)
+        XCTAssertNil(router.parked, "the window holds it, not the router")
+
+        let other = window(coordinator, router)
+        other.composeLock.isUp = true
+        other.composeClosed()
+        XCTAssertNil(other.selectedFolder)
+
+        replying.composeClosed()
+
+        XCTAssertFalse(replying.composeLock.isUp)
+        XCTAssertEqual(replying.selectedFolder?.path, "Archive")
+    }
+
     func testTheLastLinkParkedWins() {
         let router = DeepLinkRouter()
         router.open(archiveSeven)

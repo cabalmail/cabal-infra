@@ -55,7 +55,7 @@ struct FailedSendBanner: View {
             onDismiss: { confirmingDiscard = true }
         )
         .accessibilityIdentifier("banner.failedSend")
-        .confirmationDialog(
+        .confirmationPrompt(
             Self.discardTitle(count: entries.count),
             isPresented: $confirmingDiscard,
             titleVisibility: .visible

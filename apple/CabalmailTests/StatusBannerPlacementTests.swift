@@ -52,3 +52,77 @@ final class StatusBannerPlacementTests: XCTestCase {
         XCTAssertEqual(StatusBannerPlacement.bottomInset(isRegularWidth: true), 6)
     }
 }
+
+/// The iPhone Duo fold rule: nothing on the crease, a banner with the column
+/// that raised it in book pose, nothing tappable above a laptop fold.
+/// Geometry from the open Duo's 951 x 667 pt overlay.
+final class StatusBannerFoldPlacementTests: XCTestCase {
+    private let bounds = CGRect(x: 0, y: 0, width: 951, height: 667)
+    private let left = CGRect(x: 0, y: 0, width: 455, height: 667)
+    private let right = CGRect(x: 495, y: 0, width: 456, height: 667)
+    private let top = CGRect(x: 0, y: 0, width: 951, height: 313)
+    private let bottom = CGRect(x: 0, y: 353, width: 951, height: 314)
+    private let columns: [Toast.Column?] = [nil, .list, .reader]
+
+    func testWithNoFoldEveryBannerTakesTheWholeOverlay() {
+        for column in columns {
+            for hasControls in [false, true] {
+                let slot = StatusBannerPlacement.slot(in: .whole(bounds), column: column, hasControls: hasControls)
+                XCTAssertEqual(slot, .whole)
+                XCTAssertEqual(StatusBannerPlacement.frame(of: slot, in: .whole(bounds)), bounds)
+            }
+        }
+    }
+
+    func testInBookPoseABannerSitsWithTheColumnThatRaisedIt() {
+        let pieces = FoldPieces.sideBySide(leading: left, trailing: right)
+        for hasControls in [false, true] {
+            XCTAssertEqual(StatusBannerPlacement.slot(in: pieces, column: .list, hasControls: hasControls),
+                           .leadingPiece)
+            XCTAssertEqual(StatusBannerPlacement.slot(in: pieces, column: .reader, hasControls: hasControls),
+                           .trailingPiece)
+            XCTAssertEqual(StatusBannerPlacement.slot(in: pieces, column: nil, hasControls: hasControls),
+                           .trailingPiece, "the window's own banners sit with the reader")
+        }
+        XCTAssertEqual(StatusBannerPlacement.frame(of: .leadingPiece, in: pieces), left)
+        XCTAssertEqual(StatusBannerPlacement.frame(of: .trailingPiece, in: pieces), right)
+    }
+
+    func testInLaptopPoseNothingTappableSitsAboveTheFold() {
+        let pieces = FoldPieces.stacked(top: top, bottom: bottom)
+        for column in columns {
+            XCTAssertEqual(StatusBannerPlacement.slot(in: pieces, column: column, hasControls: true), .belowCrease)
+            XCTAssertEqual(StatusBannerPlacement.slot(in: pieces, column: column, hasControls: false), .aboveCrease)
+        }
+        XCTAssertEqual(StatusBannerPlacement.frame(of: .aboveCrease, in: pieces), top)
+        XCTAssertEqual(StatusBannerPlacement.frame(of: .belowCrease, in: pieces), bottom)
+    }
+
+    func testASlotFromAnotherFoldHasNoFrame() {
+        XCTAssertNil(StatusBannerPlacement.frame(of: .leadingPiece, in: .whole(bounds)))
+        XCTAssertNil(StatusBannerPlacement.frame(of: .aboveCrease, in: .sideBySide(leading: left, trailing: right)))
+        XCTAssertNil(StatusBannerPlacement.frame(of: .whole, in: .stacked(top: top, bottom: bottom)))
+    }
+
+    /// Above a laptop fold the crease is the banners' floor, with no bar in
+    /// between; everywhere else they keep the window's own bottom inset.
+    func testOnlyBannersOnACreaseDropTheWindowsBottomInset() {
+        let window = StatusBannerPlacement.compactWidthBottomInset
+        XCTAssertEqual(StatusBannerPlacement.bottomInset(of: .aboveCrease, windowBottomInset: window),
+                       StatusBannerPlacement.defaultBottomInset)
+        for slot in [StatusBannerPlacement.Slot.whole, .leadingPiece, .trailingPiece, .belowCrease] {
+            XCTAssertEqual(StatusBannerPlacement.bottomInset(of: slot, windowBottomInset: window), window)
+        }
+    }
+
+    /// A toast's column counts only in the window that raised it; any other
+    /// window shows it as the window's own.
+    func testAToastsColumnCountsOnlyInItsOwnWindow() {
+        let here = UUID()
+        let raised = Toast(kind: .info, message: "x", origin: Toast.Origin(window: here, column: .list))
+        XCTAssertEqual(raised.column(in: here), .list)
+        XCTAssertNil(raised.column(in: UUID()))
+        XCTAssertNil(raised.column(in: nil))
+        XCTAssertNil(Toast(kind: .info, message: "x").column(in: here))
+    }
+}

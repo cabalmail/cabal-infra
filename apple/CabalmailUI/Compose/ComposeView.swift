@@ -8,11 +8,11 @@ import UIKit
 #endif
 import UniformTypeIdentifiers
 
-/// Compose scene. macOS, iPadOS, visionOS, and an open iPhone Duo host
-/// this in a standalone `WindowGroup` opened via `openWindow` (see
-/// `ComposeWindowScene`); a single-window host keeps it as a modal sheet
-/// so the user doesn't get torn away from the mailbox they were just
-/// reading.
+/// Compose scene. macOS and visionOS host this in a standalone
+/// `WindowGroup` opened via `openWindow` (see `ComposeWindowScene`); iOS
+/// keeps it as a modal sheet over the window it was asked from, so the
+/// user isn't torn away from the mailbox they were just reading
+/// (`ComposeSurfacePolicy`).
 ///
 /// The form is four labeled fields (From picker, To/Cc/Bcc tokens, subject,
 /// dual-mode rich-text + Markdown body) plus an attachment strip and a Send
@@ -40,7 +40,12 @@ struct ComposeView: View {
     var model: ComposeViewModel { deferredModel.model }
 
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
+    /// Whether the window's bars are a side strip, where Cancel and Send
+    /// carry symbols (`ComposeBarLabel`).
+    @Environment(\.barsAreVertical) private var barsAreVertical
+    /// Whether this composer's window is in front, which a window taking
+    /// over a sheet's draft waits for before it claims it.
+    @Environment(\.scenePhase) private var scenePhase
     /// Read by `attachmentSizeWarning` in `ComposeView+Subviews`, which is
     /// why this one isn't `private` — Swift's `private` is file-scoped.
 
@@ -57,7 +62,7 @@ struct ComposeView: View {
     #endif
     @State private var showFileImporter = false
     /// Compose-scoped banner. The compose surface is a separate window
-    /// (macOS / iPad regular) or a sheet (iPhone), so the root
+    /// (macOS, visionOS) or a sheet (iOS), so the root
     /// `AppState.toast` overlay can't reach it — host the post-creation
     /// "Created … / Copy" banner here instead.
     @State private var composeToast: Toast?
@@ -79,9 +84,12 @@ struct ComposeView: View {
     var body: some View {
         NavigationStack {
             composeContent
+            .startsPastCrease()
             .navigationTitle(model.navigationTitle)
             .inlineNavigationTitle()
             .toolbar { toolbarContent }
+            .stripGivesUpTabsFirst()
+            .verticalBarsOnceShown()
             .task {
                 // Pick up the attachments the forward action sent with its
                 // compose request. They hand off out-of-band, keyed by seed
@@ -107,6 +115,9 @@ struct ComposeView: View {
                 // window that stays up a moment longer.
                 closeCoordinator.onCloseAttempt = { await cancelOrAsk() }
                 #endif
+                // A window that did not take a sheet's draft over has none to
+                // focus.
+                guard model.holdsDraft else { return }
                 if model.shouldFocusBodyOnAppear {
                     // Clear the SwiftUI focus binding so the Form can't
                     // keep the To field as its first responder behind the
@@ -118,6 +129,7 @@ struct ComposeView: View {
                 } else {
                     focusedField = .to
                 }
+                model.hasStarted = true
             }
             #if os(macOS)
             .background {
@@ -129,6 +141,12 @@ struct ComposeView: View {
             .onDisappear {
                 model.stop()
             }
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                model.handoff?.sceneIsActive = phase == .active
+            }
+            // VoiceOver's escape asks what Cancel asks: the sheet cannot be
+            // swiped away, and an escape that did nothing would strand it.
+            .accessibilityAction(.escape) { Task { await cancelOrAsk() } }
             .sheet(isPresented: $showNewAddressSheet) {
                 NewAddressSheet(
                     domains: appState.client?.configuration.domains ?? [],
@@ -163,7 +181,7 @@ struct ComposeView: View {
             ) { result in
                 Task { await ingestFileImport(result) }
             }
-            .confirmationDialog(
+            .confirmationPrompt(
                 "Discard draft?",
                 isPresented: $showDiscardConfirm
             ) {
@@ -175,6 +193,9 @@ struct ComposeView: View {
             }
             .toastOverlay($composeToast)
         }
+        // A window taking over a sheet's draft shows it at once, but the
+        // sheet may still take it back until the window has claimed it.
+        .frozen(while: model.isAwaitingClaim)
     }
 
     // MARK: - Cancel dialog
@@ -198,6 +219,8 @@ struct ComposeView: View {
     /// they can afford the bridge round trip because `windowShouldClose`
     /// has already declined the close and returned `false`.
     private func cancelOrAsk() async {
+        // VoiceOver's escape reaches a frozen composer too.
+        guard model.holdsDraft else { return }
         // A failed conversion can't say the buffer is empty, so it asks,
         // the same as a dead bridge.
         let bodies = try? await model.computeMessageBodies()
@@ -234,18 +257,7 @@ struct ComposeView: View {
                 closeCoordinator.allowsClose = true
                 #endif
                 await model.discard()
-                // The discard expunged the server copy an open Drafts list
-                // — and the reader this dismissal returns to — is still
-                // holding. Say so, or the row survives and Edit Draft on it
-                // reopens the discarded draft with Send live (#1081). Same
-                // event as Save Draft; the replacement has no survivor, so
-                // the policy drops the reader rather than re-pointing it.
-                if let replacement = model.retiredDraftReplacement {
-                    appState.mailStore.events.post(
-                        .draftReplaced(folderPath: "Drafts", replacement: replacement),
-                        from: nil
-                    )
-                }
+                outcomeReport.draftRetired()
             }
         case .saveDraft:
             Task {
@@ -253,21 +265,7 @@ struct ComposeView: View {
                 closeCoordinator.allowsClose = true
                 #endif
                 let didClose = await model.cancel()
-                // The save replaced the server copy, expunging the UID an
-                // open Drafts list — and the reader this dismissal returns
-                // to — is still holding. Hand the list the whole chain plus
-                // the survivor so it can swap rather than strand the user
-                // on content the server no longer has (#1078). An emptied
-                // body takes the `.discardEmpty` exit through this same
-                // button and reports a chain with no survivor (#1081); a
-                // first save reports the survivor with nothing retired, and
-                // rides the same refresh into the list (#1083).
-                if didClose, let replacement = model.retiredDraftReplacement {
-                    appState.mailStore.events.post(
-                        .draftReplaced(folderPath: "Drafts", replacement: replacement),
-                        from: nil
-                    )
-                }
+                if didClose { outcomeReport.draftRetired() }
                 #if os(macOS)
                 // IMAP save failed: keep the user in the window so they can
                 // see the error banner and retry.
@@ -291,17 +289,26 @@ struct ComposeView: View {
     // storage stays here because `private` doesn't reach an extension
     // in another file.
 
+    /// What this composer tells the rest of the app once it has closed.
+    private var outcomeReport: ComposeOutcomeReport {
+        ComposeOutcomeReport(model: model, appState: appState)
+    }
+
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel") {
+            Button {
                 Task { await cancelOrAsk() }
+            } label: {
+                ComposeBarLabel.cancel(barsAreVertical: barsAreVertical).label("Cancel", systemImage: "xmark")
             }
             .accessibilityIdentifier("compose.cancel")
         }
+        .keepsInBar()
         ToolbarItem {
             attachMenu
         }
+        ComposeWindowOfferItem(model: model)
         ToolbarItem(placement: .confirmationAction) {
             Button {
                 Task {
@@ -315,55 +322,17 @@ struct ComposeView: View {
                     #if os(macOS)
                     if !sent { closeCoordinator.allowsClose = false }
                     #endif
-                    guard sent else { return }
-                    // Sending from a draft discards the server copy, so the
-                    // Drafts list is showing a message that no longer
-                    // exists. Prune it through the same event the reader's
-                    // archive/move actions post instead of waiting for the
-                    // next background reconcile (the folder is unsubscribed
-                    // by default, so that took over a minute). "Drafts" is
-                    // the mailbox `/save_draft` pins every draft to; see
-                    // `MessageDetailViewModel.isDraftsFolder`.
-                    // Every UID the session held, not just the last: a 60s
-                    // autosave replaces the copy under a new UID and the
-                    // open list is still rendering the old one (#1071).
-                    let retired = model.supersededDraftUIDs.map { MessageRef(folder: FolderTree.draftsPath, uid: $0) }
-                    appState.mailStore.events.post(.removed(retired), from: nil)
-                    // A reply left the device (or the outbox owns it now):
-                    // mark the original `\Answered` so the list's replied
-                    // arrow appears without waiting for a refresh.
-                    if let folder = model.replySourceFolder, let uid = model.replySourceUid {
-                        appState.mailStore.markAnswered(
-                            MessageRef(folder: folder, uid: uid), client: appState.client
-                        )
-                    }
-                    // Surface the outcome as a toast on the shared AppState
-                    // so the user sees confirmation after the sheet dismisses.
-                    // `.queued` means the message is in the outbox and
-                    // `SendQueue` will drain it on reconnect — callers should
-                    // understand their message isn't lost.
-                    switch model.lastSendOutcome {
-                    case .sent:
-                        appState.showToast(.init(kind: .success, message: "Message sent."))
-                    case .queued:
-                        appState.showToast(.init(
-                            kind: .warning,
-                            message: "Message queued — will send when back online."
-                        ))
-                    case .none:
-                        break
-                    }
+                    if sent { outcomeReport.sent() }
                 }
             } label: {
-                if model.isSending {
-                    ProgressView()
-                } else {
-                    Text("Send")
-                }
+                ComposeBarLabel.send(barsAreVertical: barsAreVertical, isSending: model.isSending)
+                    .label("Send", systemImage: "paperplane")
             }
+            .symbolEffect(.pulse, isActive: model.isSending)
             .disabled(!model.canSend || model.isSending)
             .accessibilityIdentifier("compose.send")
         }
+        .keepsInBarFirst()
     }
 
     @ViewBuilder

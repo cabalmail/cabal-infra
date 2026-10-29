@@ -101,8 +101,10 @@ extension MessageDetailView {
     // blank row there (#1047). The toolbars themselves still draw icons only —
     // macOS's unified toolbar does that by default, and the touch call sites
     // apply `.labelStyle(.iconOnly)` (see `readerActionBar` and the
-    // navigation-bar and `.bottomBar` items in
-    // `MessageDetailView.toolbarContent`).
+    // navigation-bar items and `.bottomBar` group in
+    // `MessageDetailView.toolbarContent`). The side strip's `.bottomItems`
+    // leave it off: the system bar draws a `Label` icon-only anyway, and the
+    // overflow rows it folds items into need the title (#1787).
 
     /// Drafts-folder affordance: resume the open draft in compose.
     /// Disabled until the body fetch + MIME parse complete so a tap can't
@@ -207,7 +209,7 @@ extension MessageDetailView {
             onFailure: { error in
                 // Every list has already put the row back; surface a toast
                 // so the user knows the move didn't take.
-                appState.showToast(Toast(
+                showToast(Toast(
                     kind: .error,
                     message: failureMessage(for: action, error: error)
                 ))
@@ -223,7 +225,7 @@ extension MessageDetailView {
         Task {
             await model.purge(
                 onFailure: { error in
-                    appState.showToast(Toast(
+                    showToast(Toast(
                         kind: .error,
                         message: "Couldn't delete message: \(error.localizedDescription)"
                     ))
@@ -321,11 +323,12 @@ extension MessageDetailView {
     }
 
     #if os(iOS)
-    /// Second home for the compact navigation bar's leading control. That bar
-    /// has an unmeasured budget, and a narrow iPad window can fold even a
-    /// ranked item into a system overflow this repo has found inert (#1626,
-    /// #1670); the menu is the one item ranked above every other, so Reply,
-    /// Reply All and Forward (Edit Draft in Drafts) stay reachable from it.
+    /// Second home for the leading control of the compact navigation bar and
+    /// of the side strip's bottom items. Both have unmeasured budgets, and a
+    /// bar can fold even a ranked item into a system overflow, which this
+    /// repo has found inert in a narrow iPad window (#1626, #1670); the menu
+    /// is the one item ranked above every other, so Reply, Reply All and
+    /// Forward (Edit Draft in Drafts) stay reachable from it.
     /// No accessibility identifiers: the bar's control owns `reader.reply`.
     @ViewBuilder
     func replyMenuItems(model: MessageDetailViewModel) -> some View {
@@ -369,7 +372,9 @@ extension MessageDetailView {
         Menu {
             if let model {
                 #if os(iOS)
-                if actionPlacement == .topBar {
+                // A second home for Reply wherever the bar may fold it away:
+                // the compact navigation bar, and the short side strip.
+                if actionPlacement == .topBar || actionPlacement == .bottomItems {
                     replyMenuItems(model: model)
                     Divider()
                 }

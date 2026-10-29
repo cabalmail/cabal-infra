@@ -285,6 +285,45 @@ sessions out of known potholes:
   of the same bundle id on the same simulator — keep one designated
   signed-in simulator per runtime and record which.
 
+### The iPhone Duo simulator
+
+The Duo simulator ships with Xcode 27.1 and later. It runs on the iOS
+27.1 runtime, which supports no other device type, and its device type
+is installed machine-wide, so every Xcode from 27.1 on lists it.
+
+- **Headless, it stays closed.** A booted Duo sits in its closed posture,
+  on the outer display (466 x 678 pt, compact width, regular height, its
+  bars in a strip at the side). Neither `simctl` nor SimDrive has a
+  posture command, and `simctl io screenshot` only ever returns the outer
+  display. Everything in this section past the closed display needs the
+  simulator UI.
+- **Folding takes Device Hub.** Xcode 27.1 has no `Simulator.app`; the
+  simulator UI is `Xcode.app/Contents/Applications/DeviceHub.app`. Open it
+  on a booted device with `open -a <that path> --args -CurrentDeviceUDID
+  <udid>`. The posture buttons are the device icons at the right of the
+  canvas's bottom bar: **Closed** (0 degrees), **Book** (130 degrees,
+  the fold active) and **Open** (180 degrees, flat), with a hinge slider
+  for other angles. There is no laptop or tent preset: for laptop pose,
+  rotate the opened device with the bar's rotate control, then press
+  Book. Device Hub has no accessibility tree, so scripted clicks go by
+  screen coordinates. Screenshots and recordings of a freshly booted Duo
+  can be black for a few minutes, and accessibility tools cannot read its
+  content in Device Hub.
+- **The software keyboard is off by default.** With Device > Keyboard >
+  Simulate Hardware Keyboard checked, the software keyboard never
+  appears. Uncheck it to see the keyboard in book or laptop pose, or use
+  ⌥⌘K to toggle it for one field, and check it again afterwards.
+- **What the simulator cannot settle.** Every reading taken in it may
+  differ on hardware. Note as provisional anything that depends on the
+  software keyboard or on a true laptop angle (the Book preset on a
+  rotated device is 130 degrees, not 90), and anything about tent pose,
+  StandBy or Split View halves.
+- **Sizes, measured on Xcode 27.1:** the inner display is 951 x 669 pt
+  (669 x 951 turned upright), regular in both size classes in every
+  orientation. A book or laptop fold is a 40 pt division region around
+  the crease at 475.5 pt, which turns active 0.05 to 0.4 s after the
+  hinge comes to rest and drops out while it moves.
+
 ## Apple Developer account setup
 
 This is the one-time manual setup required to enable CI uploads to
@@ -722,8 +761,9 @@ own CI files, on pushes to `main` and `stage` that do, and on
 | `kit-test` | Every run but a `main` push reported tested | SwiftLint and the platform-conditionals check (macOS leg only), then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) on macOS and iOS, and on visionOS too except on a PR into a branch other than `main` |
 | `app-test` | Same | The `CabalmailMacTests` app-layer suite, hosted by `CabalmailMac` |
 | `ios-app-test` | Same | The `CabalmailiOSTests` app-layer suite, hosted by the iOS app on a simulator |
+| `ios-duo-test` | `stage` pushes, `workflow_dispatch`, and PRs whose branch name contains `duo` | The same suite on an iPhone Duo simulator (closed), the one leg that runs code behind `#available(iOS 27.1, *)`. Advisory: `continue-on-error`, and in neither `apple-gate`'s nor `approval`'s `needs` (see [iPhone Duo](#iphone-duo-the-fold-and-the-side-strip)) |
 | `app-build` | PRs, and `workflow_dispatch` from a branch other than `main` or `stage` | Unsigned `xcodebuild build`: `CabalmailVision` (visionOS) and `CabalmailWatch` (watchOS) on a PR, where the two test suites already build the iOS and Mac apps; all four schemes, adding `Cabalmail` (iOS) and `CabalmailMac` (macOS), from another branch. Skipped on `main` and `stage` runs, whose upload archives are the device builds |
-| `apple-gate` | Every run | The one check that sums up the test and build jobs above |
+| `apple-gate` | Every run | The one check that sums up the test and build jobs above, `ios-duo-test` aside |
 | `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass, or straight after `promotion-verdict` on a `main` push it reports tested |
 | `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
@@ -824,8 +864,8 @@ Apple's rules forbid combining `com.apple.developer.mail-client` with
 
 Once the entitlement lands and the user picks Cabalmail in Settings,
 `mailto:` clicks in Safari and other apps open Cabalmail with a
-compose window pre-filled from the URL's recipients, subject, and
-body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
+composer (a sheet on iOS, a window on the Mac) pre-filled from the URL's
+recipients, subject, and body. Only the standard RFC 6068 hfields (`to`, `cc`, `bcc`,
 `subject`, `body`) are honored; other headers are dropped.
 
 ### Default-app request: cover-letter template
@@ -1065,7 +1105,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, list place, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included, and where that list is scrolled, as a `ListAnchor`: its top row by Message-ID, UID and position), its `StoredRoute` (the route its scene storage keeps, and where its folder list was scrolled, for the account they were stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, which also keeps where the last-used window's folder list was scrolled, on this device only, reading positions and the cross-device cursor); `DeepLinkRouter` (a notification, a Spotlight result or Siri's Open Folder opens in one main window: the system's target, else the window last used) with the `WindowRegistry` it finds windows in, and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
 | `Shell/` | How a window is laid out. The sign-in / signed-in router resolves the window's `ShellLayout` and draws one of four layout shells: `DesktopShell` (the Mac window), `SplitShell` (the iPad split, and iPhone Duo unfolded), `TabShell` (the iPhone tab bar, a narrowed iPad window and Duo folded) and `OrnamentShell` (the Vision Pro tabs). `WideMail` is what the two wide shells share, `CompactTab` is the tab list as data, and `CompactMailStack` is the phone's Mail tab. Also here: the layout and column policies, the split's Settings sheet presenter, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
-| `Shell/Columns/` | What the mail columns show on every layout, with no platform conditionals (`MailSidebarColumn`, `MailContentColumn`, `MailReaderColumn`, `FeedReaderColumn`); column and inspector widths, the column resize handle, the macOS split-view autosave workaround |
+| `Shell/Columns/` | What the mail columns show on every layout, with no platform conditionals (`MailSidebarColumn`, `MailContentColumn`, `MailReaderColumn`, `FeedReaderColumn`); column and inspector widths, the pinned list column's width and fold rules (`ListColumnPolicy`, `ListColumnState`, `ListColumnTab`), the column resize handle, the macOS split-view autosave workaround |
 | `Mail/` | Mail pieces used by more than one mail column: drag and drop, Move to Folder, the sender avatar, the authentication line |
 | `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts: the unread ones are the sidebar badges and a message list's Unread pill, the flagged ones its Flagged pill; and the Inbox count behind the app badge), `MessageShields` (the one record of writes in flight and removals just confirmed, which every list's merge and every writer of a fetched STATUS asks, so a refresh can't undo a write made anywhere or count it twice), `MailEvents` (every change to mail, delivered at once and in order to every message list's and reader's view model but the one that made it, naming the window that started it when a reader did, and saying whether another list's selection may move on), and `MailMutationService` (the one place the app's writes go through: every flag change, move, dispose and purge from a list, the reader or the composer is recorded, posted and counted before it goes out, made through the writer's client, then confirmed, forgetting a removed message in the offline caches, or taken back; Mark All as Read and Empty Trash go through it too, acting once the server answers; a notification's actions are the exception, #1973); and `FolderPollers` (the change watching of the folders open in message lists: one `FolderPoller` per folder, made by the first list showing it and stopped with the last or at sign-out, whose watcher events and 60-second tick each ask one STATUS that every list on the folder takes); also saved folder counts |
 | `Mail/Folders/` | The folder sidebar and its view model, filters, rows, New Folder |
@@ -1074,8 +1114,8 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Mail/Search/` | `MailSearchSession`, a list's search (query, filters, results and their paging), the search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
 | `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
 | `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
-| `Compose/` | `ComposeView`, `ComposeViewModel`, the From picker, drafts and the failed-send banner |
-| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene), and on iPad each main window's scene session, so closing a composer returns to the main window it came from and a notification finds the window it was shown over |
+| `Compose/` | `ComposeView`, `ComposeViewModel` (with its autosave loops, `ComposeAutosaveLoops`, and what it starts from, `ComposeSnapshot`), the From picker, drafts, the failed-send banner, and what a closed composer reports (`ComposeOutcomeReport`) |
+| `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene; and the move from a sheet to a window, `ComposeWindowMove` and its hand-off table, `ComposeHandoffs`), and on iPad each main window's scene session, so a notification finds the window it was shown over and a compose window iPadOS restores lands on a main window (the one last used) when it closes |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Admin/` | Administrator screens, listed in Settings only when the session's token names the `admin` group (`SessionManager.isAdmin`): the Users list, each account's page (confirm, enable or disable, delete, domain access) and `UsersViewModel`. The server refuses every admin call to anyone else; a 403 shows as "Administrators only" |
@@ -1142,6 +1182,212 @@ The script is standard-library Python and runs anywhere
 ```sh
 python3 scripts/check-platform-conditionals.py
 ```
+
+### iPhone Duo: the fold and the side strip
+
+Nothing in the app asks whether it runs on an iPhone Duo. Layout follows
+the window's size classes, its shape (wider or taller than it is wide)
+and the active fold region, never the device, its idiom, or a pose name.
+Closing and opening a Duo is a size-class change, so it swaps
+`TabShell` and `SplitShell` like any narrowing or widening
+(`SectionLayoutPolicy`). Book and laptop pose draw the same window as
+the device lying flat; only the fold region differs.
+
+The design is the maintainer's Duo spec (a private Claude Doc, "Cabalmail
+on iPhone Duo: Poses and Transitions"); the work plan that follows it,
+with the spec's rules and what has landed, is
+[`docs/1.x/post-wave-3/duo-support.md`](1.x/post-wave-3/duo-support.md).
+Its rules for the app's own controls: none above a laptop fold or within
+44 pt of a book crease (measured from the crease line, the middle of the
+40 pt division band); floating elements (toasts, banners) in the piece
+of the window that belongs to the column that raised them; and no
+animation of Cabalmail's own on a close, open or fold, except the column
+divider's.
+
+**Where Duo API code may live.** Every iPhone Duo API (reserved
+regions, the hinge, the vertical bar edge) is iOS 27.1. The deployment
+target is iOS 18, and the compiler cannot tell the 27.0 SDK from 27.1
+(both are Swift 6.4), so each use sits behind the SwiftUICore module
+version as well as availability:
+
+```swift
+#if os(iOS) && canImport(SwiftUICore, _version: 8.0.85)
+if #available(iOS 27.1, *) { ... }
+#endif
+```
+
+That is an `os(` conditional, so it may only appear in `Shell/` and
+`Platform/` (see "Platform conditionals"). An API that is iOS 27.0 rather
+than 27.1, such as `presentationPlacement(_:)`, swaps only the
+module-version test for the compiler's: `#if os(iOS) && compiler(>=6.4)`
+with `#available(iOS 27.0, *)`, in the same places. Keep the `os(iOS)`:
+the SDK marks these APIs `anyAppleOS 27.0`, so without it the macOS 15
+and visionOS 2 builds of the same module fail on the call. A call meant
+for more than one platform names each in `#available`, as
+`Shared/Chrome/ToolbarVisibility.swift` does.
+
+**The tripwire.** `FoldAPI.isCompiled` is true only when the guard
+compiled, and `FoldAPICompiledTests` in the iOS-hosted suite asserts it.
+An Xcode without the iOS 27.1 SDK would compile every Duo change out
+without a word and run the app boxed in on both displays; the required
+`ios-app-test` leg fails first. The advisory `ios-duo-test` leg runs the
+same suite on a closed Duo simulator, the only place the code behind
+`#available(iOS 27.1, *)` actually runs in CI. Neither leg can fold.
+
+**The fold: `Platform/FoldGeometry.swift`.** `foldGeometry()`, applied
+once at `SignedInRootView`, publishes `\.foldState`: `.none`, or a
+`.vertical` (book) or `.horizontal` (laptop) crease in the window's own
+coordinates. On the way:
+
+- The active `.division` regions are read on every layout pass from a
+  clear reader behind the root that ignores every safe area. The root
+  itself shrinks above the keyboard, which in laptop pose fills the
+  bottom half from the crease, and the query returns only regions that
+  overlap the view it is asked of.
+- A reading counts only once a confirming pass 50 ms later still reads
+  it (`FoldSettler`), because the first frame after a change can be
+  stale.
+- `FoldHold` holds a fold while the hinge moves, since the region drops
+  out during any motion. A fold whose region has dropped out ends on a
+  fully open hinge, after 0.6 s at rest, when the window changes size, or
+  when the hinge reading goes away. The region always wins: hinge data
+  never enters a fold or ends one the region still backs. The hinge is
+  read only while a fold is held; that and the hold are the app's only
+  uses of it.
+- `onFoldPiecesChange(_:)` hands a view its bounds less the crease
+  (`FoldPieces`), for placing floating elements, and waits while the
+  root's own reading is settling (`\.foldIsSettling`) so a rotation
+  never pairs a view's new frame with the old crease. The status banners
+  place themselves with it (`StatusBannerOverlay`): in book pose in the
+  half of the column that raised them (`Toast.Origin`), the reader's for
+  the window's own; in laptop pose, anything tappable below the crease.
+- `\.foldDivision` is the division region whether or not it is active:
+  flat, the inner display reports the same 40 pt band book pose does,
+  inactive. `DivisionHold` keeps it while the window keeps its size and
+  drops it on a close, an open or a rotation. It is never a fold; read it
+  only for a default that must not move when the device folds.
+
+**The list column: `Shell/Columns/ListColumnPolicy.swift`.** `SplitShell`
+pins the message list to an explicit width, which UIKit honours in book
+pose as well (measured: it does not snap to the fold). In book pose the
+list ends at the crease band's leading edge, the point the system's own
+split snaps to, wherever its range can seat that width, and the drag
+handle hides; where it cannot (the addresses inspector open beside the
+split leaves a 567 pt split), the list keeps its own width and the reader
+crosses the crease until Decision 10 settles the inspector. Lying flat with no width of its
+own, the list ends at the same edge of the inactive band, so folding moves
+nothing; unfolding goes back to the user's width in one animation, none
+with Reduce Motion. The range is 320 pt in a split wider than tall and
+300 pt in a taller one, up to the split less the reader's 360 pt floor and
+`ListColumnWidth`'s 16 pt slack: 320 to 491 pt in the Duo's 867 pt split,
+which leaves the 84 pt side strip out. The floor follows the ceiling down
+in a narrow split, and the handle shows only where the list can move and
+no fold is active. A drag starts only on the 22 by 44 pt grip, moves the
+list as it goes and is recorded when it ends; a cancelled drag records
+nothing, and a double tap on the grip or Reset in its long-press menu
+clears the width. Widths are per window and per list, in scene storage
+(`cabalmail.window.listColumnWidth.<list>`). The pure rules are tested on
+the Mac host, and the one view tree's splits are meant to reuse them,
+passing the width of any column tiled before the list.
+
+The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
+tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
+starting values to tune on hardware.
+
+**The side strip: `Platform/VerticalBars.swift`.** On the Duo's outer
+display, and on its inner display in a window wider than tall, the
+system puts the navigation bar, toolbar and tab bar in one vertical strip
+at one side. `verticalBars()`, applied after `foldGeometry()` at the root of
+each main window (`SignedInRootView`) and compose window
+(`ComposeWindowScene`), publishes the system's own reading
+(`toolbarVerticalEdge`) as `\.barsAreVertical` and `\.verticalBarEdge`.
+Read the edge, never assume the right: the strip moves with the window
+(in landscape it can be on the left). While the bars are vertical the
+phone's Search tab takes no search role
+(`CompactTab.role(in:barsAreVertical:)`), because the strip can hand that
+role's button to the selected tab's own search field (#1963); it is an
+ordinary tab there, and opens the Search screen with its field at the top.
+
+**The reader's actions in the strip.** While the bars are vertical the mail
+reader's actions are five separate system bottom-bar items
+(`ReaderToolbarPolicy.Placement.bottomItems`): Reply or Edit Draft, Read,
+Flag, the dispose action and More, ranked so the strip folds Read and Flag
+into its overflow before Reply, dispose and More. The strip draws them near
+the thumb and the tabs, on the closed display and in the open display's wide
+window alike. The message, the feed article and compose ask a short strip to
+give up tabs before their own actions (`stripGivesUpTabsFirst()`, the iOS
+27.1 `toolbarVerticalCompressionBehavior`); lists keep the tabs. A laptop fold
+changes nothing: its window is tall, so its bars are horizontal, and a system
+bottom bar there would span the window, under the list too, so the reader's
+own pane bar stays below the crease. Whether an HTML body runs under the
+bottom chrome follows the width alone (`bodyRunsUnderBottomBar`), since
+flipping it rebuilds the web view and the strip comes and goes without a
+shell swap.
+
+**Compose in the strip.** A strip takes only items with a symbol; an item
+with a title alone stays in a horizontal bar above the content. So while the
+window's bars are vertical, compose's Cancel and Send carry symbols
+(`ComposeBarLabel`) and sit in the sheet's strip, Send ranked last to go
+(#2259); everywhere else they keep their titles. The label reads the
+window's `\.barsAreVertical` (published at the root of a main window and of
+a compose window), not the sheet's own `toolbarVerticalEdge`: a label that
+followed the sheet's edge saw it go from trailing to nil, and Cancel and Send
+dropped out of the bar. Send keeps its symbol while sending, pulsing,
+since a spinner in its place drops it from the strip. On iOS 27.1 a sheet
+presented with its strip allowed lays the strip out under the status bar
+and scrolls title-only items away with the form until the window next
+changes size; a plain SwiftUI app does the same. Compose holds its bars
+horizontal until it has appeared (`verticalBarsOnceShown()`), which lays
+the strip out as a size change does. Remove that once a release fixes it.
+
+**Crease margins: `Shell/Columns/CreaseClearance.swift`.** In book pose
+the keep-out is the crease line plus and minus 44 pt: 431.5 to 519.5 on
+the Duo's 951 pt inner display, where the list column ends at the band's
+leading edge (455.5) and the reader starts there. `SplitShell` keeps both
+columns out of it, from the live `\.foldState`, with modifiers that are
+always present and only change their value, so a fold never rebuilds the
+reader's web view:
+
+- The list column takes a trailing safe area of 24 pt
+  (`CreaseClearance.trailingClearance`), so its search field, the folder
+  and feed filter bars' controls and its rows' content stop at 431.5. The
+  bars' backgrounds still reach the column edge, and so does a row's
+  trailing swipe, whose buttons open from the cell's own edge.
+- Its bar's trailing items (Mail's Compose, More and `@`; Feeds' Compose,
+  Refresh, Mark All as Read and Feed Settings) move to the leading end
+  beside Folders. `SplitShell` publishes `\.listBarItemsLead` on the list
+  column, and each item asks `ToolbarItemPlacement.listBar(_:leads:)`
+  (`Platform/ListBarPlacement.swift`), which answers `.topBarLeading`
+  while it leads and the item's own placement otherwise; the ranks that
+  keep Compose and `@` in a narrow bar are unchanged.
+- The reader column's content starts 64 pt in
+  (`CreaseClearance.leadingInset`), past 519.5: the message header, its
+  body and the feed article alike. Its system bar is not inset: a feed
+  article's inline title starts inside the keep-out. The mail reader
+  shows no title there.
+- Every confirmation dialog in the shared app layer goes through
+  `confirmationPrompt` (`Platform/ConfirmationPrompt.swift`), which takes
+  SwiftUI's `confirmationDialog` arguments and presents an alert instead
+  while a fold runs top to bottom through the window
+  (`ConfirmationDialogPolicy.presentsAsAlert`). The popover lands on the
+  crease; the system centres the alert on the leading page. A question
+  keeps the style it opened with if the device folds or opens while it
+  is up. Its actions are the dialog's own, so the back-out button keeps
+  `ConfirmationDialogPolicy.backOutRole`, which is no role on iOS: the
+  alert draws it, but a hardware keyboard's Escape does not press it.
+  SwiftUI runs an alert's or a dialog's action before it dismisses, so
+  actions that read the pending item still find it.
+  `ConfirmationPromptTests` fails a direct `confirmationDialog` anywhere
+  in `CabalmailUI/`.
+- The compose sheet takes the trailing page, starting 8 pt past the crease
+  line, so its form starts past the keep-out (`startsPastCrease()`,
+  `Shell/Columns/CreaseLeadingInset.swift`, from its own place in the
+  window); its Cancel and Send are in the strip at the outer edge (#2262).
+
+With the addresses inspector open the list ends short of the crease and
+the reader runs across it, so neither column is inset (Decision 10 in the
+plan). Laptop pose, a flat or closed Duo and every other device have no
+vertical fold, and every rule answers zero or false.
 
 ### Extension-shared values: the `CabalmailShared` module
 
@@ -1491,6 +1737,12 @@ best-effort expunges the Drafts copy once delivery succeeds.
   `docs/README.md`'s primary-action framing). Attachments land via
   `PhotosPicker` (images) and `fileImporter` (arbitrary documents);
   mime-type derived from `UTType` for file imports.
+- `CabalmailUI/Compose/ComposeSnapshot.swift` is what a
+  `ComposeViewModel` starts from: a seed's fields
+  (`init(seed:preferences:)`, the one place the signature preference is
+  added), or a live composer's whole state when Open in New Window moves
+  it to a window (`capture(from:)`), so a moved draft is neither signed
+  again nor has its rich pane rendered again from the Markdown.
 - `CabalmailUI/Addresses/NewAddressSheet.swift` mirrors the React app's
   `Addresses/Request.jsx` — username / subdomain / domain / optional
   comment, with a **Random** button that seeds alphanumerics so the
@@ -1654,8 +1906,11 @@ Menu commands need to reach the view that owns the action, but
 and published with `focusedSceneValue`. A menu reads the front main
 window's object with `@FocusedValue(\.windowCommands)`; with a compose
 or Settings window in front, or none open, it reads nil and the Message,
-Mailbox and Feeds menus and iPadOS ⌘, dim. New Message stays live: it
-opens the compose scene itself (#1162).
+Mailbox and Feeds menus and iPadOS ⌘, dim. A main window with its
+compose sheet up publishes nil too (`SceneNavigator.composeLock`), so on
+iPad the menus dim over a reply as they did with a compose window in
+front. On the Mac, New Message stays live: it opens the compose scene
+itself (#1162).
 
 A menu, or a window's own button (the Mac toolbar's Refresh, the iPad
 Settings gear), sends a `WindowCommand`, which bumps its own count; a
@@ -1685,7 +1940,16 @@ Reply and Forward, and a mailto: link, go to `AppState.compose`
 (`ComposeCoordinator`) with the main window they are for
 (`MainWindowCommandScope`'s window identity; for a link, the window last
 in front). That window's compose surface (`ComposeRequestRouter`) shows
-the seed, as a compose window or, on a single-window host, a sheet. A
+the seed: a sheet over the window on iOS, iPad and iPhone Duo included,
+and a compose window on the Mac and visionOS (`ComposeSurfacePolicy`).
+In a wide window that is regular in both size classes the sheet sits on
+the trailing side (`sheetPlacement(trailing:)`, iOS 27's
+`presentationPlacement`); in book pose the system moves it to the
+trailing page. It cannot be swiped away, so Cancel and its
+keep-or-discard question are the way out. While it is up nothing acts on
+the message behind it (`SceneNavigator.composeLock`): the menus read no
+window, the reader's hidden chords and the ⌘⌫ host go, and a deep link
+waits for the sheet to close. A
 request that names no window, or one whose window has no compose surface
 (none is recorded as last in front, or it has closed), goes to the window
 opened last. A seed nothing can show yet waits its turn: behind its
@@ -1694,6 +1958,63 @@ first window that can. No request reaches two windows. Data-change reloads (Mark
 actions) are not commands: they bump the mail store's `listRefreshTick`,
 which every list observes (#1824). A drag names the list it lifted from,
 and only that list performs a sidebar drop.
+
+Where a second window can open beside the first, an iPad or an open
+iPhone Duo at regular width, the sheet offers Open in New Window
+(`ComposeSurfacePolicy.offersNewWindow`, read on every pass, so Slide
+Over, a narrow window or a closed Duo hides it), once its composer has
+started: a tap before the rich pane is seeded would hand over a pane
+without the reply's quote. It moves the draft to a compose window of its
+own (`ComposeWindowMove`), window first and sheet last: the window is
+asked for in the tap's own turn, before anything awaits, and the draft
+follows it. The sheet hands over a snapshot of its composer
+(`ComposeSnapshot`) rather than the composer itself, since one
+`WKWebView` cannot sit in two scenes: the same draft ID, server copy and
+replace chain, intent, attachments, threading and both panes, the rich
+one read through the checked bridge. Only the undo history, the caret
+and selection, the scroll offset and a photo still loading stay behind.
+From the tap the sheet is frozen, refuses Send, Cancel and Discard, and
+pauses its autosaves; then it flushes its local copy and reads its
+composer inside the server draft queue's close, so a save already in
+flight lands first and the window replaces the copy it landed. Until the
+snapshot comes the window shows only a frozen placeholder ("Opening in a
+new window…"), since a composer built sooner would start from nothing.
+Then it builds its composer from the snapshot, frozen the same way until
+it has loaded the rich text into its own editor and claimed the draft
+(`ComposeHandoffs`), which it does only once it is in front; then it
+starts saving. Each composer built for the draft holds a claim of its
+own: SwiftUI keeps a closed compose window mounted, and one rebuilt for
+the recycled slot composes the draft too, behind the new window and on
+its slot, so it neither claims, nor declines, nor closes. On the claim
+the sheet closes and the window's lock releases at once, and nothing a
+closing composer does runs: no cancel, discard or removal of the local
+copy, and no Drafts event. `openWindow` reports no failure on iOS, so a
+window that has not built its composer within ten seconds of the tap, or
+has not claimed the draft within thirty seconds of building it, counts
+as refused, as does a draft the sheet could not read. The second
+deadline is long because a new window's WebKit content process can take
+a while to answer (about ten seconds, measured on the iPadOS 27.0
+simulator), and the moved composer's editor waits as long for its
+bridge. On a refusal the sheet
+carries on as it was, says the window didn't open, and stops offering
+the action; the window that opened for it finds the hand-off withdrawn
+and, once it is in front, closes without saving. Closing the window
+returns to the main window the sheet was over. A closed compose window
+is only off screen: iPhone Duo keeps listing it in the window switcher
+and the "Views Open" pill, and iOS refuses an app's request to destroy
+its scene session there ("not supported for this device idiom"); iPad
+keeps the scene connected too (#1084). So once a closed window has left
+the screen, or if it closed while out of view, its composer goes
+(`ComposeSlotRegistry.mayCompose`), and one brought back to the front
+steps straight back out to the mail window (`ClosedComposeWindow`,
+#2257). That state lives in the running app: after a relaunch, the
+system's restored compose windows come back with empty composers, and an
+older closed window rebuilt behind a newer one on a recycled slot keeps
+its frozen copy of the newer draft. A mailto: link that
+reaches a compose window with a slot opens a composer of its own from
+that window's main window, rather than replacing the draft, and with no
+main window open, signed in, in a compose window of its own
+(`ComposeCoordinator.openLink`).
 
 A link from outside a window uses the same identity. A tapped
 notification, a Spotlight result and Siri's Open Folder each go to

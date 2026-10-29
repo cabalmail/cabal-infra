@@ -118,31 +118,6 @@ final class ComposeSlotRegistryTests: XCTestCase {
         XCTAssertEqual(registry.seed(for: slot)?.subject, "closing")
     }
 
-    // MARK: - mailto: reseeding
-
-    func testReseedReplacesTheSeedOfAnOpenSlot() {
-        let registry = ComposeSlotRegistry()
-
-        let slot = registry.acquire(seed: Draft())
-        registry.reseed(slot, with: Draft(to: ["someone@example.com"]))
-
-        XCTAssertEqual(registry.seed(for: slot)?.to, ["someone@example.com"])
-        XCTAssertEqual(registry.openCount, 1)
-    }
-
-    func testReseedOccupiesASlotTheProcessNeverHandedOut() {
-        // Should a link land in a window restored with its slot (macOS
-        // restores none), this process never handed that slot out;
-        // reseeding must not leave it free for a second composer to claim
-        // underneath the window.
-        let registry = ComposeSlotRegistry()
-
-        registry.reseed(ComposeSlot(index: 0), with: Draft(subject: "mailto"))
-
-        XCTAssertEqual(registry.openCount, 1)
-        XCTAssertEqual(registry.acquire(seed: Draft()).index, 1)
-    }
-
     // MARK: - Restored scenes
 
     func testUnknownSlotHasNoSeed() {
@@ -218,6 +193,31 @@ final class ComposeSlotRegistryTests: XCTestCase {
         let reply = Draft(subject: "Re: closing")
 
         XCTAssertTrue(registry.mayCompose(reply, closedOn: registry.closedCompose(for: reply)))
+    }
+
+    func testAClosedWindowStopsComposingOnceItHasLeftTheScreen() {
+        // The system still lists a closed window; picked there, it must not
+        // come back holding the draft it sent or discarded (#2257).
+        let registry = ComposeSlotRegistry()
+        let reply = Draft(subject: "Re: discarded")
+        var closed = registry.closedCompose(for: reply)
+
+        closed.hasLeftScreen = true
+
+        XCTAssertFalse(registry.mayCompose(reply, closedOn: closed))
+    }
+
+    func testAWindowThatLeftTheScreenComposesWhenItsSlotIsHandedOut() throws {
+        let registry = ComposeSlotRegistry()
+        let slot = registry.acquire(seed: Draft(subject: "Re: sent"))
+        var closed = registry.closedCompose(for: try XCTUnwrap(registry.seed(for: slot)))
+        closed.hasLeftScreen = true
+        registry.release(slot)
+
+        let reused = registry.acquire(seed: Draft(subject: "Re: next"))
+
+        XCTAssertEqual(reused, slot)
+        XCTAssertTrue(registry.mayCompose(try XCTUnwrap(registry.seed(for: reused)), closedOn: closed))
     }
 
     func testAClosedWindowComposesAgainWhenItsSlotIsHandedOut() throws {

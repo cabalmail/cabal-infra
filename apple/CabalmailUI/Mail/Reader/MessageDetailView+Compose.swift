@@ -55,7 +55,7 @@ extension MessageDetailView {
             )
         }
         if loaded.count < source.count {
-            appState.showToast(Toast(
+            showToast(Toast(
                 kind: .warning,
                 message: "Some attachments couldn't be carried into the forward."
             ))
@@ -76,8 +76,8 @@ extension MessageDetailView {
     }
 
     /// Routes to this window's compose surface (`ComposeRequestRouter` on
-    /// `SignedInRootView`): a compose window on macOS / iPadOS / visionOS,
-    /// the root-hosted sheet on iPhone. Root-hosted rather than view-local
+    /// `SignedInRootView`): a compose window on macOS and visionOS, the
+    /// root-hosted sheet on iOS. Root-hosted rather than view-local
     /// so a mailto: arriving mid-reply and this reply flow never race two
     /// sheet presentations against each other.
     func presentCompose(seed: Draft, attachments: [Attachment] = []) {

@@ -17,14 +17,17 @@ import SwiftUI
 /// `ReaderToolbarLayout.macControlShape` — a chevron segment costs real
 /// points, so a plain-button stand-in for the Reply menu or the dispose,
 /// read and Flag split buttons is narrower than what replaces it, and every
-/// slot after it slides sideways when a message opens (#2016).
+/// slot after it slides sideways when a message opens (#2016). A split
+/// button's stand-in also carries as many menu rows as its twin's menu
+/// (`ReaderToolbarLayout.macStandInMenuRows`), which decides whether it
+/// draws in a glass capsule of its own or shares its neighbours'.
 struct EmptyDetailToolbar: ToolbarContent {
-    /// Whether the flag control will draw its palette menu, which decides
-    /// whether its live twin is a split button or the plain button it is
-    /// with an empty palette (`flagButton`). Read from `Preferences` by the
-    /// shell that installs these stand-ins — a `ToolbarContent` has no
-    /// reader model to ask.
-    let flagMenuHasRows: Bool
+    /// How many rows the flag control's palette menu will offer. Zero
+    /// makes its live twin the plain button it is with an empty palette
+    /// (`flagButton`), any more a split button with that many rows. Read
+    /// from `Preferences` by the shell that installs these stand-ins — a
+    /// `ToolbarContent` has no reader model to ask.
+    let flagMenuRowCount: Int
 
     private let actions = ReaderToolbarLayout.macToolbar(leading: .reply)
 
@@ -60,7 +63,11 @@ struct EmptyDetailToolbar: ToolbarContent {
             symbol: action.quiescentSymbol,
             shape: ReaderToolbarLayout.macControlShape(
                 for: action,
-                flagMenuHasRows: flagMenuHasRows
+                flagMenuHasRows: flagMenuRowCount > 0
+            ),
+            menuRows: ReaderToolbarLayout.macStandInMenuRows(
+                for: action,
+                flagMenuRowCount: flagMenuRowCount
             )
         )
     }
@@ -74,14 +81,19 @@ struct EmptyDetailToolbar: ToolbarContent {
 /// platform-conditional ratchet may not grow a row
 /// (`scripts/check-platform-conditionals.py`).
 ///
-/// The menu shapes carry a single inert row rather than no rows at all:
-/// AppKit draws a `Menu` with an empty content block as a plain button,
-/// which is the very footprint these stand-ins exist to avoid. Nothing can
-/// open them — the whole control is disabled — so the row is never seen.
+/// The menu shapes carry inert rows rather than no rows at all: AppKit
+/// draws a `Menu` with an empty content block as a plain button, which is
+/// the very footprint these stand-ins exist to avoid. How many is
+/// `menuRows`, because a split button's row count decides whether liquid
+/// glass gives it a capsule of its own (see
+/// `ReaderToolbarLayout.macStandInMenuRows`). Nothing can open them — the
+/// whole control is disabled — so the rows are never seen.
 struct ToolbarStandIn: View {
     let title: String
     let symbol: String
     let shape: ReaderToolbarControlShape
+    /// Inert rows in a menu shape's menu; a plain button ignores it.
+    var menuRows = 1
 
     var body: some View {
         switch shape {
@@ -89,10 +101,10 @@ struct ToolbarStandIn: View {
             Button {} label: { face }
                 .disabled(true)
         case .menu:
-            Menu { placeholderRow } label: { face }
+            Menu { placeholderRows } label: { face }
                 .disabled(true)
         case .splitButton:
-            Menu { placeholderRow } label: { face } primaryAction: {}
+            Menu { placeholderRows } label: { face } primaryAction: {}
                 .menuIndicator(.visible)
                 .disabled(true)
         }
@@ -102,8 +114,10 @@ struct ToolbarStandIn: View {
         Label(title, systemImage: symbol)
     }
 
-    private var placeholderRow: some View {
-        Button {} label: { face }
+    private var placeholderRows: some View {
+        ForEach(0..<max(menuRows, 1), id: \.self) { _ in
+            Button {} label: { face }
+        }
     }
 }
 #endif

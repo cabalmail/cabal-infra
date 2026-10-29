@@ -1,4 +1,5 @@
 import Foundation
+import CabalmailKit
 
 /// One control in the reader's action set, identified by the accessibility
 /// identifier its button carries.
@@ -143,14 +144,54 @@ enum ReaderToolbarLayout {
         }
     }
 
+    /// How many inert rows `EmptyDetailToolbar`'s stand-in for an action
+    /// carries in its menu: for a split button, as many as its live twin's
+    /// menu holds with no message open, because under liquid glass
+    /// (measured on macOS 27) the row count decides where the control is
+    /// drawn. A split button whose menu holds two or more rows gets a glass
+    /// capsule of its own; one with a single row shares its neighbours'
+    /// capsule. Single-row stand-ins merged into one capsule with every slot
+    /// after them, a capsule's edge padding is worth real points, and the
+    /// slots after the read control moved 17pt when a message opened.
+    /// Pull-down menus (Reply) draw alone whatever they hold, so they keep
+    /// the one row a `Menu` needs to draw as a menu at all; plain buttons
+    /// carry no menu.
+    static func macStandInMenuRows(
+        for action: ReaderToolbarAction,
+        flagMenuRowCount: Int
+    ) -> Int {
+        switch action {
+        case .dispose:
+            // Which pair is selected checks a row; it doesn't change how many
+            // there are.
+            return ReaderOptionMenuPolicy.disposeRows(
+                verbs: DisposeAction.allCases.map { (action: $0, verb: "") },
+                selectedAction: .archive,
+                selectedAdvance: .next
+            ).count
+        case .toggleRead:
+            return ReaderOptionMenuPolicy.seenRows(advance: .stay, isSeen: false).count
+        case .toggleFlag:
+            return max(flagMenuRowCount, 1)
+        case .reply, .overflow, .editDraft, .remoteContent, .readerMode, .move,
+             .plainText, .viewSource, .viewHeaders, .printMessage:
+            return 1
+        }
+    }
+
     /// Where the reader's touch action set lives (`ReaderToolbarPolicy`).
     typealias Placement = ReaderToolbarPolicy.Placement
 
     /// Which bar carries the mail reader's touch action set:
     /// `ReaderToolbarPolicy.placement(for: .mail, ...)`, which explains the
     /// choice.
-    static func placement(isRegularWidth: Bool, isOS27OrLater: Bool) -> Placement {
-        ReaderToolbarPolicy.placement(for: .mail, isRegularWidth: isRegularWidth, isOS27OrLater: isOS27OrLater)
+    static func placement(isRegularWidth: Bool, isOS27OrLater: Bool, barsAreVertical: Bool = false) -> Placement {
+        ReaderToolbarPolicy.placement(
+            for: .mail,
+            isRegularWidth: isRegularWidth,
+            isOS27OrLater: isOS27OrLater,
+            barsAreVertical: barsAreVertical
+        )
     }
 
     /// Compact navigation-bar items, in drawn order. The view draws each as
@@ -168,7 +209,8 @@ enum ReaderToolbarLayout {
         ]
     }
 
-    /// Bottom-bar items (the regular-width `.bottomBar` group), in drawn
+    /// Bottom-bar items (the regular-width `.bottomBar` group, and the
+    /// `.bottomItems` set the side strip draws item by item), in drawn
     /// order.
     static func bottomBar(leading: LeadingReaderAction) -> [ReaderToolbarAction] {
         [

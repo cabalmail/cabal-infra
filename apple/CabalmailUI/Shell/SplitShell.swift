@@ -16,8 +16,10 @@ import CabalmailKit
 ///   out-arbitrated the row's leading swipe; and UIKit's `.overlay` split
 ///   behavior still composes the sidebar BESIDE the supplementary column, so
 ///   it, too, would shove the list rightward.)
-/// - The list column is pinned to a persisted width with a drag handle on
-///   its trailing edge, and the reader declares its floor to UIKit (#1679).
+/// - The list column is pinned to this window's width for the list it
+///   shows, or to the fold while a vertical one crosses the window, with a
+///   drag handle on its trailing edge (`ListColumnPolicy`), and the reader
+///   declares its floor to UIKit (#1679).
 /// - The global search field sits in a header row inside the list column:
 ///   the column's own navigation bar has no room for it
 ///   (`GlobalSearchFieldPlacement`).
@@ -45,13 +47,22 @@ struct SplitShell: View {
     /// Whether the split view was first laid out too narrow to tile, and so
     /// has to be built again at the window's real width (#1988).
     @State private var retile = SplitRetilePolicy()
-    /// Persisted width of the message-list (content) column.
+    /// This window's list width for each list the column shows, in points
+    /// (0 is none), written only when a drag on the handle ends or a reset
+    /// clears it (`ListColumnPolicy`, `ListColumnTab`).
     /// `NavigationSplitView` doesn't report where a user drags the native
     /// list-reader divider, so the column is pinned to this width and a
-    /// `ColumnResizeHandle` on its trailing edge drives it — letting the
-    /// chosen split survive cold launches. Stored as `Double` because
-    /// `@AppStorage` has no `CGFloat` overload.
-    @AppStorage("cabalmail.layout.listColumnWidth") private var listColumnWidthStored: Double = 360
+    /// `ColumnResizeHandle` on its trailing edge drives it.
+    @SceneStorage(ListColumnTab.mail.sceneStorageKey) private var mailListWidth: Double = 0
+    @SceneStorage(ListColumnTab.feeds.sceneStorageKey) private var feedsListWidth: Double = 0
+    /// The drag in progress and the fold the list column has applied.
+    @State private var columnState = ListColumnState()
+    /// The split view's frame in the window, measured on the split itself,
+    /// as `splitWidth` is.
+    @State private var splitFrame: CGRect = .zero
+    @Environment(\.foldState) private var foldState
+    @Environment(\.foldDivision) private var foldDivision
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var mail: WideMail {
         WideMail(
@@ -92,11 +103,16 @@ struct SplitShell: View {
             // reader the width of the whole window: on iPhone Duo's 951 pt
             // inner display a list wider than 410 pt did that, so the
             // crease-pinned 50/50 split could never tile (#1679). The floor
-            // is the one `listColumnBounds` already keeps for the reader —
+            // is the one `ListColumnPolicy.bounds` already keeps for the reader —
             // and, in a split too narrow to seat that beside the pinned list,
             // what the split has left instead, because the two declared
             // together would over-subscribe it (#2106).
+            //
+            // In book pose the reader starts its content past the crease's
+            // keep-out (`CreaseClearance`). Always present, at 0 with no fold,
+            // so a fold reflows the web view and never rebuilds it.
             mail.reader(mailPlaceholder: EmptyModifier(), feedPlaceholder: EmptyModifier())
+                .padding(.leading, readerCreaseInset)
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
         }
         // Revealing folders floats a panel OVER the message list rather than
@@ -109,6 +125,29 @@ struct SplitShell: View {
         .overlay(alignment: .leading) {
             folderPanelOverlay
         }
+        // The split's own frame in the window, for the list column's width
+        // and its place against the crease (`ListColumnPolicy`). Inside the
+        // addresses inspector, at the depth `splitWidth` is measured, so it
+        // leaves a tiled inspector out as that does. Read behind the split
+        // with the keyboard's region ignored, so the docked keyboard coming
+        // up for the search field cannot shorten it and change which floor
+        // the column takes.
+        .background {
+            Color.clear
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { frame in
+                    splitFrame = frame
+                }
+                .ignoresSafeArea(.keyboard)
+        }
+        // The fold the list column follows: pinned in book pose, and back to
+        // the user's width on unfolding, in the divider's one animation.
+        .onChange(of: foldState, initial: true) { _, fold in
+            followFold(fold)
+        }
+        // The width every window shared before they kept their own.
+        .task { ListColumnTab.retireAppWideWidth() }
         .wideMailBehaviour(mail)
         .settingsSheetPresenter()
         // Each width the split view is laid out at, which during a Zoom out
@@ -153,6 +192,11 @@ struct SplitShell: View {
     /// header, the column's bar, and the pinned width with its drag handle.
     private func listColumn(_ mail: WideMail) -> some View {
         mail.content(header: { columnHeaderSearchField(mail) })
+            // In book pose the list's own controls (the search field, the
+            // filter and sort rows, the rows' content) stop short of the
+            // crease's keep-out (`CreaseClearance`); the bars' and rows'
+            // backgrounds still reach the column's edge. 0 with no fold.
+            .safeAreaPadding(.trailing, listCreaseClearance)
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.width
             } action: { newWidth in
@@ -190,21 +234,34 @@ struct SplitShell: View {
                             folderPanelPresented.toggle()
                         }
                     } label: {
-                        Image(systemName: "sidebar.leading")
-                            .accessibilityLabel("Toggle folder list")
+                        // Titled for the rows of the system overflow a
+                        // squeezed bar folds it into, which draw the title
+                        // (#1787); the bar itself draws the icon alone.
+                        Label("Folders", systemImage: "sidebar.leading")
                     }
+                    .accessibilityIdentifier("sidebar.leading")
                 }
             }
-            // Pin the list column to its persisted width and hang the drag
-            // handle on its trailing edge.
+            // Pin the list column to its width and hang the drag handle on
+            // its trailing edge, where the column can move at all and no fold
+            // holds it. The handle comes and goes with no transition of its
+            // own, so an unfold's one animation is the width's.
             .navigationSplitViewColumnWidth(listColumnWidth)
             .overlay(alignment: .trailing) {
-                ColumnResizeHandle(
-                    width: listColumnWidthBinding,
-                    minWidth: listColumnBounds.minimum,
-                    maxWidth: listColumnBounds.maximum
-                )
+                let layout = listColumnLayout
+                if layout.handleIsShown {
+                    ColumnResizeHandle(
+                        resetTitle: layout.canReset ? layout.resetTitle : nil,
+                        onEvent: listColumnEvent
+                    )
+                    .transition(.identity)
+                }
             }
+            // In book pose the bar's trailing end sits within the crease's
+            // keep-out, so its items move to the leading end beside Folders
+            // (`ToolbarItemPlacement.listBar`). Read from the window's fold
+            // as it is now, so the move never rides the divider's animation.
+            .environment(\.listBarItemsLead, listCreaseClearance > 0)
     }
 
     /// Records the measured content-column width, as the wide layouts have
@@ -303,25 +360,54 @@ extension SplitShell {
 
 // MARK: - Resizable list column
 
-/// Clamp bounds for the resizable message-list column. Shared with the Mac's
-/// width policy so the two can't drift — see `ListColumnWidth`.
-private let listColumnMinWidth = ListColumnWidth.minimum
-
 extension SplitShell {
-    /// Clamp range for the pinned list column: a ceiling that leaves the
-    /// reading pane its floor and a little more (`ListColumnWidth.pinnedBounds`
-    /// — an exact fit is what #1716 was), and a floor that follows it down in a
-    /// window too narrow to seat both. Falls back to a generous cap until the
-    /// first geometry read lands.
-    private var listColumnBounds: (minimum: CGFloat, maximum: CGFloat) {
-        guard mailState.splitWidth > 0 else { return (listColumnMinWidth, 640) }
-        return ListColumnWidth.pinnedBounds(splitWidth: mailState.splitWidth)
+    /// The list the column shows, for its width in this window. Search
+    /// results take over whichever list that is, so search keeps its width.
+    private var listColumnTab: ListColumnTab {
+        mail.selectedFeedScope != nil ? .feeds : .mail
     }
 
-    /// The persisted list-column width, clamped to the current valid range.
-    private var listColumnWidth: CGFloat {
-        let bounds = listColumnBounds
-        return min(max(CGFloat(listColumnWidthStored), bounds.minimum), bounds.maximum)
+    /// This window's stored width for the list the column shows; 0 is none.
+    private var storedListWidth: Double {
+        listColumnTab == .feeds ? feedsListWidth : mailListWidth
+    }
+
+    private func recordListWidth(_ width: Double) {
+        switch listColumnTab {
+        case .feeds: feedsListWidth = width
+        case .mail, .search: mailListWidth = width
+        }
+    }
+
+    /// The column's width, range and handle, from the split's frame, the fold
+    /// and this window's width for the list it shows.
+    private var listColumnLayout: ListColumnPolicy {
+        ListColumnPolicy(
+            split: splitFrame,
+            fold: columnState.fold,
+            division: foldDivision,
+            stored: ListColumnPolicy.storedWidth(storedListWidth),
+            live: columnState.liveWidth(for: listColumnTab)
+        )
+    }
+
+    private var listColumnWidth: CGFloat { listColumnLayout.width }
+
+    /// The list column's trailing edge in the window, which is where the
+    /// reader starts.
+    private var listTrailingEdge: CGFloat { listColumnLayout.listLeadingEdge + listColumnWidth }
+
+    /// How far the crease's keep-out reaches into the list column: the
+    /// window's fold as it is now, against the edge the column is going to
+    /// (`followFold` moves it to the band in the update after the fold
+    /// arrives), so neither rides the divider's animation.
+    private var listCreaseClearance: CGFloat {
+        CreaseClearance.trailingClearance(fold: foldState, columnEndingAt: listTrailingEdge)
+    }
+
+    /// The reader's leading inset past the crease's keep-out.
+    private var readerCreaseInset: CGFloat {
+        CreaseClearance.leadingInset(fold: foldState, columnStartingAt: listTrailingEdge)
     }
 
     /// Floor the reading pane declares, which is `ListColumnWidth.readerFloor`
@@ -330,17 +416,43 @@ extension SplitShell {
     /// over-subscribed every split narrower than 596pt — which is what the
     /// addresses inspector tiling beside the columns leaves on an iPad in
     /// portrait (#2106).
-    private var readerColumnMinWidth: CGFloat {
-        ListColumnWidth.pinnedReaderFloor(splitWidth: mailState.splitWidth,
-                                          listWidth: listColumnWidth)
+    private var readerColumnMinWidth: CGFloat { listColumnLayout.readerFloor }
+
+    /// A drag moves the column as it goes and records its width when it
+    /// ends; a cancelled one records nothing, and a reset clears the width
+    /// in the divider's one animation.
+    private func listColumnEvent(_ event: ColumnResizeEvent) {
+        let layout = listColumnLayout
+        let tab = listColumnTab
+        switch event {
+        case .began:
+            columnState.beginDrag(tab: tab, from: layout.width)
+        case .moved(let translation):
+            columnState.moveDrag(tab: tab, translation: translation, bounds: layout.bounds)
+        case .ended:
+            if let width = columnState.endDrag(tab: tab) {
+                recordListWidth(Double(width))
+            }
+        case .cancelled:
+            columnState.cancelDrag()
+        case .reset:
+            columnState.cancelDrag()
+            withAnimation(reduceMotion ? nil : ListColumnPolicy.dividerAnimation) {
+                recordListWidth(0)
+            }
+        }
     }
 
-    /// Binding the drag handle writes: clamps on read, persists on write.
-    private var listColumnWidthBinding: Binding<CGFloat> {
-        Binding(
-            get: { listColumnWidth },
-            set: { listColumnWidthStored = Double($0) }
+    /// Applies the window's fold to the column: an unfold goes back to the
+    /// user's width in the divider's one animation, and everything else
+    /// moves the column with the window.
+    private func followFold(_ fold: FoldState) {
+        let animates = ListColumnPolicy.unfoldAnimates(
+            from: columnState.fold, to: fold, division: foldDivision, reduceMotion: reduceMotion
         )
+        withAnimation(animates ? ListColumnPolicy.dividerAnimation : nil) {
+            columnState.follow(fold)
+        }
     }
 }
 #endif

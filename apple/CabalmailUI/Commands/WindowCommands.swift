@@ -148,10 +148,12 @@ public final class WindowCommands {
         feedReports.value(for: front) ?? .none
     }
 
-    /// Which surface in `tab` holds ⌘⌫: none unless that surface is in front.
+    /// Which surface in `tab` holds ⌘⌫: none unless that surface is in front,
+    /// and none while the window's compose sheet is up, where the chord is
+    /// the text view's delete-to-line-start.
     func disposeChordHost(in tab: CompactTab?) -> DisposeChordHost {
         let surface = CommandSurface(tab: tab)
-        guard surface == front else { return .none }
+        guard surface == front, !navigator.composeLock.isUp else { return .none }
         return messageReports.value(for: surface)?.disposeChordHost ?? .none
     }
 

@@ -27,10 +27,9 @@ import SwiftUI
 enum ListColumnWidth {
     /// `@AppStorage`/`UserDefaults` key holding the width the user last left
     /// the column at. Zero (the missing-key default) means "never resized" and
-    /// resolves to `ideal`. Not the iPad layout's
-    /// `cabalmail.layout.listColumnWidth`: that one is the width the column is
-    /// pinned to, and `SplitShell` observes it, so sharing it would re-render
-    /// the whole root on every point of a divider drag here.
+    /// resolves to `ideal`. Not the iPad and iPhone Duo layout's widths: those
+    /// are per window and per list, in scene storage (`ListColumnTab`), and
+    /// written only when a drag on the handle ends.
     static let storageKey = "cabalmail.layout.macListColumnWidth"
 
     /// Narrow enough to hand the window back to the reading pane, wide enough
@@ -156,7 +155,9 @@ enum ListColumnWidth {
     static let reservedSlack: CGFloat = 16
 
     /// Clamp range for a column pinned to an exact width in a split of
-    /// `splitWidth`, with no sidebar column tiled beside it.
+    /// `splitWidth`, with no sidebar column tiled beside it, and a floor of
+    /// `minimumWidth` where the split can seat it (`ListColumnPolicy` raises
+    /// it to 320 in a split wider than tall).
     ///
     /// The ceiling reserves `reservedSlack` beyond the reader's floor (above).
     /// The floor follows the ceiling down: a window too narrow to seat
@@ -165,9 +166,12 @@ enum ListColumnWidth {
     /// does it (the reader is the point of the window) — because a floor left
     /// above the ceiling would pin the column wider than the window can seat
     /// and over-subscribe the split instead of merely filling it.
-    static func pinnedBounds(splitWidth: CGFloat) -> (minimum: CGFloat, maximum: CGFloat) {
+    static func pinnedBounds(
+        splitWidth: CGFloat,
+        minimumWidth: CGFloat = ListColumnWidth.minimum
+    ) -> (minimum: CGFloat, maximum: CGFloat) {
         let ceiling = max(squeezedMinimum, splitWidth - readerFloor - reservedSlack)
-        return (min(minimum, ceiling), ceiling)
+        return (min(minimumWidth, ceiling), ceiling)
     }
 
     /// The floor the reading pane declares beside a column pinned to

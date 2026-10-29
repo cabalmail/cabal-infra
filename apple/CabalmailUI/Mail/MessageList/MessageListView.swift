@@ -88,6 +88,8 @@ struct MessageListView: View {
     @Environment(\.commandWindowID) var commandWindowID
     /// This window's commands, which the toolbar's Refresh sends to.
     @Environment(\.windowCommands) var windowCommands
+    /// The bar's trailing items lead in book pose (`\.listBarItemsLead`).
+    @Environment(\.listBarItemsLead) var listBarItemsLead
     /// This list's identity, carried on the drags it starts so that only
     /// it performs the move a sidebar drop posts (`MessageMoveRequest`).
     @State var dragSourceID = UUID()
@@ -235,9 +237,8 @@ struct MessageListView: View {
     }
 
     /// Routes to this window's compose surface (`ComposeRequestRouter`
-    /// on `SignedInRootView`), which opens a compose window on the
-    /// platforms that support one and hosts the compose sheet on
-    /// iPhone. Presentation is deliberately NOT view-local: a sheet
+    /// on `SignedInRootView`), which opens a compose window on macOS
+    /// and visionOS and hosts the compose sheet on iOS. Presentation is deliberately NOT view-local: a sheet
     /// anchored here can't present when this view isn't visible, and
     /// two competing sheet hosts would block each other.
     private func presentCompose(seed: Draft) {
@@ -382,7 +383,7 @@ extension MessageListView {
             // system honours that as a priority rather than by our ordering.
             .keepsInBar()
             #else
-            ToolbarItem {
+            ToolbarItem(placement: .listBar(.automatic, leads: listBarItemsLead)) {
                 Button {
                     presentCompose(seed: ReplyBuilder.newDraft())
                 } label: {
@@ -426,7 +427,7 @@ extension MessageListView {
         .sheet(item: $moveCandidate) { candidate in
             selectionMoveSheet(for: candidate)
         }
-        .confirmationDialog(
+        .confirmationPrompt(
             "Delete Forever?",
             isPresented: purgeDialogBinding,
             titleVisibility: .visible,
@@ -451,7 +452,7 @@ extension MessageListView {
         // Large-selection dispose guard (threshold in `+Actions.swift`):
         // recoverable, unlike the purge above, but big enough that a
         // mis-aimed select-all shouldn't file everything silently.
-        .confirmationDialog(
+        .confirmationPrompt(
             disposeDialogTitle,
             isPresented: disposeDialogBinding,
             titleVisibility: .visible,

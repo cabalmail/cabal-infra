@@ -2,6 +2,7 @@ package com.cabalmail.android.ui.mail
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -50,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -712,7 +714,8 @@ private fun AttachmentRow(
  * posture: no JavaScript, remote loads blocked until the per-message
  * opt-in, all navigation swallowed. A user tap on a link (the only
  * gestured navigation with JavaScript off) is surfaced via [onLinkTap]
- * instead of being silently dropped.
+ * instead of being silently dropped. A lost renderer is handled by
+ * [RendererRecovery] rather than taking the app down.
  */
 @Composable
 internal fun HtmlBody(
@@ -728,54 +731,89 @@ internal fun HtmlBody(
     val currentOnLinkTap by rememberUpdatedState(onLinkTap)
     val currentOnScroll by rememberUpdatedState(onScrollFraction)
     val currentRestore by rememberUpdatedState(restoreFraction)
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            WebView(context).apply {
-                settings.javaScriptEnabled = false
-                settings.blockNetworkLoads = true
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                webViewClient =
-                    object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView?,
-                            request: WebResourceRequest?,
-                        ): Boolean {
-                            // Gesture-gated so a meta refresh can't pop the menu.
-                            if (request?.hasGesture() == true) {
-                                currentOnLinkTap(request.url.toString())
+    val recovery = remember(html) { RendererRecovery() }
+    val currentRecovery by rememberUpdatedState(recovery)
+    if (recovery.gaveUp) {
+        RendererGoneNotice(onRetry = recovery::retry, modifier = modifier)
+        return
+    }
+    key(recovery.generation) {
+        AndroidView(
+            modifier = modifier,
+            factory = { context ->
+                WebView(context).apply {
+                    settings.javaScriptEnabled = false
+                    settings.blockNetworkLoads = true
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
+                    webViewClient =
+                        object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: WebResourceRequest?,
+                            ): Boolean {
+                                // Gesture-gated so a meta refresh can't pop the menu.
+                                if (request?.hasGesture() == true) {
+                                    currentOnLinkTap(request.url.toString())
+                                }
+                                return true
                             }
-                            return true
-                        }
 
-                        override fun onPageFinished(
-                            view: WebView?,
-                            url: String?,
-                        ) {
-                            // The layout settles after this callback; try a few times.
-                            val target = currentRestore ?: return
-                            view?.let { restoreScrollFraction(it, target, attemptsLeft = 5) }
+                            override fun onPageFinished(
+                                view: WebView?,
+                                url: String?,
+                            ) {
+                                // The layout settles after this callback; try a few times.
+                                val target = currentRestore ?: return
+                                view?.let { restoreScrollFraction(it, target, attemptsLeft = 5) }
+                            }
+
+                            override fun onRenderProcessGone(
+                                view: WebView?,
+                                detail: RenderProcessGoneDetail?,
+                            ): Boolean = currentRecovery.onRenderProcessGone(detail?.didCrash() == true)
                         }
+                    setOnScrollChangeListener { view, _, scrollY, _, _ ->
+                        val range = (view as WebView).scrollRange()
+                        if (range > 0) currentOnScroll?.invoke((scrollY.toFloat() / range).coerceIn(0f, 1f))
                     }
-                setOnScrollChangeListener { view, _, scrollY, _, _ ->
-                    val range = (view as WebView).scrollRange()
-                    if (range > 0) currentOnScroll?.invoke((scrollY.toFloat() / range).coerceIn(0f, 1f))
                 }
-            }
-        },
-        update = { webView ->
-            webView.settings.blockNetworkLoads = !allowRemoteContent
-            // Reload only when the document actually changed; unrelated
-            // recompositions (the link sheet opening, flag toggles) must
-            // not reset the reading position.
-            val loadKey = allowRemoteContent to html
-            if (webView.tag != loadKey) {
-                webView.tag = loadKey
-                webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
-            }
-        },
-    )
+            },
+            update = { webView ->
+                webView.settings.blockNetworkLoads = !allowRemoteContent
+                // Reload only when the document actually changed; unrelated
+                // recompositions (the link sheet opening, flag toggles) must
+                // not reset the reading position.
+                val loadKey = allowRemoteContent to html
+                if (webView.tag != loadKey) {
+                    webView.tag = loadKey
+                    webView.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
+                }
+            },
+            onRelease = { it.destroy() },
+        )
+    }
+}
+
+/** Shown in place of the body when its renderer crashed again after the silent remount. */
+@Composable
+private fun RendererGoneNotice(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.padding(24.dp)) {
+        Text(
+            stringResource(R.string.web_renderer_gone_title),
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            stringResource(R.string.web_renderer_gone_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+    }
 }
 
 /** The scrollable height in view pixels: the laid-out content beyond the viewport. */

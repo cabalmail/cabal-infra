@@ -5,8 +5,9 @@ import Foundation
 /// from the budgets here; the feed reader lays its out in
 /// `FeedReaderToolbarLayout`, whose touch bar is held to `topBarCapacity` by
 /// test. Both readers ask `placement(for:...)` which bar carries their actions,
-/// which also decides whether the reader's body runs under the bottom bar. A
-/// new SDK's folding is answered here, in one place.
+/// and `bodyRunsUnderBottomBar(for:isRegularWidth:)` whether their body runs
+/// under the bottom bar, which follows the width alone. A new SDK's folding is
+/// answered here, in one place.
 ///
 /// On the touch platforms the bar sizes itself to its content, and past a
 /// certain item count the system takes over: on the iOS 27 SDK it silently
@@ -49,9 +50,9 @@ enum ReaderToolbarPolicy {
 
     /// Where a reader's touch action set lives.
     enum Placement: Equatable {
-        /// Trailing items of the navigation bar. Compact width, where the
-        /// section tab bar owns the bottom edge; and the feed reader at
-        /// every width.
+        /// Trailing items of the navigation bar. Compact width with
+        /// horizontal bars, where the section tab bar owns the bottom edge;
+        /// and the feed reader at every width.
         case topBar
         /// A system `.bottomBar` toolbar group (the mail reader at regular
         /// width before iOS 27).
@@ -59,6 +60,11 @@ enum ReaderToolbarPolicy {
         /// The mail reader's own bar pinned under the reading pane (regular
         /// width on iOS 27 and later).
         case ownBar
+        /// The reader's actions as separate system `.bottomBar` items, each
+        /// ranked for the overflow: where the system draws the window's bars
+        /// in a strip down one side, which they join near the thumb and the
+        /// tabs (iPhone Duo).
+        case bottomItems
     }
 
     /// Which bar carries a reader's touch action set.
@@ -82,8 +88,37 @@ enum ReaderToolbarPolicy {
     /// does not move it back). That spreads the reader's actions across the
     /// list column too, so Reply and Mark-as-read render under the message
     /// list they don't act on; iOS 27 therefore draws the pane-scoped bar.
-    static func placement(for medium: Medium, isRegularWidth: Bool, isOS27OrLater: Bool) -> Placement {
-        guard medium == .mail, isRegularWidth else { return .topBar }
+    ///
+    /// Where the system draws the window's bars in a strip down one side
+    /// (`barsAreVertical`: iPhone Duo's outer display, and its inner display
+    /// in a wide window), the mail reader's actions are system bottom items
+    /// instead, so the strip carries them near the thumb and the tabs (the
+    /// Duo spec: "Prefer the bottom toolbar for Reply, Archive, Flag and
+    /// Read … Bottom items overflow first by default, so Reply and Archive
+    /// need explicit high priority").
+    ///
+    /// A laptop fold changes nothing: the window is tall, so its bars are
+    /// horizontal, and a system bottom bar there spans the window, under the
+    /// list too, as above (measured on the Duo simulator, 2026-10-27). The
+    /// reader's own pane bar already sits below the crease.
+    static func placement(
+        for medium: Medium,
+        isRegularWidth: Bool,
+        isOS27OrLater: Bool,
+        barsAreVertical: Bool = false
+    ) -> Placement {
+        guard medium == .mail else { return .topBar }
+        if barsAreVertical { return .bottomItems }
+        guard isRegularWidth else { return .topBar }
         return isOS27OrLater ? .ownBar : .bottomBar
+    }
+
+    /// Whether a reader's HTML body runs under the bottom chrome: by width
+    /// alone, never the strip. `underBottomGlass(_:)` replaces the web view's
+    /// host when this flips (the Decision 9 spike), and the strip comes and
+    /// goes with each rotation of an open iPhone Duo, which swaps no shell; a
+    /// width change swaps the shells, which rebuild the reader anyway.
+    static func bodyRunsUnderBottomBar(for medium: Medium, isRegularWidth: Bool) -> Bool {
+        medium == .feeds || !isRegularWidth
     }
 }

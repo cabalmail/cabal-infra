@@ -93,13 +93,34 @@ struct SignedInRootView: View {
                 measuredWidth = width
             }
             // Bottom-anchored since #1426: at the top the banners covered the
-            // filter pills and clipped the first message row.
-            .overlay(alignment: .bottom) {
-                statusBanners
-                    .animation(.default, value: isOffline)
-                    .animation(.default, value: appState.toast)
-                    .animation(.default, value: failedSends.visible.map(\.id))
+            // filter pills and clipped the first message row. Kept off the
+            // fold on an iPhone Duo (`StatusBannerOverlay`).
+            .overlay {
+                StatusBannerOverlay(
+                    isOffline: isOffline,
+                    failedSends: failedSends,
+                    bottomInset: bannerBottomInset,
+                    action: actionHandler(for:)
+                )
+                .animation(.default, value: isOffline)
+                .animation(.default, value: appState.toast)
+                .animation(.default, value: failedSends.visible.map(\.id))
             }
+            // This window's compose surface (its New Message, Reply and
+            // Forward, and a mailto: link). Lives here — not on
+            // MessageListView — because this view is in the visible hierarchy
+            // in every tab, folder, and modal state; see ComposeRequestRouter.
+            // Outside the `.id`, so a new navigator does not take a draft
+            // down, and inside the fold, so the sheet reads it.
+            .composeRequestRouter(navigator)
+            // The window's fold (`\.foldState`), for the shells, the
+            // banners and the compose sheet alike: after the overlay so both
+            // are beneath it, and after the `.id` so a new sign-in keeps the
+            // fold it is in.
+            .foldGeometry()
+            // Whether the system draws this window's bars in a side strip
+            // (`\.barsAreVertical`), for the tab roles and the reader's bar.
+            .verticalBars()
             .task { await observeReachability() }
             .task(id: appState.client.map { ObjectIdentifier($0) }) { await failedSends.observe(appState.client) }
             // The cross-device "pick up where you left off" probe, at launch
@@ -117,12 +138,9 @@ struct SignedInRootView: View {
                       appState.navCoordinator?.hasLoadedInitial == true else { return }
                 Task { await appState.offerCrossDeviceCursor(atLaunch: false) }
             }
-            // This window's compose surface (its New Message, Reply and
-            // Forward, and a mailto: link). Lives here — not on
-            // MessageListView — because this view is in the visible hierarchy
-            // in every tab, folder, and modal state; see ComposeRequestRouter.
-            .composeRequestRouter()
-            .focusedSceneValue(\.windowCommands, windowCommands)
+            // None while the compose sheet is up, so the menus dim as they
+            // do with a compose window in front (`SceneNavigator.composeLock`).
+            .focusedSceneValue(\.windowCommands, navigator.composeLock.isUp ? nil : windowCommands)
             // The window's navigator takes the deep links aimed at it, and a
             // link parked before it existed (`DeepLinkRouter`).
             .onChange(of: commandWindowID, initial: true) { _, id in
@@ -201,36 +219,6 @@ struct SignedInRootView: View {
             compactTab: navigator.compactTab,
             folderName: navigator.selectedFolder?.name
         )
-    }
-
-    @ViewBuilder
-    private var statusBanners: some View {
-        VStack(spacing: 8) {
-            if isOffline {
-                BannerView(
-                    icon: "wifi.slash",
-                    text: "Offline — some actions will retry automatically.",
-                    tint: ColorTokens.warningFg
-                )
-            }
-            if !failedSends.visible.isEmpty, let client = appState.client {
-                FailedSendBanner(monitor: failedSends, client: client)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            if let toast = appState.toast {
-                // The offline banner above carries no dismissal: it reports a
-                // state that is still true, so hiding it would only make the
-                // app quieter about being offline (#1426).
-                ToastBanner(
-                    toast: toast,
-                    onAction: actionHandler(for: toast),
-                    onDismiss: { appState.toast = nil }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .padding(.bottom, bannerBottomInset)
-        .padding(.horizontal, 12)
     }
 
     /// Lift the banners above the tab bar wherever one occupies that band —

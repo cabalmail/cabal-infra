@@ -57,7 +57,7 @@ extension MessageDetailView {
         let email = canonicalEmail(for: address)
         Button {
             copyToPasteboard(email)
-            appState.showToast(.addressCopied(email))
+            showToast(.addressCopied(email))
         } label: {
             Label("Copy Address", systemImage: "doc.on.doc")
         }
@@ -135,7 +135,7 @@ extension MessageDetailView {
     private func copyName(for address: EmailAddress) {
         if let name = address.displayName, !name.isEmpty {
             copyToPasteboard(name)
-            appState.showToast(Toast(kind: .success, message: "Name copied"))
+            showToast(Toast(kind: .success, message: "Name copied"))
             return
         }
         // No RFC 5322 phrase on the envelope — fall back to a Contacts name
@@ -144,9 +144,9 @@ extension MessageDetailView {
             if let name = await appState.contactsStore.displayName(for: address),
                !name.isEmpty {
                 copyToPasteboard(name)
-                appState.showToast(Toast(kind: .success, message: "Name copied"))
+                showToast(Toast(kind: .success, message: "Name copied"))
             } else {
-                appState.showToast(Toast(kind: .info, message: "No name available"))
+                showToast(Toast(kind: .info, message: "No name available"))
             }
         }
     }
@@ -179,9 +179,9 @@ extension MessageDetailView {
             // Drop it from the owned set so the menu's "Compose From" / "Revoke"
             // items disappear on the next open without a full re-fetch.
             ownedAddresses.removeAll { $0.address == address.address }
-            appState.showToast(.addressRevoked(address.address))
+            showToast(.addressRevoked(address.address))
         } catch {
-            appState.showToast(Toast(kind: .error, message: "Couldn't revoke \(address.address)"))
+            showToast(Toast(kind: .error, message: "Couldn't revoke \(address.address)"))
         }
     }
 
@@ -197,7 +197,7 @@ extension MessageDetailView {
                 contactsAuth = status
             }
             guard status.isAccessible else {
-                appState.showToast(Toast(kind: .info, message: "Contacts access denied"))
+                showToast(Toast(kind: .info, message: "Contacts access denied"))
                 return
             }
             contactEditorRequest = ContactEditorRequest(mode: mode, email: email, name: name)
@@ -216,7 +216,7 @@ struct RevokeAddressConfirmation: ViewModifier {
     let perform: (Address) -> Void
 
     func body(content: Content) -> some View {
-        content.confirmationDialog(
+        content.confirmationPrompt(
             pending.map { AddressDisplay.revokeTitle($0.address) } ?? "Revoke address?",
             isPresented: Binding(
                 get: { pending != nil },

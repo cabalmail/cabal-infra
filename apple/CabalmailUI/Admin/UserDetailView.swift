@@ -26,7 +26,7 @@ struct UserDetailView: View {
         .navigationTitle(username)
         .inlineNavigationTitle()
         .usersActionErrorAlert(model: model)
-        .confirmationDialog(
+        .confirmationPrompt(
             "Delete \(username)?",
             isPresented: $confirmingDelete,
             titleVisibility: .visible

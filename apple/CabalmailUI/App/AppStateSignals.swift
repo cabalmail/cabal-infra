@@ -18,6 +18,18 @@ enum SignedOutReason: Sendable, Equatable {
 /// `Kind` enum stays at a single level of nesting (SwiftLint's cap).
 struct Toast: Equatable, Sendable {
     enum Kind: Sendable { case info, success, warning, error }
+    /// The split column a toast came from, which on a folded iPhone Duo
+    /// decides the half of the window it shows in (`StatusBannerPlacement`).
+    enum Column: Sendable { case list, reader }
+    /// Who raised a toast: the window and its column. Nil on a toast that
+    /// belongs to no column (a send, the cross-device Resume, an address
+    /// made in the Addresses tab), which sits with the reader. Another
+    /// window treats a toast raised elsewhere the same way, since the one
+    /// toast slot is the app's and every main window shows it.
+    struct Origin: Equatable, Sendable {
+        var window: UUID?
+        var column: Column
+    }
     let kind: Kind
     let message: String
     /// When set, the banner renders a trailing "Copy" button that places this
@@ -30,12 +42,28 @@ struct Toast: Equatable, Sendable {
     /// device). Data, not a closure, for the same `Equatable` reason as
     /// `copyAddress`; the banner host maps it to the navigation action.
     var resumeCursor: NavState?
+    /// Who raised it; nil for a toast that belongs to the window.
+    var origin: Origin?
 
-    init(kind: Kind, message: String, copyAddress: String? = nil, resumeCursor: NavState? = nil) {
+    init(
+        kind: Kind,
+        message: String,
+        copyAddress: String? = nil,
+        resumeCursor: NavState? = nil,
+        origin: Origin? = nil
+    ) {
         self.kind = kind
         self.message = message
         self.copyAddress = copyAddress
         self.resumeCursor = resumeCursor
+        self.origin = origin
+    }
+
+    /// The column that raised this toast as `window` places it: nil when it
+    /// belongs to no column, or to another window's.
+    func column(in window: UUID?) -> Column? {
+        guard let origin, origin.window == window else { return nil }
+        return origin.column
     }
 
     /// Banner shown after an address is minted, offering a one-tap copy of

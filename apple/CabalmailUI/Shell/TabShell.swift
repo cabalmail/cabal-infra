@@ -20,6 +20,11 @@ import CabalmailKit
 /// (`SearchBackdrop`). Without the activation the Search button is a fifth
 /// tab in the bar, and opens a Search screen with its field at the top.
 ///
+/// While the bars are vertical (iPhone Duo's outer display) the Search tab
+/// has no role, so it is that fifth tab there too, and opens no backdrop:
+/// the strip's search-role button could open the selected tab's own field
+/// instead (#1963, `CompactTab.role(in:barsAreVertical:)`).
+///
 /// The Mail tab is `CompactMailStack`: folders, list and reader with no
 /// search of its own, so the Search tab's query never reaches it (#1970,
 /// #1996). The Addresses tab hosts the same `AddressListView` the wide
@@ -48,6 +53,7 @@ import CabalmailKit
 /// land.
 struct TabShell: View {
     @Environment(SceneNavigator.self) private var navigator
+    @Environment(\.barsAreVertical) private var barsAreVertical
 
     /// Captures the tab in front as Search opens over it.
     @State private var backdropCapture = SearchBackdropCapture()
@@ -65,7 +71,7 @@ struct TabShell: View {
     var body: some View {
         TabView(selection: tab) {
             ForEach(CompactTab.tabs(for: .tabs), id: \.self) { tab in
-                if tab.role(in: .tabs) == .search {
+                if tab.role(in: .tabs, barsAreVertical: barsAreVertical) == .search {
                     Tab(value: tab, role: .search) {
                         content(for: tab)
                     }
@@ -117,11 +123,13 @@ struct TabShell: View {
     }
 
     /// A tap on the bar. A tap on Search captures the tab it opens over
-    /// first. A switch the app makes itself (a fold carrying a search across)
-    /// goes straight to the navigator and captures nothing.
+    /// first, where Search opens over it (the search role). A switch the app
+    /// makes itself (a fold carrying a search across) goes straight to the
+    /// navigator and captures nothing.
     private func select(_ tab: CompactTab) {
         let leaving = navigator.compactTab
-        if tab == .search, leaving != .search {
+        if tab == .search, leaving != .search,
+           tab.role(in: .tabs, barsAreVertical: barsAreVertical) == .search {
             searchBackdrop = backdrop(over: leaving)
         }
         navigator.showTab(tab)

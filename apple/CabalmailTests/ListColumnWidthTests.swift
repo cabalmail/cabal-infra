@@ -375,4 +375,17 @@ final class ListColumnWidthTests: XCTestCase {
             storedWidthBehindTheSweep
         )
     }
+
+    /// A floor of the caller's, as `ListColumnPolicy` asks for 320 pt in a
+    /// split wider than tall: kept where the split can seat it, following the
+    /// ceiling down where it cannot.
+    func testAFloorOfTheCallersFollowsTheCeilingDownLikeTheMinimum() {
+        let duo = ListColumnWidth.pinnedBounds(splitWidth: 867, minimumWidth: 320)
+        XCTAssertEqual(duo.minimum, 320)
+        XCTAssertEqual(duo.maximum, 491)
+        let portrait = ListColumnWidth.pinnedBounds(splitWidth: 669, minimumWidth: 320)
+        XCTAssertEqual(portrait.minimum, 293)
+        XCTAssertEqual(portrait.maximum, 293)
+        XCTAssertEqual(ListColumnWidth.pinnedBounds(splitWidth: 834, minimumWidth: 320).minimum, 320)
+    }
 }

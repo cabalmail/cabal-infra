@@ -5,6 +5,144 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.40.0] - 2026-10-29
+
+### Added
+- **An advisory iPhone Duo leg in the Apple CI.** `apple.yml`'s new
+  `ios-duo-test` job runs the iOS-hosted app-layer suite on an iPhone Duo
+  simulator, the one leg that executes code behind
+  `#available(iOS 27.1, *)`: every other iOS leg runs on the iOS 27.0
+  runtime. The runner image's iOS 27.1 runtime supports only the Duo, so
+  `resolve-sim-destination.sh` finds it by the "iPhone Duo" prefix with no
+  download. It runs on stage pushes, manual runs and PRs whose branch name
+  contains `duo`, with `continue-on-error` and outside `apple-gate` and
+  `approval`, so a red leg blocks no merge and no upload. It cannot fold:
+  no command changes the simulator's posture.
+- **iPhone Duo fold adapter in the Apple app layer.** A main window now
+  publishes its fold (`\.foldState`: none, a vertical crease in book pose
+  or a horizontal one in laptop pose, in the window's own coordinates)
+  from the iOS 27.1 reserved-region and hinge APIs, behind the
+  SwiftUICore 8.0.85 guard in `Platform/FoldGeometry.swift`. A reading
+  counts only once two layout passes agree, and a fold holds while the
+  hinge moves, ending on a fully open hinge, after 0.6 s at rest with no
+  region, or when the window changes size. `onFoldPiecesChange(_:)` gives
+  a view its bounds less the crease. Nothing reads it yet, so nothing
+  changes on screen; the Duo columns, toasts, reader bar and crease
+  margins build on it. The iOS-hosted suite fails if CI's Xcode stops
+  compiling the guarded code (`FoldAPICompiledTests`).
+
+### Changed
+- Apple: **Toasts and banners stay off the iPhone Duo's fold.** In book
+  pose a toast now sits in the half of the window of the column that
+  raised it, the reader's for the reader's own and for those that belong
+  to the window (offline, a failed send, Resume), instead of across the
+  crease. In laptop pose anything with a button or a close button stays
+  below the fold and the offline banner sits above it. A toast records the
+  window and column that raised it (`Toast.Origin`), and the placement is
+  a pure rule over the window's bounds less the fold
+  (`StatusBannerPlacement.slot(in:column:hasControls:)`). Nothing moves
+  without a fold.
+- Apple: **Compose as a sheet on iPad and iPhone Duo.** New Message,
+  Reply, Reply All, Forward, Edit Draft and mailto links now open a
+  sheet over the window they came from on every iPhone, iPad and iPhone
+  Duo, instead of a separate window on iPad and the open Duo. In a wide
+  window the sheet sits on the trailing side; in book pose it keeps to
+  the trailing page, and its discard question is an alert. Where the
+  window's bars are a side strip, as on the Duo, Cancel and Send are
+  symbols in the sheet's strip, which stays in reach while typing and,
+  in book pose, sits at the outer edge, away from the crease; the form
+  there starts past the crease's 44 pt keep-out. It can no longer be
+  swiped away, which used to drop the draft without asking: Cancel asks
+  whether to keep it. While a reply is up, keyboard shortcuts and
+  notification taps leave the message behind it alone, and a mailto
+  waits for the reply to close. The Mac and visionOS still open a
+  compose window. On an iPad, or an open iPhone Duo, Open in New Window
+  in the sheet moves the draft to a compose window of its own, with its
+  rich text, attachments and saved copy; if the window doesn't open, the
+  sheet stays as it was and says so. A mailto that reaches an open
+  compose window opens a second composer instead of replacing its draft.
+- Apple: **Controls and text kept clear of the iPhone Duo's crease.** In
+  book pose, Compose, More and `@` in the message list's bar, and Compose,
+  Refresh, Mark All as Read and Feed Settings in a feed list's, move to
+  the bar's leading end beside Folders; the list's search field, filter
+  and sort row and row content stop 44 pt short of the crease; a message
+  or article starts 44 pt past it; and confirmation questions (Delete
+  Forever, Mark All as Read, Revoke, Empty Trash and the rest) come up as
+  alerts on one page rather than popovers beside the crease. The 44 pt is
+  measured from the middle of the fold, and a question already showing
+  keeps its style if the device folds or opens. Flat, laptop pose, the
+  closed Duo, iPad and other iPhones are unchanged.
+- Apple: **List width per window, pinned to the iPhone Duo's fold.** On
+  iPad and the Duo's inner display the message list keeps its own width in
+  each window and for each list (mail or feeds), recorded when you let go
+  of the handle rather than on every frame of a drag; a new window starts
+  at the default, and existing windows start there once, since the old
+  app-wide width is dropped. A drag starts only on the visible grip, so
+  the rest of each row's trailing edge swipes again; a cancelled drag
+  keeps nothing; a double tap on the grip, or Reset in its long-press
+  menu, clears the width. In a window wider than tall the narrowest list
+  is now 320 pt (300 pt before; taller windows keep 300 pt), and the
+  handle hides where the list cannot move. On the Duo, with no width of
+  your own the list ends at the fold, so folding into book pose moves
+  nothing; in book pose the list is pinned to the fold wherever it can
+  reach it and the handle hides, and unfolding goes back to your width
+  in one animation (none with Reduce Motion). Laptop pose pins nothing.
+  The fold adapter now also publishes where the crease is while the Duo
+  lies flat (`\.foldDivision`).
+- Apple: **Reader actions in the iPhone Duo's side strip.** Where the
+  system draws the window's bars in a strip down one side (the closed Duo,
+  and the open Duo in a wide window), the mail reader's Reply, Read, Flag,
+  dispose and More are system bottom-toolbar items, so they sit in the
+  strip near the thumb and the tabs; Reply, dispose and More are kept as
+  the strip runs short, and Read and Flag fold into its overflow first.
+  Before, the closed Duo folded Reply and Delete away. The message, feed
+  article and compose screens ask the strip to give up tabs before their
+  own actions; lists keep their tabs. Laptop pose keeps the reader's own
+  bar below the fold. On iPad the folder-panel button gains a title,
+  which the toolbar's overflow row shows; iPad and other iPhones are
+  otherwise unchanged (#1667).
+
+### Fixed
+- Android: **No crash when a web view's renderer dies.** When Android
+  ended the render process behind the mail reader or the feed article
+  view, to reclaim memory or because the page crashed it, the whole app
+  went down with it. Both views now claim `onRenderProcessGone`
+  (`RendererRecovery`): a reclaimed renderer is replaced by a fresh view
+  that reloads the document, a crashed one gets one silent reload, and a
+  second crash on the same document shows a notice with Retry instead of
+  reloading in a loop. The mail reader's WebView is now destroyed when it
+  leaves the screen, as the article view's already was. androidx.webkit
+  1.18's Lint check (`MissingOnRenderProcessGone`) flagged both.
+- Apple: **A closed compose window can't come back with its draft.**
+  On iPhone Duo the system keeps listing a compose window in its window
+  switcher after Send or Discard closes it, and picking it there brought
+  back a live composer holding the sent or discarded draft, Send
+  included (#2257). Now a closed window that has left the screen holds
+  nothing, and one picked from the switcher steps straight back out to
+  the mail window. The switcher still lists it until it is swiped away,
+  since iOS won't let an app close a window for good on a phone. iPad
+  keeps closed compose windows the same way and should behave alike;
+  that is not yet checked.
+- Apple: **Search opens from any tab on a closed iPhone Duo.** On the
+  Duo's outer display, where the tab bar runs down the side, the Search
+  button opened the Addresses filter instead whenever Addresses was in
+  front in landscape (#1963). There the Search tab is now an ordinary tab
+  in the strip, opening the Search screen from every tab with its field at
+  the top; every other iPhone keeps the Search button that turns into the
+  field. The app now reads whether the system draws its bars in a side
+  strip (`\.barsAreVertical`, from the iOS 27.1 `toolbarVerticalEdge`),
+  which the reader's actions will also use.
+- Apple: **Empty Mac reader toolbar grouped like the live one.** With no
+  message open, the greyed dispose, read and Flag split buttons sat in one
+  liquid-glass capsule with everything after them, where the live toolbar
+  gives each its own; opening a message then moved every button after the
+  read control 17pt. Under liquid glass (measured on macOS 27) a split
+  button gets a capsule of its own once its menu holds two or more rows,
+  and the stand-ins carried one inert row. Each now carries as many as its
+  live twin's menu (`ReaderToolbarLayout.macStandInMenuRows`), the flag's
+  taken from the enabled palette, so a one-flag palette still shares a
+  capsule in both states.
+
 ## [1.39.12] - 2026-10-26
 
 ### Changed

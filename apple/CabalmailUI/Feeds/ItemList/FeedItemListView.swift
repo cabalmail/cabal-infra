@@ -22,6 +22,8 @@ struct FeedItemListView: View {
     // `+Commands` siblings can reach them.
     @Environment(AppState.self) var appState
     @Environment(Preferences.self) private var preferences
+    /// The bar's trailing items lead in book pose (`\.listBarItemsLead`).
+    @Environment(\.listBarItemsLead) private var listBarItemsLead
     /// Aims this list's compose requests at its own window.
     @Environment(\.commandWindowID) private var commandWindowID
     /// The window's navigator, whose parked feed item this list selects; nil
@@ -77,12 +79,14 @@ struct FeedItemListView: View {
             #else
             // Ranked to stay, as the message list's Compose is: on a narrow
             // column the bar folds its trailing items first (#1626).
-            ToolbarItem { composeButton }
+            ToolbarItem(placement: .listBar(.automatic, leads: listBarItemsLead)) { composeButton }
                 .keepsInBar()
-            if let model { ToolbarItem { refreshButton(model) } }
+            if let model {
+                ToolbarItem(placement: .listBar(.automatic, leads: listBarItemsLead)) { refreshButton(model) }
+            }
             #endif
             if let model {
-                ToolbarItem {
+                ToolbarItem(placement: .listBar(.automatic, leads: listBarItemsLead)) {
                     // Confirmed first: it sat beside Refresh with no way back,
                     // and a stray tap read a whole feed (2026-09-10).
                     Button {
@@ -94,7 +98,7 @@ struct FeedItemListView: View {
                     .accessibilityIdentifier("feed.markAllRead")
                 }
                 if let subscription = model.subscription {
-                    ToolbarItem {
+                    ToolbarItem(placement: .listBar(.automatic, leads: listBarItemsLead)) {
                         Button {
                             actions.settings(for: subscription)
                         } label: {
@@ -108,7 +112,7 @@ struct FeedItemListView: View {
         }
         .feedManagementSheets(actions, management: management, folders: folders, selection: .constant(nil),
                               onSaved: { updated in title = updated.displayTitle })
-        .confirmationDialog("Mark all items in \(title) as read?", isPresented: $confirmMarkAllRead,
+        .confirmationPrompt("Mark all items in \(title) as read?", isPresented: $confirmMarkAllRead,
                             titleVisibility: .visible) {
             Button("Mark All as Read") { Task { await model?.markAllRead() } }
             Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}

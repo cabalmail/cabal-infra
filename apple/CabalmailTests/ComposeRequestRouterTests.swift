@@ -23,11 +23,12 @@ final class ComposeRequestRouterTests: XCTestCase {
         let windowID: UUID
         let appState: AppState
         let preferences: Preferences
+        @State private var navigator = SceneNavigator(coordinator: { nil }, hasClient: { false })
 
         var body: some View {
             Group {
                 if window.showsSignedInRoot {
-                    Color.clear.composeRequestRouter()
+                    Color.clear.composeRequestRouter(navigator)
                 } else {
                     Color.clear
                 }

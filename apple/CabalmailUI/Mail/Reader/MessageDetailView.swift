@@ -84,6 +84,9 @@ struct MessageDetailView: View {
     // columns. See `ReaderToolbarLayout.placement`. The compact tab tree
     // forces `.compact` even in landscape on a Plus / Max.
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    // A side strip (`verticalBars()`, published at the window's root) moves
+    // the actions to bottom items, which join it.
+    @Environment(\.barsAreVertical) var barsAreVertical
     // Measured width of the pane-scoped action bar, fed to
     // `ReaderToolbarLayout.ownBar` so the item set tracks the pane as the
     // user drags the split divider. Starts at 0, which draws the compact
@@ -104,7 +107,8 @@ struct MessageDetailView: View {
         if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
         return ReaderToolbarLayout.placement(
             isRegularWidth: horizontalSizeClass == .regular,
-            isOS27OrLater: isOS27OrLater
+            isOS27OrLater: isOS27OrLater,
+            barsAreVertical: barsAreVertical
         )
         #else
         return .bottomBar
@@ -128,10 +132,12 @@ struct MessageDetailView: View {
     /// insets its content for. The iOS 27 pane-scoped `readerActionBar` is a
     /// SwiftUI `safeAreaInset` that a bridged `WKWebView` never sees, so the
     /// end of the message would stay stuck under it; regular width keeps the
-    /// body above its bottom bar as before.
+    /// body above its bottom bar as before. By width alone, never the strip
+    /// (`ReaderToolbarPolicy.bodyRunsUnderBottomBar`): flipping it rebuilds
+    /// the web view, and the strip changes without a shell swap.
     var bodyRunsUnderBottomBar: Bool {
         #if os(iOS)
-        return actionPlacement == .topBar
+        return ReaderToolbarPolicy.bodyRunsUnderBottomBar(for: .mail, isRegularWidth: horizontalSizeClass == .regular)
         #else
         return false
         #endif
@@ -190,6 +196,8 @@ struct MessageDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar { toolbarContent }
+        // A reading screen: a short side strip gives up tabs before these.
+        .stripGivesUpTabsFirst()
         // Window-scoped keyboard equivalents, hosted where the toolbar can't
         // evict them (see `disposeChordHost` / `readerChordHosts`).
         .background {
@@ -216,7 +224,7 @@ struct MessageDetailView: View {
         }
         #endif
         .task { await loadAddressMenuContext() }
-        .confirmationDialog(
+        .confirmationPrompt(
             "Delete Forever?",
             isPresented: $purgeConfirmPresented,
             titleVisibility: .visible
@@ -338,6 +346,23 @@ struct MessageDetailView: View {
                         .labelStyle(.iconOnly)
                 }
             }
+        } else if actionPlacement == .bottomItems {
+            // `ReaderToolbarLayout.bottomBar`'s set, item by item so each
+            // carries its rank: bottom items overflow first and the strip is
+            // short, so the menu is kept above all and Reply / Edit Draft and
+            // dispose next, as on the top bar. No icon-only style: a bar draws
+            // a `Label`'s icon alone and the overflow's rows its title (#1787).
+            // No spacers, which the strip draws at no size.
+            ToolbarItem(placement: .bottomBar) {
+                toolbarButton(for: model?.leadingToolbarAction == .editDraft ? .editDraft : .reply)
+            }
+            .keepsInBar()
+            ToolbarItem(placement: .bottomBar) { seenButton }
+            ToolbarItem(placement: .bottomBar) { flagButton }
+            ToolbarItem(placement: .bottomBar) { disposeButton }
+            .keepsInBar()
+            ToolbarItem(placement: .bottomBar) { overflowMenuButton }
+            .keepsInBarFirst()
         }
         #else
         // Both halves live in `MessageDetailView+MacToolbar.swift`.
@@ -366,5 +391,11 @@ extension MessageDetailView {
         from origin: UUID? = nil
     ) {
         model.connect(to: mailStore, in: origin)
+    }
+
+    /// Shows `toast` as raised by this window's reader, so a folded iPhone
+    /// Duo shows it on the reader's half (`StatusBannerPlacement`).
+    func showToast(_ toast: Toast) {
+        appState.showToast(toast, from: Toast.Origin(window: commandWindowID, column: .reader))
     }
 }

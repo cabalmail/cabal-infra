@@ -55,6 +55,19 @@ public func waitUntilOnMainActor(
     }
 }
 
+/// Whether `condition` comes to hold within `seconds`, polled on the main
+/// actor: a bounded wait, the only way to assert that something did *not*
+/// happen meanwhile.
+@MainActor
+public func holdsOnMainActor(within seconds: TimeInterval, _ condition: () -> Bool) async -> Bool {
+    let deadline = Date().addingTimeInterval(seconds)
+    while Date() < deadline {
+        if condition() { return true }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+    return condition()
+}
+
 /// Counts the elements already buffered on `stream` without waiting for
 /// more: cancelling the drain finishes the stream, which still hands over
 /// its buffer, so this never waits on an element that isn't coming.
