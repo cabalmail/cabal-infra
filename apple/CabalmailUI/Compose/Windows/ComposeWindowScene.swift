@@ -94,6 +94,11 @@ private struct ComposeWindowContent: View {
     @Environment(Preferences.self) private var preferences
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.scenePhase) private var scenePhase
+    /// The window's phase as last seen, for a composer closing out of view.
+    /// State, so `onClose`, captured when the composer was built, reads it
+    /// current.
+    @State private var phase: ScenePhase = .active
 
     /// The seed a window without a slot composes from. Held per window so
     /// it shares nothing with a slot the registry can hand out, and in
@@ -112,7 +117,12 @@ private struct ComposeWindowContent: View {
     }
 
     var body: some View {
-        composer.onOpenURL { url in
+        composer
+        .onChange(of: scenePhase, initial: true) { old, new in
+            phase = new
+            windowPhaseChanged(from: old, to: new)
+        }
+        .onOpenURL { url in
             // On macOS the main window group declines external events
             // (`handlesExternalEvents(matching: [])`, see CabalmailMacApp)
             // so a mailto: click routes here: the system spawns a compose
@@ -166,6 +176,29 @@ private struct ComposeWindowContent: View {
         Color.clear.frozen(while: true)
     }
 
+    /// Takes the window off screen. iPadOS shows the home screen when the
+    /// frontmost scene is dismissed with no sibling activated, so this brings
+    /// the main window the composer came from forward first, else the one
+    /// last used, and closing compose lands back on its split view (see
+    /// MainSceneActivation.swift).
+    private func leave() {
+        #if os(iOS)
+        MainMailScene.activate(appState.compose.origin(of: slot), fallback: appState.lastActiveMainWindow)
+        #endif
+        dismissWindow()
+    }
+
+    /// A closed window that has left the screen keeps nothing to send, and
+    /// one brought back to the front leaves again (`ClosedComposeWindow`,
+    /// #2257). A window composing a new seed on its recycled slot is not
+    /// closed.
+    private func windowPhaseChanged(from old: ScenePhase, to new: ScenePhase) {
+        guard var closed = closedOn, closed.seedID == seed.id else { return }
+        let leaves = closed.sceneMoved(from: old, to: new)
+        closedOn = closed
+        if leaves { leave() }
+    }
+
     private func composeView(client: CabalmailClient) -> some View {
         ComposeView(model: ComposeViewModel(
             seed: seed,
@@ -175,22 +208,14 @@ private struct ComposeWindowContent: View {
             handoff: appState.compose.handoffs.pending(for: seed.id),
             onClose: {
                 closedOn = appState.composeSlots.closedCompose(for: seed)
+                closedOn?.closed(in: phase)
                 // Free the slot before dismissing so the next composer
                 // can recycle this window instead of minting a
                 // presentation SwiftUI will never release. A window
                 // without a slot holds none, and must not free one a
                 // composer elsewhere is using.
                 if let slot { appState.composeSlots.release(slot) }
-                // iPadOS shows the home screen when the frontmost
-                // scene is dismissed with no sibling activated; bring
-                // the main window this composer came from forward
-                // first, else the one last used, so closing compose
-                // lands back on its split view (see
-                // MainSceneActivation.swift).
-                #if os(iOS)
-                MainMailScene.activate(appState.compose.origin(of: slot), fallback: appState.lastActiveMainWindow)
-                #endif
-                dismissWindow()
+                leave()
             }
         ))
         // Re-identify by seed: `ComposeView` keeps its model in

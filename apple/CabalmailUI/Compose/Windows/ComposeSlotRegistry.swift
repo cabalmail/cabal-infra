@@ -92,6 +92,9 @@ public final class ComposeSlotRegistry {
     struct ClosedCompose: Equatable {
         let session: Int
         let seedID: UUID
+        /// Whether the window has left the screen since, or closed out of
+        /// view (`ClosedComposeWindow`, #2257).
+        var hasLeftScreen = false
     }
 
     func closedCompose(for seed: Draft) -> ClosedCompose {
@@ -108,13 +111,20 @@ public final class ComposeSlotRegistry {
     /// SwiftUI keeps a closed window mounted and rebuilds its composer when
     /// the session comes back after a sign-out, including one forced by an
     /// expired session. Every closed window then started a hidden composer
-    /// from the seed it closed on, saving it to Drafts every minute. A
-    /// window that never closed always may. A closed one may in the session
-    /// it closed in, so it keeps drawing its composer on its way out, and
-    /// for a new seed, which is its slot being handed out again.
+    /// from the seed it closed on, saving it to Drafts every minute. And the
+    /// system keeps offering a closed window: on iPhone Duo, picked from the
+    /// window switcher, it came back as a live composer holding the draft it
+    /// had sent or discarded, Send included (#2257).
+    ///
+    /// A window that never closed always may. A closed one may for a new
+    /// seed, which is its slot being handed out again. For the seed it closed
+    /// on, it may only on its way out, so it keeps drawing its composer while
+    /// it animates away: in the session it closed in, until it has left the
+    /// screen.
     func mayCompose(_ seed: Draft, closedOn closed: ClosedCompose?) -> Bool {
         guard let closed else { return true }
-        return closed.session == session || closed.seedID != seed.id
+        if closed.seedID != seed.id { return true }
+        return closed.session == session && !closed.hasLeftScreen
     }
 
     /// Seed a restored scene composes from when this process never handed
