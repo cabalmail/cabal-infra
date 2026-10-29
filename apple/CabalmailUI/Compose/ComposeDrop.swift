@@ -88,10 +88,33 @@ enum DroppedAttachment {
         }
         drops.onFile = { [weak model] file in
             guard let model else { return }
+            // A file that was not read is reported at once, in the order the
+            // page sent it: when the page's process stops, the dead-editor
+            // banner that follows stays the last word.
+            guard case .data = file.contents else {
+                model.pendingDrops -= 1
+                report(file, in: model)
+                return
+            }
             Task { @MainActor in
                 await take(file, into: model)
                 model.pendingDrops -= 1
             }
+        }
+    }
+
+    /// Says why a file the editor page could not read wasn't attached.
+    @MainActor
+    static func report(_ file: EditorFileDrops.File, in model: ComposeViewModel) {
+        let shownName = file.name.isEmpty ? "the dropped item" : file.name
+        switch file.contents {
+        case .unreadable:
+            model.errorMessage = "Couldn't attach \(shownName)."
+        case .tooLarge(let limit):
+            let size = ByteCountFormatter.string(fromByteCount: Int64(limit), countStyle: .file)
+            model.errorMessage = "Couldn't attach \(shownName): it's larger than \(size)."
+        case .data:
+            break
         }
     }
 
@@ -100,13 +123,9 @@ enum DroppedAttachment {
     @MainActor
     static func take(_ file: EditorFileDrops.File, into model: ComposeViewModel) async {
         let drops = model.editorController.fileDrops
-        let shownName = file.name.isEmpty ? "the dropped item" : file.name
         switch file.contents {
-        case .unreadable:
-            model.errorMessage = "Couldn't attach \(shownName)."
-        case .tooLarge(let limit):
-            let size = ByteCountFormatter.string(fromByteCount: Int64(limit), countStyle: .file)
-            model.errorMessage = "Couldn't attach \(shownName): it's larger than \(size)."
+        case .unreadable, .tooLarge:
+            report(file, in: model)
         case .data(let data):
             guard takesDrops(model) else {
                 await drops.forget(file)
@@ -118,7 +137,9 @@ enum DroppedAttachment {
                 model.errorMessage = "To attach messages, drag them one at a time."
                 return
             }
-            if let image = InlineImageEncoding.encode(data) {
+            // Re-encoding decodes the whole image, which is no work for the
+            // main actor.
+            if let image = await Task.detached(operation: { InlineImageEncoding.encode(data) }).value {
                 let contentID = model.inlineImages.add(image)
                 if await drops.placeImage(file, contentID: contentID, alt: file.name) {
                     model.richMirrorsMarkdown = false

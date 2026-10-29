@@ -3,11 +3,12 @@ import CabalmailKit
 
 /// The images shown inline in the Rich Text body, by the bare Content-ID
 /// their `<img src="cid:...">` names: dropped or pasted there, or carried in
-/// from a quoted, forwarded or resumed message. The editor page loads them
-/// from here (`InlineImageSchemeHandler`). An image stays after it is
-/// deleted from the body, so undo can bring it back; only those the sent
-/// HTML still shows go on the wire (`attachments(shownIn:)`), where the
-/// Lambda sends them inline beside the HTML.
+/// from a quoted, forwarded or resumed message whose body shows them. The
+/// editor page loads them from here (`InlineImageSchemeHandler`). An image
+/// stays after it is deleted from the body, so undo can bring it back; only
+/// those the sent HTML still shows go on the wire (`attachments(shownIn:)`),
+/// where the Lambda sends them inline beside the HTML, and only those the
+/// body showed after its last edit count toward the size warning.
 struct ComposeInlineImages: Equatable {
     struct Image: Equatable {
         let contentID: String
@@ -17,9 +18,14 @@ struct ComposeInlineImages: Equatable {
     }
 
     private(set) var images: [Image] = []
+    /// The Content-IDs the body showed after its last edit
+    /// (`InlineImageSchemeHandler.onShownChanged`); nil before any edit,
+    /// when every image held is one the seed showed or one just placed.
+    var shown: Set<String>?
 
+    /// The size of the images the body shows.
     var byteCount: Int {
-        images.reduce(0) { $0 + $1.data.count }
+        images.filter { shown?.contains($0.contentID) ?? true }.reduce(0) { $0 + $1.data.count }
     }
 
     func image(for contentID: String) -> Image? {
@@ -48,12 +54,14 @@ struct ComposeInlineImages: Equatable {
     }
 
     /// Takes a quoted, forwarded or resumed message's inline image under its
-    /// own Content-ID. Returns false for an attachment that is not one: no
-    /// Content-ID, or not an image.
-    mutating func adopt(_ attachment: Attachment) -> Bool {
+    /// own Content-ID when `body`, the seeded Markdown, shows it. Returns
+    /// false for an attachment that is no inline image (no Content-ID, or
+    /// not an image), for the caller to attach; one the body doesn't show
+    /// is left out, as a quote's inline images always were.
+    mutating func adopt(_ attachment: Attachment, shownIn body: String) -> Bool {
         guard let contentID = attachment.contentID, !contentID.isEmpty,
               attachment.mimeType.lowercased().hasPrefix("image/") else { return false }
-        if image(for: contentID) == nil {
+        if image(for: contentID) == nil, Self.markdown(body, shows: contentID) {
             images.append(Image(
                 contentID: contentID,
                 filename: attachment.filename,
@@ -77,5 +85,13 @@ struct ComposeInlineImages: Equatable {
         let pattern = #"(?i:src)\s*=\s*(["'])(?i:cid):"#
             + NSRegularExpression.escapedPattern(for: contentID) + #"\1"#
         return html.range(of: pattern, options: .regularExpression) != nil
+    }
+
+    /// Whether Markdown shows `cid:<contentID>`: as an image (`![alt](cid:…)`,
+    /// what turndown writes for one) or as raw HTML that marked passes on.
+    static func markdown(_ markdown: String, shows contentID: String) -> Bool {
+        let image = #"!\[[^\]]*\]\((?i:cid):"# + NSRegularExpression.escapedPattern(for: contentID)
+            + #"(\s+"[^"]*")?\)"#
+        return markdown.range(of: image, options: .regularExpression) != nil || html(markdown, shows: contentID)
     }
 }

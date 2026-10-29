@@ -40,6 +40,16 @@ final class InlineImageEncodingTests: XCTestCase {
         XCTAssertEqual(ImageDataFormat.detect(encoded.data), .jpeg)
     }
 
+    func testAReencodedImageKeepsAtMostTheLongestSideAllowed() throws {
+        let wide = try Self.encode(try Self.blankImage(width: 5000, height: 8), as: .tiff)
+
+        let encoded = try XCTUnwrap(InlineImageEncoding.encode(wide))
+
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(encoded.data as CFData, nil))
+        let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        XCTAssertEqual(properties[kCGImagePropertyPixelWidth] as? Int, InlineImageEncoding.maxReencodedPixels)
+    }
+
     func testWhatIsNoImageIsLeftForTheCallerToAttach() {
         XCTAssertNil(InlineImageEncoding.encode(Data("%PDF-1.7 not an image".utf8)))
         // A recognised signature with nothing readable behind it.
@@ -47,6 +57,20 @@ final class InlineImageEncodingTests: XCTestCase {
     }
 
     private struct EncodingFailed: Error {}
+
+    /// A blank image of the given size, as PNG.
+    private static func blankImage(width: Int, height: Int) throws -> Data {
+        guard let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ), let image = context.makeImage() else { throw EncodingFailed() }
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(output, UTType.png.identifier as CFString, 1, nil)
+        else { throw EncodingFailed() }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { throw EncodingFailed() }
+        return output as Data
+    }
 
     private static func encode(_ data: Data, as type: UTType) throws -> Data {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { throw EncodingFailed() }

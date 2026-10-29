@@ -34,6 +34,24 @@ final class EditorDroppedAttachmentTests: XCTestCase {
         XCTAssertEqual(model.attachments.count, 1)
     }
 
+    /// When the page's process stops, the files it was still reading are
+    /// reported unreadable before the dead-editor banner, which stays.
+    func testTheDeadEditorBannerOutlastsTheUnreadFiles() async throws {
+        let model = try TestFixtures.makeComposeModel()
+        let drops = model.editorController.fileDrops
+        drops.onStarted?(1)
+
+        drops.onFile?(file("notes.txt", .unreadable))
+        model.noteEditorUnavailable("the editor's web content process stopped")
+        _ = await holdsOnMainActor(within: 0.2) { false }
+
+        XCTAssertEqual(model.pendingDrops, 0)
+        XCTAssertEqual(
+            model.errorMessage,
+            ComposeViewModel.editorUnavailableMessage("the editor's web content process stopped")
+        )
+    }
+
     func testAFileTooLargeToReadSaysSo() async throws {
         let model = try TestFixtures.makeComposeModel()
 

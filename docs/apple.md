@@ -1641,8 +1641,8 @@ once, as unreadable if the page's process stops first. The host
 (`DroppedAttachment.takeEditorDrops`) holds Send and the move to a window
 for the named files (`pendingDrops`), then decides. An image goes inline:
 JPEG, PNG and GIF as they are, any other image the device can read (HEIC
-from the photo library, WebP, TIFF) re-encoded as JPEG
-(`InlineImageEncoding`). It is stored under a new Content-ID
+from the photo library, WebP, TIFF) re-encoded off the main actor as a
+JPEG at most 4096 pixels on its longest side (`InlineImageEncoding`). It is stored under a new Content-ID
 (`ComposeInlineImages`), and the page shows it where it was dropped as
 `<img src="cid:<id>">` (`placeDroppedImage`), which it builds itself and
 only for a `cid:` the host names. `InlineImageSchemeHandler` serves those
@@ -1656,9 +1656,11 @@ At send and draft save, only the images the HTML body still shows go on
 the wire, each as an attachment with its `content_id`; the Lambda
 (`lambda/api/_shared/compose.py`) sends those inline in a
 `multipart/related` beside the HTML. A deleted image stays in the store,
-so undo can bring it back. A reply, a forward and a resumed draft carry
-the message's inline images (`MimeAttachmentPlan.inlineParts`), so a quote
-or a draft that shows them keeps them; a resumed draft also carries its
+so undo can bring it back; the size warning counts only the images the
+body showed after its last edit, which the page reports with each `input`.
+A reply, a forward and a resumed draft keep the message's inline images
+(`MimeAttachmentPlan.inlineParts`) that their seeded body shows, and leave
+the rest out, as a quote always did; a resumed draft also carries its
 attachments.
 
 #### Why a WKWebView instead of native NSTextView / UITextView

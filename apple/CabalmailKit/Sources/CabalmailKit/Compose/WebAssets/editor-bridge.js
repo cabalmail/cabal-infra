@@ -505,8 +505,17 @@
     document.execCommand('insertHTML', false, sanitizeForInsert(html));
   });
 
+  // The Content-IDs of the `cid:` images the body shows now, so the app
+  // counts only what the message will carry.
+  function shownImages() {
+    return Array.from(editor.querySelectorAll('img'))
+      .map(function (img) { return img.getAttribute('src') || ''; })
+      .filter(function (src) { return /^cid:/i.test(src); })
+      .map(function (src) { return src.slice(4); });
+  }
+
   editor.addEventListener('input', function () {
-    postNative({ type: 'input', empty: isEmpty() });
+    postNative({ type: 'input', empty: isEmpty(), images: shownImages() });
   });
 
   editor.addEventListener('focus', function () {

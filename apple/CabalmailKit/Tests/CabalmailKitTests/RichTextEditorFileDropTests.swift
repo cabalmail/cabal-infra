@@ -90,12 +90,14 @@ final class RichTextEditorFileDropTests: XCTestCase {
 
     /// The host shows two dropped images inline: each goes where they were
     /// dropped, in order, as the `cid:` the message will carry, loaded from
-    /// the host, and the edit counts as one (`input`).
+    /// the host, and the edit counts as one (`input`) that reports both.
     func testPlacedImagesShowInOrderAsTheirContentIDs() async throws {
         await controller.setHTML("<p>Before</p>")
         let drops = DropRecorder(controller)
         var edited = false
+        var shown: Set<String> = []
         controller.onContentChanged = { edited = true }
+        controller.inlineImages.onShownChanged = { shown = $0 }
         controller.inlineImages.provider = { _ in (Self.png, "image/png") }
         let png = Self.png.base64EncodedString()
 
@@ -117,6 +119,7 @@ final class RichTextEditorFileDropTests: XCTestCase {
             ) as? Int == 2
         }
         try await waitUntilOnMainActor { edited }
+        try await waitUntilOnMainActor { shown == ["a@cabalmail", "b@cabalmail"] }
     }
 
     /// The page shows only a `cid:` image the host names, for a file it

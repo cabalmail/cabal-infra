@@ -426,6 +426,7 @@ extension RichTextEditorController {
             handleScriptError(payload)
         case "input":
             onContentChanged?()
+            inlineImages.noteShown(payload)
         case "pastePlain":
             Task { await pastePlainText() }
         case "selection":

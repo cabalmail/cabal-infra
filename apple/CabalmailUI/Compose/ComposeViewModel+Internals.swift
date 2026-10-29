@@ -103,9 +103,9 @@ extension ComposeViewModel {
     /// seeded rows are ordinary `ComposeAttachment`s from here on — the
     /// user can remove them, and send stages them like hand-picked files.
     func seedForwardedAttachments(_ forwarded: [Attachment]) {
-        // A part carrying a Content-ID is an inline image the seeded body
-        // may show; it goes on the wire only if the sent HTML still does.
-        for attachment in forwarded where !inlineImages.adopt(attachment) {
+        // A part carrying a Content-ID is an inline image: kept if the
+        // seeded body shows it, and sent only if the sent HTML still does.
+        for attachment in forwarded where !inlineImages.adopt(attachment, shownIn: markdownBody) {
             addAttachment(
                 filename: attachment.filename,
                 mimeType: attachment.mimeType,

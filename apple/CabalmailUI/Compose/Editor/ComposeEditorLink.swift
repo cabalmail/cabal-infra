@@ -3,7 +3,8 @@ import CabalmailKit
 /// Connects a composer to its rich-text editor: the toolbar's selection
 /// state, focus, the provenance flag the send path reads, the bridge's
 /// health, the inline images the page shows, and the files dropped or
-/// pasted onto it. Once, when the composer is made; every callback holds
+/// pasted onto it. It owns that wiring, which runs once, when the composer
+/// is made, and before the page can report anything; every callback holds
 /// the composer weakly, since it owns the editor.
 @MainActor
 enum ComposeEditorLink {
@@ -32,9 +33,13 @@ enum ComposeEditorLink {
         editor.onReady = { [weak model] in
             model?.noteEditorRecovered()
         }
-        // The rich pane's inline images load from the composer's own store.
+        // The rich pane's inline images load from the composer's own store,
+        // and the size warning counts the ones the body still shows.
         editor.inlineImages.provider = { [weak model] contentID in
             model?.inlineImages.image(for: contentID).map { ($0.data, $0.mimeType) }
+        }
+        editor.inlineImages.onShownChanged = { [weak model] contentIDs in
+            model?.inlineImages.shown = contentIDs
         }
         DroppedAttachment.takeEditorDrops(into: model)
     }

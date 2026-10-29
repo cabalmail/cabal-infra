@@ -8,8 +8,9 @@ import WebKit
 /// image shown inline in the body is `<img src="cid:<id>">` in the editor:
 /// the reference the sent message carries, with no rewriting between what
 /// the editor holds and what goes on the wire, and one that survives a
-/// round trip through Markdown. A `cid:` the host does not know (a quoted
-/// message's own inline image) fails to load, as before.
+/// round trip through Markdown. A `cid:` the host does not have fails to
+/// load. After each edit it also reports which `cid:` images the body
+/// shows (`onShownChanged`).
 @MainActor
 public final class InlineImageSchemeHandler: NSObject, WKURLSchemeHandler {
     static let scheme = "cid"
@@ -17,6 +18,15 @@ public final class InlineImageSchemeHandler: NSObject, WKURLSchemeHandler {
     /// An inline image's bytes and MIME type, by the bare Content-ID its
     /// `cid:` names; nil for one the host doesn't have.
     public var provider: (@MainActor (_ contentID: String) -> (data: Data, mimeType: String)?)?
+    /// Fires after each edit with the bare Content-IDs of the `cid:` images
+    /// the body shows now.
+    public var onShownChanged: (@MainActor (_ contentIDs: Set<String>) -> Void)?
+
+    /// An `input` message from the page, which lists the images it shows.
+    func noteShown(_ payload: [String: Any]) {
+        guard let contentIDs = payload["images"] as? [String] else { return }
+        onShownChanged?(Set(contentIDs))
+    }
 
     public func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url,
