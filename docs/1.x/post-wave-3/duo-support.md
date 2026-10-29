@@ -31,10 +31,10 @@ This table and the **Status:** line under each work item are updated in the same
 | Session 1, PR 8: nothing re-marked on a close or open | Dropped (2026-10-27): the merge deletes the shell swap it would carry across |
 | Session 1, PR 9: crease margins in book pose | Merged (2026-10-28), #2253 |
 | Session 1, PR 11: Duo docs | Merged (2026-10-26), #2238 |
-| Session 1, PR 10: compact row drag (#1681; R2) | PR open (2026-10-29), #2269 |
-| Session 1, PR 12: drops into compose (R2) | Merged (2026-10-29), #2272; drops onto the body merged (2026-10-29), #2273; inline images: server merged (2026-10-29), #2274, Apple PR open (2026-10-29), #2276 |
+| Session 1, PR 10: compact row drag (#1681; R2) | Merged (2026-10-29), #2269 |
+| Session 1, PR 12: drops into compose (R2) | Merged (2026-10-29), #2272; drops onto the body merged (2026-10-29), #2273; inline images merged (2026-10-29): server #2274, Apple #2276 |
 | Session 1: the Studio simulator pass | Run once (2026-10-28), after PRs 3 to 9: six findings (#2257 to #2262) and a comment on #1692; the device checklist is #2263. The laptop prototype and Risk 6's comparison ran on the Mini (2026-10-29): the message's web view survives laptop pose without a rebuild or reload, and nothing moved on an ordinary iPhone |
-| Session 2: with the device | Not started (2026-10-25); waits for the maintainer's device, back-ordered until December 2026 |
+| Session 2: with the device | The device pass waits for the maintainer's device, back-ordered until December 2026. Its builds go ahead on the simulator at the maintainer's word (2026-10-29): the empty reader's unread count is done |
 | Session 3: the one-tree merge (with Decision 9), or the reader-bar refactor alone | Not started (2026-10-27); the merge, by Decision 9's answer |
 
 ## Words used here
