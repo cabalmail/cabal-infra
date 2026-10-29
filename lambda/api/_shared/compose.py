@@ -16,6 +16,7 @@ from botocore.exceptions import ClientError # pylint: disable=import-error
 from helper import format_mailbox # pylint: disable=import-error
 from helper import get_object # pylint: disable=import-error
 from helper import user_authorized_for_sender # pylint: disable=import-error
+from helper import validate_content_id # pylint: disable=import-error
 from helper import CACHE_BUCKET # pylint: disable=import-error
 
 # Attachments are uploaded to S3 via the /upload_url Lambda's presigned
@@ -109,6 +110,11 @@ def load_attachments(raw, bucket, user):
     authenticated caller so a request can't pull from another user's
     upload prefix. Total fetched size is capped above the client-side
     warning threshold as a defensive ceiling.
+
+    An entry may also carry `content_id`, the bare id (no angle brackets)
+    an `<img src="cid:...">` in the HTML body names: compose_message then
+    sends the image inline rather than attached. It is passed through
+    unchecked; compose_message decides whether it can be honoured.
     """
     if not raw:
         return []
@@ -152,6 +158,7 @@ def load_attachments(raw, bucket, user):
             'maintype': maintype,
             'subtype': subtype,
             'data': data,
+            'content_id': entry.get('content_id'),
         })
     return decoded
 
@@ -178,7 +185,10 @@ def compose_message(subject, from_header, headers, text, html, attachments=None)
         msg['References'] = ' '.join(headers['references'])
     msg['Date'] = formatdate(localtime=True)
     _set_body(msg, text, html)
-    for attachment in attachments or []:
+    inline = _add_inline_images(msg, html, attachments or [])
+    for index, attachment in enumerate(attachments or []):
+        if index in inline:
+            continue
         msg.add_attachment(
             attachment['data'],
             maintype=attachment['maintype'],
@@ -186,6 +196,71 @@ def compose_message(subject, from_header, headers, text, html, attachments=None)
             filename=attachment['filename'],
         )
     return msg
+
+
+def _add_inline_images(msg, html, attachments):
+    """Sends each image the HTML body shows by Content-ID inline, beside
+    the HTML in a multipart/related (RFC 2387), and returns the indices of
+    the entries it took.
+
+    An entry goes inline only when its `content_id` is a valid Content-ID
+    once bracketed (helper.validate_content_id, the check /fetch_inline_image
+    applies when a reader asks for the part), it is an image, the message
+    has an HTML body, an `src` attribute in that body names `cid:<id>`, and
+    no earlier entry claimed the same id. Anything else stays an ordinary
+    attachment, as every entry was before inline images: a forwarded or
+    resumed part may carry its original sender's id, and refusing the send
+    over it would lose more than attaching it does.
+    """
+    if not html.strip():
+        return set()
+    related = None
+    taken = set()
+    claimed = set()
+    for index, attachment in enumerate(attachments):
+        content_id = attachment.get('content_id')
+        if (attachment['maintype'] != 'image' or not isinstance(content_id, str)
+                or content_id in claimed or not _is_valid_content_id(content_id)
+                or not _html_shows(html, content_id)):
+            continue
+        if related is None:
+            related = msg.get_body(('html',))
+        # A filename alone would make the part an attachment; the explicit
+        # disposition keeps it inline.
+        related.add_related(
+            attachment['data'],
+            maintype=attachment['maintype'],
+            subtype=attachment['subtype'],
+            cid=f'<{content_id}>',
+            disposition='inline',
+            filename=attachment['filename'],
+        )
+        claimed.add(content_id)
+        taken.add(index)
+    if related is not None:
+        # RFC 2387 requires the root part's type; the stdlib leaves it out.
+        related.set_param('type', 'text/html')
+    return taken
+
+
+def _is_valid_content_id(content_id):
+    """Whether `content_id` (bare) is a Content-ID a reader can fetch."""
+    try:
+        validate_content_id(f'<{content_id}>')
+    except ValueError:
+        return False
+    return True
+
+
+def _html_shows(html, content_id):
+    """Whether an `src` attribute in `html` names `cid:<content_id>`.
+
+    The attribute, not the text: plain text that mentions a `cid:` (as a
+    quoted Outlook message's `[cid:image001.png@...]` does) shows nothing.
+    """
+    pattern = (r'(?i:src)\s*=\s*(["\'])(?i:cid):' + re.escape(content_id)
+               + r'\1')
+    return re.search(pattern, html) is not None
 
 
 def _set_body(msg, text, html):
