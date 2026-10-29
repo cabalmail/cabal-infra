@@ -2,12 +2,15 @@ import SwiftUI
 import UniformTypeIdentifiers
 import CabalmailKit
 
-/// Files, images and messages dropped onto the compose form become
-/// attachments: from Files, Photos or another app beside Cabalmail in Split
-/// View (the iPhone Duo spec), or from a Cabalmail message list in another
-/// window, as an `.eml`. They take the same path as the photo and file
-/// pickers, `ComposeViewModel.addAttachment`. The Mac compose window lays its
-/// fields out without these rows and takes no drops yet.
+/// Files, images and messages dropped onto the compose form or its body
+/// become attachments: from Files, Photos or another app beside Cabalmail in
+/// Split View (the iPhone Duo spec), or from a Cabalmail message list in
+/// another window, as an `.eml`. They take the same path as the photo and
+/// file pickers, `ComposeViewModel.addAttachment`. On the rich-text editor
+/// the page reads the files and hands them over (`takeEditorDrops`); a drag
+/// that carries markup as well, a selection from a page or a document, is
+/// still inserted. On the Mac only the body takes drops: its compose window
+/// lays the header fields out without these rows.
 ///
 /// Read through `NSItemProvider` rather than a `Transferable` drop: a
 /// `FileRepresentation` import never matched a drag whose types are only
@@ -68,6 +71,59 @@ enum DroppedAttachment {
         return mime
     }
 
+    /// Takes files dropped onto `model`'s rich-text editor as attachments.
+    /// The editor page reads them and hands them over
+    /// (`RichTextEditorController.onDroppedFile`) rather than inserting them,
+    /// saying first how many are coming, which Send and the move to a window
+    /// wait for (`pendingDrops`). That wait starts once WebKit has given the
+    /// page the files, which for a message is after its source has been
+    /// fetched.
+    @MainActor
+    static func takeEditorDrops(into model: ComposeViewModel) {
+        model.editorController.onDropStarted = { [weak model] count in
+            model?.pendingDrops += count
+        }
+        model.editorController.onDroppedFile = { [weak model] name, contents in
+            guard let model else { return }
+            model.pendingDrops -= 1
+            take(contents, named: name, into: model)
+        }
+    }
+
+    /// Attaches a file the editor page read, or says why it can't.
+    @MainActor
+    static func take(_ contents: RichTextEditorController.DroppedFileContents, named name: String,
+                     into model: ComposeViewModel) {
+        let shownName = name.isEmpty ? "the dropped item" : name
+        switch contents {
+        case .unreadable:
+            model.errorMessage = "Couldn't attach \(shownName)."
+        case .tooLarge(let limit):
+            let size = ByteCountFormatter.string(fromByteCount: Int64(limit), countStyle: .file)
+            model.errorMessage = "Couldn't attach \(shownName): it's larger than \(size)."
+        case .data(let data):
+            guard takesDrops(model) else { return }
+            guard !isMoveReference(data) else {
+                // The body showed it would take the drag, so say why nothing came.
+                model.errorMessage = "To attach messages, drag them one at a time."
+                return
+            }
+            let filename = name.isEmpty ? "Attachment" : name
+            model.addAttachment(filename: filename, mimeType: mimeType(forFilename: filename, data: data), data: data)
+        }
+    }
+
+    /// Whether a file the editor page read is a message list's move reference
+    /// (`MessageDragPayload`'s wire form). A drag of several messages offers
+    /// nothing else, and the page reads whatever a drag offers as a file: a
+    /// build whose single-message drags offered only the move reference
+    /// attached it as a 123-byte file (iPhone Duo simulator). The form's rows
+    /// leave it by its type (`readableType`).
+    static func isMoveReference(_ data: Data) -> Bool {
+        guard let reference = try? JSONDecoder().decode(MessageDragPayload.self, from: data) else { return false }
+        return !reference.items.isEmpty
+    }
+
     /// Whether `model` takes a drop now: not while it is moving to a window,
     /// sending, or closing.
     @MainActor
@@ -117,8 +173,8 @@ enum DroppedAttachment {
 extension View {
     /// Takes files, images and messages dropped onto this part of a composer
     /// as attachments, and outlines it while one it can take hovers. Apply to
-    /// the form's rows: a `Form` passes a drop over its rows to the row, not
-    /// to a modifier on the form itself.
+    /// the form's rows and the Markdown body: a `Form` passes a drop over its
+    /// rows to the row, not to a modifier on the form itself.
     func takesDroppedAttachments(into model: ComposeViewModel) -> some View {
         modifier(DroppedAttachmentTarget(model: model))
     }

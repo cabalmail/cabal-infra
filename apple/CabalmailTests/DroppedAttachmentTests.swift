@@ -8,8 +8,17 @@ import CabalmailKit
 final class DroppedAttachmentTests: XCTestCase {
     func testAMessageFromAListArrivesAsItsEml() {
         let type = DroppedAttachment.readableType(
-            registered: [UTType.cabalmailMessageMove.identifier, UTType.emailMessage.identifier],
+            registered: [UTType.emlFile.identifier, UTType.cabalmailMessageMove.identifier],
             hasSuggestedName: true
+        )
+
+        XCTAssertEqual(type, .emlFile)
+    }
+
+    func testAMessageFromAnotherAppIsReadAsAMessage() {
+        let type = DroppedAttachment.readableType(
+            registered: [UTType.utf8PlainText.identifier, UTType.emailMessage.identifier],
+            hasSuggestedName: false
         )
 
         XCTAssertEqual(type, .emailMessage)
@@ -21,6 +30,18 @@ final class DroppedAttachmentTests: XCTestCase {
             registered: [UTType.cabalmailMessageMove.identifier],
             hasSuggestedName: false
         ))
+    }
+
+    func testAMoveReferenceTheEditorReadIsLeft() throws {
+        // The editor page reads whatever a drag offers as a file, the move
+        // reference of a several-message drag included.
+        let two = [MessageDragItem(uid: 1, sourceFolder: "INBOX"), MessageDragItem(uid: 2, sourceFolder: "INBOX")]
+        let reference = try JSONEncoder().encode(MessageDragPayload(items: two))
+
+        XCTAssertTrue(DroppedAttachment.isMoveReference(reference))
+        XCTAssertFalse(DroppedAttachment.isMoveReference(Data("From: a@b\r\n\r\nhi".utf8)))
+        XCTAssertFalse(DroppedAttachment.isMoveReference(Data(#"{"items": "a list"}"#.utf8)))
+        XCTAssertFalse(DroppedAttachment.isMoveReference(Data(#"{"items": []}"#.utf8)), "a JSON file, not a drag")
     }
 
     func testAFileIsReadAsItsOwnType() {

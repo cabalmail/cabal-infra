@@ -348,9 +348,73 @@
   let draggingFromEditor = false;
   editor.addEventListener('dragstart', function () { draggingFromEditor = true; });
   editor.addEventListener('dragend', function () { draggingFromEditor = false; });
+
+  // Files dropped onto the editor (a message from a list, an image, any
+  // other file) are the app's to attach, never the page's to insert:
+  // WebKit's own insertion of a file skips the sanitizer. The page says
+  // which files are coming (`dropStarted`) before it reads them, so the app
+  // can hold Send until each has arrived as a `droppedFile` message. A drag
+  // that carries markup as well is a selection from a page or a document
+  // (its images may come along as files), and takes the paste path below.
+  // Past MAX_DROPPED_FILE_BYTES a file is refused unread: its bytes cross
+  // the bridge as base64, and a very large one could take the page down,
+  // and the draft's rich text with it. Files are read one at a time, so a
+  // drop of several holds no more than one file's copies at once.
+  const MAX_DROPPED_FILE_BYTES = 50 * 1000 * 1000;
+  let lastDroppedFileId = 0;
+
+  function typesOf(transfer) {
+    return Array.from((transfer && transfer.types) || []);
+  }
+
+  function sendDroppedFiles(files) {
+    if (files.length === 0) return;
+    const dropped = files[0];
+    const next = function () { sendDroppedFiles(files.slice(1)); };
+    if (dropped.file.size > MAX_DROPPED_FILE_BYTES) {
+      postNative({ type: 'droppedFile', id: dropped.id, tooLarge: true, limit: MAX_DROPPED_FILE_BYTES });
+      next();
+      return;
+    }
+    const reader = new FileReader();
+    // `loadend` follows a load, an error and an abort alike: exactly once.
+    reader.onloadend = function () {
+      const url = reader.error ? '' : String(reader.result || '');
+      const comma = url.indexOf(',');
+      postNative(comma === -1
+        ? { type: 'droppedFile', id: dropped.id, failed: true }
+        : { type: 'droppedFile', id: dropped.id, base64: url.slice(comma + 1) });
+      next();
+    };
+    reader.readAsDataURL(dropped.file);
+  }
+
+  editor.addEventListener('dragover', function (event) {
+    const types = typesOf(event.dataTransfer);
+    if (draggingFromEditor || types.indexOf('Files') === -1 || types.indexOf('text/html') !== -1) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+
   editor.addEventListener('drop', function (event) {
-    const html = event.dataTransfer && event.dataTransfer.getData('text/html');
-    if (draggingFromEditor || !html) return;
+    if (draggingFromEditor) return;
+    const transfer = event.dataTransfer;
+    const html = transfer && transfer.getData('text/html');
+    if (!html && typesOf(transfer).indexOf('Files') !== -1) {
+      event.preventDefault();
+      const files = Array.from(transfer.files || []).map(function (file) {
+        lastDroppedFileId += 1;
+        return { id: lastDroppedFileId, file: file };
+      });
+      if (files.length === 0) return;
+      postNative({
+        type: 'dropStarted',
+        files: files.map(function (dropped) { return { id: dropped.id, name: dropped.file.name }; }),
+      });
+      sendDroppedFiles(files);
+      return;
+    }
+    if (!html) return;
     event.preventDefault();
     const point = document.caretRangeFromPoint
       ? document.caretRangeFromPoint(event.clientX, event.clientY)
