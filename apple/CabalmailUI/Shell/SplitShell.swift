@@ -66,6 +66,9 @@ struct SplitShell: View {
     /// Whether the window is taller than wide, measured outside the
     /// addresses inspector (`ListColumnPolicy.windowIsTall`).
     @State private var windowIsTall = false
+    /// The crease the reader keeps above while the split is arranged for
+    /// laptop pose, and where the reader ends (`LaptopPanelPolicy`, #1649).
+    @State private var laptopReader = LaptopReaderSlot()
     @Environment(\.foldState) private var foldState
     @Environment(\.foldDivision) private var foldDivision
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -117,15 +120,34 @@ struct SplitShell: View {
             // In book pose the reader starts its content past the crease's
             // keep-out (`CreaseClearance`). Always present, at 0 with no fold,
             // so a fold reflows the web view and never rebuilds it.
-            mail.reader(mailPlaceholder: EmptyModifier(), feedPlaceholder: EmptyModifier())
+            //
+            // In laptop pose the reader ends its content above the fold, its
+            // placeholders here and a message inside its own bar's inset, and
+            // hides the navigation bar a stock split leaves on the upright
+            // half (`LaptopPanelPolicy`). Values only, so a fold reflows the
+            // web view and never rebuilds it.
+            mail.reader(mailPlaceholder: LaptopFoldClearance(), feedPlaceholder: EmptyModifier())
                 .padding(.leading, readerCreaseInset)
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
                 .toolbar { messagesButton }
+                .toolbar(laptopReader.crease == nil ? .automatic : .hidden, for: .navigationBar)
+                .environment(\.laptopReader, laptopReader)
         }
         // A message or a feed item opened over the floating list sends it
         // away; none open brings it back (`ListOverlay`).
         .onChange(of: openReading, initial: true) { _, opened in
             listOverlay.messageChanged(isOpen: opened != nil)
+        }
+        // Laptop pose: the list in a panel below the fold, under the folder
+        // panel, which floats over it as it does over the list column.
+        .overlay(alignment: .top) {
+            laptopPanel
+        }
+        .onChange(of: laptopCrease, initial: true) { old, crease in
+            // Before the list moves, so the list mounting takes the window's
+            // selection and place.
+            if (old == nil) != (crease == nil) { navigator.listMoves() }
+            laptopReader.crease = crease
         }
         // Revealing folders floats a panel OVER the message list rather than
         // tiling the split's sidebar column, so the list never shifts and its
@@ -215,7 +237,7 @@ struct SplitShell: View {
     /// The list column: the shared content with the search field in its
     /// header, the column's bar, and the pinned width with its drag handle.
     private func listColumn(_ mail: WideMail) -> some View {
-        mail.content(header: { columnHeaderSearchField(mail) })
+        columnList(mail)
             // In book pose the list's own controls (the search field, the
             // filter and sort rows, the rows' content) stop short of the
             // crease's keep-out (`CreaseClearance`); the bars' and rows'
@@ -286,6 +308,19 @@ struct SplitShell: View {
             // (`ToolbarItemPlacement.listBar`). Read from the window's fold
             // as it is now, so the move never rides the divider's animation.
             .environment(\.listBarItemsLead, listCreaseClearance > 0)
+    }
+
+    /// The column's list, or nothing while the panel below a laptop fold
+    /// holds it: one list at a time, handed the window's selection and place
+    /// each way as it moves (`SceneNavigator.listMoves()`). The column is
+    /// hidden meanwhile.
+    @ViewBuilder
+    private func columnList(_ mail: WideMail) -> some View {
+        if laptopReader.crease == nil {
+            mail.content(header: { columnHeaderSearchField(mail) })
+        } else {
+            Color.clear
+        }
     }
 
     /// Records the measured content-column width, as the wide layouts have
@@ -366,6 +401,9 @@ extension SplitShell {
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .shadow(color: .black.opacity(0.25), radius: 18, x: 4, y: 0)
                 .padding(.vertical, 10)
+                // Below a laptop fold, where the folders open over the list's
+                // panel rather than across the upright half.
+                .padding(.top, laptopPanelTop)
                 .padding(.leading, 10)
                 .offset(x: folderPanelPresented ? 0 : -(folderPanelWidth + 60))
                 .accessibilityHidden(!folderPanelPresented)
@@ -499,10 +537,16 @@ extension SplitShell {
     /// the zero-width sidebar relies on. Overlaid, the reader alone unless
     /// the list is shown, and a tap on the reader or a swipe that puts the
     /// list away is taken back from the split.
+    ///
+    /// In laptop pose the reader alone, whatever is open: the list is in the
+    /// panel below the fold, and nothing the split asks brings it back.
     private var listColumnVisibility: Binding<NavigationSplitViewVisibility> {
         Binding(
-            get: { listOverlay.visibility(overlays: listOverlays) },
-            set: { listOverlay.splitAsked(for: $0, overlays: listOverlays) }
+            get: { laptopReader.crease == nil ? listOverlay.visibility(overlays: listOverlays) : .detailOnly },
+            set: { visibility in
+                guard laptopReader.crease == nil else { return }
+                listOverlay.splitAsked(for: visibility, overlays: listOverlays)
+            }
         )
     }
 
@@ -520,6 +564,40 @@ extension SplitShell {
                 }
                 .accessibilityIdentifier("reader.showList")
             }
+        }
+    }
+}
+
+// MARK: - Laptop pose
+
+extension SplitShell {
+    /// The crease to arrange the split around: a laptop fold across a tall
+    /// window in the mail section, nil otherwise (`LaptopPanelPolicy`).
+    private var laptopCrease: CGRect? {
+        let arranged = LaptopPanelPolicy.isArranged(
+            fold: foldState, windowIsTall: windowIsTall, showsFeeds: mail.selectedFeedScope != nil
+        )
+        return arranged ? foldState.crease : nil
+    }
+
+    /// How far below the split's top the panels start in laptop pose: the
+    /// crease's bottom edge; 0 otherwise.
+    private var laptopPanelTop: CGFloat {
+        laptopReader.crease.map { max(0, $0.maxY - splitFrame.minY) } ?? 0
+    }
+
+    /// The list's panel, from the crease to the reader's own bar.
+    @ViewBuilder
+    private var laptopPanel: some View {
+        if let crease = laptopReader.crease {
+            let frame = LaptopPanelPolicy.panelFrame(
+                split: splitFrame, crease: crease, readerBottom: laptopReader.readerBottom
+            )
+            LaptopListPanel(mail: mail) {
+                withAnimation(folderPanelAnimation) { folderPanelPresented = true }
+            }
+            .frame(width: frame.width, height: frame.height)
+            .padding(.top, frame.minY)
         }
     }
 }

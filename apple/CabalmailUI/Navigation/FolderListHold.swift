@@ -58,7 +58,7 @@ final class FolderListHold {
         return fresh
     }
 
-    // MARK: Swaps, folder changes and back-outs
+    // MARK: Swaps, moves, folder changes and back-outs
 
     /// The window's layout changed, away from the wide one or to it: a
     /// folder list in the layout it left goes with its tree, so its claim is
@@ -81,6 +81,19 @@ final class FolderListHold {
     /// again.
     func handOff(isWide: Bool, folderPath: String?, parkingIn restores: WindowRestores) {
         handsOffSelection = listSelection?.model.handOff(toWide: isWide) ?? false
+        if let place, place.folderPath == folderPath { restores.parkListAnchor(place) }
+        generation += 1
+    }
+
+    /// The window's list is moving within its tree, between the split's
+    /// list column and the panel below a laptop fold (#1649): the next list
+    /// for the folder takes the selection whatever it holds, so a single
+    /// row's highlight goes with the checked ones, and the place is parked
+    /// for it; the moving list's claim is void. Unlike a layout swap's
+    /// hand-off, nothing else about the window changes: the open message
+    /// stays open, so the reader is not rebuilt.
+    func move(folderPath: String?, parkingIn restores: WindowRestores) {
+        handsOffSelection = listSelection?.folderPath == folderPath
         if let place, place.folderPath == folderPath { restores.parkListAnchor(place) }
         generation += 1
     }

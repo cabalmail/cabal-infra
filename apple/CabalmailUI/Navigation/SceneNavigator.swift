@@ -740,6 +740,13 @@ extension SceneNavigator {
     func mailSelection(for folderPath: String) -> SelectionModel<MessageRef> {
         listHold.mailSelection(for: folderPath)
     }
+
+    /// The split's list moves between its column and the panel below a
+    /// laptop fold (`FolderListHold.move`): the list mounting next takes
+    /// the window's selection and place, as a layout swap's does.
+    func listMoves() {
+        listHold.move(folderPath: selectedFolder?.path, parkingIn: restores)
+    }
 }
 
 // Applies `ShellHandOff`'s decisions, which take the tab and the window's search.

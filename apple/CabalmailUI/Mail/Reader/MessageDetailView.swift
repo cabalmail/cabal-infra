@@ -183,6 +183,11 @@ struct MessageDetailView: View {
                 }
             }
         }
+        // In the split's laptop arrangement the message ends above the fold,
+        // and the action bar pinned below stays at the window's bottom edge,
+        // under the list's panel (`LaptopPanelPolicy`). Inside that bar's
+        // inset, so the bar is not moved with it.
+        .keepsAboveLaptopFold()
         #if os(macOS)
         // macOS renders the subject in the window's title bar (its own chrome),
         // separate from the reading area, so it doesn't duplicate the header
