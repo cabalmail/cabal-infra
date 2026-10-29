@@ -1305,22 +1305,23 @@ ignored while nothing is open. The window's shape is measured outside the
 addresses inspector, which narrows the split in a wide window without
 making it tall. A window wider than tall tiles as before.
 
-**Laptop pose: `Shell/Columns/LaptopPanel.swift`.** With a horizontal fold
-across a tall window, in the mail section, the split hides the list
+**Laptop pose: `Shell/Columns/LaptopPanel.swift`.** With a horizontal
+fold across a tall window, in the mail section, the split hides the list
 column and the reader its navigation bar, and the message ends above the
-fold (`keepsAboveLaptopFold()`, plain bottom padding: behind a
-safe-area inset of that size the web view drew nothing). The reader's own action bar stays at the window's bottom edge,
-and `LaptopListPanel` fills the space between the fold and that bar with
-the list and its bar, in a navigation stack of its own; the folder panel
-opens below the fold over it. The reader reports where its content ends
-through `\.laptopReader`, which is how the panel knows where the bar
-starts. Every change is a value on a modifier that is always present, so
-the message's web view reflows and is never rebuilt. The list itself
-moves: the column holds none while the panel does, and
-`SceneNavigator.listMoves()` hands the mounting list the window's
-selection (a single highlighted row included, which a layout swap does
-not carry) and its place, each way. Feeds keeps the floating list, since
-the feed reader's actions are in its navigation bar.
+fold (`keepsAboveLaptopFold()`, plain bottom padding: behind a safe-area
+inset of that size the web view drew nothing). The reader's own action
+bar stays at the window's bottom edge, and `LaptopListPanel` fills the
+space between the fold and that bar with the list and its bar, in a
+navigation stack of its own; the folder panel opens below the fold over
+it. The reader reports where its content ends through `\.laptopReader`,
+which is how the panel knows where the bar starts. Every change is a
+value on a modifier that is always present, so the message's web view
+reflows and is never rebuilt. The list itself moves: the column holds
+none while the panel does, and `SceneNavigator.listMoves()` hands the
+mounting list the window's selection (a single highlighted row included,
+which a layout swap does not carry) and its place, each way. Feeds keeps
+the floating list, since the feed reader's actions are in its navigation
+bar.
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
