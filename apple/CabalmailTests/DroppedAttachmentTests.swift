@@ -37,11 +37,19 @@ final class DroppedAttachmentTests: XCTestCase {
         XCTAssertEqual(DroppedAttachment.readableType(registered: text, hasSuggestedName: true), .utf8PlainText)
     }
 
+    func testALinkOrRichSelectionIsLeftButAnImageWithALinkIsRead() {
+        let readable = DroppedAttachment.readableType(registered:hasSuggestedName:)
+        XCTAssertNil(readable([UTType.url.identifier, UTType.utf8PlainText.identifier], false))
+        XCTAssertNil(readable(["com.apple.webarchive", UTType.html.identifier, UTType.utf8PlainText.identifier], false))
+        XCTAssertEqual(readable([UTType.png.identifier, UTType.url.identifier], false), .png)
+    }
+
     func testTheSuggestedNameGainsTheTypesExtension() {
         let name = DroppedAttachment.filename(suggested:type:received:)
         XCTAssertEqual(name("IMG_0001", .png, "x.tmp"), "IMG_0001.png")
         XCTAssertEqual(name("Invoice.pdf", .pdf, "x.tmp"), "Invoice.pdf")
         XCTAssertEqual(name(nil, .pdf, "report.pdf"), "report.pdf")
+        XCTAssertEqual(name("Report v1.2", .pdf, "x.tmp"), "Report v1.2.pdf", "a dot in the name is not an extension")
     }
 
     func testAnImageIsTypedByItsBytesNotItsName() {
@@ -54,5 +62,7 @@ final class DroppedAttachmentTests: XCTestCase {
         let mime = DroppedAttachment.mimeType(forFilename:data:)
         XCTAssertEqual(mime("Invoice.pdf", Data("%PDF-1.7".utf8)), "application/pdf")
         XCTAssertEqual(mime("blob", Data([1, 2, 3])), "application/octet-stream")
+        XCTAssertEqual(mime("Notification test.eml", Data("From: a@b\r\n\r\nhi".utf8)), "application/octet-stream",
+                       "the send path base64-encodes parts, which a message/rfc822 part may not be")
     }
 }
