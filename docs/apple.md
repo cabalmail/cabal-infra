@@ -1978,7 +1978,13 @@ bridge. On a refusal the sheet
 carries on as it was, says the window didn't open, and stops offering
 the action; the window that opened for it finds the hand-off withdrawn
 and, once it is in front, closes without saving. Closing the window
-returns to the main window the sheet was over. A mailto: link that
+returns to the main window the sheet was over. A closed compose window
+is only off screen: iPadOS and iPhone Duo keep listing it in the window
+switcher and the "Views Open" pill, and on a phone iOS refuses an app's
+request to destroy a scene session ("not supported for this device
+idiom"). So once a closed window has gone to the background its
+composer goes (`ComposeSlotRegistry.mayCompose`), and one picked from
+the switcher steps straight back out to the mail window (#2257). A mailto: link that
 reaches a compose window with a slot opens a composer of its own from
 that window's main window, rather than replacing the draft, and with no
 main window open, signed in, in a compose window of its own

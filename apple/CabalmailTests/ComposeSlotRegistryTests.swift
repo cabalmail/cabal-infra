@@ -195,6 +195,31 @@ final class ComposeSlotRegistryTests: XCTestCase {
         XCTAssertTrue(registry.mayCompose(reply, closedOn: registry.closedCompose(for: reply)))
     }
 
+    func testAClosedWindowStopsComposingOnceItHasLeftTheScreen() {
+        // The system still lists a closed window; picked there, it must not
+        // come back holding the draft it sent or discarded (#2257).
+        let registry = ComposeSlotRegistry()
+        let reply = Draft(subject: "Re: discarded")
+        var closed = registry.closedCompose(for: reply)
+
+        closed.hasLeftScreen = true
+
+        XCTAssertFalse(registry.mayCompose(reply, closedOn: closed))
+    }
+
+    func testAWindowThatLeftTheScreenComposesWhenItsSlotIsHandedOut() throws {
+        let registry = ComposeSlotRegistry()
+        let slot = registry.acquire(seed: Draft(subject: "Re: sent"))
+        var closed = registry.closedCompose(for: try XCTUnwrap(registry.seed(for: slot)))
+        closed.hasLeftScreen = true
+        registry.release(slot)
+
+        let reused = registry.acquire(seed: Draft(subject: "Re: next"))
+
+        XCTAssertEqual(reused, slot)
+        XCTAssertTrue(registry.mayCompose(try XCTUnwrap(registry.seed(for: reused)), closedOn: closed))
+    }
+
     func testAClosedWindowComposesAgainWhenItsSlotIsHandedOut() throws {
         // The reused window builds the new composer while still hidden, so
         // a new seed is the only signal it is being opened again.
