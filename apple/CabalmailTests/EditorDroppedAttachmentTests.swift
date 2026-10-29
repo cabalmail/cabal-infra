@@ -38,6 +38,9 @@ final class EditorDroppedAttachmentTests: XCTestCase {
     /// reported unreadable before the dead-editor banner, which stays.
     func testTheDeadEditorBannerOutlastsTheUnreadFiles() async throws {
         let model = try TestFixtures.makeComposeModel()
+        // Booted first: a `ready` landing during the wait below would clear
+        // the banner as a late recovery, which is not what this measures.
+        try await TestFixtures.requireEditorBridge(model)
         let drops = model.editorController.fileDrops
         drops.onStarted?(1)
 
