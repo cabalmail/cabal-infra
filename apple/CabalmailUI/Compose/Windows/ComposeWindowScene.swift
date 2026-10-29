@@ -50,6 +50,10 @@ public struct ComposeWindowScene: Scene {
                 // pose the discard question is an alert, as it is over the
                 // sheet (`ConfirmationPrompt`), not a popover on the crease.
                 .foldGeometry()
+                // The window's bars (`\.barsAreVertical`): a wide compose
+                // window on an iPhone Duo has a side strip, where Cancel and
+                // Send carry symbols (`ComposeBarLabel`), as over the sheet.
+                .verticalBars()
                 .environment(appState)
                 .environment(preferences)
                 // A scene is its own appearance root — the main window's

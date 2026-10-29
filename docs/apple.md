@@ -1297,8 +1297,9 @@ starting values to tune on hardware.
 **The side strip: `Platform/VerticalBars.swift`.** On the Duo's outer
 display, and on its inner display in a window wider than tall, the
 system puts the navigation bar, toolbar and tab bar in one vertical strip
-at one side. `verticalBars()`, applied once at `SignedInRootView` after
-`foldGeometry()`, publishes the system's own reading
+at one side. `verticalBars()`, applied after `foldGeometry()` at the root of
+each main window (`SignedInRootView`) and compose window
+(`ComposeWindowScene`), publishes the system's own reading
 (`toolbarVerticalEdge`) as `\.barsAreVertical` and `\.verticalBarEdge`.
 Read the edge, never assume the right: the strip moves with the window
 (in landscape it can be on the left). While the bars are vertical the
@@ -1322,6 +1323,22 @@ own pane bar stays below the crease. Whether an HTML body runs under the
 bottom chrome follows the width alone (`bodyRunsUnderBottomBar`), since
 flipping it rebuilds the web view and the strip comes and goes without a
 shell swap.
+
+**Compose in the strip.** A strip takes only items with a symbol; an item
+with a title alone stays in a horizontal bar above the content. So while the
+window's bars are vertical, compose's Cancel and Send carry symbols
+(`ComposeBarLabel`) and sit in the sheet's strip, Send ranked last to go
+(#2259); everywhere else they keep their titles. The label reads the
+window's `\.barsAreVertical` (published at the root of a main window and of
+a compose window), not the sheet's own `toolbarVerticalEdge`: a label that
+followed the sheet's edge saw it go from trailing to nil, and Cancel and Send
+dropped out of the bar. Send keeps its symbol while sending, pulsing,
+since a spinner in its place drops it from the strip. On iOS 27.1 a sheet
+presented with its strip allowed lays the strip out under the status bar
+and scrolls title-only items away with the form until the window next
+changes size; a plain SwiftUI app does the same. Compose holds its bars
+horizontal until it has appeared (`verticalBarsOnceShown()`), which lays
+the strip out as a size change does. Remove that once a release fixes it.
 
 **Crease margins: `Shell/Columns/CreaseClearance.swift`.** In book pose
 the keep-out is the crease line plus and minus 44 pt: 431.5 to 519.5 on
@@ -1362,6 +1379,10 @@ reader's web view:
   actions that read the pending item still find it.
   `ConfirmationPromptTests` fails a direct `confirmationDialog` anywhere
   in `CabalmailUI/`.
+- The compose sheet takes the trailing page, starting 8 pt past the crease
+  line, so its form starts past the keep-out (`startsPastCrease()`,
+  `Shell/Columns/CreaseLeadingInset.swift`, from its own place in the
+  window); its Cancel and Send are in the strip at the outer edge (#2262).
 
 With the addresses inspector open the list ends short of the crease and
 the reader runs across it, so neither column is inset (Decision 10 in the
