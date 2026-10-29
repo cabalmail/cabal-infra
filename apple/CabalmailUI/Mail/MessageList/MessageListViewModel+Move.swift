@@ -52,8 +52,14 @@ extension MessageListViewModel {
     /// cross-folder search selection routes every message back to its own
     /// folder on drop, and dragging one of two rows that share a UID lifts
     /// only that one.
-    func dragItems(liftedFrom envelope: Envelope) -> [MessageDragItem] {
-        if selectedRefs.count > 1, isSelected(envelope) {
+    ///
+    /// `carriesSelection` is false on the touch path, which drags only the
+    /// lifted row: its rows show no selection outside Select mode (which
+    /// drags nothing), so a selection still held from a wide layout before a
+    /// narrowing would ride along unseen, and only a single message leaves
+    /// the app as an `.eml`.
+    func dragItems(liftedFrom envelope: Envelope, carriesSelection: Bool = true) -> [MessageDragItem] {
+        if carriesSelection, selectedRefs.count > 1, isSelected(envelope) {
             return loadedRows(selectedRefs).map { MessageDragItem(rowRef(for: $0)) }
         }
         return [MessageDragItem(rowRef(for: envelope))]
