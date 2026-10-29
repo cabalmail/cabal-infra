@@ -10,7 +10,8 @@ import SwiftUI
 /// hides it, so a compose window, the Mac's and visionOS's included, never
 /// shows it. Unavailable until the composer has started, while the draft is
 /// being sent or closed, or with the editor down, when there is nothing safe
-/// to hand over (`ComposeViewModel.mayHandOff`).
+/// to hand over (`ComposeViewModel.mayHandOff`), and while a dropped item is
+/// still being read (`pendingDrops`).
 struct ComposeWindowOfferItem: ToolbarContent {
     let model: ComposeViewModel
     @Environment(\.composeWindowOffer) private var offer
@@ -25,7 +26,7 @@ struct ComposeWindowOfferItem: ToolbarContent {
                     // overflow, which draws a row from the title (#1787).
                     Label("Open in New Window", systemImage: "macwindow.badge.plus")
                 }
-                .disabled(!model.mayHandOff)
+                .disabled(!model.mayHandOff || model.pendingDrops > 0)
                 .accessibilityIdentifier("compose.openInNewWindow")
             }
         }

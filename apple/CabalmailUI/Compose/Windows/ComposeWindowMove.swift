@@ -105,7 +105,7 @@ final class ComposeWindowMove {
     /// composer's start runs again.
     @discardableResult
     func move(_ model: ComposeViewModel, along route: Route) -> Task<Void, Never>? {
-        guard phase == .idle, model.mayHandOff else { return nil }
+        guard phase == .idle, model.mayHandOff, model.pendingDrops == 0 else { return nil }
         phase = .moving
         model.isMovingToWindow = true
         _ = model.editorController.webView.resignFirstResponder()

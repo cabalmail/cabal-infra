@@ -64,6 +64,10 @@ final class ComposeViewModel {
     var markdownBody: String = ""
     var editorMode: EditorMode = .rich
     var attachments: [ComposeAttachment] = []
+    /// Dropped items still being read (`DroppedAttachment`). Send
+    /// (`canSend`) and the move to a window (`ComposeWindowOfferItem`,
+    /// `ComposeWindowMove`) wait for them, so neither leaves one out.
+    var pendingDrops = 0
 
     var availableAddresses: [Address] = []
     var isSending = false
@@ -330,7 +334,7 @@ final class ComposeViewModel {
     /// bridge disables it too: the body can't be assembled, so the send
     /// would only be refused (#745) — better not to offer the tap (#812).
     var canSend: Bool {
-        guard editorUnavailable == nil, holdsDraft else { return false }
+        guard editorUnavailable == nil, holdsDraft, pendingDrops == 0 else { return false }
         guard fromAddress != nil, !subject.isEmpty else { return false }
         return !parseRecipients(toText).isEmpty
             || !parseRecipients(ccText).isEmpty
@@ -350,7 +354,8 @@ final class ComposeViewModel {
     /// Whether the draft may move to a window ("Open in New Window"): not
     /// before the composer has started, nor while it is being sent, cancelled
     /// or discarded, or moving already, nor with the editor down, when there
-    /// is no rich text to hand over.
+    /// is no rich text to hand over. The move also waits for dropped items
+    /// still being read (`pendingDrops`, read where the move is offered).
     var mayHandOff: Bool { hasStarted && holdsDraft && !isSending && !isFinishing && editorUnavailable == nil }
 
     /// Sum of the attached file sizes in bytes. Drives the soft-warn banner.

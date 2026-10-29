@@ -32,7 +32,7 @@ This table and the **Status:** line under each work item are updated in the same
 | Session 1, PR 9: crease margins in book pose | Merged (2026-10-28), #2253 |
 | Session 1, PR 11: Duo docs | Merged (2026-10-26), #2238 |
 | Session 1, PR 10: compact row drag (#1681; R2) | PR open (2026-10-29), #2269 |
-| Session 1, PR 12: drops into compose (R2) | Not started (2026-10-15) |
+| Session 1, PR 12: drops into compose (R2) | PR open (2026-10-29), #2272 |
 | Session 1: the Studio simulator pass | Run once (2026-10-28), after PRs 3 to 9: six findings (#2257 to #2262) and a comment on #1692; the device checklist is #2263. The laptop prototype and Risk 6's comparison ran on the Mini (2026-10-29): the message's web view survives laptop pose without a rebuild or reload, and nothing moved on an ordinary iPhone |
 | Session 2: with the device | Not started (2026-10-25); waits for the maintainer's device, back-ordered until December 2026 |
 | Session 3: the one-tree merge (with Decision 9), or the reader-bar refactor alone | Not started (2026-10-27); the merge, by Decision 9's answer |
@@ -293,7 +293,7 @@ Verify by measuring each against the crease on the Studio simulator.
 
 **PR 12, drops into compose (`Apple:`; R2).** Images and files dropped onto the compose sheet become attachments, through the same path as the photo and file pickers 〔.14407〕. Verify a drag from Photos and Files in a Duo Split View half and on iPad.
 
-**Status:** Not started (2026-10-15).
+**Status:** PR open (2026-10-29), #2272. A drop onto the compose form's rows (From, recipients, subject, attachments) becomes an attachment through `ComposeViewModel.addAttachment` (`Compose/ComposeDrop.swift`). It reads through `NSItemProvider` with a `DropDelegate` on each row: a `Transferable` `FileRepresentation` drop never matched a message list's data-only `.eml`, and a drop target on the `Form` itself never saw a drop over its rows. A message arrives as its `.eml` (sent as `application/octet-stream`, since the send path base64-encodes every part); a list's bare move reference, a link and an unnamed text selection are left; Send and the move to a window wait for an item still being read. On the Duo simulator, with two Cabalmail windows in Split View, a message dragged from the list onto the other window's compose form became an `.eml` attachment. Not exercised: Photos and Files (the 27.1 runtime has neither, and the iPad simulator can't show two apps side by side under the harness), the Mac (its compose window has no drop target yet), and drops onto the message body, which stay with the editor; whether those should become attachments too is the maintainer's call. Found on the way: #2271, a compose window in a Split View half stays on screen after it closes.
 
 **The Decision 9 spike (trimmed; no `stage` PR).** Added 2026-10-26 by Decision 9's answer, which holds its scope. It runs on a throwaway branch on the Studio, with the Duo closes and opens and the Pro Max rotations, and its result is a yes or no on the merge, with the evidence, recorded under Decision 9.
 
