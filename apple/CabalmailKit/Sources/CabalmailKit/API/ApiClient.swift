@@ -530,11 +530,16 @@ public struct ApiSendAttachment: Sendable, Hashable {
     public let filename: String
     public let mimeType: String
     public let s3Key: String
+    /// The bare Content-ID an `<img src="cid:...">` in the HTML body names,
+    /// for an image the Lambda sends inline beside the HTML rather than
+    /// attached. A server that predates the field attaches the image.
+    public let contentID: String?
 
-    public init(filename: String, mimeType: String, s3Key: String) {
+    public init(filename: String, mimeType: String, s3Key: String, contentID: String? = nil) {
         self.filename = filename
         self.mimeType = mimeType
         self.s3Key = s3Key
+        self.contentID = contentID
     }
 }
 

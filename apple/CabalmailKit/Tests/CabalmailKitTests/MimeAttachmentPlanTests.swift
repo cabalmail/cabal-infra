@@ -35,6 +35,7 @@ final class MimeAttachmentPlanTests: XCTestCase {
         XCTAssertEqual(attachment?.data, jpeg)
         // Also registered as inline so a `cid:` ref in the body still resolves.
         XCTAssertNotNil(plan.inlineImages["abc123"])
+        XCTAssertEqual(plan.inlineParts.map(\.contentID), ["abc123"])
     }
 
     // A genuine inline image (image/* with a Content-ID and no attachment
@@ -62,6 +63,10 @@ final class MimeAttachmentPlanTests: XCTestCase {
 
         XCTAssertTrue(plan.attachments.isEmpty)
         XCTAssertNotNil(plan.inlineImages["logo"])
+        // Its part, for a reply, forward or resumed draft to carry on.
+        XCTAssertEqual(plan.inlineParts.map(\.contentID), ["logo"])
+        XCTAssertEqual(plan.inlineParts.first?.mimeType, "image/png")
+        XCTAssertEqual(plan.inlineParts.first?.data, png)
     }
 
     // A non-image attachment (no Content-ID) is listed, using the

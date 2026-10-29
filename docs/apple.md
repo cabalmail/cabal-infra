@@ -1630,6 +1630,37 @@ message fetches nothing from its sender's servers. The images in the
 user's own signature stay, and a new compose, a mailto, a reopened draft
 and a paste keep theirs.
 
+#### Dropped and pasted files, and inline images
+
+Files dropped or pasted onto the rich pane never go into the page as the
+page received them (WebKit's own insertion of a file skips the
+sanitizer). The page names them (`dropStarted`), reads them one at a time,
+refusing one over 50 MB unread, and hands each over the bridge
+(`droppedFile`); `EditorFileDrops` delivers each named file to the host
+once, as unreadable if the page's process stops first. The host
+(`DroppedAttachment.takeEditorDrops`) holds Send and the move to a window
+for the named files (`pendingDrops`), then decides. An image goes inline:
+JPEG, PNG and GIF as they are, any other image the device can read (HEIC
+from the photo library, WebP, TIFF) re-encoded as JPEG
+(`InlineImageEncoding`). It is stored under a new Content-ID
+(`ComposeInlineImages`), and the page shows it where it was dropped as
+`<img src="cid:<id>">` (`placeDroppedImage`), which it builds itself and
+only for a `cid:` the host names. `InlineImageSchemeHandler` serves those
+`cid:` loads from the composer's store, so the editor holds the reference
+the message carries, unchanged by Markdown round trips. Anything else is
+attached. A drag that carries markup as well (a selection from a page or
+a document) takes the paste path instead; a drop onto the Markdown pane
+attaches, like a drop onto the form's rows.
+
+At send and draft save, only the images the HTML body still shows go on
+the wire, each as an attachment with its `content_id`; the Lambda
+(`lambda/api/_shared/compose.py`) sends those inline in a
+`multipart/related` beside the HTML. A deleted image stays in the store,
+so undo can bring it back. A reply, a forward and a resumed draft carry
+the message's inline images (`MimeAttachmentPlan.inlineParts`), so a quote
+or a draft that shows them keeps them; a resumed draft also carries its
+attachments.
+
 #### Why a WKWebView instead of native NSTextView / UITextView
 
 Native rich-text editing on Apple platforms means `NSAttributedString`,

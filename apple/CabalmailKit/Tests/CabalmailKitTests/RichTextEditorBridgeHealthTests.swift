@@ -147,13 +147,9 @@ final class RichTextEditorBridgeHealthTests: XCTestCase {
     func testDroppedFilesArriveOnceEachAsAnnounced() {
         let controller = RichTextEditorController(readyTimeout: 600)
         var started: [Int] = []
-        var dropped: [String] = []
-        var contents: [RichTextEditorController.DroppedFileContents] = []
-        controller.onDropStarted = { started.append($0) }
-        controller.onDroppedFile = { name, read in
-            dropped.append(name)
-            contents.append(read)
-        }
+        var files: [EditorFileDrops.File] = []
+        controller.fileDrops.onStarted = { started.append($0) }
+        controller.fileDrops.onFile = { files.append($0) }
 
         controller.handleBridgeMessage(["type": "dropStarted", "files": [
             ["id": 1, "name": "a.pdf"], ["id": 2, "name": "b.mov"], ["id": 3, "name": "c.png"]
@@ -166,8 +162,12 @@ final class RichTextEditorBridgeHealthTests: XCTestCase {
         controller.handleBridgeMessage(["type": "droppedFile", "id": 3, "failed": true])
 
         XCTAssertEqual(started, [3])
-        XCTAssertEqual(dropped, ["a.pdf", "b.mov", "c.png"])
-        XCTAssertEqual(contents, [.data(Data("%PDF".utf8)), .tooLarge(limitBytes: 50_000_000), .unreadable])
+        XCTAssertEqual(files.map(\.id), [1, 2, 3])
+        XCTAssertEqual(files.map(\.name), ["a.pdf", "b.mov", "c.png"])
+        XCTAssertEqual(
+            files.map(\.contents),
+            [.data(Data("%PDF".utf8)), .tooLarge(limitBytes: 50_000_000), .unreadable]
+        )
     }
 
     /// Files still being read when the page's process stops will never come.
@@ -177,7 +177,7 @@ final class RichTextEditorBridgeHealthTests: XCTestCase {
         let controller = RichTextEditorController(readyTimeout: 600)
         controller.handleBridgeMessage(["type": "ready"])
         var events: [String] = []
-        controller.onDroppedFile = { name, read in events.append("\(name) \(read == .unreadable)") }
+        controller.fileDrops.onFile = { events.append("\($0.name) \($0.contents == .unreadable)") }
         controller.onBridgeError = { _ in events.append("bridge") }
 
         controller.handleBridgeMessage(["type": "dropStarted", "files": [

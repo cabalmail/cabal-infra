@@ -32,7 +32,8 @@ final class ComposeWireBodyTests: XCTestCase {
 
     private func sendRequest(
         discardUid: UInt32? = nil,
-        discardValidity: UInt32? = nil
+        discardValidity: UInt32? = nil,
+        attachments: [ApiSendAttachment]? = nil
     ) -> SendMessageRequest {
         SendMessageRequest(
             host: "imap.cabalmail.example",
@@ -46,7 +47,7 @@ final class ComposeWireBodyTests: XCTestCase {
             htmlBody: "<p>hi</p>",
             textBody: "hi",
             draft: false,
-            attachments: attachments,
+            attachments: attachments ?? self.attachments,
             discardDraftUid: discardUid,
             discardDraftUidValidity: discardValidity
         )
@@ -136,6 +137,19 @@ final class ComposeWireBodyTests: XCTestCase {
              "other_headers", "html", "text", "attachments"],
             "/save_draft is the /send shape minus the SMTP concerns"
         )
+    }
+
+    func testAnInlineImageCarriesItsContentID() async throws {
+        let inline = ApiSendAttachment(
+            filename: "photo.jpg", mimeType: "image/jpeg", s3Key: "u/1/photo.jpg", contentID: "a1@cabalmail"
+        )
+        let http = RecordingHTTPTransport(responses: [(Data(#"{"status":"submitted"}"#.utf8), 200)])
+        try await makeClient(transport: http).sendMessage(sendRequest(attachments: attachments + [inline]))
+
+        let payload = try await body(of: http)
+        let wireAttachments = try XCTUnwrap(payload["attachments"] as? [[String: Any]])
+        XCTAssertEqual(wireAttachments.map { $0["content_id"] as? String }, [nil, nil, "a1@cabalmail"])
+        XCTAssertEqual(Set(wireAttachments[2].keys), ["filename", "mime_type", "s3_key", "content_id"])
     }
 
     func testSendDiscardPairIsAllOrNothing() async throws {

@@ -152,15 +152,11 @@ public final class RichTextEditorController: NSObject {
     /// web content process. Hosts should surface it to the user; whether the
     /// bridge is still usable afterwards is recorded in `bridgeFailure`.
     public var onBridgeError: (@MainActor (String) -> Void)?
-    /// Fires when files are dropped onto the editor, with how many
-    /// `onDroppedFile` calls will follow. Every one of them does, even if the
-    /// page's process stops first, so a host can hold Send meanwhile.
-    public var onDropStarted: (@MainActor (_ count: Int) -> Void)?
-    /// Fires once for each file dropped onto the editor: a message from a
-    /// list, an image, any other file. The page inserts none of them;
-    /// attaching is the host's.
-    public var onDroppedFile: (@MainActor (_ name: String, _ contents: DroppedFileContents) -> Void)?
-    private var droppedFiles = DroppedFilesInFlight()
+    /// Files dropped or pasted onto the editor, which the page hands over
+    /// rather than inserting.
+    public let fileDrops: EditorFileDrops
+    /// Serves the body's inline images (`<img src="cid:...">`) from the host.
+    public let inlineImages: InlineImageSchemeHandler
 
     private var pendingReadyContinuations: [CheckedContinuation<Void, Never>] = []
     private var readyTimeoutTask: Task<Void, Never>?
@@ -187,6 +183,8 @@ public final class RichTextEditorController: NSObject {
         // swiftlint:disable:next content_javascript_enabled
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
+        let inlineImages = InlineImageSchemeHandler()
+        config.setURLSchemeHandler(inlineImages, forURLScheme: InlineImageSchemeHandler.scheme)
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.allowsLinkPreview = false
         #if os(iOS) || os(visionOS)
@@ -198,6 +196,8 @@ public final class RichTextEditorController: NSObject {
         webView.setValue(false, forKey: "drawsBackground")
         #endif
         self.webView = webView
+        self.inlineImages = inlineImages
+        self.fileDrops = EditorFileDrops(webView: webView)
         super.init()
         controller.add(BridgeRelay(target: self), name: "cabal")
         webView.navigationDelegate = self
@@ -437,20 +437,9 @@ extension RichTextEditorController {
             isEditorFocused = type == "focus"
             onEditorFocusChanged?(isEditorFocused)
         case "dropStarted", "droppedFile":
-            handleDropMessage(type, payload)
+            fileDrops.handle(type, payload)
         default:
             break
-        }
-    }
-
-    /// Files dropped onto the editor: the page announces them
-    /// (`dropStarted`), then delivers each in a `droppedFile` message.
-    private func handleDropMessage(_ type: String, _ payload: [String: Any]) {
-        if type == "dropStarted" {
-            let count = droppedFiles.start(payload)
-            if count > 0 { onDropStarted?(count) }
-        } else if let file = droppedFiles.arrive(payload) {
-            onDroppedFile?(file.name, file.contents)
         }
     }
 
@@ -599,9 +588,7 @@ extension RichTextEditorController: WKNavigationDelegate {
     public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         // Files the page was still reading will never come; the host is
         // holding Send for them.
-        for name in droppedFiles.abandon() {
-            onDroppedFile?(name, .unreadable)
-        }
+        fileDrops.pageStopped()
         failBridge("the editor's web content process stopped")
     }
 }

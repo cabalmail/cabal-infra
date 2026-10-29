@@ -2,6 +2,10 @@ import Foundation
 import Observation
 import CabalmailKit
 
+/// The Kit's attachment, which the reader's own `Attachment` hides inside
+/// the model.
+typealias KitAttachment = Attachment
+
 /// Backs `MessageDetailView`. Fetches the raw RFC 5322 bytes (consulting the
 /// `MessageBodyCache` first), hands them to `MimeParser`, and exposes the
 /// pieces the view needs: headers, a plain / HTML body, an attachment list,
@@ -31,6 +35,9 @@ final class MessageDetailViewModel {
     var htmlBody: String?
     var attachments: [Attachment] = []
     var inlineImages: [String: URL] = [:]
+    /// The inline images' parts, which a reply, forward or resumed draft
+    /// carries on for its body to show.
+    var inlineParts: [KitAttachment] = []
 
     /// RFC 5322 threading identity parsed from the fetched message's
     /// headers (angle-bracketed, like the envelope payload). The list
@@ -353,6 +360,12 @@ private extension MessageDetailViewModel {
         // silently fail to render. See `MimePart.inlineImageDataURL`.
         let plan = root.attachmentPlan()
         inlineImages = plan.inlineImages
+        inlineParts = plan.inlineParts.map { part in
+            let name = part.filename ?? "image.\(ImageDataFormat.detect(part.data)?.filenameExtension ?? "bin")"
+            return KitAttachment(
+                filename: name, mimeType: part.mimeType, data: part.data, contentID: part.contentID
+            )
+        }
         var fileNames = AttachmentFileNamer()
         attachments = try plan.attachments.map { item in
             let filename = item.filename ?? "attachment-\(UUID().uuidString).bin"

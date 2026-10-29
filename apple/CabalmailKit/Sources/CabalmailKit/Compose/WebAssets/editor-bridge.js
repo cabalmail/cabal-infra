@@ -23,6 +23,11 @@
 //   window.cabal.setTextScale(scale)      -> display-only text size ratio
 //                                            (Dynamic Type); never in the
 //                                            HTML getHTML() returns
+//   window.cabal.placeDroppedImage(id, src, alt)
+//                                         -> shows a dropped or pasted
+//                                            image as <img src="cid:...">
+//                                            where it was dropped
+//   window.cabal.forgetDroppedFile(id)    -> the app attached it instead
 //
 // Native code talks back via window.webkit.messageHandlers.cabal when it
 // exists; outside a WKWebView (e.g. /unit tests served in a browser) the
@@ -336,6 +341,15 @@
       document.execCommand('insertHTML', false, sanitizeForInsert(html));
       return;
     }
+    // A pasted image (or other file) goes to the app like a dropped one,
+    // to show at the caret or attach. Inserting the text flavor instead
+    // pasted nothing for an image.
+    const files = Array.from((event.clipboardData && event.clipboardData.files) || []);
+    if (files.length > 0) {
+      event.preventDefault();
+      takeFiles(files, caretRange());
+      return;
+    }
     if (typeof text === 'string') {
       event.preventDefault();
       insertPlainText(text);
@@ -362,9 +376,79 @@
   // drop of several holds no more than one file's copies at once.
   const MAX_DROPPED_FILE_BYTES = 50 * 1000 * 1000;
   let lastDroppedFileId = 0;
+  // Where each file named to the app would go if the app shows it inline:
+  // one insertion point per drop or paste, shared by its files and moved
+  // past each image placed, so they keep their order.
+  const insertions = new Map();
 
   function typesOf(transfer) {
     return Array.from((transfer && transfer.types) || []);
+  }
+
+  function endRange() {
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    return range;
+  }
+
+  function caretRange() {
+    const selection = window.getSelection();
+    if (selection.rangeCount && editor.contains(selection.getRangeAt(0).startContainer)) {
+      return selection.getRangeAt(0).cloneRange();
+    }
+    return endRange();
+  }
+
+  function dropRange(event) {
+    const point = document.caretRangeFromPoint
+      ? document.caretRangeFromPoint(event.clientX, event.clientY)
+      : null;
+    return point && editor.contains(point.startContainer) ? point : endRange();
+  }
+
+  function takeFiles(list, range) {
+    const insertion = { range: range };
+    const files = list.map(function (file) {
+      lastDroppedFileId += 1;
+      insertions.set(lastDroppedFileId, insertion);
+      return { id: lastDroppedFileId, file: file };
+    });
+    postNative({
+      type: 'dropStarted',
+      files: files.map(function (dropped) { return { id: dropped.id, name: dropped.file.name }; }),
+    });
+    sendDroppedFiles(files);
+  }
+
+  // The app shows a dropped or pasted image inline. The page inserts only
+  // a `cid:` image the app names (served by the app, never fetched), and
+  // builds the element itself, so nothing it did not write reaches the
+  // document unsanitized. Returns whether it placed the image.
+  function placeDroppedImage(id, src, alt) {
+    const insertion = insertions.get(id);
+    insertions.delete(id);
+    if (!insertion || !/^cid:[^\s"'<>]+$/i.test(String(src))) return false;
+    const image = document.createElement('img');
+    image.setAttribute('src', src);
+    if (alt) image.setAttribute('alt', String(alt));
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(insertion.range);
+    // insertHTML keeps the insertion undoable.
+    if (document.execCommand('insertHTML', false, image.outerHTML) && selection.rangeCount) {
+      insertion.range = selection.getRangeAt(0).cloneRange();
+      return true;
+    }
+    insertion.range.insertNode(image);
+    insertion.range.setStartAfter(image);
+    insertion.range.collapse(true);
+    editor.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  }
+
+  function forgetDroppedFile(id) {
+    insertions.delete(id);
   }
 
   function sendDroppedFiles(files) {
@@ -372,6 +456,7 @@
     const dropped = files[0];
     const next = function () { sendDroppedFiles(files.slice(1)); };
     if (dropped.file.size > MAX_DROPPED_FILE_BYTES) {
+      insertions.delete(dropped.id);
       postNative({ type: 'droppedFile', id: dropped.id, tooLarge: true, limit: MAX_DROPPED_FILE_BYTES });
       next();
       return;
@@ -381,6 +466,7 @@
     reader.onloadend = function () {
       const url = reader.error ? '' : String(reader.result || '');
       const comma = url.indexOf(',');
+      if (comma === -1) insertions.delete(dropped.id);
       postNative(comma === -1
         ? { type: 'droppedFile', id: dropped.id, failed: true }
         : { type: 'droppedFile', id: dropped.id, base64: url.slice(comma + 1) });
@@ -402,16 +488,8 @@
     const html = transfer && transfer.getData('text/html');
     if (!html && typesOf(transfer).indexOf('Files') !== -1) {
       event.preventDefault();
-      const files = Array.from(transfer.files || []).map(function (file) {
-        lastDroppedFileId += 1;
-        return { id: lastDroppedFileId, file: file };
-      });
-      if (files.length === 0) return;
-      postNative({
-        type: 'dropStarted',
-        files: files.map(function (dropped) { return { id: dropped.id, name: dropped.file.name }; }),
-      });
-      sendDroppedFiles(files);
+      const files = Array.from(transfer.files || []);
+      if (files.length > 0) takeFiles(files, dropRange(event));
       return;
     }
     if (!html) return;
@@ -633,7 +711,9 @@
     focus: focus,
     focusAtStart: focusAtStart,
     setPlaceholder: setPlaceholder,
-    setTextScale: setTextScale
+    setTextScale: setTextScale,
+    placeDroppedImage: placeDroppedImage,
+    forgetDroppedFile: forgetDroppedFile
   };
 
   postNative({ type: 'ready' });

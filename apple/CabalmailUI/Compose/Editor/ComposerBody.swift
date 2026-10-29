@@ -53,8 +53,6 @@ struct ComposerBody: View {
             #endif
             RichTextEditorView(controller: model.editorController)
                 .frame(minHeight: 180)
-                // Files dropped onto the editor become attachments.
-                .onAppear { DroppedAttachment.takeEditorDrops(into: model) }
                 // The pane's only addressable descendants are web content,
                 // which publishes no identifier and is not hittable. Without
                 // an identifier here the body is reachable only by coordinate

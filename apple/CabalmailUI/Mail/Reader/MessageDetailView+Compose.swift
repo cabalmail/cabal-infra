@@ -26,7 +26,8 @@ extension MessageDetailView {
                 userAddresses: addresses,
                 sourceFolder: folder.path
             )
-            presentCompose(seed: seed, attachments: mode == .forward ? forwardedAttachments() : [])
+            let attachments = mode == .forward ? carriedAttachments(into: "the forward") : []
+            presentCompose(seed: seed, attachments: attachments + (model?.inlineParts ?? []))
         }
     }
 
@@ -37,14 +38,15 @@ extension MessageDetailView {
         (try? await client.addressesForSending().addresses) ?? []
     }
 
-    /// Forwarding includes the original message's attachments. The detail
-    /// view model decoded them to temp files during the MIME parse, so
-    /// re-read the bytes; they ride the compose request beside the seed
+    /// A forward or a resumed draft includes the message's attachments. The
+    /// detail view model decoded them to temp files during the MIME parse,
+    /// so re-read the bytes; they ride the compose request beside the seed
     /// (the window value is a recycled slot, not the draft), and
-    /// `ComposeView` takes them on appearance. Inline `cid:` images stay
-    /// behind: they live in the quoted body, not the attachment strip,
-    /// matching the React composer's scope.
-    private func forwardedAttachments() -> [Attachment] {
+    /// `ComposeView` takes them on appearance. A reply, a forward and a
+    /// resumed draft also carry the message's inline images
+    /// (`inlineParts`), which go on the wire only if the body still shows
+    /// them (`ComposeInlineImages`).
+    private func carriedAttachments(into destination: String) -> [Attachment] {
         guard let source = model?.attachments, !source.isEmpty else { return [] }
         let loaded: [Attachment] = source.compactMap { attachment in
             guard let data = try? Data(contentsOf: attachment.fileURL) else { return nil }
@@ -57,21 +59,22 @@ extension MessageDetailView {
         if loaded.count < source.count {
             showToast(Toast(
                 kind: .warning,
-                message: "Some attachments couldn't be carried into the forward."
+                message: "Some attachments couldn't be carried into \(destination)."
             ))
         }
         return loaded
     }
 
     /// Opens compose resuming the open Drafts-folder message: recipients,
-    /// subject, and body from the fetched draft, with the server
-    /// coordinates wired so the first re-save replaces this copy and a
-    /// send discards it.
+    /// subject, body, attachments and inline images from the fetched draft,
+    /// with the server coordinates wired so the first re-save replaces this
+    /// copy and a send discards it. Without its attachments the first
+    /// autosave replaced the server copy with one that had none.
     func beginResumeDraft() {
         guard let model else { return }
         Task { @MainActor in
             let seed = await model.resumeDraftSeed()
-            presentCompose(seed: seed)
+            presentCompose(seed: seed, attachments: carriedAttachments(into: "the draft") + model.inlineParts)
         }
     }
 

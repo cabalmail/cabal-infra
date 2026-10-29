@@ -38,8 +38,10 @@ extension ComposeView {
     }
 
     /// Byte-total warning shown under the attachment rows once the
-    /// total crosses the model's warning threshold. Shared by the
-    /// grouped-Form path (iOS et al.) and the macOS bottom strip.
+    /// total, inline images included, crosses the model's warning
+    /// threshold. Shared by the grouped-Form path (iOS et al.) and the
+    /// macOS bottom strip, which both show it with no attachment rows when
+    /// inline images alone cross it.
     ///
     /// Drawn in the warning token; #1453 measured why the platform orange
     /// could not be used here, and the token file records the floors.
@@ -49,7 +51,7 @@ extension ComposeView {
             fromByteCount: Int64(model.attachmentTotalBytes),
             countStyle: .file
         )
-        let warning = "Attachments total \(total). Many mail servers reject "
+        let warning = "Attachments and images total \(total). Many mail servers reject "
             + "messages over 25 MB; delivery may fail."
         Label(warning, systemImage: "exclamationmark.triangle")
             .font(.caption)
