@@ -457,6 +457,22 @@ extension RichTextEditorControllerTests {
         XCTAssertEqual(ran, "")
     }
 
+    /// A dropped file (a message from a list, an image) is the host's to
+    /// attach: the page hands its bytes over and inserts nothing.
+    func testADroppedFileGoesToTheHostAndNotIntoThePage() async throws {
+        await controller.setHTML("<p>Kept</p>")
+        var dropped: [(name: String, data: Data?)] = []
+        controller.onDroppedFile = { name, _, data in dropped.append((name, data)) }
+        let eml = "From: sender@example.invalid\r\n\r\nHello"
+
+        let html = try await dropFile(named: "note.eml", contents: eml)
+
+        XCTAssertEqual(html, "<p>Kept</p>", "the page inserted the dropped file")
+        try await waitUntilOnMainActor { !dropped.isEmpty }
+        XCTAssertEqual(dropped.map(\.name), ["note.eml"])
+        XCTAssertEqual(dropped.first?.data, Data(eml.utf8))
+    }
+
     /// Script in the page can't navigate it: not to another local file, and
     /// not back to the editor itself, which would reload it and wipe the
     /// draft.
@@ -534,6 +550,26 @@ extension RichTextEditorControllerTests {
               editor.dispatchEvent(event);
               return editor.innerHTML;
             })(\(jsonString(kind)), \(jsonString(html)))
+            """
+        ) as? String
+        return try XCTUnwrap(read)
+    }
+
+    /// Fires a `drop` carrying one file, as WebKit does for a file dragged
+    /// in from outside the page, then reads the editor.
+    private func dropFile(named name: String, contents: String) async throws -> String {
+        let read = try await controller.webView.evaluateJavaScript(
+            """
+            (function (name, contents) {
+              const editor = document.getElementById('editor');
+              const data = new DataTransfer();
+              data.items.add(new File([contents], name));
+              const init = { bubbles: true, cancelable: true, dataTransfer: data };
+              const event = new (window.DragEvent || MouseEvent)('drop', init);
+              if (event.dataTransfer !== data) Object.defineProperty(event, 'dataTransfer', { value: data });
+              editor.dispatchEvent(event);
+              return editor.innerHTML;
+            })(\(jsonString(name)), \(jsonString(contents)))
             """
         ) as? String
         return try XCTUnwrap(read)

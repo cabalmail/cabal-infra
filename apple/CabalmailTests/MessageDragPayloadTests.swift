@@ -1,4 +1,6 @@
 import XCTest
+import CoreTransferable
+import UniformTypeIdentifiers
 import CabalmailKit
 @testable import CabalmailUI
 
@@ -38,6 +40,43 @@ final class MessageDragPayloadTests: XCTestCase {
             MessageDragPayload(items: two, subject: nil, rawSource: Self.fetch).exportsEml,
             "a multi-select drag is a move; one .eml cannot carry two messages"
         )
+    }
+
+    func testTheEmlIsAFileOfADataType() {
+        // A receiver that takes any file looks for data; the abstract
+        // `.emailMessage` is not, and the compose editor's page passed it over.
+        XCTAssertTrue(UTType.emlFile.conforms(to: .data))
+        XCTAssertEqual(UTType.emlFile.preferredFilenameExtension, "eml")
+    }
+
+    func testASingleMessageOffersItsEmlAheadOfTheMoveReference() {
+        let provider = NSItemProvider()
+        provider.register(MessageDragPayload(items: [Self.item], subject: "Hello", rawSource: Self.fetch))
+
+        XCTAssertEqual(
+            provider.registeredTypeIdentifiers,
+            [UTType.emlFile.identifier, UTType.cabalmailMessageMove.identifier],
+            "a receiver that takes the first data type it finds takes the .eml"
+        )
+    }
+
+    func testSeveralMessagesOfferOnlyTheMoveReference() {
+        let provider = NSItemProvider()
+        let two = [Self.item, MessageDragItem(uid: 43, sourceFolder: "INBOX")]
+        provider.register(MessageDragPayload(items: two, subject: nil, rawSource: Self.fetch))
+
+        XCTAssertEqual(provider.registeredTypeIdentifiers, [UTType.cabalmailMessageMove.identifier])
+    }
+
+    func testAFolderStillReadsTheMoveReferenceBehindTheEml() async throws {
+        let provider = NSItemProvider()
+        provider.register(MessageDragPayload(items: [Self.item], subject: "Hello", rawSource: Self.fetch))
+
+        let read: MessageDragPayload = try await withCheckedThrowingContinuation { continuation in
+            _ = provider.loadTransferable(type: MessageDragPayload.self) { continuation.resume(with: $0) }
+        }
+
+        XCTAssertEqual(read.items, [Self.item])
     }
 
     func testEmlFilenameNeutralisesSeparatorsAndEmptySubjects() {

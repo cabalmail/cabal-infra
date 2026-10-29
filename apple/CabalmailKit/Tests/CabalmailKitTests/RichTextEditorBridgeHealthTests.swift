@@ -139,5 +139,24 @@ final class RichTextEditorBridgeHealthTests: XCTestCase {
         XCTAssertFalse(controller.isEditorFocused)
         XCTAssertEqual(observed, [true, false])
     }
+
+    /// A dropped file reaches the host with its bytes, or with none when the
+    /// page could not read it, so the host can say so.
+    func testDroppedFileMessagesCarryTheFilesBytes() {
+        let controller = RichTextEditorController(readyTimeout: 600)
+        var dropped: [(name: String, data: Data?)] = []
+        controller.onDroppedFile = { name, _, data in dropped.append((name, data)) }
+
+        controller.handleBridgeMessage([
+            "type": "droppedFile", "name": "a.pdf", "mimeType": "application/pdf",
+            "base64": Data("%PDF".utf8).base64EncodedString()
+        ])
+        controller.handleBridgeMessage([
+            "type": "droppedFile", "name": "b.png", "mimeType": "image/png", "failed": true
+        ])
+
+        XCTAssertEqual(dropped.map(\.name), ["a.pdf", "b.png"])
+        XCTAssertEqual(dropped.map(\.data), [Data("%PDF".utf8), nil])
+    }
 }
 #endif

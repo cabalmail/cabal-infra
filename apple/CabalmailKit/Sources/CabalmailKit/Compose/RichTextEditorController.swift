@@ -152,6 +152,10 @@ public final class RichTextEditorController: NSObject {
     /// web content process. Hosts should surface it to the user; whether the
     /// bridge is still usable afterwards is recorded in `bridgeFailure`.
     public var onBridgeError: (@MainActor (String) -> Void)?
+    /// Fires for each file dropped onto the editor: a message from a list,
+    /// an image, any other file. The page does not insert them; attaching
+    /// is the host's. Nil `data` means the page could not read the file.
+    public var onDroppedFile: (@MainActor (_ name: String, _ mimeType: String, _ data: Data?) -> Void)?
 
     private var pendingReadyContinuations: [CheckedContinuation<Void, Never>] = []
     private var readyTimeoutTask: Task<Void, Never>?
@@ -427,6 +431,13 @@ extension RichTextEditorController {
         case "focus", "blur":
             isEditorFocused = type == "focus"
             onEditorFocusChanged?(isEditorFocused)
+        case "droppedFile":
+            let base64 = payload["base64"] as? String
+            onDroppedFile?(
+                payload["name"] as? String ?? "",
+                payload["mimeType"] as? String ?? "",
+                base64.flatMap { Data(base64Encoded: $0) }
+            )
         default:
             break
         }

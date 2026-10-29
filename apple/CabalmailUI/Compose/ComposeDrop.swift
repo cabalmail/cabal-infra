@@ -2,12 +2,14 @@ import SwiftUI
 import UniformTypeIdentifiers
 import CabalmailKit
 
-/// Files, images and messages dropped onto the compose form become
-/// attachments: from Files, Photos or another app beside Cabalmail in Split
-/// View (the iPhone Duo spec), or from a Cabalmail message list in another
-/// window, as an `.eml`. They take the same path as the photo and file
-/// pickers, `ComposeViewModel.addAttachment`. The Mac compose window lays its
-/// fields out without these rows and takes no drops yet.
+/// Files, images and messages dropped onto the compose form or its body
+/// become attachments: from Files, Photos or another app beside Cabalmail in
+/// Split View (the iPhone Duo spec), or from a Cabalmail message list in
+/// another window, as an `.eml`. They take the same path as the photo and
+/// file pickers, `ComposeViewModel.addAttachment`. On the rich-text editor
+/// the page reads the files and hands them over (`takeEditorDrops`). On the
+/// Mac only the body takes drops: its compose window lays the header fields
+/// out without these rows.
 ///
 /// Read through `NSItemProvider` rather than a `Transferable` drop: a
 /// `FileRepresentation` import never matched a drag whose types are only
@@ -22,7 +24,7 @@ enum DroppedAttachment {
     /// outside the list it came from.
     static func readableType(registered identifiers: [String], hasSuggestedName: Bool) -> UTType? {
         let types = identifiers.compactMap(UTType.init)
-        if let eml = types.first(where: { $0.conforms(to: .emailMessage) }) {
+        if let eml = types.first(where: { $0.conforms(to: .emailMessage) || $0.conforms(to: .emlFile) }) {
             return eml
         }
         if let image = types.first(where: { $0.conforms(to: .image) }) {
@@ -66,6 +68,32 @@ enum DroppedAttachment {
             return "application/octet-stream"
         }
         return mime
+    }
+
+    /// Takes files dropped onto `model`'s rich-text editor as attachments.
+    /// The editor page reads them and hands them over
+    /// (`RichTextEditorController.onDroppedFile`) rather than inserting them.
+    @MainActor
+    static func takeEditorDrops(into model: ComposeViewModel) {
+        model.editorController.onDroppedFile = { [weak model] name, _, data in
+            guard let model else { return }
+            guard let data else {
+                model.errorMessage = "Couldn't attach \(name.isEmpty ? "the dropped item" : name)."
+                return
+            }
+            guard takesDrops(model), !isMoveReference(data) else { return }
+            let filename = name.isEmpty ? "Attachment" : name
+            model.addAttachment(filename: filename, mimeType: mimeType(forFilename: filename, data: data), data: data)
+        }
+    }
+
+    /// Whether a file the editor page read is a message list's move reference
+    /// (`MessageDragPayload`'s wire form). A drag of several messages offers
+    /// nothing else, and the page reads it as a file like any other (measured
+    /// on the iPhone Duo simulator); it is left, as the form's rows leave it
+    /// by its type (`readableType`).
+    static func isMoveReference(_ data: Data) -> Bool {
+        (try? JSONDecoder().decode(MessageDragPayload.self, from: data)) != nil
     }
 
     /// Whether `model` takes a drop now: not while it is moving to a window,

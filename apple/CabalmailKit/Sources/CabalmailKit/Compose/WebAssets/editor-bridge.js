@@ -348,7 +348,44 @@
   let draggingFromEditor = false;
   editor.addEventListener('dragstart', function () { draggingFromEditor = true; });
   editor.addEventListener('dragend', function () { draggingFromEditor = false; });
+
+  // Files dropped onto the editor (a message from a list, an image, any
+  // other file) are the app's to attach, not the page's to insert: each one
+  // goes over the bridge as a `droppedFile` message.
+  function carriesFiles(transfer) {
+    return !!transfer && Array.from(transfer.types || []).indexOf('Files') !== -1;
+  }
+
+  function sendDroppedFile(file) {
+    const reader = new FileReader();
+    reader.onload = function () {
+      const url = String(reader.result || '');
+      const comma = url.indexOf(',');
+      postNative({
+        type: 'droppedFile',
+        name: file.name,
+        mimeType: file.type,
+        base64: comma === -1 ? '' : url.slice(comma + 1),
+      });
+    };
+    reader.onerror = function () {
+      postNative({ type: 'droppedFile', name: file.name, mimeType: file.type, failed: true });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  editor.addEventListener('dragover', function (event) {
+    if (draggingFromEditor || !carriesFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+
   editor.addEventListener('drop', function (event) {
+    if (!draggingFromEditor && carriesFiles(event.dataTransfer) && event.dataTransfer.files.length > 0) {
+      event.preventDefault();
+      Array.from(event.dataTransfer.files).forEach(sendDroppedFile);
+      return;
+    }
     const html = event.dataTransfer && event.dataTransfer.getData('text/html');
     if (draggingFromEditor || !html) return;
     event.preventDefault();
