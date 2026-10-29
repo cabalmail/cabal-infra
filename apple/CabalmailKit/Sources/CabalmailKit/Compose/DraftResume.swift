@@ -42,7 +42,8 @@ public enum DraftResume {
             // already the user's own words, not a quoted original).
             composeIntent: .new,
             serverUid: serverRef?.uid,
-            serverUidValidity: serverRef?.uidValidity
+            serverUidValidity: serverRef?.uidValidity,
+            isResumedDraft: true
         )
     }
 
