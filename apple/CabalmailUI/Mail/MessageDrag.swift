@@ -3,10 +3,11 @@ import CoreTransferable
 import UniformTypeIdentifiers
 import CabalmailKit
 
-// Drag-and-drop plumbing for moving messages onto sidebar folders on the
-// wide-screen layouts (iPad regular width, macOS, visionOS). The message
-// rows in `MessageListView` are the drag source (`.draggable`); the folder
-// rows in `FolderListView` are the drop target (`.dropDestination`).
+// Drag-and-drop plumbing for moving messages onto folders, and for a single
+// message leaving the app as an `.eml`. The message rows in
+// `MessageListView` are the drag source (`.draggable`), on every layout from
+// iOS 27 (`MessageListLayout.touchRowsDrag`); the folder rows in
+// `FolderListView` are the drop target (`.dropDestination`).
 //
 // `.draggable` / `.dropDestination` (rather than the lower-level
 // `.onDrag` / `.onDrop`) is deliberate: `.onDrag` on a `List(selection:)`
