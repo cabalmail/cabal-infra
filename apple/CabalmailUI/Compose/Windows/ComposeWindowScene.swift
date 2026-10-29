@@ -91,6 +91,10 @@ private struct ComposeWindowContent: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
+    /// The window's phase as last seen, for a composer closing out of view.
+    /// State, so `onClose`, captured when the composer was built, reads it
+    /// current.
+    @State private var phase: ScenePhase = .active
 
     /// The seed a window without a slot composes from. Held per window so
     /// it shares nothing with a slot the registry can hand out, and in
@@ -110,8 +114,9 @@ private struct ComposeWindowContent: View {
 
     var body: some View {
         composer
-        .onChange(of: scenePhase) { _, phase in
-            windowPhaseChanged(phase)
+        .onChange(of: scenePhase, initial: true) { old, new in
+            phase = new
+            windowPhaseChanged(from: old, to: new)
         }
         .onOpenURL { url in
             // On macOS the main window group declines external events
@@ -179,21 +184,15 @@ private struct ComposeWindowContent: View {
         dismissWindow()
     }
 
-    /// A closed window that has left the screen keeps nothing to send: its
-    /// composer goes (`ComposeSlotRegistry.mayCompose`). And one the user
-    /// brings back from the window switcher leaves again, since the system
-    /// still lists it and a phone cannot destroy its session (#2257).
-    private func windowPhaseChanged(_ phase: ScenePhase) {
+    /// A closed window that has left the screen keeps nothing to send, and
+    /// one brought back to the front leaves again (`ClosedComposeWindow`,
+    /// #2257). A window composing a new seed on its recycled slot is not
+    /// closed.
+    private func windowPhaseChanged(from old: ScenePhase, to new: ScenePhase) {
         guard var closed = closedOn, closed.seedID == seed.id else { return }
-        switch phase {
-        case .background:
-            closed.hasLeftScreen = true
-            closedOn = closed
-        case .active where closed.hasLeftScreen:
-            leave()
-        default:
-            break
-        }
+        let leaves = closed.sceneMoved(from: old, to: new)
+        closedOn = closed
+        if leaves { leave() }
     }
 
     private func composeView(client: CabalmailClient) -> some View {
@@ -205,6 +204,7 @@ private struct ComposeWindowContent: View {
             handoff: appState.compose.handoffs.pending(for: seed.id),
             onClose: {
                 closedOn = appState.composeSlots.closedCompose(for: seed)
+                closedOn?.closed(in: phase)
                 // Free the slot before dismissing so the next composer
                 // can recycle this window instead of minting a
                 // presentation SwiftUI will never release. A window

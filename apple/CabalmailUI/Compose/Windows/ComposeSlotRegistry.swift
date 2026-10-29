@@ -92,10 +92,8 @@ public final class ComposeSlotRegistry {
     struct ClosedCompose: Equatable {
         let session: Int
         let seedID: UUID
-        /// Whether the window has gone to the background since. A dismissed
-        /// window is not gone: iPadOS and iPhone Duo keep offering it in the
-        /// window switcher, and on a phone the app cannot destroy its session
-        /// (#2257).
+        /// Whether the window has left the screen since, or closed out of
+        /// view (`ClosedComposeWindow`, #2257).
         var hasLeftScreen = false
     }
 
@@ -114,9 +112,9 @@ public final class ComposeSlotRegistry {
     /// the session comes back after a sign-out, including one forced by an
     /// expired session. Every closed window then started a hidden composer
     /// from the seed it closed on, saving it to Drafts every minute. And the
-    /// system keeps offering a closed window: picked from the window switcher
-    /// it came back as a live composer holding the draft it had sent or
-    /// discarded, Send included (#2257).
+    /// system keeps offering a closed window: on iPhone Duo, picked from the
+    /// window switcher, it came back as a live composer holding the draft it
+    /// had sent or discarded, Send included (#2257).
     ///
     /// A window that never closed always may. A closed one may for a new
     /// seed, which is its slot being handed out again. For the seed it closed
