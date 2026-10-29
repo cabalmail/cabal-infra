@@ -103,6 +103,17 @@ final class MessageDetailViewModel {
 
     func requestPrint() { printRequestTick += 1 }
 
+    /// The tall bar's last Page Up or Page Down, which the body pages for
+    /// (`ReaderPaging`).
+    private(set) var pageRequest: ReaderPageRequest?
+
+    func requestPage(_ direction: ReaderPageRequest.Direction) {
+        pageRequest = .next(after: pageRequest, direction)
+    }
+
+    /// Whether a body is on screen to page.
+    var hasBody: Bool { htmlBody != nil || plainText != nil }
+
     /// In-flight body fetch (#403). Owned by the model so SwiftUI's `.task`
     /// double-fire can't cancel it. Deliberately not cancelled when the view
     /// disappears: `.onDisappear` is unreliable on iPhone (SwiftUI fires it

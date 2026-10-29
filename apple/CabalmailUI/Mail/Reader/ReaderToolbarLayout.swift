@@ -17,6 +17,9 @@ enum ReaderToolbarAction: String, CaseIterable {
     case viewSource = "reader.viewSource"
     case viewHeaders = "reader.viewHeaders"
     case printMessage = "reader.print"
+    case pageUp = "reader.pageUp"
+    case pageDown = "reader.pageDown"
+    case compose = "reader.compose"
 
     /// Icon and label in the quiescent state (unread message, not flagged,
     /// remote content blocked, original formatting, HTML showing, Archive
@@ -46,6 +49,9 @@ enum ReaderToolbarAction: String, CaseIterable {
         case .viewHeaders:   return ("View headers", "list.bullet.rectangle")
         case .printMessage:  return ("Print…", "printer")
         case .overflow:      return ("More actions", "ellipsis.circle")
+        case .pageUp:        return ("Page Up", "chevron.up")
+        case .pageDown:      return ("Page Down", "chevron.down")
+        case .compose:       return ("New Message", "square.and.pencil")
         }
     }
 }
@@ -96,6 +102,12 @@ enum ReaderToolbarLayout {
         .move, .plainText, .viewSource, .viewHeaders, .printMessage
     ]
 
+    /// Controls only the bar of a window taller than wide carries
+    /// (`tallBar`). They act on the reader rather than the message, and
+    /// every other layout has them elsewhere: the list's bar has Compose,
+    /// and the body scrolls under a finger, a trackpad or the keyboard.
+    static let tallWindowOnly: [ReaderToolbarAction] = [.pageUp, .pageDown, .compose]
+
     /// The macOS top toolbar, in drawn order: every reader action as its own
     /// button, no app-owned overflow menu, ordered by *reverse demotion
     /// priority* (#1047). AppKit folds a crowded toolbar's trailing items
@@ -139,7 +151,8 @@ enum ReaderToolbarLayout {
         case .dispose, .toggleRead:    return .splitButton
         case .toggleFlag:              return flagMenuHasRows ? .splitButton : .button
         case .editDraft, .remoteContent, .readerMode, .move,
-             .plainText, .viewSource, .viewHeaders, .printMessage:
+             .plainText, .viewSource, .viewHeaders, .printMessage,
+             .pageUp, .pageDown, .compose:
             return .button
         }
     }
@@ -174,7 +187,8 @@ enum ReaderToolbarLayout {
         case .toggleFlag:
             return max(flagMenuRowCount, 1)
         case .reply, .overflow, .editDraft, .remoteContent, .readerMode, .move,
-             .plainText, .viewSource, .viewHeaders, .printMessage:
+             .plainText, .viewSource, .viewHeaders, .printMessage,
+             .pageUp, .pageDown, .compose:
             return 1
         }
     }
@@ -233,10 +247,15 @@ enum ReaderToolbarLayout {
     /// and dispose/overflow the trailing one, and resizing never moves the
     /// endpoint hit targets. Narrow panes draw the same five as the system
     /// bar.
+    ///
+    /// A reader that fills a window taller than wide draws `tallBar`
+    /// whatever its width.
     static func ownBar(
         leading: LeadingReaderAction,
-        paneWidth: CGFloat
+        paneWidth: CGFloat,
+        fillsTallWindow: Bool = false
     ) -> [ReaderToolbarAction] {
+        if fillsTallWindow { return tallBar(leading: leading) }
         guard paneWidth >= fullSetMinWidth else {
             return bottomBar(leading: leading)
         }
@@ -248,6 +267,27 @@ enum ReaderToolbarLayout {
             .readerMode,
             .dispose,
             .overflow
+        ]
+    }
+
+    /// The reader's own bar in a window taller than wide, where it fills the
+    /// window: the iPhone Duo open upright or in laptop pose, an iPad in
+    /// portrait. The list's bar, with Compose, is behind the message there
+    /// or below a laptop fold, and the bar is the controls' one row under
+    /// the thumb, so it carries the iPhone Duo spec's set in its order:
+    /// Reply, dispose, Flag, Read, Page Up, Page Down, the More menu (which
+    /// takes the display toggles) and Compose. Open tall and laptop pose
+    /// keep the same controls, as Apple asks of a tabletop layout.
+    static func tallBar(leading: LeadingReaderAction) -> [ReaderToolbarAction] {
+        [
+            leading == .editDraft ? .editDraft : .reply,
+            .dispose,
+            .toggleFlag,
+            .toggleRead,
+            .pageUp,
+            .pageDown,
+            .overflow,
+            .compose
         ]
     }
 }

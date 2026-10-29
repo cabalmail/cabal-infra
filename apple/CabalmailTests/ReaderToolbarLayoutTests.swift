@@ -135,7 +135,7 @@ final class ReaderToolbarLayoutTests: XCTestCase {
 
         XCTAssertEqual(
             reachable,
-            Set(ReaderToolbarAction.allCases),
+            Set(ReaderToolbarAction.allCases).subtracting(ReaderToolbarLayout.tallWindowOnly),
             "every reader action must be on the navigation bar or in the overflow menu"
         )
     }
@@ -221,7 +221,7 @@ final class ReaderToolbarLayoutTests: XCTestCase {
 
         XCTAssertEqual(
             reachable,
-            Set(ReaderToolbarAction.allCases),
+            Set(ReaderToolbarAction.allCases).subtracting(ReaderToolbarLayout.tallWindowOnly),
             "every reader action must be on the bar or in the overflow menu"
         )
     }
@@ -263,6 +263,7 @@ final class ReaderToolbarLayoutTests: XCTestCase {
             let actions = ReaderToolbarLayout.macToolbar(leading: leading)
             let expected = Set(ReaderToolbarAction.allCases)
                 .subtracting([.overflow, leading == .editDraft ? .reply : .editDraft])
+                .subtracting(ReaderToolbarLayout.tallWindowOnly)
 
             XCTAssertEqual(
                 Set(actions), expected,

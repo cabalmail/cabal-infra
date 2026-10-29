@@ -29,7 +29,34 @@ extension MessageDetailView {
         case .viewSource:    viewSourceButton
         case .viewHeaders:   viewHeadersButton
         case .printMessage:  printButton
+        case .pageUp:        pageButton(.upward)
+        case .pageDown:      pageButton(.downward)
+        case .compose:       newMessageButton
         }
+    }
+
+    /// Page Up or Page Down, on a tall window's bar: pages the body a
+    /// screen (`ReaderPaging`).
+    func pageButton(_ direction: ReaderPageRequest.Direction) -> some View {
+        let action: ReaderToolbarAction = direction == .upward ? .pageUp : .pageDown
+        return Button {
+            model?.requestPage(direction)
+        } label: {
+            Label(action.quiescentTitle, systemImage: action.quiescentSymbol)
+        }
+        .disabled(model?.hasBody != true)
+        .accessibilityIdentifier(action.rawValue)
+    }
+
+    /// Compose, on a tall window's bar, where the list's bar and its
+    /// Compose are behind the message or below a laptop fold.
+    var newMessageButton: some View {
+        Button {
+            presentCompose(seed: ReplyBuilder.newDraft())
+        } label: {
+            Label(ReaderToolbarAction.compose.quiescentTitle, systemImage: ReaderToolbarAction.compose.quiescentSymbol)
+        }
+        .accessibilityIdentifier(ReaderToolbarAction.compose.rawValue)
     }
 
     #if os(iOS)
@@ -40,7 +67,8 @@ extension MessageDetailView {
     var ownBarActions: [ReaderToolbarAction] {
         ReaderToolbarLayout.ownBar(
             leading: model?.leadingToolbarAction ?? .reply,
-            paneWidth: readerPaneWidth
+            paneWidth: readerPaneWidth,
+            fillsTallWindow: readerFillsTallWindow
         )
     }
     #endif

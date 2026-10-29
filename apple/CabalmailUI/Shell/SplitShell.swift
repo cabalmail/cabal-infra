@@ -132,6 +132,7 @@ struct SplitShell: View {
                 .toolbar { messagesButton }
                 .toolbar(laptopReader.crease == nil ? .automatic : .hidden, for: .navigationBar)
                 .environment(\.laptopReader, laptopReader)
+                .environment(\.readerFillsTallWindow, listOverlays)
         }
         // A message or a feed item opened over the floating list sends it
         // away; none open brings it back (`ListOverlay`).

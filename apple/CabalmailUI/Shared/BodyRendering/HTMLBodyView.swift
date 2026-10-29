@@ -37,6 +37,8 @@ struct HTMLBodyView: View {
     /// advances, so a SwiftUI re-layout (which re-runs `update*View` with
     /// the same tick) doesn't re-trigger printing.
     var printRequestTick: Int = 0
+    /// The tall bar's Page Up and Page Down (`ReaderPaging`).
+    var pageRequest: ReaderPageRequest?
     /// In-message scroll anchor to reapply once the body finishes loading (a
     /// child-index path + delta produced by a prior `onScrollCaptured`, resumed
     /// from the nav cursor). Nil for a normal open. See `NavStateCoordinator`.
@@ -74,6 +76,7 @@ struct HTMLBodyView: View {
         allowRemote: Bool,
         readerMode: Bool,
         printRequestTick: Int = 0,
+        pageRequest: ReaderPageRequest? = nil,
         restoreAnchor: String? = nil,
         runsUnderBottomBar: Bool = false,
         onScrollCaptured: ((ScrollCapture) -> Void)? = nil
@@ -83,6 +86,7 @@ struct HTMLBodyView: View {
         self.allowRemote = allowRemote
         self.readerMode = readerMode
         self.printRequestTick = printRequestTick
+        self.pageRequest = pageRequest
         self.restoreAnchor = restoreAnchor
         self.runsUnderBottomBar = runsUnderBottomBar
         self.onScrollCaptured = onScrollCaptured
@@ -116,6 +120,7 @@ struct HTMLBodyView: View {
             readerMode: readerMode,
             textScale: dynamicTypeSize.bodyTextScale,
             printRequestTick: printRequestTick,
+            pageRequest: pageRequest,
             restoreAnchor: restoreAnchor,
             onScrollCaptured: onScrollCaptured,
             onLinkTap: presentLinkMenu,
@@ -129,6 +134,7 @@ struct HTMLBodyView: View {
             readerMode: readerMode,
             textScale: dynamicTypeSize.bodyTextScale,
             printRequestTick: printRequestTick,
+            pageRequest: pageRequest,
             restoreAnchor: restoreAnchor,
             onScrollCaptured: onScrollCaptured,
             onLinkTap: presentLinkMenu,
@@ -193,6 +199,7 @@ private struct MobileHTMLView: UIViewRepresentable {
     let readerMode: Bool
     let textScale: Double
     let printRequestTick: Int
+    let pageRequest: ReaderPageRequest?
     let restoreAnchor: String?
     let onScrollCaptured: ((ScrollCapture) -> Void)?
     let onLinkTap: (LinkMenuTarget) -> Void
@@ -228,6 +235,7 @@ private struct MobileHTMLView: UIViewRepresentable {
             on: uiView
         )
         context.coordinator.handlePrintTick(printRequestTick, for: uiView)
+        context.coordinator.handlePageRequest(pageRequest, for: uiView)
         context.coordinator.updateRestoreAnchor(restoreAnchor, on: uiView)
     }
 }
@@ -243,6 +251,7 @@ private struct MacHTMLView: NSViewRepresentable {
     let readerMode: Bool
     let textScale: Double
     let printRequestTick: Int
+    let pageRequest: ReaderPageRequest?
     let restoreAnchor: String?
     let onScrollCaptured: ((ScrollCapture) -> Void)?
     let onLinkTap: (LinkMenuTarget) -> Void
@@ -273,6 +282,7 @@ private struct MacHTMLView: NSViewRepresentable {
             on: nsView
         )
         context.coordinator.handlePrintTick(printRequestTick, for: nsView)
+        context.coordinator.handlePageRequest(pageRequest, for: nsView)
         context.coordinator.updateRestoreAnchor(restoreAnchor, on: nsView)
     }
 }
@@ -329,6 +339,9 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     /// SwiftUI re-layout; comparing against this value ensures the system
     /// print sheet only opens when the parent's counter actually advances.
     private var lastPrintTick: Int = 0
+    /// The last page request's tick (`handlePageRequest`); nil until the
+    /// first update sets the baseline.
+    var lastPageTick: Int?
     /// Reports the current in-message scroll anchor to the reader. Set from
     /// `update*View`; invoked by the scroll bridge and the fallback poll.
     var onScrollCaptured: ((ScrollCapture) -> Void)?
