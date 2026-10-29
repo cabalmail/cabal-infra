@@ -344,6 +344,8 @@ Write the consolidated device checklist from this pass, the spec's "What needs h
    - **the laptop layout** (#1649), from the Session 1 prototype: in laptop pose the reader column shows only the message in the top half, with the navigation bar hidden, and a panel below the fold holds the header (folder button, folder name, Filter, Select, Settings), the list (same anchor and checked rows), the bottom toolbar (Reply, Archive or Trash, Flag, Read, Page Up, Page Down, a Message menu, Compose) and the tab bar if the system puts it at the bottom 〔.49942〕〔.50159〕. Feeds and Search use the same panel; Addresses puts its list there. The Message menu and the page buttons go in every tall window's bottom toolbar 〔.50681〕. Compose in laptop pose: the body above the fold, fields and buttons below while the keyboard is down 〔row .51954〕;
    - **sheets by window shape:** trailing in a wide window, book included; centered in a tall one; Cabalmail's own sheets other than compose take only the region below a laptop fold 〔.13567〕;
    - the empty reader shows the folder's unread count 〔.14932〕;
+
+     **Status:** Built ahead of the device (2026-10-29), at the maintainer's word to do what needs no device: "No message selected" now reads "Nothing unread in INBOX." or "N unread messages in …" from the folder's count (`MailReaderChoice.emptyDescription`), on every shell. Checked on the Duo simulator open flat.
    - Select mode per Decision 11, with any 27.1 modifier in a `Platform/` adapter (after feed-bulk-actions.md PR D);
    - #1692 per Decision 10;
    - turning on detached-reader-window.md's open-Duo entry point if it has landed (regular width, on request, falling back in place).
