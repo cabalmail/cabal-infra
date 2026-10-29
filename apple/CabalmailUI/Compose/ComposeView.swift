@@ -500,6 +500,7 @@ extension ComposeView {
                     model: model,
                     onCreateAddress: { showNewAddressSheet = true }
                 )
+                .takesDroppedAttachments(into: model)
             }
         case .recipients:
             recipientsSection
@@ -507,12 +508,14 @@ extension ComposeView {
             Section("Subject") {
                 TextField("Subject", text: $model.subject)
                     .accessibilityIdentifier("compose.subject")
+                    .takesDroppedAttachments(into: model)
             }
         case .attachments:
             if !model.attachments.isEmpty {
                 Section("Attachments") {
                     ForEach(model.attachments) { attachment in
                         attachmentRow(attachment)
+                            .takesDroppedAttachments(into: model)
                     }
                     if model.attachmentTotalExceedsWarning {
                         attachmentSizeWarning
@@ -540,6 +543,7 @@ extension ComposeView {
                 identifier: "compose.to",
                 onContactsAccessChanged: reloadRecipientCandidates
             )
+            .takesDroppedAttachments(into: model)
             RecipientFieldWithSuggestions(
                 label: "Cc",
                 text: $model.ccText,
@@ -549,6 +553,7 @@ extension ComposeView {
                 identifier: "compose.cc",
                 onContactsAccessChanged: reloadRecipientCandidates
             )
+            .takesDroppedAttachments(into: model)
             RecipientFieldWithSuggestions(
                 label: "Bcc",
                 text: $model.bccText,
@@ -558,6 +563,7 @@ extension ComposeView {
                 identifier: "compose.bcc",
                 onContactsAccessChanged: reloadRecipientCandidates
             )
+            .takesDroppedAttachments(into: model)
         }
     }
     #endif
