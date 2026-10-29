@@ -22,6 +22,7 @@ struct SettingsSheetPresenter: ViewModifier {
         content
             .sheet(isPresented: $presented) {
                 SettingsSheet()
+                    .windowShapedSheet()
             }
             .onChange(of: navigator.showsSettingsSheet, initial: true) { _, shows in
                 if presented != shows { presented = shows }

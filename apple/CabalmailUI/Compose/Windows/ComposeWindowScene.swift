@@ -54,6 +54,9 @@ public struct ComposeWindowScene: Scene {
                 // window on an iPhone Duo has a side strip, where Cancel and
                 // Send carry symbols (`ComposeBarLabel`), as over the sheet.
                 .verticalBars()
+                // Where this window's sheets sit (`\.sheetsSitTrailing`):
+                // New Address and the contact picker, by the window's shape.
+                .windowSheetPlacement()
                 .environment(appState)
                 .environment(preferences)
                 // A scene is its own appearance root — the main window's

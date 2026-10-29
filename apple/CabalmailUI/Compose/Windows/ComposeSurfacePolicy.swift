@@ -60,21 +60,6 @@ enum ComposeSurfacePolicy {
         !alwaysWindows && supportsMultipleWindows && isRegularWidth
     }
 
-    /// Whether the compose sheet sits on the window's trailing side (the
-    /// spec's "replies on the trailing side in flat wide windows"), leaving
-    /// the window's leading side in view, rather than where the system puts
-    /// it.
-    ///
-    /// Only in a window wider than it is tall that is regular in both size
-    /// classes: an iPad in landscape, an open iPhone Duo held wide, flat or
-    /// in book pose. A tall window keeps the system's placement, centred on
-    /// an iPad and the Duo's inner display; so does every compact one,
-    /// where a sheet takes the width anyway (an iPhone, a closed Duo, a
-    /// large iPhone held wide, whose height is compact).
-    static func sheetSitsTrailing(windowIsWide: Bool, isRegularWidth: Bool, isRegularHeight: Bool) -> Bool {
-        windowIsWide && isRegularWidth && isRegularHeight
-    }
-
     /// The host platform's answer (`HostPlatform.alwaysWindows`), as a value
     /// so the rule above can be exercised for both answers on whichever
     /// platform the tests run.

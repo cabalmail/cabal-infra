@@ -156,6 +156,7 @@ struct ComposeView: View {
                     }
                 )
                 .environment(appState)
+                .windowShapedSheet()
             }
             #if os(iOS) || os(visionOS)
             // No `maxSelectionCount`: omitting it leaves the parameter at its
