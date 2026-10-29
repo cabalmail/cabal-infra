@@ -16,9 +16,11 @@ tester's direct-API unblock email -- arrived as a blank body in any client
 showing rich content, with the text the sender wrote hidden in the plain part.
 '''
 import os
+import re
 import sys
 import types
 import unittest
+from email import message_from_bytes, policy
 
 os.environ.setdefault('AWS_REGION', 'us-east-1')
 os.environ.setdefault('CONTROL_DOMAIN', 'test.example.com')
@@ -326,6 +328,31 @@ class ComposeInlineImagesTest(_ComposeTestCase):
                 msg = self._compose_inline('probe', html + f'<img src="cid:{CID}">', [attachment])
                 self.assertEqual(_inline_parts(msg), [])
                 self.assertEqual(len(list(msg.iter_attachments())), 1)
+
+    def test_an_id_the_header_cannot_carry_literally_is_attached(self):
+        # The stdlib would write these as RFC 2047 encoded-words, which no
+        # other mail client matches against the HTML's cid:.
+        for content_id in ('a' * 66 + '@example.org',      # 78 characters
+                           'bild-\u00e4@example.org',
+                           '=?utf-8?q?x?=@example.org'):
+            with self.subTest(content_id=content_id):
+                msg = self._compose_inline(
+                    'probe', f'<img src="cid:{content_id}">', [_image(content_id=content_id)])
+                self.assertEqual(_inline_parts(msg), [])
+                self.assertEqual(len(list(msg.iter_attachments())), 1)
+
+    def test_the_longest_inline_id_reaches_the_wire_as_written(self):
+        content_id = 'a' * 63 + '@example.org'     # 75 characters
+        msg = self._compose_inline('probe', f'<img src="cid:{content_id}">',
+                                   [_image(content_id=content_id)])
+
+        wire = msg.as_bytes(policy=msg.policy.clone(linesep='\r\n'))
+        self.assertNotIn(b'=?', wire)
+        for read_policy in (policy.default, policy.compat32):
+            with self.subTest(policy=read_policy):
+                (image,) = _inline_parts(message_from_bytes(wire, policy=read_policy))
+                header = re.sub(r'\s+', '', str(image['Content-ID']))
+                self.assertEqual(header, f'<{content_id}>')
 
     def test_a_text_only_body_attaches_its_images(self):
         msg = self._compose_inline(f'![photo](cid:{CID})', '', [_image()])

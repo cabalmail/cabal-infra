@@ -205,7 +205,8 @@ def _add_inline_images(msg, html, attachments):
 
     An entry goes inline only when its `content_id` is a valid Content-ID
     once bracketed (helper.validate_content_id, the check /fetch_inline_image
-    applies when a reader asks for the part), it is an image, the message
+    applies when a reader asks for the part) that the header can carry
+    literally (MAX_INLINE_CONTENT_ID_LEN), it is an image, the message
     has an HTML body, an `src` attribute in that body names `cid:<id>`, and
     no earlier entry claimed the same id. Anything else stays an ordinary
     attachment, as every entry was before inline images: a forwarded or
@@ -243,8 +244,22 @@ def _add_inline_images(msg, html, attachments):
     return taken
 
 
+# The longest bare id a Content-ID header carries literally. The stdlib
+# treats Content-ID as unstructured text: an `<id>` that fits no 78-column
+# line on its own, or that holds a non-ASCII byte or an `=?`, it rewrites
+# as RFC 2047 encoded-words, which a msg-id may not contain (RFC 2047
+# section 5) and which other mail clients then fail to match against the
+# HTML's `cid:`. Up to this length the id stays literal, folded onto a
+# continuation line of its own at worst.
+MAX_INLINE_CONTENT_ID_LEN = 75
+
+
 def _is_valid_content_id(content_id):
-    """Whether `content_id` (bare) is a Content-ID a reader can fetch."""
+    """Whether `content_id` (bare) is a Content-ID a reader can fetch and
+    the header can carry as written."""
+    if (len(content_id) > MAX_INLINE_CONTENT_ID_LEN or not content_id.isascii()
+            or '=?' in content_id):
+        return False
     try:
         validate_content_id(f'<{content_id}>')
     except ValueError:
