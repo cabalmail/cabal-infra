@@ -41,6 +41,7 @@ final class DroppedAttachmentTests: XCTestCase {
         XCTAssertTrue(DroppedAttachment.isMoveReference(reference))
         XCTAssertFalse(DroppedAttachment.isMoveReference(Data("From: a@b\r\n\r\nhi".utf8)))
         XCTAssertFalse(DroppedAttachment.isMoveReference(Data(#"{"items": "a list"}"#.utf8)))
+        XCTAssertFalse(DroppedAttachment.isMoveReference(Data(#"{"items": []}"#.utf8)), "a JSON file, not a drag")
     }
 
     func testAFileIsReadAsItsOwnType() {

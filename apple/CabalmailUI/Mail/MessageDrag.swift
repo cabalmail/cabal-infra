@@ -34,8 +34,10 @@ extension UTType {
     /// Declared as an exported type in both app targets' Info.plist
     /// (`UTExportedTypeDeclarations`, via `project.yml`) so Launch Services
     /// recognizes it and the runtime doesn't warn about an undeclared
-    /// identifier. Conforms only to `public.data`; no filename tag because
-    /// it's never written to disk or shared.
+    /// identifier. Conforms only to `public.data`, with no filename tag. A
+    /// receiver that takes any data as a file can still take it, as the
+    /// compose editor's page does from a several-message drag
+    /// (`DroppedAttachment.isMoveReference`).
     static let cabalmailMessageMove = UTType(exportedAs: "com.cabalmail.message-move")
 
     /// A message as an `.eml` file: the file type the `eml` extension names
@@ -109,11 +111,12 @@ struct MessageDragPayload: Codable, Transferable {
     }
 
     static var transferRepresentation: some TransferRepresentation {
-        // The `.eml` comes first, as a file of a data type (`emlFile`): a
-        // receiver that takes whatever file it is offered takes the first
-        // data type it finds, and the compose editor's page (WebKit) saw no
-        // file at all while the `.eml` was offered as data. The sidebar's
-        // folder drop decodes the move reference wherever it sits.
+        // The `.eml` comes first, under a data type (`emlFile`): a receiver
+        // that takes any data as a file takes the first data type it finds.
+        // While the `.eml` came second as the abstract `.emailMessage`, the
+        // compose editor's page (WebKit) took the move reference instead.
+        // The sidebar's folder drop decodes the move reference wherever it
+        // sits.
         DataRepresentation(exportedContentType: .emlFile) { payload in
             guard let rawSource = payload.rawSource else {
                 throw CocoaError(.fileNoSuchFile)

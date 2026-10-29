@@ -457,20 +457,47 @@ extension RichTextEditorControllerTests {
         XCTAssertEqual(ran, "")
     }
 
-    /// A dropped file (a message from a list, an image) is the host's to
-    /// attach: the page hands its bytes over and inserts nothing.
-    func testADroppedFileGoesToTheHostAndNotIntoThePage() async throws {
-        await controller.setHTML("<p>Kept</p>")
-        var dropped: [(name: String, data: Data?)] = []
-        controller.onDroppedFile = { name, _, data in dropped.append((name, data)) }
+    /// Dropped files (a message from a list, an image) are the host's to
+    /// attach: the page says they are coming, hands each one's bytes over in
+    /// turn, and keeps WebKit from inserting them.
+    func testDroppedFilesGoToTheHostAndNotIntoThePage() async throws {
+        let drops = DropRecorder(controller)
         let eml = "From: sender@example.invalid\r\n\r\nHello"
+        let files = [DropFile(name: "note.eml", contents: eml), DropFile(name: "photo.png", contents: "png")]
 
-        let html = try await dropFile(named: "note.eml", contents: eml)
+        let dropped = try await drop(files)
 
-        XCTAssertEqual(html, "<p>Kept</p>", "the page inserted the dropped file")
-        try await waitUntilOnMainActor { !dropped.isEmpty }
-        XCTAssertEqual(dropped.map(\.name), ["note.eml"])
-        XCTAssertEqual(dropped.first?.data, Data(eml.utf8))
+        XCTAssertTrue(dropped.prevented, "the page left the files to WebKit's own insertion")
+        try await waitUntilOnMainActor { drops.files.count == 2 }
+        XCTAssertEqual(drops.started, [2], "the page did not say the files were coming")
+        XCTAssertEqual(drops.files.map(\.name), ["note.eml", "photo.png"])
+        XCTAssertEqual(drops.files.map(\.contents), [.data(Data(eml.utf8)), .data(Data("png".utf8))])
+    }
+
+    /// A drag that carries markup as well as files is a selection from a
+    /// page or a document: its markup takes the paste path, and nothing is
+    /// attached.
+    func testADropCarryingMarkupInsertsItAndAttachesNothing() async throws {
+        let drops = DropRecorder(controller)
+        let markup = "<p><b>dropped</b>\(Self.handler)</p>"
+
+        let dropped = try await drop([DropFile(name: "photo.png", contents: "png")], html: markup)
+
+        XCTAssertTrue(dropped.html.contains("<b>dropped</b>"), dropped.html)
+        XCTAssertFalse(dropped.html.contains("onerror"), dropped.html)
+        let attached = await holdsOnMainActor(within: 0.5) { !drops.started.isEmpty || !drops.files.isEmpty }
+        XCTAssertFalse(attached, "a selection's file was attached")
+    }
+
+    /// A file too large to send across the bridge is refused unread, and the
+    /// files dropped with it still come.
+    func testAFileOverTheLimitIsRefusedUnread() async throws {
+        let drops = DropRecorder(controller)
+
+        _ = try await drop([DropFile(name: "film.mov", size: 50_000_001), DropFile(name: "notes.txt", contents: "ok")])
+
+        try await waitUntilOnMainActor { drops.files.count == 2 }
+        XCTAssertEqual(drops.files.map(\.contents), [.tooLarge(limitBytes: 50_000_000), .data(Data("ok".utf8))])
     }
 
     /// Script in the page can't navigate it: not to another local file, and
@@ -555,24 +582,43 @@ extension RichTextEditorControllerTests {
         return try XCTUnwrap(read)
     }
 
-    /// Fires a `drop` carrying one file, as WebKit does for a file dragged
-    /// in from outside the page, then reads the editor.
-    private func dropFile(named name: String, contents: String) async throws -> String {
+    /// Puts the caret at the end of the editor and fires a `drop` carrying
+    /// `files`, as WebKit does for files dragged in from outside the page,
+    /// with `html` alongside them if given. Returns the editor's
+    /// markup and whether the page kept WebKit from handling the drop.
+    private func drop(
+        _ files: [DropFile], html: String? = nil
+    ) async throws -> (html: String, prevented: Bool) {
+        let list = files.map { "[\(jsonString($0.name)), \(jsonString($0.contents)), \($0.size)]" }
         let read = try await controller.webView.evaluateJavaScript(
             """
-            (function (name, contents) {
+            (function (files, html) {
               const editor = document.getElementById('editor');
+              editor.focus();
+              const range = document.createRange();
+              range.selectNodeContents(editor);
+              range.collapse(false);
+              const selection = window.getSelection();
+              selection.removeAllRanges();
+              selection.addRange(range);
               const data = new DataTransfer();
-              data.items.add(new File([contents], name));
+              files.forEach(function (file) {
+                const parts = [file[1]];
+                if (file[2] > file[1].length) parts.push(new Uint8Array(file[2] - file[1].length));
+                data.items.add(new File(parts, file[0]));
+              });
+              if (html !== null) data.setData('text/html', html);
               const init = { bubbles: true, cancelable: true, dataTransfer: data };
               const event = new (window.DragEvent || MouseEvent)('drop', init);
               if (event.dataTransfer !== data) Object.defineProperty(event, 'dataTransfer', { value: data });
               editor.dispatchEvent(event);
-              return editor.innerHTML;
-            })(\(jsonString(name)), \(jsonString(contents)))
+              return [editor.innerHTML, event.defaultPrevented];
+            })([\(list.joined(separator: ", "))], \(html.map(jsonString) ?? "null"))
             """
-        ) as? String
-        return try XCTUnwrap(read)
+        ) as? [Any]
+        let markup = try XCTUnwrap(read?.first as? String)
+        let prevented = try XCTUnwrap(read?.last as? Bool)
+        return (markup, prevented)
     }
 
     private func watchPolicyViolations() async throws {
@@ -595,5 +641,25 @@ extension RichTextEditorControllerTests {
     private func jsonString(_ value: String) -> String {
         let data = (try? JSONSerialization.data(withJSONObject: [value])) ?? Data()
         return String(String(data: data, encoding: .utf8)?.dropFirst().dropLast() ?? "\"\"")
+    }
+}
+
+/// A file for `drop(_:html:)`, its contents padded with zero bytes to
+/// `size` if that is longer.
+private struct DropFile {
+    let name: String
+    var contents = ""
+    var size = 0
+}
+
+/// What a controller tells its host about files dropped onto the editor.
+@MainActor
+private final class DropRecorder {
+    private(set) var started: [Int] = []
+    private(set) var files: [(name: String, contents: RichTextEditorController.DroppedFileContents)] = []
+
+    init(_ controller: RichTextEditorController) {
+        controller.onDropStarted = { [weak self] in self?.started.append($0) }
+        controller.onDroppedFile = { [weak self] in self?.files.append((name: $0, contents: $1)) }
     }
 }

@@ -152,10 +152,15 @@ public final class RichTextEditorController: NSObject {
     /// web content process. Hosts should surface it to the user; whether the
     /// bridge is still usable afterwards is recorded in `bridgeFailure`.
     public var onBridgeError: (@MainActor (String) -> Void)?
-    /// Fires for each file dropped onto the editor: a message from a list,
-    /// an image, any other file. The page does not insert them; attaching
-    /// is the host's. Nil `data` means the page could not read the file.
-    public var onDroppedFile: (@MainActor (_ name: String, _ mimeType: String, _ data: Data?) -> Void)?
+    /// Fires when files are dropped onto the editor, with how many
+    /// `onDroppedFile` calls will follow. Every one of them does, even if the
+    /// page's process stops first, so a host can hold Send meanwhile.
+    public var onDropStarted: (@MainActor (_ count: Int) -> Void)?
+    /// Fires once for each file dropped onto the editor: a message from a
+    /// list, an image, any other file. The page inserts none of them;
+    /// attaching is the host's.
+    public var onDroppedFile: (@MainActor (_ name: String, _ contents: DroppedFileContents) -> Void)?
+    private var droppedFiles = DroppedFilesInFlight()
 
     private var pendingReadyContinuations: [CheckedContinuation<Void, Never>] = []
     private var readyTimeoutTask: Task<Void, Never>?
@@ -431,15 +436,21 @@ extension RichTextEditorController {
         case "focus", "blur":
             isEditorFocused = type == "focus"
             onEditorFocusChanged?(isEditorFocused)
-        case "droppedFile":
-            let base64 = payload["base64"] as? String
-            onDroppedFile?(
-                payload["name"] as? String ?? "",
-                payload["mimeType"] as? String ?? "",
-                base64.flatMap { Data(base64Encoded: $0) }
-            )
+        case "dropStarted", "droppedFile":
+            handleDropMessage(type, payload)
         default:
             break
+        }
+    }
+
+    /// Files dropped onto the editor: the page announces them
+    /// (`dropStarted`), then delivers each in a `droppedFile` message.
+    private func handleDropMessage(_ type: String, _ payload: [String: Any]) {
+        if type == "dropStarted" {
+            let count = droppedFiles.start(payload)
+            if count > 0 { onDropStarted?(count) }
+        } else if let file = droppedFiles.arrive(payload) {
+            onDroppedFile?(file.name, file.contents)
         }
     }
 
@@ -586,6 +597,11 @@ extension RichTextEditorController: WKNavigationDelegate {
     /// fallback would hand the send path an empty body for a message the
     /// user did write — which then leaves on the wire (#745).
     public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        // Files the page was still reading will never come; the host is
+        // holding Send for them.
+        for name in droppedFiles.abandon() {
+            onDroppedFile?(name, .unreadable)
+        }
         failBridge("the editor's web content process stopped")
     }
 }
