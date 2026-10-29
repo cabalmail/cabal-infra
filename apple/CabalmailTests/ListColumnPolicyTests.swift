@@ -99,6 +99,35 @@ final class ListColumnPolicyTests: XCTestCase {
         XCTAssertEqual(sidebar.width, 231)
     }
 
+    // MARK: - The list over the reader
+
+    /// Laptop pose and open portrait are a window taller than wide: the list
+    /// floats over a reader that takes the whole split (`ListOverlay`,
+    /// #1686), at the width it has before anyone sets one, with no handle
+    /// and no pin. So does an iPad in portrait.
+    func testATallWindowFloatsTheListOverTheReader() {
+        for fold in [FoldState.horizontal(crease: tallBand), .none] {
+            var tall = policy(split: tallSplit, fold: fold, division: tallBand, stored: 400)
+            tall.windowIsTall = true
+            XCTAssertTrue(tall.overlaysReader)
+            XCTAssertEqual(tall.width, 360)
+            XCTAssertEqual(tall.readerFloor, 669, "the whole split, so UIKit can't tile the two")
+            XCTAssertFalse(tall.handleIsShown)
+        }
+        var portrait = policy(split: CGRect(x: 0, y: 0, width: 834, height: 1100), stored: 400)
+        portrait.windowIsTall = true
+        XCTAssertEqual(portrait.width, 360)
+        XCTAssertEqual(portrait.readerFloor, 834)
+    }
+
+    /// A split narrowed below its height in a wide window, by the addresses
+    /// inspector, still tiles: the window's shape decides, not the split's.
+    func testAWideWindowTilesHoweverNarrowItsSplit() {
+        let squeezed = policy(split: CGRect(x: 0, y: 0, width: 567, height: 635), stored: 400)
+        XCTAssertFalse(squeezed.overlaysReader)
+        XCTAssertEqual(squeezed.width, 220)
+    }
+
     // MARK: - iPad
 
     func testIPadKeepsItsDefaultAndGainsTheWideFloorInLandscapeOnly() {

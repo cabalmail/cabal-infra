@@ -1290,6 +1290,21 @@ clears the width. Widths are per window and per list, in scene storage
 the Mac host, and the one view tree's splits are meant to reuse them,
 passing the width of any column tiled before the list.
 
+**The list over the reader: `Shell/Columns/ListOverlay.swift`.** In a
+window taller than wide (the Duo open upright or in laptop pose, an iPad
+in portrait) the list doesn't tile: it floats over a reader that takes
+the whole split, at 360 pt, with no handle. `ListColumnPolicy` declares the
+whole split as the reader's floor there, which is what keeps UIKit from
+tiling, and `SplitShell` drives the split's column visibility from
+`ListOverlay`: the list is shown first while nothing is open, gives way to
+an opened message or feed item, and comes back from the reader's Messages
+(or Articles) button, a swipe from the leading edge, or the message
+closing; a tap on the reader puts it away. UIKit puts the floating column
+away on its own as the split turns to overlaying, so that request is
+ignored while nothing is open. The window's shape is measured outside the
+addresses inspector, which narrows the split in a wide window without
+making it tall. A window wider than tall tiles as before.
+
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
 starting values to tune on hardware.
