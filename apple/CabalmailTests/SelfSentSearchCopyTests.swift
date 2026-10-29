@@ -283,6 +283,16 @@ final class SelfSentSearchCopyTests: XCTestCase {
         XCTAssertEqual(listed(model), [inbox, receipt], "the INBOX copy, sharing the UID, is neither moved nor dropped")
     }
 
+    func testATouchPathDragLiftsOnlyItsRowFromASelection() async throws {
+        // A selection held from a wide layout, unseen after a narrowing.
+        let model = try await selfSentSearchModel(imap: FakeImapClient())
+        model.selectedRefs = [inbox, receipt]
+
+        let items = model.dragItems(liftedFrom: try row(inbox, in: model), carriesSelection: false)
+
+        XCTAssertEqual(items.map(\.ref), [inbox])
+    }
+
     func testDraggingAnUnselectedRowLiftsOnlyThatRow() async throws {
         let imap = FakeImapClient()
         let model = try await selfSentSearchModel(imap: imap)

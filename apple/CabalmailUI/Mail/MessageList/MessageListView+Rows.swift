@@ -63,7 +63,7 @@ extension MessageListView {
             .hoverEffect(.highlight)
             #endif
             // Swipe-to-dispose / toggle-read come from `SwipeActionRow`
-            // (applied by `messageRow`), and drag-to-folder is applied OUTSIDE
+            // (applied by `messageRow`), and the row drag is applied OUTSIDE
             // that wrapper by `draggableRow` -- both have to sit outside the
             // per-row `List` that `SwipeActionRow` embeds BELOW 27 for its
             // native `.swipeActions`, or the embedded List swallows them (the
@@ -130,13 +130,18 @@ extension MessageListView {
     /// a cross-folder search selection routes every message back to its own
     /// folder on drop. The rule lives on the model so it can be tested.
     private func dragItems(for envelope: Envelope, model: MessageListViewModel) -> [MessageDragItem] {
-        model.dragItems(liftedFrom: envelope)
+        model.dragItems(liftedFrom: envelope, carriesSelection: isWideLayout)
     }
 
-    /// Wraps a virtualized row in `.draggable` on wide layouts so it can be
-    /// dragged onto a sidebar folder. On compact iPhone the modifier is
-    /// skipped entirely (see `isWideLayout`): there's nowhere to drop, and the
-    /// long-press drag would fight the row's context menu.
+    /// Wraps a virtualized row in `.draggable`. The drag can land on a folder
+    /// row wherever a folder list is on screen (beside the list on the Mac and
+    /// the iPad split, or in another Cabalmail window), and a single message
+    /// can leave the app as an `.eml` (see `MessageDragPayload`). That second
+    /// landing is why the touch path's rows carry it too, from iOS 27
+    /// (`MessageListLayout.touchRowsDrag`, #1681): an iPhone Duo's Split View
+    /// half is compact, and the app beside it can take the file. There the
+    /// row's long-press context menu coexists with it: a held press opens the
+    /// menu, and a held press that moves lifts the drag.
     ///
     /// Applied by `messageRow` OUTSIDE the per-row `SwipeActionRow` (i.e.
     /// outside the single-row `List` that wrapper embeds below 27 for its
@@ -157,10 +162,8 @@ extension MessageListView {
         model: MessageListViewModel,
         @ViewBuilder content: () -> some View
     ) -> some View {
-        // Drag is exonerated for the iPad leading-swipe lag (gating it off iOS
-        // didn't change the lag), so it's back on every wide layout.
         let items = dragItems(for: envelope, model: model)
-        if isWideLayout, !items.isEmpty {
+        if !items.isEmpty, isWideLayout || MessageListLayout.touchRowsDrag {
             content()
                 .contentShape(Rectangle())
                 .draggable(dragPayload(items, envelope: envelope, model: model)) {
