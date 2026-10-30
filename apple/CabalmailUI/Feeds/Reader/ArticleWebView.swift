@@ -396,10 +396,10 @@ enum ArticleReaderDocument {
 }
 
 extension ArticleWebCoordinator {
-    /// The page request to act on now, if any, once the page has loaded
-    /// (`ReaderPageGate`): the tall bar's Page Up and Page Down.
+    /// The page request to act on now, if any (`ReaderPageGate`): the tall
+    /// bar's Page Up and Page Down. Not held for the page to finish
+    /// loading: its scroll view pages whatever has laid out.
     func admitPage(_ request: ReaderPageRequest?) -> ReaderPageRequest? {
-        guard let request = pageGate.admit(request), pageLoaded else { return nil }
-        return request
+        pageGate.admit(request)
     }
 }

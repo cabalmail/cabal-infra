@@ -1323,8 +1323,9 @@ panel does, and `SceneNavigator.listMoves()` hands the mounting list the
 window's selection (a single highlighted row included, which a layout
 swap does not carry; none while search results move) and its place, each
 way, and a list the move replaced takes no pending restore once off
-screen (`ListPlaceTracker.mayTakeParked`). Feeds keeps the floating
-list, since the feed reader's actions are in its navigation bar.
+screen (`ListPlaceTracker.mayTakeParked`). Feeds keeps the floating list
+for now; in a tall window, laptop pose included, its reader's actions
+are in its own bar (below).
 
 **The reader's bar in a tall window: `ReaderToolbarLayout.tallBar`.**
 Where the reader fills a window taller than wide
@@ -1351,7 +1352,8 @@ regular width (`bodyRunsUnderBottomBar` is compact width alone for both
 readers), so a turn that brings the bar reflows the body and never
 rebuilds its web view. A publisher's page pages through its own scroll
 view (`ReaderPaging.scrollTarget`), so nothing runs in the page, and
-every body takes a press once through `ReaderPageGate`.
+every web view takes a press once through `ReaderPageGate` (a plain-text
+body acts on each change of the request).
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are

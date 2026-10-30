@@ -80,8 +80,7 @@ enum FeedReaderToolbarLayout {
     /// the View menu and Compose, the iPhone Duo spec's order for a tall
     /// window without the mail reader's Reply and Archive. The View menu
     /// stands in for the spec's Message menu, and keeps Open article. The
-    /// list's bar, with its Compose, is behind the article there or below a
-    /// laptop fold.
+    /// list's bar, with its Compose, is behind the article there.
     static let tallBar: [FeedReaderBarSlot] = [
         .action(.favorite), .action(.read), .page(.upward), .page(.downward), .action(.more), .compose
     ]

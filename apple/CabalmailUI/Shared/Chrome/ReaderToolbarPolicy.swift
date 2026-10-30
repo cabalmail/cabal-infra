@@ -52,13 +52,14 @@ enum ReaderToolbarPolicy {
     enum Placement: Equatable {
         /// Trailing items of the navigation bar. Compact width with
         /// horizontal bars, where the section tab bar owns the bottom edge;
-        /// and the feed reader at every width.
+        /// and the feed reader everywhere but a tall window on iOS 27.
         case topBar
         /// A system `.bottomBar` toolbar group (the mail reader at regular
         /// width before iOS 27).
         case bottomBar
-        /// The mail reader's own bar pinned under the reading pane (regular
-        /// width on iOS 27 and later).
+        /// A reader's own bar pinned under the reading pane: the mail reader
+        /// at regular width on iOS 27 and later, and the feed reader where it
+        /// fills a tall window there.
         case ownBar
         /// The reader's actions as separate system `.bottomBar` items, each
         /// ranked for the overflow: where the system draws the window's bars
@@ -69,9 +70,10 @@ enum ReaderToolbarPolicy {
 
     /// Which bar carries a reader's touch action set.
     ///
-    /// The feed reader always uses the system top bar: its touch set is
-    /// three items, inside `topBarCapacity`, at every width (macOS and
-    /// visionOS draw its wider set in the window's own toolbar).
+    /// The feed reader uses the system top bar except in a tall window
+    /// (below): its touch set is three items, inside `topBarCapacity`, at
+    /// every width (macOS and visionOS draw its wider set in the window's
+    /// own toolbar).
     ///
     /// The mail reader at compact width puts its actions in the navigation
     /// bar so the section tab bar can stay on screen while a message is
@@ -107,8 +109,8 @@ enum ReaderToolbarPolicy {
     /// (`fillsTallWindow`, the iPhone Duo upright or in laptop pose, an iPad
     /// in portrait): there it draws its own bar under its pane, as the mail
     /// reader does, with the page buttons and Compose (the Duo spec's
-    /// "every tall window"). Laptop pose hides the navigation bar its
-    /// actions otherwise live in.
+    /// "every tall window"), where the list's bar, with Compose, is behind
+    /// the article.
     static func placement(
         for medium: Medium,
         isRegularWidth: Bool,
