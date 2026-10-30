@@ -1,8 +1,8 @@
 import Foundation
 
-/// Where compose opens, and where its sheet sits. Pure rules, so they can be
-/// tested for every answer on whichever platform the tests run; the caller
-/// (`ComposeRequestRouter`) reads the window.
+/// Where compose opens. Pure rules, so they can be tested for every answer
+/// on whichever platform the tests run. Where its sheet sits is the window's
+/// rule for every sheet (`SheetPlacementPolicy`).
 ///
 /// On iOS compose is a sheet over the window it was asked from, in every
 /// layout: an iPhone, an iPad and an iPhone Duo open or closed alike (the
