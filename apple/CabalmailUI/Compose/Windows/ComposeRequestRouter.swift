@@ -24,8 +24,8 @@ import AppKit
 /// order, until the sheet closes, so an incoming mailto: never replaces a
 /// draft being typed.
 ///
-/// The sheet sits on the window's trailing side in a wide, regular window
-/// (`ComposeSurfacePolicy.sheetSitsTrailing`). It cannot be swiped away:
+/// The sheet sits on the window's trailing side in a wide, regular window,
+/// as every sheet does (`SheetPlacementPolicy`). It cannot be swiped away:
 /// Cancel is the one way out, and it asks whether to keep the draft. And
 /// while it is up the window's navigator says so (`SceneNavigator.composeLock`),
 /// so no menu, shortcut or deep link archives, moves or swaps the message
@@ -57,28 +57,14 @@ struct ComposeRequestRouter: ViewModifier {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.commandWindowID) private var windowID
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.sheetsSitTrailing) private var sheetsSitTrailing
     @State private var composeSeed: Draft?
-    @State private var windowIsWide = false
     @State private var presenter: ComposeCoordinator.Presenter?
     @State private var move = ComposeWindowMove()
 
     func body(content: Content) -> some View {
         content
-            // The window's shape, read behind it with the keyboard's region
-            // ignored, as `SplitShell` reads its split: a docked keyboard
-            // would otherwise make a tall window read as wide the moment a
-            // field takes focus, and move the sheet while it is typed in.
-            .background {
-                Color.clear
-                    .onGeometryChange(for: Bool.self) { proxy in
-                        proxy.size.width > proxy.size.height
-                    } action: { wide in
-                        windowIsWide = wide
-                    }
-                    .ignoresSafeArea(.keyboard)
-            }
             .task(id: windowID) {
                 register()
             }
@@ -95,11 +81,7 @@ struct ComposeRequestRouter: ViewModifier {
                     .frozen(while: move.isMoving)
                     .environment(\.composeWindowOffer, windowOffer)
                     .interactiveDismissDisabled()
-                    .sheetPlacement(trailing: ComposeSurfacePolicy.sheetSitsTrailing(
-                        windowIsWide: windowIsWide,
-                        isRegularWidth: horizontalSizeClass == .regular,
-                        isRegularHeight: verticalSizeClass == .regular
-                    ))
+                    .sheetPlacement(trailing: sheetsSitTrailing)
             }
     }
 

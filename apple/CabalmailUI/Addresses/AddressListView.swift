@@ -120,7 +120,7 @@ struct AddressListView: View {
         .refreshable {
             await model?.refresh(force: true)
         }
-        .sheet(isPresented: $showNewAddressSheet) { newAddressSheet }
+        .sheet(isPresented: $showNewAddressSheet) { newAddressSheet.windowShapedSheet() }
         .confirmationPrompt(
             revokeDialogTitle,
             isPresented: revokeDialogBinding,

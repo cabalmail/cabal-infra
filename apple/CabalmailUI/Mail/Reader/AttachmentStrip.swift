@@ -44,6 +44,7 @@ struct AttachmentStrip: View {
         #if canImport(EventKitUI)
         .sheet(item: $calendarInvite) { invite in
             CalendarEventSheet(invite: invite)
+                .windowShapedSheet()
         }
         #endif
     }

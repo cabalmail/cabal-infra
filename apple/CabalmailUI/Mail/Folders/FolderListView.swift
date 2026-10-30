@@ -278,7 +278,7 @@ struct FolderListView: View {
         .refreshable {
             await manualRefresh()
         }
-        .sheet(isPresented: $showNewFolderSheet) { newFolderSheet }
+        .sheet(isPresented: $showNewFolderSheet) { newFolderSheet.windowShapedSheet() }
         .confirmationPrompt(
             deleteDialogTitle,
             isPresented: deleteDialogBinding,

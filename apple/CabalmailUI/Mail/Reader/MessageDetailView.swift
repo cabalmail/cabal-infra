@@ -214,9 +214,11 @@ struct MessageDetailView: View {
         #endif
         .sheet(isPresented: $moveSheetPresented) {
             moveSheet
+                .windowShapedSheet()
         }
         .sheet(item: $sourceSheetTab) { tab in
             sourceSheet(initialTab: tab)
+                .windowShapedSheet()
         }
         #if os(iOS) || os(visionOS)
         .sheet(item: $contactEditorRequest) { request in
