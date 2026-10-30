@@ -97,6 +97,19 @@ final class ComposeSignatureSeedTests: XCTestCase {
         XCTAssertTrue(model.hasDraftContent(bodies: Self.renderedBodies(model.markdownBody)))
     }
 
+    /// Edit Draft opens the draft's own body, which was signed when it was
+    /// written, so it is not signed again (#2275). A reply or a new message
+    /// still is (the tests above).
+    func testAResumedDraftIsNotSignedAgain() throws {
+        let saved = "the draft I saved yesterday" + Self.signatureSeed
+        let seed = Draft(body: saved, isResumedDraft: true)
+
+        let model = try TestFixtures.makeComposeModel(seed: seed, signature: Self.signature)
+
+        XCTAssertEqual(model.markdownBody, saved)
+        XCTAssertEqual(model.seededMarkdownBody, saved, "an untouched resumed body still reads as the seed")
+    }
+
     /// Same for a reply's attribution + quoted original.
     func testReplyQuotedBodyWithASignatureStaysContent() throws {
         let seed = Draft(body: "\n\nOn Tuesday, someone wrote:\n\n> the original")

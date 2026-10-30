@@ -2,7 +2,7 @@ import SwiftUI
 import XCTest
 @testable import CabalmailUI
 
-/// The list floating over a full-width reader in a split taller than wide
+/// The list floating over a full-width reader in a window taller than wide
 /// (`ListOverlay`, #1686): the iPhone Duo open upright and iPad in portrait.
 final class ListOverlayTests: XCTestCase {
     func testAWideSplitAlwaysShowsBothColumns() {

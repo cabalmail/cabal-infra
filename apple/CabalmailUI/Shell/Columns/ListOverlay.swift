@@ -8,12 +8,12 @@ extension EnvironmentValues {
     @Entry var readerFillsTallWindow = false
 }
 
-/// The list floating over a full-width reader in a split taller than wide:
+/// The list floating over a full-width reader in a window taller than wide:
 /// the iPhone Duo open upright and an iPad in portrait (the spec's open
 /// portrait choice, #1686). The message takes the window's width, and the
 /// list slides over it from the reader's Messages button or the leading
-/// edge, shown first when nothing is open. A split wider than tall tiles the
-/// two as before and never hides the list.
+/// edge, shown first when nothing is open. A window wider than tall tiles
+/// the two as before and never hides the list.
 ///
 /// Pure, so the rule is tested on the Mac host; `SplitShell` keeps one in
 /// state and reads the split's columns from it.
