@@ -35,10 +35,23 @@ enum MailReaderChoice: Equatable {
     static func selectionTitle(count: Int) -> String {
         count == 1 ? "1 Message Selected" : "\(count) Messages Selected"
     }
+
+    /// The empty reader's line: the folder's unread count, when it is known.
+    /// An empty pane says something rather than opening a message to fill
+    /// itself, which would mark it read (the iPhone Duo spec).
+    static func emptyDescription(folderName: String?, unread: Int?) -> String {
+        guard let folderName, let unread else { return "Pick a message from the list to read it." }
+        switch unread {
+        case ...0: return "Nothing unread in \(folderName)."
+        case 1: return "1 unread message in \(folderName)."
+        default: return "\(unread) unread messages in \(folderName)."
+        }
+    }
 }
 
 /// The mail reader column every shell shows: "N Messages Selected", the
-/// reader, or the empty prompt (`MailReaderChoice`).
+/// reader, or the empty prompt with the folder's unread count
+/// (`MailReaderChoice`).
 ///
 /// The placeholders' chrome is the shell's to pass: the Mac reserves the
 /// reader's toolbar slots while no message is open (`EmptyDetailToolbar`),
@@ -49,6 +62,8 @@ struct MailReaderColumn<PlaceholderChrome: ViewModifier>: View {
     let envelope: Envelope?
     let sidebarFolder: Folder?
     let placeholderChrome: PlaceholderChrome
+
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         let choice = MailReaderChoice.choose(
@@ -70,7 +85,10 @@ struct MailReaderColumn<PlaceholderChrome: ViewModifier>: View {
             ContentUnavailableView(
                 "No message selected",
                 systemImage: "envelope",
-                description: Text("Pick a message from the list to read it.")
+                description: Text(MailReaderChoice.emptyDescription(
+                    folderName: sidebarFolder?.name,
+                    unread: sidebarFolder.flatMap { appState.mailStore.counts.folderUnreadCounts[$0.path] }
+                ))
             )
             .modifier(placeholderChrome)
         }

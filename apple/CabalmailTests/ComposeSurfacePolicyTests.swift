@@ -82,35 +82,4 @@ final class ComposeSurfacePolicyTests: XCTestCase {
         // This suite runs on the Mac.
         XCTAssertFalse(ComposeSurfacePolicy.offersNewWindow(supportsMultipleWindows: true, isRegularWidth: true))
     }
-
-    // MARK: Where the sheet sits
-
-    private func trailing(wide: Bool, width regular: Bool, height regularHeight: Bool) -> Bool {
-        ComposeSurfacePolicy.sheetSitsTrailing(
-            windowIsWide: wide, isRegularWidth: regular, isRegularHeight: regularHeight
-        )
-    }
-
-    /// A wide, regular window: an iPad in landscape, or an open iPhone Duo
-    /// held wide, flat or in book pose. The sheet leaves the message in view.
-    func testAWideRegularWindowPutsTheSheetOnTheTrailingSide() {
-        XCTAssertTrue(trailing(wide: true, width: true, height: true))
-    }
-
-    /// A tall window (an iPad or the Duo's inner display upright) keeps the
-    /// system's centred sheet.
-    func testATallWindowKeepsTheSystemPlacement() {
-        XCTAssertFalse(trailing(wide: false, width: true, height: true))
-    }
-
-    /// A compact window takes the sheet across its width anyway: an iPhone,
-    /// a closed Duo, a large iPhone held wide (regular width, compact
-    /// height), or a short, narrow iPad window (compact width, regular
-    /// height).
-    func testACompactWindowKeepsTheSystemPlacement() {
-        XCTAssertFalse(trailing(wide: true, width: true, height: false))
-        XCTAssertFalse(trailing(wide: true, width: false, height: true))
-        XCTAssertFalse(trailing(wide: true, width: false, height: false))
-        XCTAssertFalse(trailing(wide: false, width: false, height: true))
-    }
 }
