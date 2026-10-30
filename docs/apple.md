@@ -1327,10 +1327,11 @@ its place, each way, and a list the move replaced takes no pending
 restore once off screen (`ListPlaceTracker.mayTakeParked`). A feed list
 moves the same way through the split's `FeedListHold`: the list mounting
 next for the same scope takes the moved one's model, with its rows,
-pages, filter and search, and lands on its top row, so a fold neither
-reloads the store nor syncs. The feed reader's actions are in its own
-bar in a tall window (below), so laptop pose hiding the navigation bar
-loses none of them.
+pages, filter and search, and lands on its top row, so a fold reloads
+nothing: the model catches up with the store's marks and counts as it
+starts following it again, and syncs only if no sync of it ran to the
+end. The feed reader's actions are in its own bar in a tall window
+(below), so laptop pose hiding the navigation bar loses none of them.
 
 **The reader's bar in a tall window: `ReaderToolbarLayout.tallBar`.**
 Where the reader fills a window taller than wide

@@ -37,7 +37,6 @@ final class FeedListHoldTests: XCTestCase {
         let handoff = try XCTUnwrap(panel.handoff)
         XCTAssertTrue(handoff.model === held)
         XCTAssertEqual(handoff.topItemID, "item-40")
-        XCTAssertFalse(handoff.synced, "its opening sync never finished")
         XCTAssertNil(hold.mount(scope: scope).handoff, "handed to one list")
     }
 
@@ -91,25 +90,22 @@ final class FeedListHoldTests: XCTestCase {
         XCTAssertNil(hold.mount(scope: scope).handoff)
     }
 
-    /// A list that finished its sync hands that on, so the next list doesn't
-    /// sync again; and the next list keeps it, and the top row, across a
-    /// second move.
-    func testASyncedListHandsOnThatItSynced() throws {
+    /// The list that took a moved one over keeps its top row across a
+    /// second move, until the user scrolls it.
+    func testATakenOverListKeepsItsTopAcrossASecondMove() throws {
         let hold = FeedListHold()
         let column = hold.mount(scope: scope)
         let held = try model()
         hold.register(held, scope: scope, under: column.claim)
-        hold.markSynced(under: column.claim)
         hold.record(topItemID: "item-9", under: column.claim)
 
         hold.move()
         let panel = hold.mount(scope: scope)
         hold.register(held, scope: scope, under: panel.claim)
-        XCTAssertEqual(panel.handoff?.synced, true)
 
         hold.move()
         let back = try XCTUnwrap(hold.mount(scope: scope).handoff)
-        XCTAssertTrue(back.synced)
+        XCTAssertTrue(back.model === held)
         XCTAssertEqual(back.topItemID, "item-9")
     }
 }

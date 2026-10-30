@@ -39,6 +39,11 @@ final class FeedItemListViewModel {
         didSet { Task { await reload() } }
     }
     var isSyncing = false
+    /// Whether a sync of this model has run to the end. A list that takes
+    /// the model over from one that moved below a laptop fold, or back,
+    /// syncs only while this is false (`FeedListHold`): a move mid-sync
+    /// cancels that sync.
+    private(set) var hasSynced = false
     var isLoadingOlder = false
     var hasMoreLocal = true
     var olderExhausted = false
@@ -152,15 +157,18 @@ final class FeedItemListViewModel {
     ///   one that moved below a laptop fold or back (`FeedListHold`): its
     ///   rows and pages stay. Nothing followed the store while no list was
     ///   up, and the store replays nothing, so it catches up as a batch
-    ///   naming everything it shows would: a first page re-reads, a paged
-    ///   list patches its rows and counts and keeps its place.
+    ///   naming every row it shows would: their marks and the counts, and
+    ///   the catalog.
     func observe(reloading: Bool = true) async {
         guard let store else { return }
         let changes = await store.changes()
         if reloading {
             await reload()
         } else {
-            await apply(FeedChangeBatch(items: Set(items.map(\.id)), feeds: scopeFeedIds, catalog: true))
+            // The rows' marks and the counts, and a reload only if the
+            // catalog moved the scope or its order: the rows on screen stay,
+            // a read one under the Unread pill included, as they would have.
+            await apply(FeedChangeBatch(items: Set(items.map(\.id)), catalog: true))
         }
         await FeedStoreChanges.follow(changes) { batch in await apply(batch) }
     }
@@ -227,7 +235,7 @@ final class FeedItemListViewModel {
         for row in items where ids.contains(row.id) {
             let fresh = (try? await store.item(feedId: row.feedId, sortKey: row.sortKey)) ?? nil
             let queued = (try? await store.hasPending(feedId: row.feedId, sortKey: row.sortKey)) == true
-            if let fresh {
+            if let fresh, fresh.isRead != row.isRead || fresh.isFavorite != row.isFavorite {
                 replace(row) {
                     $0.isRead = fresh.isRead
                     $0.isFavorite = fresh.isFavorite
@@ -319,6 +327,7 @@ final class FeedItemListViewModel {
         // drain stays quiet, as before: the queue waits for the next one.
         if let report, !Task.isCancelled {
             errorMessage = (report.catalogError ?? report.firstFeedError).map(FeedErrorText.describe)
+            hasSynced = true
         }
         await reload()
     }

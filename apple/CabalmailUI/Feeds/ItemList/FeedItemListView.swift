@@ -132,7 +132,7 @@ struct FeedItemListView: View {
         }
         .task(id: scope) {
             // A list the split moved below a laptop fold, or back, is taken
-            // over whole: no reload, no sync (`FeedListHold`).
+            // over whole, with no reload (`FeedListHold`).
             let mounted = hold?.mount(scope: scope)
             holdClaim = mounted?.claim
             if let handoff = mounted?.handoff { await adopt(handoff) } else { await start() }
@@ -143,10 +143,14 @@ struct FeedItemListView: View {
             // before the sync, so a mark made elsewhere meanwhile lands too.
             let model = model
             async let following: Void? = model?.observe(reloading: mounted?.handoff == nil)
-            // A taken-over list syncs only if the one before it didn't finish.
-            if mounted?.handoff?.synced != true {
+            // A taken-over list syncs only if no sync of its model ran to the
+            // end: a move mid-sync cancels the sync, whose re-read of the
+            // store still has to finish before another can start.
+            if mounted?.handoff == nil {
                 await model?.sync()
-                if !Task.isCancelled, let claim = mounted?.claim { hold?.markSynced(under: claim) }
+            } else if let model, !model.hasSynced {
+                await FeedListHold.awaitSyncWindDown(of: model)
+                await model.sync()
             }
             // A list a move replaced takes no parked item: its successor does.
             if holdsClaim {

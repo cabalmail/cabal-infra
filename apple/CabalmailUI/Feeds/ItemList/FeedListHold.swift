@@ -5,7 +5,7 @@ import CabalmailKit
 /// below a laptop fold (#1649): the list mounting next for the same scope
 /// takes the one that went away, its model (rows, pages loaded, filter,
 /// search) and the item at its top, instead of reloading the store and
-/// syncing from scratch.
+/// syncing from scratch; it syncs only a model no sync has finished for.
 ///
 /// The feed twin of `FolderListHold`'s move, and the same claim rule: a list
 /// records only under the claim it took when it mounted, and a move voids
@@ -25,16 +25,12 @@ final class FeedListHold {
         let model: FeedItemListViewModel
         /// The item at the top of the list that went away.
         let topItemID: String?
-        /// Whether the list that went away finished its opening sync; a move
-        /// mid-sync cancels it, so the next list syncs instead.
-        let synced: Bool
     }
 
     private struct Held {
         let scope: RssItemScope
         let model: FeedItemListViewModel
         var topItemID: String?
-        var synced = false
     }
 
     private var held: Held?
@@ -53,21 +49,15 @@ final class FeedListHold {
             self.held = nil
             return (claim, nil)
         }
-        return (claim, Handoff(model: held.model, topItemID: held.topItemID, synced: held.synced))
+        return (claim, Handoff(model: held.model, topItemID: held.topItemID))
     }
 
     /// The mounted list's model, under its claim. A list that took a moved
-    /// one over keeps its top row and whether it synced.
+    /// one over keeps its top row.
     func register(_ model: FeedItemListViewModel, scope: RssItemScope, under claim: Claim) {
         guard holds(claim) else { return }
         if let held, held.model === model { return }
         held = Held(scope: scope, model: model)
-    }
-
-    /// The mounted list's opening sync finished.
-    func markSynced(under claim: Claim) {
-        guard holds(claim) else { return }
-        held?.synced = true
     }
 
     /// The item at the top of the mounted list, as it scrolls. Refused under
@@ -86,6 +76,15 @@ final class FeedListHold {
 
     func holds(_ claim: Claim) -> Bool {
         claim.generation == generation
+    }
+
+    /// Waits for a sync still running on a handed-over model to wind down:
+    /// the one the moved list started, whose cancelled pass still re-reads
+    /// the store before it lets go, and until then `sync()` refuses another.
+    static func awaitSyncWindDown(of model: FeedItemListViewModel) async {
+        while model.isSyncing, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
     }
 }
 
