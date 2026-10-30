@@ -74,4 +74,19 @@ final class MailReaderChoiceTests: XCTestCase {
         let open = TestFixtures.makeEnvelope(uid: 7)
         XCTAssertEqual(MailReaderChoice.choose(selectionCount: 0, envelope: open, sidebarFolder: nil), .empty)
     }
+
+    /// The empty reader says how much is unread in the folder, so it doesn't
+    /// open a message to fill the pane (the iPhone Duo spec).
+    func testTheEmptyReaderGivesTheFoldersUnreadCount() {
+        let line = MailReaderChoice.emptyDescription(folderName:unread:)
+        XCTAssertEqual(line("INBOX", 0), "Nothing unread in INBOX.")
+        XCTAssertEqual(line("INBOX", 1), "1 unread message in INBOX.")
+        XCTAssertEqual(line("Archive", 12), "12 unread messages in Archive.")
+    }
+
+    func testWithoutAFolderOrACountTheEmptyReaderPromptsAsBefore() {
+        let line = MailReaderChoice.emptyDescription(folderName:unread:)
+        XCTAssertEqual(line(nil, 3), "Pick a message from the list to read it.")
+        XCTAssertEqual(line("INBOX", nil), "Pick a message from the list to read it.")
+    }
 }
