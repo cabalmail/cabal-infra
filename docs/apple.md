@@ -1291,41 +1291,47 @@ the Mac host, and the one view tree's splits are meant to reuse them,
 passing the width of any column tiled before the list.
 
 **The list over the reader: `Shell/Columns/ListOverlay.swift`.** In a
-window taller than wide (the Duo open upright, an iPad in portrait, and
-Feeds in laptop pose) the list doesn't tile: it floats over a reader that takes
-the whole split, at 360 pt, with no handle. `ListColumnPolicy` declares the
-whole split as the reader's floor there, which is what keeps UIKit from
+window taller than wide (the Duo open upright, and an iPad in portrait)
+the list doesn't tile: it floats over a reader that takes the whole
+split, at 360 pt, with no handle. `ListColumnPolicy` declares the whole
+split as the reader's floor there, which is what keeps UIKit from
 tiling, and `SplitShell` drives the split's column visibility from
-`ListOverlay`: the list is shown first while nothing is open, gives way to
-an opened message or feed item, and comes back from the reader's Messages
-(or Articles) button, a swipe from the leading edge, or the message
-closing; a tap on the reader puts it away. UIKit puts the floating column
-away on its own as the split turns to overlaying, so that request is
-ignored while nothing is open. The window's shape is measured outside the
-addresses inspector, which narrows the split in a wide window without
-making it tall. A window wider than tall tiles as before.
+`ListOverlay`: the list is shown first while nothing is open, gives way
+to an opened message or feed item, and comes back from the reader's
+Messages (or Articles) button, a swipe from the leading edge, or the
+message closing; a tap on the reader puts it away. UIKit puts the
+floating column away on its own as the split turns to overlaying, so
+that request is ignored while nothing is open. The window's shape is
+measured outside the addresses inspector, which narrows the split in a
+wide window without making it tall. A window wider than tall tiles as
+before.
 
 **Laptop pose: `Shell/Columns/LaptopPanel.swift`.** With a horizontal
-fold across a tall window, in the mail section, the split hides the list
-column and the reader its navigation bar, and the message ends above the
-fold (`keepsAboveLaptopFold()`, plain bottom padding: behind a safe-area
-inset of that size the web view drew nothing). The reader's own action
-bar stays at the window's bottom edge, and `LaptopListPanel` fills the
-space between the fold and that bar with the list and its bar, in a
-navigation stack of its own; the folder panel opens below the fold over
-it. The panel's bar carries the addresses `@`; a fold closes an open
-inspector, which would run up the upright half. The reader reports where
-its content ends through `\.laptopReader`, which is how the panel knows
-where the bar starts. Every change is a value on a modifier that is
-always present, so the message's web view reflows and is never rebuilt.
-The list itself moves, one at a time: the column holds none while the
-panel does, and `SceneNavigator.listMoves()` hands the mounting list the
-window's selection (a single highlighted row included, which a layout
-swap does not carry; none while search results move) and its place, each
-way, and a list the move replaced takes no pending restore once off
-screen (`ListPlaceTracker.mayTakeParked`). Feeds keeps the floating list
-for now; in a tall window, laptop pose included, its reader's actions
-are in its own bar (below).
+fold across a tall window, in Mail and Feeds alike, the split hides the
+list column and the reader its navigation bar, and the message ends
+above the fold (`keepsAboveLaptopFold()`, plain bottom padding: behind a
+safe-area inset of that size the web view drew nothing). The reader's
+own action bar stays at the window's bottom edge, and `LaptopListPanel`
+fills the space between the fold and that bar with the list and its bar,
+in a navigation stack of its own; the folder panel opens below the fold
+over it. The panel's bar carries the addresses `@`; a fold closes an
+open inspector, which would run up the upright half. The reader reports
+where its content ends through `\.laptopReader`, which is how the panel
+knows where the bar starts. Every change is a value on a modifier that
+is always present, so the message's web view reflows and is never
+rebuilt. The list itself moves, one at a time: the column holds none
+while the panel does, and `SceneNavigator.listMoves()` hands the
+mounting list the window's selection (a single highlighted row included,
+which a layout swap does not carry; none while search results move) and
+its place, each way, and a list the move replaced takes no pending
+restore once off screen (`ListPlaceTracker.mayTakeParked`). A feed list
+moves the same way through the split's `FeedListHold`: the list mounting
+next for the same scope takes the moved one's model, with its rows,
+pages, filter and search, and lands on its top row, so a fold reloads
+nothing: the model catches up with the store's marks and counts as it
+starts following it again, and syncs only if no sync of it ran to the
+end. The feed reader's actions are in its own bar in a tall window
+(below), so laptop pose hiding the navigation bar loses none of them.
 
 **The reader's bar in a tall window: `ReaderToolbarLayout.tallBar`.**
 Where the reader fills a window taller than wide

@@ -48,6 +48,17 @@ struct FeedItemListView: View {
     @State var folders: [RssFolder] = []
     @State var switchSubscriptions: [RssSubscription] = []
     @State var confirmMarkAllRead = false
+    /// The split's hold on its feed list as it moves below a laptop fold and
+    /// back (`FeedListHold`), and this list's place in it: its claim, the
+    /// item to land on when it took a moved list over, and the rows on
+    /// screen, whose first is the list's top.
+    @Environment(\.feedListHold) private var hold
+    @State private var holdClaim: FeedListHold.Claim?
+    @State private var landingItemID: String?
+    @State private var visibleItemIDs: Set<String> = []
+    /// Whether the user is scrolling: the top is recorded from that, never
+    /// from rows leaving because the list did (the overlay putting it away).
+    @State private var isScrolling = false
 
     var body: some View {
         feedScopeSwitchTitle(
@@ -120,14 +131,32 @@ struct FeedItemListView: View {
             Text("Items you have not opened will be marked read too.")
         }
         .task(id: scope) {
-            await start()
+            // A list the split moved below a laptop fold, or back, is taken
+            // over whole, with no reload (`FeedListHold`).
+            let mounted = hold?.mount(scope: scope)
+            holdClaim = mounted?.claim
+            if let handoff = mounted?.handoff { await adopt(handoff) } else { await start() }
+            if let model, let claim = mounted?.claim {
+                hold?.register(model, scope: scope, under: claim)
+            }
             // The list follows the store for as long as it is up, from
             // before the sync, so a mark made elsewhere meanwhile lands too.
             let model = model
-            async let following: Void? = model?.observe()
-            await model?.sync()
-            initialLoadComplete = true
-            applyLaunchRestoreWhenReady()
+            async let following: Void? = model?.observe(reloading: mounted?.handoff == nil)
+            // A taken-over list syncs only if no sync of its model ran to the
+            // end: a move mid-sync cancels the sync, whose re-read of the
+            // store still has to finish before another can start.
+            if mounted?.handoff == nil {
+                await model?.sync()
+            } else if let model, !model.hasSynced {
+                await FeedListHold.awaitSyncWindDown(of: model)
+                await model.sync()
+            }
+            // A list a move replaced takes no parked item: its successor does.
+            if holdsClaim {
+                initialLoadComplete = true
+                applyLaunchRestoreWhenReady()
+            }
             _ = await following
         }
         .onAppear {
@@ -205,6 +234,22 @@ struct FeedItemListView: View {
 
     @ViewBuilder
     private func itemList(_ model: FeedItemListViewModel) -> some View {
+        ScrollViewReader { proxy in
+            itemRows(model)
+                // A list taken over from one that moved lands on its top row,
+                // once the rows have had their first layout: a scroll asked
+                // for before it does nothing.
+                .task(id: landingItemID) {
+                    guard let itemID = landingItemID else { return }
+                    try? await Task.sleep(for: .milliseconds(150))
+                    proxy.scrollTo(itemID, anchor: .top)
+                    landingItemID = nil
+                }
+        }
+    }
+
+    @ViewBuilder
+    private func itemRows(_ model: FeedItemListViewModel) -> some View {
         List(selection: $selection) {
             ForEach(model.items) { item in
                 itemRow(item, model: model)
@@ -213,6 +258,10 @@ struct FeedItemListView: View {
         }
         .listStyle(.plain)
         .refreshable { await model.sync() }
+        .onScrollPhaseChange { _, phase in
+            isScrolling = phase.isScrolling
+            if !phase.isScrolling { recordTop(model) }
+        }
         .onChange(of: selection) { previous, item in
             // A new item opening, not the same item refreshed below: a
             // reader-side "mark as unread" must not be undone on the spot.
@@ -239,7 +288,9 @@ struct FeedItemListView: View {
                     .accessibilityIdentifier("feed.item.\(item.id)")
                     .onAppear {
                         if item.id == model.items.last?.id { Task { await model.loadMore() } }
+                        rowShown(item.id, model: model)
                     }
+                    .onDisappear { rowHidden(item.id, model: model) }
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         feedSwipeButton(model.swipeLeading, item: item, model: model)
                     }
@@ -391,6 +442,51 @@ enum FeedItemDate {
     /// The feed's name for a multi-feed list. The item itself only carries
     /// ids; the row shows the host of the item URL as the cheap, always-
     /// available stand-in until the list model resolves titles (5d).
+}
+
+// MARK: - A move below a laptop fold
+
+extension FeedItemListView {
+    /// Whether this list may take what its window parks for its list: it
+    /// holds the split's claim, or there is no split hold (the tab layouts).
+    private var holdsClaim: Bool {
+        guard let hold, let holdClaim else { return true }
+        return hold.holds(holdClaim)
+    }
+
+    /// Takes over the list that moved: its model, rows and pages as they
+    /// were; the title from the model's own rows, which its catalog re-read
+    /// keeps current; the catalog reads are local and cheap.
+    private func adopt(_ handoff: FeedListHold.Handoff) async {
+        model = handoff.model
+        title = scopeTitle(subscription: handoff.model.subscription, folder: handoff.model.folder)
+        landingItemID = handoff.topItemID
+        guard let client = appState.client else { return }
+        if handoff.model.subscription != nil {
+            management = FeedManagementViewModel(client: client)
+        }
+        folders = (try? await client.rssStore?.folders()) ?? []
+        switchSubscriptions = (try? await client.rssStore?.subscriptions()) ?? []
+    }
+
+    private func rowShown(_ itemID: String, model: FeedItemListViewModel) {
+        visibleItemIDs.insert(itemID)
+        if isScrolling { recordTop(model) }
+    }
+
+    private func rowHidden(_ itemID: String, model: FeedItemListViewModel) {
+        visibleItemIDs.remove(itemID)
+        if isScrolling { recordTop(model) }
+    }
+
+    /// Records the first row on screen as the list's top, for the list that
+    /// takes this one over after a move: while the user scrolls and when the
+    /// scroll settles, so rows leaving with the whole list never move it.
+    private func recordTop(_ model: FeedItemListViewModel) {
+        guard let hold, let holdClaim, landingItemID == nil,
+              let top = model.items.first(where: { visibleItemIDs.contains($0.id) })?.id else { return }
+        hold.record(topItemID: top, under: holdClaim)
+    }
 }
 
 // MARK: - Launch restore

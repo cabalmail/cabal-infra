@@ -69,6 +69,9 @@ struct SplitShell: View {
     /// The crease the reader keeps above while the split is arranged for
     /// laptop pose, and where the reader ends (`LaptopPanelPolicy`, #1649).
     @State private var laptopReader = LaptopReaderSlot()
+    /// The feed list's state as it moves below a laptop fold and back
+    /// (`FeedListHold`), as the window's navigator holds the mail list's.
+    @State private var feedListHold = FeedListHold()
     @Environment(\.foldState) private var foldState
     @Environment(\.foldDivision) private var foldDivision
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -122,11 +125,12 @@ struct SplitShell: View {
             // so a fold reflows the web view and never rebuilds it.
             //
             // In laptop pose the reader ends its content above the fold, its
-            // placeholders here and a message inside its own bar's inset, and
+            // placeholders here and a message or an article inside its own
+            // bar's inset, and
             // hides the navigation bar a stock split leaves on the upright
             // half (`LaptopPanelPolicy`). Values only, so a fold reflows the
             // web view and never rebuilds it.
-            mail.reader(mailPlaceholder: LaptopFoldClearance(), feedPlaceholder: EmptyModifier())
+            mail.reader(mailPlaceholder: LaptopFoldClearance(), feedPlaceholder: LaptopFoldClearance())
                 .padding(.leading, readerCreaseInset)
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
                 .toolbar { messagesButton }
@@ -147,7 +151,7 @@ struct SplitShell: View {
         .onChange(of: laptopCrease, initial: true) { old, crease in
             // Before the list moves, so the list mounting takes the window's
             // selection and place.
-            if (old == nil) != (crease == nil) { navigator.listMoves(isSearching: mail.isSearching) }
+            if (old == nil) != (crease == nil) { listMoves() }
             // The addresses inspector would run up the upright half, beside
             // the message, so a fold closes it as a shell swap does; the
             // panel's `@` opens it again.
@@ -187,6 +191,7 @@ struct SplitShell: View {
         }
         // The width every window shared before they kept their own.
         .task { ListColumnTab.retireAppWideWidth() }
+        .environment(\.feedListHold, feedListHold)
         .wideMailBehaviour(mail)
         // The window's shape, outside the addresses inspector, which narrows
         // the split in a wide window without making it tall; with the
@@ -586,12 +591,22 @@ extension SplitShell {
 
 extension SplitShell {
     /// The crease to arrange the split around: a laptop fold across a tall
-    /// window in the mail section, nil otherwise (`LaptopPanelPolicy`).
+    /// window, nil otherwise (`LaptopPanelPolicy`).
     private var laptopCrease: CGRect? {
-        let arranged = LaptopPanelPolicy.isArranged(
-            fold: foldState, windowIsTall: windowIsTall, showsFeeds: mail.selectedFeedScope != nil
-        )
+        let arranged = LaptopPanelPolicy.isArranged(fold: foldState, windowIsTall: windowIsTall)
         return arranged ? foldState.crease : nil
+    }
+
+    /// The list moves between the column and the panel: the feed list
+    /// through the split's own hold, a mail list through the window's
+    /// (`SceneNavigator.listMoves`), each handing the list mounting next its
+    /// state.
+    private func listMoves() {
+        if readerShowsFeeds {
+            feedListHold.move()
+        } else {
+            navigator.listMoves(isSearching: mail.isSearching)
+        }
     }
 
     /// How far below the split's top the panels start in laptop pose: the
