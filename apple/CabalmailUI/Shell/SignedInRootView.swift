@@ -118,6 +118,10 @@ struct SignedInRootView: View {
             // are beneath it, and after the `.id` so a new sign-in keeps the
             // fold it is in.
             .foldGeometry()
+            // Where this window's sheets sit (`\.sheetsSitTrailing`), by its
+            // shape: outside the compose router and the shells, whose sheets
+            // read it.
+            .windowSheetPlacement()
             // Whether the system draws this window's bars in a side strip
             // (`\.barsAreVertical`), for the tab roles and the reader's bar.
             .verticalBars()

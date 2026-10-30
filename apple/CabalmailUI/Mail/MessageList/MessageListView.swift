@@ -415,17 +415,21 @@ extension MessageListView {
         chromeLayer
         .sheet(isPresented: $filtersPresented) {
             filtersSheet
+                .windowShapedSheet()
         }
         .sheet(item: $envelopeToMove) { envelope in
             moveSheet(for: envelope)
+                .windowShapedSheet()
         }
         .sheet(isPresented: $bulkMoveSheetPresented) {
             if let model {
                 bulkMoveSheet(model: model)
+                    .windowShapedSheet()
             }
         }
         .sheet(item: $moveCandidate) { candidate in
             selectionMoveSheet(for: candidate)
+                .windowShapedSheet()
         }
         .confirmationPrompt(
             "Delete Forever?",
