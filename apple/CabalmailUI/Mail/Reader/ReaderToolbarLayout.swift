@@ -37,7 +37,7 @@ enum ReaderToolbarAction: String, CaseIterable {
         func toggle(_ face: ReaderToggleFace) -> (String, String) { (face.title, face.systemImage) }
         switch self {
         case .reply:         return ("Reply", "arrowshape.turn.up.left")
-        case .editDraft:     return ("Edit Draft", "square.and.pencil")
+        case .editDraft:     return ("Edit Draft", "pencil")
         case .dispose:       return ("Archive", "archivebox")
         case .toggleRead:    return toggle(.read(isRead: false))
         case .remoteContent: return toggle(.remoteContent(isShown: false))

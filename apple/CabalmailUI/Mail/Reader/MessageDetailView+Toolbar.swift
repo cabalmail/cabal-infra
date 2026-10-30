@@ -143,7 +143,7 @@ extension MessageDetailView {
             Button {
                 beginResumeDraft()
             } label: {
-                Label("Edit Draft", systemImage: "square.and.pencil")
+                Label("Edit Draft", systemImage: "pencil")
             }
             .disabled(!model.canResumeDraft)
             .accessibilityIdentifier("reader.editDraft")
@@ -364,7 +364,7 @@ extension MessageDetailView {
             Button {
                 beginResumeDraft()
             } label: {
-                Label("Edit Draft", systemImage: "square.and.pencil")
+                Label("Edit Draft", systemImage: "pencil")
             }
             .disabled(!model.canResumeDraft)
         } else {

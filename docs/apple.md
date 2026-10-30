@@ -1326,9 +1326,12 @@ bar.
 **The reader's bar in a tall window: `ReaderToolbarLayout.tallBar`.**
 Where the reader fills a window taller than wide
 (`\.readerFillsTallWindow`, which `SplitShell` publishes while the list
-floats over the reader or sits below a laptop fold), its own bar draws
-the iPhone Duo spec's set in its order whatever its width: Reply,
-dispose, Flag, Read, Page Up, Page Down, the More menu and Compose. The
+floats over the reader or sits below a laptop fold), its own bar (iOS 27
+and later, where the reader draws its own bar at regular width; earlier
+releases keep the system bottom bar) draws the iPhone Duo spec's set in
+its order whatever its width: Reply, dispose, Flag, Read, Page Up, Page
+Down, the More menu and Compose. Edit Draft's button is a pencil there,
+as everywhere, so a draft's bar doesn't show two Compose faces. The
 list's bar, with its Compose, is behind the message or below the fold
 there, so the reader's bar carries Compose too, and the display toggles
 (remote content, reader view) move to the More menu to make room. Page
