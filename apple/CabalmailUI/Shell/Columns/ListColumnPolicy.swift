@@ -53,6 +53,10 @@ struct ListColumnPolicy: Equatable, Sendable {
     var stored: CGFloat?
     /// The width of a drag in progress on this list.
     var live: CGFloat?
+    /// Whether the window is taller than wide: the iPhone Duo open upright
+    /// or in laptop pose, an iPad in portrait. The window's shape, not the
+    /// split's, which a tiled inspector narrows in a wide window.
+    var windowIsTall = false
 
     var isMeasured: Bool { split.width > 0 }
 
@@ -63,6 +67,11 @@ struct ListColumnPolicy: Equatable, Sendable {
     var listLeadingEdge: CGFloat { split.minX + leadingColumnsWidth }
 
     var isWide: Bool { split.width > split.height }
+
+    /// Whether the list floats over a full-width reader rather than tiling
+    /// beside it: in a window taller than wide, the iPhone Duo open upright
+    /// and an iPad in portrait (`ListOverlay`, #1686).
+    var overlaysReader: Bool { isMeasured && windowIsTall }
 
     var bounds: ClosedRange<CGFloat> {
         let floor = isWide ? Self.wideMinimum : ListColumnWidth.minimum
@@ -98,18 +107,25 @@ struct ListColumnPolicy: Equatable, Sendable {
     /// The handle shows only with no active fold — none on a book crease, and
     /// in laptop pose its centred grip would sit on the crease — and only
     /// where it can move the list.
-    var handleIsShown: Bool { !fold.isFolded && hasTravel }
+    var handleIsShown: Bool { !fold.isFolded && hasTravel && !overlaysReader }
 
     var width: CGFloat {
+        // Floating over the reader, the list keeps the width it has before
+        // anyone sets one: the tiled range, which shares the window with the
+        // reader's floor, has no say.
+        if overlaysReader { return min(Self.defaultWidth, available) }
         if let pin { return pin }
         if handleIsShown, let live { return clamped(live) }
         if let stored { return clamped(stored) }
         return foldLine ?? clamped(Self.defaultWidth)
     }
 
-    /// The floor the reader declares beside `width`.
+    /// The floor the reader declares beside `width`. Over a reader the list
+    /// floats over, the whole split, which is what keeps UIKit from tiling
+    /// the two.
     var readerFloor: CGFloat {
-        ListColumnWidth.pinnedReaderFloor(splitWidth: isMeasured ? available : 0, listWidth: width)
+        if overlaysReader { return available }
+        return ListColumnWidth.pinnedReaderFloor(splitWidth: isMeasured ? available : 0, listWidth: width)
     }
 
     /// Whether there is a width of the user's to clear.

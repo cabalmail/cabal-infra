@@ -60,6 +60,12 @@ struct SplitShell: View {
     /// The split view's frame in the window, measured on the split itself,
     /// as `splitWidth` is.
     @State private var splitFrame: CGRect = .zero
+    /// Whether the list is over the reader, in a window taller than wide
+    /// (`ListOverlay`, #1686).
+    @State private var listOverlay = ListOverlay()
+    /// Whether the window is taller than wide, measured outside the
+    /// addresses inspector (`ListColumnPolicy.windowIsTall`).
+    @State private var windowIsTall = false
     @Environment(\.foldState) private var foldState
     @Environment(\.foldDivision) private var foldDivision
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -76,7 +82,7 @@ struct SplitShell: View {
     var body: some View {
         let mail = self.mail
         NavigationSplitView(
-            columnVisibility: .constant(.doubleColumn),
+            columnVisibility: listColumnVisibility,
             preferredCompactColumn: mail.compactColumnSelection
         ) {
             // The folder list lives in the floating panel
@@ -114,6 +120,12 @@ struct SplitShell: View {
             mail.reader(mailPlaceholder: EmptyModifier(), feedPlaceholder: EmptyModifier())
                 .padding(.leading, readerCreaseInset)
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
+                .toolbar { messagesButton }
+        }
+        // A message or a feed item opened over the floating list sends it
+        // away; none open brings it back (`ListOverlay`).
+        .onChange(of: openReading, initial: true) { _, opened in
+            listOverlay.messageChanged(isOpen: opened != nil)
         }
         // Revealing folders floats a panel OVER the message list rather than
         // tiling the split's sidebar column, so the list never shifts and its
@@ -149,6 +161,18 @@ struct SplitShell: View {
         // The width every window shared before they kept their own.
         .task { ListColumnTab.retireAppWideWidth() }
         .wideMailBehaviour(mail)
+        // The window's shape, outside the addresses inspector, which narrows
+        // the split in a wide window without making it tall; with the
+        // keyboard's region ignored, so a docked keyboard can't turn it.
+        .background {
+            Color.clear
+                .onGeometryChange(for: Bool.self) { proxy in
+                    proxy.size.height > proxy.size.width
+                } action: { tall in
+                    windowIsTall = tall
+                }
+                .ignoresSafeArea(.keyboard)
+        }
         .settingsSheetPresenter()
         // Each width the split view is laid out at, which during a Zoom out
         // of compact is not the window's: UIKit lays the split out once at an
@@ -387,7 +411,8 @@ extension SplitShell {
             fold: columnState.fold,
             division: foldDivision,
             stored: ListColumnPolicy.storedWidth(storedListWidth),
-            live: columnState.liveWidth(for: listColumnTab)
+            live: columnState.liveWidth(for: listColumnTab),
+            windowIsTall: windowIsTall
         )
     }
 
@@ -452,6 +477,58 @@ extension SplitShell {
         )
         withAnimation(animates ? ListColumnPolicy.dividerAnimation : nil) {
             columnState.follow(fold)
+        }
+    }
+}
+
+// MARK: - The list over the reader
+
+extension SplitShell {
+    /// Whether the list floats over a full-width reader: in a window taller
+    /// than wide (`ListColumnPolicy.overlaysReader`).
+    private var listOverlays: Bool { listColumnLayout.overlaysReader }
+
+    /// What the reader has open, the section's message or feed item; nil for
+    /// nothing. The feed item only while the reader shows it: a search in
+    /// the Feeds section opens mail results (`WideMail.reader`). A message
+    /// by its folder too, so a search result with another folder's UID is a
+    /// new open.
+    private var openReading: String? {
+        if readerShowsFeeds { return mail.selectedFeedItem.map { "item:\($0.id)" } }
+        return mail.selectedEnvelope.map { "message:\($0.folder ?? "")#\($0.uid)" }
+    }
+
+    /// Whether the reader shows the feed reader rather than mail, by the
+    /// rule `WideMail.reader` draws it by.
+    private var readerShowsFeeds: Bool {
+        mail.selectedFeedScope != nil && !mail.isSearching
+    }
+
+    /// The split's columns. Tiled, both, always: the pinned `.doubleColumn`
+    /// the zero-width sidebar relies on. Overlaid, the reader alone unless
+    /// the list is shown, and a tap on the reader or a swipe that puts the
+    /// list away is taken back from the split.
+    private var listColumnVisibility: Binding<NavigationSplitViewVisibility> {
+        Binding(
+            get: { listOverlay.visibility(overlays: listOverlays) },
+            set: { listOverlay.splitAsked(for: $0, overlays: listOverlays) }
+        )
+    }
+
+    /// The reader's way back to the list while it floats away.
+    @ToolbarContentBuilder
+    private var messagesButton: some ToolbarContent {
+        if listOverlay.offersMessagesButton(overlays: listOverlays) {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    withAnimation(.snappy(duration: 0.28)) { listOverlay.show() }
+                } label: {
+                    // A back button, as the spec draws it, rather than the
+                    // folder panel's sidebar symbol.
+                    Label(readerShowsFeeds ? "Articles" : "Messages", systemImage: "chevron.backward")
+                }
+                .accessibilityIdentifier("reader.showList")
+            }
         }
     }
 }
