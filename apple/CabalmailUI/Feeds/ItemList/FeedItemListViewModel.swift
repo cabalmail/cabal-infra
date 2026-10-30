@@ -150,11 +150,18 @@ final class FeedItemListViewModel {
     /// then follows the store's changes until the view goes.
     /// - Parameter reloading: false for a model a list took over from the
     ///   one that moved below a laptop fold or back (`FeedListHold`): its
-    ///   rows and pages stay, and it follows the store from here.
+    ///   rows and pages stay. Nothing followed the store while no list was
+    ///   up, and the store replays nothing, so it catches up as a batch
+    ///   naming everything it shows would: a first page re-reads, a paged
+    ///   list patches its rows and counts and keeps its place.
     func observe(reloading: Bool = true) async {
         guard let store else { return }
         let changes = await store.changes()
-        if reloading { await reload() }
+        if reloading {
+            await reload()
+        } else {
+            await apply(FeedChangeBatch(items: Set(items.map(\.id)), feeds: scopeFeedIds, catalog: true))
+        }
         await FeedStoreChanges.follow(changes) { batch in await apply(batch) }
     }
 
@@ -307,7 +314,8 @@ final class FeedItemListViewModel {
         // stands; the store is still re-read below, since feeds synced before
         // the cancel have landed. No retry is armed here: the list's
         // `.task(id: scope)` builds a fresh model and syncs on every
-        // appearance; a `model == nil` gate there would need one. A failed
+        // appearance, and a list that takes a moved one's model over syncs
+        // when that list's sync did not finish (`FeedListHold`). A failed
         // drain stays quiet, as before: the queue waits for the next one.
         if let report, !Task.isCancelled {
             errorMessage = (report.catalogError ?? report.firstFeedError).map(FeedErrorText.describe)

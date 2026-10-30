@@ -23,16 +23,18 @@ final class FeedListHold {
     /// What a move hands the next list for the same scope.
     struct Handoff {
         let model: FeedItemListViewModel
-        let title: String
         /// The item at the top of the list that went away.
         let topItemID: String?
+        /// Whether the list that went away finished its opening sync; a move
+        /// mid-sync cancels it, so the next list syncs instead.
+        let synced: Bool
     }
 
     private struct Held {
         let scope: RssItemScope
         let model: FeedItemListViewModel
-        let title: String
         var topItemID: String?
+        var synced = false
     }
 
     private var held: Held?
@@ -41,24 +43,31 @@ final class FeedListHold {
 
     /// A list mounting for `scope`: the moved list's state, once, when a
     /// move is handing it over for that scope; and the claim it records
-    /// under. A list for another scope starts afresh, and the held list goes.
+    /// under. Any other mount starts afresh, and what was held goes with it,
+    /// so a move before the new list registers hands nothing stale over.
     func mount(scope: RssItemScope) -> (claim: Claim, handoff: Handoff?) {
         defer { handsOff = false }
         generation += 1
         let claim = Claim(generation: generation)
-        guard let held, held.scope == scope else {
+        guard handsOff, let held, held.scope == scope else {
             self.held = nil
             return (claim, nil)
         }
-        guard handsOff else { return (claim, nil) }
-        return (claim, Handoff(model: held.model, title: held.title, topItemID: held.topItemID))
+        return (claim, Handoff(model: held.model, topItemID: held.topItemID, synced: held.synced))
     }
 
-    /// The mounted list's model, under its claim.
-    func register(_ model: FeedItemListViewModel, scope: RssItemScope, title: String, under claim: Claim) {
+    /// The mounted list's model, under its claim. A list that took a moved
+    /// one over keeps its top row and whether it synced.
+    func register(_ model: FeedItemListViewModel, scope: RssItemScope, under claim: Claim) {
         guard holds(claim) else { return }
-        let top = held.flatMap { $0.model === model ? $0.topItemID : nil }
-        held = Held(scope: scope, model: model, title: title, topItemID: top)
+        if let held, held.model === model { return }
+        held = Held(scope: scope, model: model)
+    }
+
+    /// The mounted list's opening sync finished.
+    func markSynced(under claim: Claim) {
+        guard holds(claim) else { return }
+        held?.synced = true
     }
 
     /// The item at the top of the mounted list, as it scrolls. Refused under

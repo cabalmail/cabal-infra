@@ -3,4 +3,6 @@
   with its bar, sits in a panel below the fold, above the message's
   actions. The list keeps its place, its selection and its checked rows
   as it moves in and out of the panel, and the message doesn't reload.
-  Feeds keeps the floating list for now.
+  Feeds works the same way: the article above the fold and the item list
+  below, which keeps its loaded items, filter and place without
+  reloading.
