@@ -1,5 +1,13 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    /// Whether the reader fills a window taller than wide, with the list
+    /// over it or below a laptop fold, so its own bar carries the page
+    /// buttons and Compose (`ReaderToolbarLayout.tallBar`). Published by
+    /// `SplitShell` on its reader.
+    @Entry var readerFillsTallWindow = false
+}
+
 /// The list floating over a full-width reader in a window taller than wide:
 /// the iPhone Duo open upright and an iPad in portrait (the spec's open
 /// portrait choice, #1686). The message takes the window's width, and the

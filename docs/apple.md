@@ -1326,6 +1326,23 @@ way, and a list the move replaced takes no pending restore once off
 screen (`ListPlaceTracker.mayTakeParked`). Feeds keeps the floating
 list, since the feed reader's actions are in its navigation bar.
 
+**The reader's bar in a tall window: `ReaderToolbarLayout.tallBar`.**
+Where the reader fills a window taller than wide
+(`\.readerFillsTallWindow`, which `SplitShell` publishes while the list
+floats over the reader or sits below a laptop fold), its own bar (iOS 27
+and later, where the reader draws its own bar at regular width; earlier
+releases keep the system bottom bar) draws the iPhone Duo spec's set in
+its order whatever its width: Reply, dispose, Flag, Read, Page Up, Page
+Down, the More menu and Compose. Edit Draft's button is a pencil there,
+as everywhere, so a draft's bar doesn't show two Compose faces. The
+list's bar, with its Compose, is behind the message or below the fold
+there, so the reader's bar carries Compose too, and the display toggles
+(remote content, reader view) move to the More menu to make room. Page
+Up and Page Down page the body by 90% of its visible height
+(`ReaderPaging`): an HTML body through a script in the app's own content
+world, which shares the page's document while page JavaScript stays off,
+and a plain-text body through its `ScrollPosition`.
+
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
 starting values to tune on hardware.

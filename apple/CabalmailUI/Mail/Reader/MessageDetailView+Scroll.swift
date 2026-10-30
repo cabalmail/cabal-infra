@@ -59,6 +59,7 @@ extension MessageDetailView {
             allowRemote: model.remoteContentAllowed,
             readerMode: model.readerMode,
             printRequestTick: model.printRequestTick,
+            pageRequest: model.pageRequest,
             restoreAnchor: restoreScrollAnchor,
             runsUnderBottomBar: bodyRunsUnderBottomBar,
             onScrollCaptured: { capture in
@@ -77,6 +78,7 @@ extension MessageDetailView {
             PlainTextBodyView(plain: plain)
         }
         .scrollPosition($plainScrollPosition)
+        .modifier(PlainBodyPaging(request: model?.pageRequest, position: $plainScrollPosition))
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.contentOffset.y
         } action: { _, offset in
