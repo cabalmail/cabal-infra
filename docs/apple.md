@@ -1313,15 +1313,18 @@ inset of that size the web view drew nothing). The reader's own action
 bar stays at the window's bottom edge, and `LaptopListPanel` fills the
 space between the fold and that bar with the list and its bar, in a
 navigation stack of its own; the folder panel opens below the fold over
-it. The reader reports where its content ends through `\.laptopReader`,
-which is how the panel knows where the bar starts. Every change is a
-value on a modifier that is always present, so the message's web view
-reflows and is never rebuilt. The list itself moves: the column holds
-none while the panel does, and `SceneNavigator.listMoves()` hands the
-mounting list the window's selection (a single highlighted row included,
-which a layout swap does not carry) and its place, each way. Feeds keeps
-the floating list, since the feed reader's actions are in its navigation
-bar.
+it. The panel's bar carries the addresses `@`; a fold closes an open
+inspector, which would run up the upright half. The reader reports where
+its content ends through `\.laptopReader`, which is how the panel knows
+where the bar starts. Every change is a value on a modifier that is
+always present, so the message's web view reflows and is never rebuilt.
+The list itself moves, one at a time: the column holds none while the
+panel does, and `SceneNavigator.listMoves()` hands the mounting list the
+window's selection (a single highlighted row included, which a layout
+swap does not carry; none while search results move) and its place, each
+way, and a list the move replaced takes no pending restore once off
+screen (`ListPlaceTracker.mayTakeParked`). Feeds keeps the floating
+list, since the feed reader's actions are in its navigation bar.
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
