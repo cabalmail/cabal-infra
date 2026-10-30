@@ -1341,7 +1341,17 @@ there, so the reader's bar carries Compose too, and the display toggles
 Up and Page Down page the body by 90% of its visible height
 (`ReaderPaging`): an HTML body through a script in the app's own content
 world, which shares the page's document while page JavaScript stays off,
-and a plain-text body through its `ScrollPosition`.
+and a plain-text body through its `ScrollPosition`. The feed reader does
+the same where it fills a tall window (`ReaderToolbarPolicy.placement`'s
+`fillsTallWindow`): `FeedReaderActionBar` draws Flag, Read, Page Up,
+Page Down, the View menu and Compose
+(`FeedReaderToolbarLayout.tallBar`), and its navigation bar draws none
+of them meanwhile. Its body no longer runs under the bottom edge at
+regular width (`bodyRunsUnderBottomBar` is compact width alone for both
+readers), so a turn that brings the bar reflows the body and never
+rebuilds its web view. A publisher's page pages through its own scroll
+view (`ReaderPaging.scrollTarget`), so nothing runs in the page, and
+every body takes a press once through `ReaderPageGate`.
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are

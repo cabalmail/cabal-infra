@@ -11,9 +11,9 @@ final class ReaderToolbarPolicyTests: XCTestCase {
     ]
 
     /// The feed reader's set is three items, inside the top bar's budget at
-    /// every width, so it stays in the system navigation bar on every layout
-    /// and OS generation.
-    func testTheFeedReaderAlwaysUsesTheSystemTopBar() {
+    /// every width, so outside a tall window it stays in the system
+    /// navigation bar on every layout and OS generation.
+    func testTheFeedReaderUsesTheSystemTopBarOutsideATallWindow() {
         for combo in Self.combinations {
             XCTAssertEqual(
                 ReaderToolbarPolicy.placement(for: .feeds, isRegularWidth: combo.regular, isOS27OrLater: combo.os27),
@@ -105,16 +105,57 @@ final class ReaderToolbarPolicyTests: XCTestCase {
         }
     }
 
-    /// The body runs under the bottom chrome by width alone, as it did before
-    /// the strip had a say in the placement: flipping it rebuilds the web
-    /// view (the Decision 9 spike), and the strip changes without a shell
-    /// swap.
+    /// The body runs under the bottom chrome at compact width alone, for
+    /// both readers: flipping it rebuilds the web view (the Decision 9
+    /// spike), and the strip and a tall window's own bar come and go without
+    /// a shell swap. And never where the reader draws its own bar, a SwiftUI
+    /// inset the web view does not see.
     func testTheBodyFollowsTheWidthAlone() {
         for medium in [ReaderToolbarPolicy.Medium.mail, .feeds] {
-            for (regular, os27) in combos {
+            for regular in [false, true] {
+                let body = ReaderToolbarPolicy.bodyRunsUnderBottomBar(for: medium, isRegularWidth: regular)
+                XCTAssertEqual(body, !regular, "\(medium) regular=\(regular)")
+                for os27 in [false, true] {
+                    for vertical in [false, true] {
+                        for tall in [false, true] {
+                            let placement = ReaderToolbarPolicy.placement(
+                                for: medium, isRegularWidth: regular, isOS27OrLater: os27,
+                                barsAreVertical: vertical, fillsTallWindow: tall
+                            )
+                            if placement == .ownBar { XCTAssertFalse(body, "\(medium) under its own bar") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The feed reader draws its own bar where it fills a window taller than
+    /// wide, on iOS 27, at regular width, with horizontal bars: the iPhone
+    /// Duo upright or in laptop pose, an iPad in portrait. A side strip, a
+    /// compact window or iOS 26 keep the top bar.
+    func testTheFeedReaderDrawsItsOwnBarInATallWindow() {
+        func feeds(regular: Bool = true, os27: Bool = true, vertical: Bool = false, tall: Bool = true)
+            -> ReaderToolbarPolicy.Placement {
+            ReaderToolbarPolicy.placement(for: .feeds, isRegularWidth: regular, isOS27OrLater: os27,
+                                          barsAreVertical: vertical, fillsTallWindow: tall)
+        }
+        XCTAssertEqual(feeds(), .ownBar)
+        XCTAssertEqual(feeds(tall: false), .topBar)
+        XCTAssertEqual(feeds(vertical: true), .topBar)
+        XCTAssertEqual(feeds(regular: false), .topBar)
+        XCTAssertEqual(feeds(os27: false), .topBar)
+    }
+
+    /// The mail reader's placement doesn't read the window's shape.
+    func testTheMailPlacementIgnoresATallWindow() {
+        for (regular, os27) in combos {
+            for vertical in [false, true] {
                 XCTAssertEqual(
-                    ReaderToolbarPolicy.bodyRunsUnderBottomBar(for: medium, isRegularWidth: regular),
-                    ReaderToolbarPolicy.placement(for: medium, isRegularWidth: regular, isOS27OrLater: os27) == .topBar
+                    ReaderToolbarPolicy.placement(for: .mail, isRegularWidth: regular, isOS27OrLater: os27,
+                                                  barsAreVertical: vertical, fillsTallWindow: true),
+                    ReaderToolbarPolicy.placement(for: .mail, isRegularWidth: regular, isOS27OrLater: os27,
+                                                  barsAreVertical: vertical)
                 )
             }
         }

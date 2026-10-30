@@ -18,6 +18,9 @@ struct ArticleWebView: View {
     let dataStoreID: UUID?
     let readerMode: Bool
     let isOffline: Bool
+    /// The tall bar's Page Up and Page Down, which scroll the web view
+    /// itself, so nothing runs in the page (`ReaderPaging.scrollTarget`).
+    var pageRequest: ReaderPageRequest?
     /// Reports that a link tapped in the reader has opened its page, so the
     /// view model can leave the reader for that page without touching the
     /// feed's saved styling (#2060).
@@ -31,7 +34,7 @@ struct ArticleWebView: View {
 
     var body: some View {
         ArticleWebViewRepresentable(url: url, dataStoreID: dataStoreID, readerMode: readerMode,
-                                    textScale: dynamicTypeSize.bodyTextScale,
+                                    textScale: dynamicTypeSize.bodyTextScale, pageRequest: pageRequest,
                                     onFailure: { failure = $0 }, onLeftReader: onLeftReader)
             .id(attempt)
             .overlay {
@@ -65,6 +68,7 @@ private struct ArticleWebViewRepresentable: NSViewRepresentable {
     let dataStoreID: UUID?
     let readerMode: Bool
     let textScale: Double
+    let pageRequest: ReaderPageRequest?
     let onFailure: @MainActor (String?) -> Void
     let onLeftReader: @MainActor () -> Void
 
@@ -86,6 +90,7 @@ private struct ArticleWebViewRepresentable: UIViewRepresentable {
     let dataStoreID: UUID?
     let readerMode: Bool
     let textScale: Double
+    let pageRequest: ReaderPageRequest?
     let onFailure: @MainActor (String?) -> Void
     let onLeftReader: @MainActor () -> Void
 
@@ -99,6 +104,23 @@ private struct ArticleWebViewRepresentable: UIViewRepresentable {
 
     func updateUIView(_ uiView: WKWebView, context: Context) {
         context.coordinator.apply(readerMode: readerMode, textScale: textScale, on: uiView)
+        if let request = context.coordinator.admitPage(pageRequest) { page(uiView.scrollView, request.direction) }
+    }
+
+    /// Pages the web view's own scroll view, so nothing runs in the page:
+    /// neither the reader document's script policy nor the live page's
+    /// scripts matter. A page that scrolls an inner element instead of its
+    /// window doesn't move.
+    private func page(_ scrollView: UIScrollView, _ direction: ReaderPageRequest.Direction) {
+        let inset = scrollView.adjustedContentInset
+        let target = ReaderPaging.scrollTarget(
+            from: scrollView.contentOffset.y,
+            viewport: scrollView.bounds.height - inset.top - inset.bottom,
+            minOffset: -inset.top,
+            maxOffset: scrollView.contentSize.height + inset.bottom - scrollView.bounds.height,
+            direction: direction
+        )
+        scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: target), animated: true)
     }
 }
 #endif
@@ -113,6 +135,8 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     private var wantsReader = false
     private var showingReader = false
     private var pageLoaded = false
+    /// The tall bar's page requests this page has seen (`ReaderPageGate`).
+    private var pageGate = ReaderPageGate()
     private var extracting = false
     /// The live page's article, extracted once; the reader document is built
     /// from it at the text size of the moment.
@@ -368,5 +392,14 @@ enum ArticleReaderDocument {
         text.replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
+    }
+}
+
+extension ArticleWebCoordinator {
+    /// The page request to act on now, if any, once the page has loaded
+    /// (`ReaderPageGate`): the tall bar's Page Up and Page Down.
+    func admitPage(_ request: ReaderPageRequest?) -> ReaderPageRequest? {
+        guard let request = pageGate.admit(request), pageLoaded else { return nil }
+        return request
     }
 }

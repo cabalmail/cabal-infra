@@ -101,24 +101,40 @@ enum ReaderToolbarPolicy {
     /// horizontal, and a system bottom bar there spans the window, under the
     /// list too, as above (measured on the Duo simulator, 2026-10-27). The
     /// reader's own pane bar already sits below the crease.
+    ///
+    /// The feed reader keeps the system top bar, except where it fills a
+    /// window taller than wide on iOS 27 with horizontal bars
+    /// (`fillsTallWindow`, the iPhone Duo upright or in laptop pose, an iPad
+    /// in portrait): there it draws its own bar under its pane, as the mail
+    /// reader does, with the page buttons and Compose (the Duo spec's
+    /// "every tall window"). Laptop pose hides the navigation bar its
+    /// actions otherwise live in.
     static func placement(
         for medium: Medium,
         isRegularWidth: Bool,
         isOS27OrLater: Bool,
-        barsAreVertical: Bool = false
+        barsAreVertical: Bool = false,
+        fillsTallWindow: Bool = false
     ) -> Placement {
-        guard medium == .mail else { return .topBar }
+        guard medium == .mail else {
+            let ownsBar = fillsTallWindow && isRegularWidth && isOS27OrLater && !barsAreVertical
+            return ownsBar ? .ownBar : .topBar
+        }
         if barsAreVertical { return .bottomItems }
         guard isRegularWidth else { return .topBar }
         return isOS27OrLater ? .ownBar : .bottomBar
     }
 
-    /// Whether a reader's HTML body runs under the bottom chrome: by width
-    /// alone, never the strip. `underBottomGlass(_:)` replaces the web view's
-    /// host when this flips (the Decision 9 spike), and the strip comes and
-    /// goes with each rotation of an open iPhone Duo, which swaps no shell; a
-    /// width change swaps the shells, which rebuild the reader anyway.
+    /// Whether a reader's HTML body runs under the bottom chrome: at
+    /// compact width only, for both readers, never by the strip or the
+    /// window's shape. `underBottomGlass(_:)` replaces the web view's host
+    /// when this flips (the Decision 9 spike), and the strip and the tall
+    /// bar come and go with each turn of an open iPhone Duo or an iPad,
+    /// which swaps no shell; a width change swaps the shells, which rebuild
+    /// the reader anyway. At regular width a body never runs under its
+    /// pane's own bar, a SwiftUI inset that a bridged web view does not see,
+    /// so the end of an article would stay stuck under it.
     static func bodyRunsUnderBottomBar(for medium: Medium, isRegularWidth: Bool) -> Bool {
-        medium == .feeds || !isRegularWidth
+        !isRegularWidth
     }
 }
