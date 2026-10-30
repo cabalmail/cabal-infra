@@ -460,13 +460,18 @@ jobs:
   # runtime supports exactly one device type, the iPhone Duo, so the same
   # resolver finds it by name.
   #
-  # Advisory, per the Duo plan's Decision 1 (docs/1.x/post-wave-3/
-  # duo-support.md): `continue-on-error`, and in neither apple-gate's nor
-  # approval's needs, so a red leg is visible on the run but blocks no merge
-  # and no upload. It runs on stage pushes, on a manual dispatch, and on a
-  # PR whose branch name contains `duo`; ordinary PRs keep their macOS job
-  # count. Not on main: a main push's tests are the release PR's, and the
+  # Required where it runs, since 2026-10-30, after 46 runs green with no
+  # flake (it was advisory from 2026-10-26, per the Duo plan's Decision 1 in
+  # docs/1.x/post-wave-3/duo-support.md): apple-gate fails on a red leg, and
+  # approval holds the stage uploads for it. It runs on stage pushes, on a
+  # manual dispatch, and on a PR whose branch name contains `duo`; ordinary
+  # PRs keep their macOS job count, and both checks take its skip there as a
+  # pass. Not on main: a main push's tests are the release PR's, and the
   # release PR's branch is `stage`.
+  #
+  # The leg needs the image's iOS 27.1 runtime. If an image update drops it,
+  # the resolver fails and so does every stage upload: put
+  # `continue-on-error: true` back on this job until a runtime is restored.
   #
   # What it cannot do: fold. No simctl or Xcode command changes the Duo's
   # posture, so the simulator stays closed (the outer display) and every
@@ -486,7 +491,6 @@ jobs:
       || (github.event_name == 'push' && github.ref_name == 'stage')
       || (github.event_name == 'pull_request' && contains(github.head_ref, 'duo'))) }}
     runs-on: xcode-27
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -657,7 +661,7 @@ jobs:
   # promotion-verdict found already tested.
   # -----------------------------------------------------------------------
   apple-gate:
-    needs: [promotion-verdict, kit-test, app-test, ios-app-test, app-build]
+    needs: [promotion-verdict, kit-test, app-test, ios-app-test, ios-duo-test, app-build]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -666,13 +670,19 @@ jobs:
         KIT_TEST: ${{ needs.kit-test.result }}
         APP_TEST: ${{ needs.app-test.result }}
         IOS_APP_TEST: ${{ needs.ios-app-test.result }}
+        IOS_DUO_TEST: ${{ needs.ios-duo-test.result }}
         APP_BUILD: ${{ needs.app-build.result }}
         # The negation of app-build's `if`.
         ARCHIVES_BUILD: ${{ github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
         TESTED: ${{ needs.promotion-verdict.outputs.tested == 'true' }}
       run: |
         set -euo pipefail
-        echo "[apple-gate] kit-test=$KIT_TEST app-test=$APP_TEST ios-app-test=$IOS_APP_TEST app-build=$APP_BUILD archives-build=$ARCHIVES_BUILD promotion-tested=$TESTED"
+        echo "[apple-gate] kit-test=$KIT_TEST app-test=$APP_TEST ios-app-test=$IOS_APP_TEST ios-duo-test=$IOS_DUO_TEST app-build=$APP_BUILD archives-build=$ARCHIVES_BUILD promotion-tested=$TESTED"
+        # The Duo leg runs only on stage pushes, dispatches and `duo`-named
+        # PRs (its `if`); everywhere else its skip is not a failure.
+        if [ "$IOS_DUO_TEST" = "skipped" ]; then
+          IOS_DUO_TEST=success
+        fi
         if [ "$ARCHIVES_BUILD" = "true" ] && [ "$APP_BUILD" = "skipped" ]; then
           APP_BUILD=success
         fi
@@ -681,7 +691,7 @@ jobs:
           if [ "$APP_TEST" = "skipped" ]; then APP_TEST=success; fi
           if [ "$IOS_APP_TEST" = "skipped" ]; then IOS_APP_TEST=success; fi
         fi
-        for result in "$KIT_TEST" "$APP_TEST" "$IOS_APP_TEST" "$APP_BUILD"; do
+        for result in "$KIT_TEST" "$APP_TEST" "$IOS_APP_TEST" "$IOS_DUO_TEST" "$APP_BUILD"; do
           if [ "$result" != "success" ]; then
             echo "::error::an Apple test or build job did not succeed ($result)"
             exit 1
@@ -690,7 +700,8 @@ jobs:
 
   # The environment gate in front of the uploads. Never on a pull_request:
   # a PR run ends at apple-gate. ios-app-test is a dependency so a red
-  # iOS-hosted suite stops TestFlight like the other suites do. app-build
+  # iOS-hosted suite stops TestFlight like the other suites do, and so is
+  # ios-duo-test, whose skip on a main push counts as a pass. app-build
   # is not: it is skipped on every run that uploads, and the archives below
   # are those runs' device builds. On a main push promotion-verdict found
   # already tested, the three test jobs skip and the gate opens on that
@@ -698,13 +709,14 @@ jobs:
   # promotion-verdict's own skip on every stage push, so the test results
   # are checked explicitly.
   approval:
-    needs: [promotion-verdict, kit-test, app-test, ios-app-test]
+    needs: [promotion-verdict, kit-test, app-test, ios-app-test, ios-duo-test]
     if: >-
       ${{ !cancelled() && github.event_name != 'pull_request'
       && (needs.promotion-verdict.outputs.tested == 'true'
       || (needs.kit-test.result == 'success'
       && needs.app-test.result == 'success'
-      && needs.ios-app-test.result == 'success')) }}
+      && needs.ios-app-test.result == 'success'
+      && (needs.ios-duo-test.result == 'success' || needs.ios-duo-test.result == 'skipped'))) }}
     environment: gate-${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     runs-on: ubuntu-latest
     steps:
