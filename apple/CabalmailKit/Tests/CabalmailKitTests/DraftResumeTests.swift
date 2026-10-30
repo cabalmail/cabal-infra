@@ -59,6 +59,7 @@ final class DraftResumeTests: XCTestCase {
         XCTAssertEqual(draft.serverUidValidity, 99)
         XCTAssertEqual(draft.serverRef, DraftServerRef(uid: 42, uidValidity: 99))
         XCTAssertEqual(draft.composeIntent, .new)
+        XCTAssertEqual(draft.isResumedDraft, true, "its body was signed when it was written (#2275)")
     }
 
     func testBodyPrefersPlainTextOverHtml() {

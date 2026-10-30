@@ -69,6 +69,12 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
     /// just misses.
     public var replySourceFolder: String?
     public var replySourceUid: UInt32?
+    /// True when the body is a saved draft's own (Edit Draft), which
+    /// already carries the signature it was written with, so composing
+    /// from it adds none. Optional for the same decode-stability reason as
+    /// the pairs above; nil means false. Not the same as `serverRef`, which
+    /// a resumed draft lacks when its folder's UIDVALIDITY could not be read.
+    public var isResumedDraft: Bool?
 
     public init(
         id: UUID = UUID(),
@@ -85,7 +91,8 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
         serverUid: UInt32? = nil,
         serverUidValidity: UInt32? = nil,
         replySourceFolder: String? = nil,
-        replySourceUid: UInt32? = nil
+        replySourceUid: UInt32? = nil,
+        isResumedDraft: Bool? = nil
     ) {
         self.id = id
         self.updatedAt = updatedAt
@@ -102,6 +109,7 @@ public struct Draft: Sendable, Codable, Hashable, Identifiable {
         self.serverUidValidity = serverUidValidity
         self.replySourceFolder = replySourceFolder
         self.replySourceUid = replySourceUid
+        self.isResumedDraft = isResumedDraft
     }
 
     /// The server coordinates as a `DraftServerRef`, when both halves are
