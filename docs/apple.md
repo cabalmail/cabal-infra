@@ -761,10 +761,10 @@ own CI files, on pushes to `main` and `stage` that do, and on
 | `kit-test` | Every run but a `main` push reported tested | SwiftLint and the platform-conditionals check (macOS leg only), then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) on macOS and iOS, and on visionOS too except on a PR into a branch other than `main` |
 | `app-test` | Same | The `CabalmailMacTests` app-layer suite, hosted by `CabalmailMac` |
 | `ios-app-test` | Same | The `CabalmailiOSTests` app-layer suite, hosted by the iOS app on a simulator |
-| `ios-duo-test` | `stage` pushes, `workflow_dispatch`, and PRs whose branch name contains `duo` | The same suite on an iPhone Duo simulator (closed), the one leg that runs code behind `#available(iOS 27.1, *)`. Advisory: `continue-on-error`, and in neither `apple-gate`'s nor `approval`'s `needs` (see [iPhone Duo](#iphone-duo-the-fold-and-the-side-strip)) |
+| `ios-duo-test` | `stage` pushes, `workflow_dispatch`, and PRs whose branch name contains `duo` | The same suite on an iPhone Duo simulator (closed), the one leg that runs code behind `#available(iOS 27.1, *)`. Required where it runs: in `apple-gate`'s and `approval`'s `needs`, which take its skip elsewhere as a pass (see [iPhone Duo](#iphone-duo-the-fold-and-the-side-strip)). It needs the runner image's iOS 27.1 runtime; if an image drops it, put `continue-on-error: true` back on the job until one is restored |
 | `app-build` | PRs, and `workflow_dispatch` from a branch other than `main` or `stage` | Unsigned `xcodebuild build`: `CabalmailVision` (visionOS) and `CabalmailWatch` (watchOS) on a PR, where the two test suites already build the iOS and Mac apps; all four schemes, adding `Cabalmail` (iOS) and `CabalmailMac` (macOS), from another branch. Skipped on `main` and `stage` runs, whose upload archives are the device builds |
-| `apple-gate` | Every run | The one check that sums up the test and build jobs above, `ios-duo-test` aside |
-| `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass, or straight after `promotion-verdict` on a `main` push it reports tested |
+| `apple-gate` | Every run | The one check that sums up the test and build jobs above |
+| `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass and `ios-duo-test` passes or is skipped, or straight after `promotion-verdict` on a `main` push it reports tested |
 | `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
 
@@ -1230,8 +1230,8 @@ for more than one platform names each in `#available`, as
 compiled, and `FoldAPICompiledTests` in the iOS-hosted suite asserts it.
 An Xcode without the iOS 27.1 SDK would compile every Duo change out
 without a word and run the app boxed in on both displays; the required
-`ios-app-test` leg fails first. The advisory `ios-duo-test` leg runs the
-same suite on a closed Duo simulator, the only place the code behind
+`ios-app-test` leg fails first. The `ios-duo-test` leg, required where it
+runs, runs the same suite on a closed Duo simulator, the only place the code behind
 `#available(iOS 27.1, *)` actually runs in CI. Neither leg can fold.
 
 **The fold: `Platform/FoldGeometry.swift`.** `foldGeometry()`, applied
