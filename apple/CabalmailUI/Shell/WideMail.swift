@@ -24,8 +24,12 @@ struct WideMailState {
     /// button asked for that — the framework may only close the inspector,
     /// never open it (`InspectorPresentationPolicy`, #1663). Hidden on every
     /// launch: it is an occasional reference panel, so it doesn't persist
-    /// open, and a fold closes it.
+    /// open, and a shell swap closes it.
     var inspector = InspectorPresentationPolicy.State(presented: false, requested: false)
+    /// Whether the split's panel below a laptop fold shows the address list
+    /// in the inspector's place, covering the reader
+    /// (`LaptopAddressesPolicy`). Never on the Mac.
+    var laptopPanelShowsAddresses = false
     /// The window's search model (`SceneNavigator.searchModel`), held here so
     /// the search field and the content column share one query and result
     /// set. The tab layout's Search tab takes the same model.
@@ -120,7 +124,7 @@ struct WideMail {
                 // Same reason the dismissal is here: re-picking the selected
                 // folder leaves the panel up otherwise, which is the half of
                 // #1217 where the tap produced no feedback at all.
-                if picked != nil { dismissFolderPanel() }
+                if picked != nil { listOpening() }
                 navigator.selectFolder(picked)
             }
         )
@@ -164,8 +168,16 @@ struct WideMail {
     /// swap's hand-off leaves it on screen (#1654).
     func feedListOpened(endingSearch: Bool) {
         if endingSearch, isSearching { endGlobalSearch() }
-        dismissFolderPanel()
+        listOpening()
         setListSelectionCount(0)
+    }
+
+    /// A folder or feed list is opening, picked or not: the split's folder
+    /// panel slides away, and the laptop panel's address list gives way to
+    /// the list (`LaptopAddressesPolicy`).
+    func listOpening() {
+        dismissFolderPanel()
+        endLaptopPanelAddresses()
     }
 
     /// End the global search exactly the way the search field's own × does
@@ -189,6 +201,36 @@ struct WideMail {
 
     private func applyInspector(_ inspector: InspectorPresentationPolicy.State) {
         if state.inspector != inspector { state.inspector = inspector }
+    }
+
+    // MARK: Addresses in laptop pose
+
+    /// Whether the laptop panel's address list covers the reader.
+    var laptopPanelShowsAddresses: Bool { state.laptopPanelShowsAddresses }
+
+    /// The laptop panel's `@`.
+    func toggleLaptopPanelAddresses() {
+        applyLaptopAddresses(LaptopAddressesPolicy.toggled(laptopAddresses))
+    }
+
+    /// The split arranged itself for laptop pose, or left it: addresses
+    /// carry between the inspector and the panel.
+    func laptopArrangement(isArranged: Bool) {
+        applyLaptopAddresses(LaptopAddressesPolicy.split(arranged: isArranged, laptopAddresses))
+    }
+
+    /// A message or a list opened: the laptop panel shows the list.
+    func endLaptopPanelAddresses() {
+        applyLaptopAddresses(LaptopAddressesPolicy.ended(laptopAddresses))
+    }
+
+    private var laptopAddresses: LaptopAddressesPolicy.State {
+        LaptopAddressesPolicy.State(inspector: state.inspector, inPanel: state.laptopPanelShowsAddresses)
+    }
+
+    private func applyLaptopAddresses(_ next: LaptopAddressesPolicy.State) {
+        applyInspector(next.inspector)
+        if state.laptopPanelShowsAddresses != next.inPanel { state.laptopPanelShowsAddresses = next.inPanel }
     }
 
     func setListSelectionCount(_ count: Int) {
@@ -348,12 +390,23 @@ private struct WideMailReporting: ViewModifier {
     let mail: WideMail
 
     func body(content: Content) -> some View {
-        content
+        // Nothing, while the laptop panel's address list covers the reader
+        // (`LaptopAddressesPolicy`).
+        let covered = mail.laptopPanelShowsAddresses
+        let message = LaptopAddressesPolicy.reported(
+            selectionCount: mail.listSelectionCount, isOpen: mail.selectedEnvelope != nil, covered: covered
+        )
+        let item = LaptopAddressesPolicy.reported(
+            selectionCount: mail.selectedFeedItem == nil ? 0 : 1,
+            isOpen: mail.selectedFeedItem != nil,
+            covered: covered
+        )
+        return content
             // Keep the Message menu's commands validated against what they'd
             // actually act on (see `MessageMenuAvailability`).
             .reportsMessageMenuAvailability(
-                selectedCount: mail.listSelectionCount,
-                hasOpenMessage: mail.selectedEnvelope != nil
+                selectedCount: message.selectionCount,
+                hasOpenMessage: message.isOpen
             )
             // The Feeds menu's twin, and which of the two sections is in
             // front, so the chords the Message/Mailbox and Feeds menus share
@@ -361,8 +414,8 @@ private struct WideMailReporting: ViewModifier {
             // shells host feeds beside mail; on the tab layouts the Feeds tab
             // reports instead.
             .reportsFeedMenuAvailability(
-                selectedCount: mail.selectedFeedItem == nil ? 0 : 1,
-                hasOpenItem: mail.selectedFeedItem != nil,
+                selectedCount: item.selectionCount,
+                hasOpenItem: item.isOpen,
                 hasScope: mail.selectedFeedScope != nil && !mail.isSearching
             )
             .reportsActiveSection(mail.selectedFeedScope != nil && !mail.isSearching ? .feeds : .mail)
@@ -399,9 +452,10 @@ private struct WideMailLifecycle: ViewModifier {
                 Task { await model?.setSearchAnchor(folder) }
                 // Programmatic folder writes (Spotlight routing, a deep link,
                 // the cursor restore) don't go through `sidebarSelection`, so
-                // they still slide the panel away from here. A sidebar pick
-                // has already done it and this is a no-op for it.
-                if path != nil { mail.dismissFolderPanel() }
+                // they still slide the panel away, and end the laptop panel's
+                // addresses, from here. A sidebar pick has already done both
+                // and this is a no-op for it.
+                if path != nil { mail.listOpening() }
             }
             // A feed list opening without a pick (RSS plan, phase 5): a
             // landing or a hand-off, or a tapped feed banner, which ends a

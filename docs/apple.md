@@ -1314,8 +1314,16 @@ safe-area inset of that size the web view drew nothing). The reader's
 own action bar stays at the window's bottom edge, and `LaptopListPanel`
 fills the space between the fold and that bar with the list and its bar,
 in a navigation stack of its own; the folder panel opens below the fold
-over it. The panel's bar carries the addresses `@`; a fold closes an
-open inspector, which would run up the upright half. The reader reports
+over it. The panel's bar carries the folder button and Settings at its
+leading end and the addresses `@` at its trailing end. The inspector
+would run up the upright half, so in laptop pose the `@` turns the
+panel into the address list, down to the window's bottom edge, under a
+cover over the message (`LaptopAddressesPolicy`): the reader stays
+mounted beneath, disabled and hidden from VoiceOver, and the menus hear
+nothing open. Addresses carry across a fold both ways (an open inspector
+becomes the panel's list, and the panel's list the inspector), and a
+message opened or parked for the list, or a folder or feed list opened,
+ends them. The reader reports
 where its content ends through `\.laptopReader`, which is how the panel
 knows where the bar starts. Every change is a value on a modifier that
 is always present, so the message's web view reflows and is never

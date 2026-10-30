@@ -44,6 +44,66 @@ enum LaptopPanelPolicy {
     }
 }
 
+/// Addresses in laptop pose (#1649, the spec's "Addresses puts its list
+/// there"): the panel's `@` turns the panel into the address list and covers
+/// the message above the fold, rather than opening the inspector, which
+/// would run up the upright half beside it. The reader stays mounted under
+/// the cover, so the list coming back shows it without rebuilding its web
+/// view.
+///
+/// Addresses carry across a fold both ways: an inspector open as the split
+/// arranges becomes the panel's address list, and the panel's address list
+/// as the split leaves laptop pose becomes the inspector. A message opened,
+/// or a folder or feed list opened, ends them, so the list it opens shows.
+/// Pure, so the rules are tested on the Mac host.
+enum LaptopAddressesPolicy {
+    struct State: Equatable {
+        var inspector: InspectorPresentationPolicy.State
+        /// Whether the laptop panel shows the address list.
+        var inPanel: Bool
+    }
+
+    /// The panel's `@`: the address list or the list it covered, in turn.
+    static func toggled(_ state: State) -> State {
+        var next = state
+        next.inPanel.toggle()
+        return next
+    }
+
+    /// The split arranged itself for laptop pose (`arranged`), or left it.
+    static func split(arranged: Bool, _ state: State) -> State {
+        if arranged, state.inspector.presented {
+            return State(inspector: .init(presented: false, requested: false), inPanel: true)
+        }
+        if !arranged, state.inPanel {
+            // Asked for, so the framework's own write-back keeps it open.
+            return State(inspector: .init(presented: true, requested: true), inPanel: false)
+        }
+        return state
+    }
+
+    /// A message or a list opened: the panel shows the list again.
+    static func ended(_ state: State) -> State {
+        var next = state
+        next.inPanel = false
+        return next
+    }
+
+    /// Where the panel ends: at the reader's bar, or, while the address
+    /// list covers the reader, at the split's bottom, over the bar as well
+    /// (`LaptopPanelPolicy.panelFrame`).
+    static func panelReaderBottom(_ readerBottom: CGFloat?, covered: Bool) -> CGFloat? {
+        covered ? nil : readerBottom
+    }
+
+    /// What the menus hear of the reader: nothing selected and nothing open
+    /// while the address list covers it, so no command or chord acts on a
+    /// message the user can't see.
+    static func reported(selectionCount: Int, isOpen: Bool, covered: Bool) -> (selectionCount: Int, isOpen: Bool) {
+        covered ? (0, false) : (selectionCount, isOpen)
+    }
+}
+
 /// Where the laptop panel meets the reader, one per split: the crease the
 /// reader keeps above while the split is arranged for laptop pose, and where
 /// the reader's content region ends, which is the panel's bottom edge.

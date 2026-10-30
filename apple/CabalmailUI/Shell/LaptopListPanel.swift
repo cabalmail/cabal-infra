@@ -4,10 +4,15 @@ import SwiftUI
 /// The list's panel below a laptop fold (#1649): the split's list, with its
 /// bar, in a navigation stack of its own across the window's width, between
 /// the crease and the reader's own action bar (`LaptopPanelPolicy`). The bar
-/// carries the folder button, the folder's name with its switch menu,
-/// Compose and More, and the row under it Filter, Sort and Select; the
-/// folder button opens the split's floating folder panel, which then starts
-/// below the fold too, with Settings on its bar.
+/// carries the folder button and Settings, the folder's name with its switch
+/// menu, Compose, More and the addresses `@`, and the row under it Filter,
+/// Sort and Select; the folder button opens the split's floating folder
+/// panel, which then starts below the fold too.
+///
+/// The `@` turns the panel into the address list (New, the filter and
+/// Refresh), down to the window's bottom edge, while a cover hides the
+/// message above (`LaptopAddressesPolicy`); `@` again, or a message or a
+/// list opened, brings the list back.
 ///
 /// The search field shows only while a search is engaged, so the list keeps
 /// its rows: the spec's panel header has no search field, which it gives
@@ -18,20 +23,29 @@ import SwiftUI
 /// a mail list takes the window's selection, checked rows and highlight
 /// included, and its place (`SceneNavigator.listMoves()`), and a feed list
 /// takes the moved list's model and top row (`FeedListHold`), so either
-/// opens where the other was.
+/// opens where the other was. Giving the panel to the address list and back
+/// is the same move.
 struct LaptopListPanel: View {
     let mail: WideMail
     /// Opens the split's floating folder panel.
     let showFolders: () -> Void
+    /// The panel's `@`: the address list in the list's place, or the list
+    /// back.
+    let toggleAddresses: () -> Void
+    /// This main window's commands, so the gear opens Settings in this
+    /// window rather than in every one (`WindowCommands`).
+    @Environment(\.windowCommands) private var windowCommands
 
     var body: some View {
         NavigationStack {
-            mail.content(header: { searchHeader })
+            panelContent
                 .toolbar(removing: .sidebarToggle)
-                // The addresses inspector's one way in on the wide shells,
-                // which the hidden list column's bar can't offer (#1626).
+                // Ranked as the open inspector's toggle while the address
+                // list shows: it is then the way back to the list.
                 .toolbar {
-                    mail.addressInspectorToolbarItem
+                    AddressInspectorToolbarItem(
+                        addressInspectorPresented: mail.laptopPanelShowsAddresses, toggle: toggleAddresses
+                    )
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
@@ -42,9 +56,32 @@ struct LaptopListPanel: View {
                         }
                         .accessibilityIdentifier("laptopPanel.folders")
                     }
+                    // The spec's panel header carries Settings, which the
+                    // folder panel's gear otherwise holds out of reach
+                    // behind the folder button.
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            windowCommands?.send(.settings)
+                        } label: {
+                            Label("Settings", systemImage: "gearshape")
+                        }
+                        .accessibilityIdentifier("laptopPanel.settings")
+                    }
                 }
         }
         .overlay(alignment: .top) { Divider() }
+    }
+
+    /// The list, or the address list in its place, with the inspector's own
+    /// header row and filter.
+    @ViewBuilder
+    private var panelContent: some View {
+        if mail.laptopPanelShowsAddresses {
+            AddressListView(externalFilter: mail.$state.addressListFilter)
+                .inlineNavigationTitle()
+        } else {
+            mail.content(header: { searchHeader })
+        }
     }
 
     @ViewBuilder
@@ -54,6 +91,36 @@ struct LaptopListPanel: View {
                 .padding(.horizontal)
                 .padding(.top, 4)
                 .padding(.bottom, 6)
+        }
+    }
+}
+
+/// What covers the message above a laptop fold while the panel shows the
+/// address list (`LaptopAddressesPolicy`): opaque, with nothing to tap, from
+/// the split's top (and the status bar's strip above it) to the crease's
+/// bottom edge. The reader stays mounted underneath, so the list coming
+/// back shows it as it was, without rebuilding its web view.
+///
+/// It reports nothing to the laptop slot, unlike the reader's placeholders
+/// (`LaptopFoldClearance`): the panel's bottom is the split's while it
+/// shows.
+struct LaptopAddressesCover: View {
+    /// From the split's top to the crease's bottom edge.
+    let height: CGFloat
+    /// The crease's own height, which the prompt stays above.
+    let foldHeight: CGFloat
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Addresses", systemImage: "at")
+        } description: {
+            Text("Tap an address to copy it.")
+        }
+        .padding(.bottom, foldHeight)
+        .frame(maxWidth: .infinity)
+        .frame(height: height)
+        .background {
+            Rectangle().fill(.background).ignoresSafeArea(edges: .top)
         }
     }
 }

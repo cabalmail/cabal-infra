@@ -138,7 +138,13 @@ struct AddressListView: View {
             message: suspendDialogMessage
         )
         .task {
-            if model == nil, let client = appState.client {
+            if let model {
+                // Back on screen: the inspector keeps this view while it is
+                // closed, and another list of the window's, the laptop
+                // panel's, may have changed an address meanwhile. The
+                // client's cache answers unless a change invalidated it.
+                await model.refresh()
+            } else if let client = appState.client {
                 let newModel = AddressesViewModel(client: client)
                 model = newModel
                 await newModel.refresh()

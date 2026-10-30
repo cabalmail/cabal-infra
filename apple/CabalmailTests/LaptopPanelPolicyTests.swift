@@ -74,3 +74,69 @@ final class LaptopPanelPolicyTests: XCTestCase {
         XCTAssertEqual(slot.readerBottom, 895)
     }
 }
+
+/// Addresses in laptop pose (`LaptopAddressesPolicy`, #1649): the panel's
+/// address list, and how it trades places with the inspector across a fold.
+@MainActor
+final class LaptopAddressesPolicyTests: XCTestCase {
+    private typealias Policy = LaptopAddressesPolicy
+    private let closed = InspectorPresentationPolicy.State(presented: false, requested: false)
+    private let open = InspectorPresentationPolicy.State(presented: true, requested: true)
+
+    func testThePanelsAtSwapsTheListForAddressesAndBack() {
+        let list = Policy.State(inspector: closed, inPanel: false)
+
+        let addresses = Policy.toggled(list)
+        XCTAssertEqual(addresses, Policy.State(inspector: closed, inPanel: true), "never the inspector")
+        XCTAssertEqual(Policy.toggled(addresses), list)
+    }
+
+    func testAnOpenInspectorMovesIntoThePanelAsTheSplitArranges() {
+        let arranged = Policy.split(arranged: true, Policy.State(inspector: open, inPanel: false))
+
+        XCTAssertEqual(arranged, Policy.State(inspector: closed, inPanel: true))
+        // A closed one leaves the panel its list.
+        let list = Policy.State(inspector: closed, inPanel: false)
+        XCTAssertEqual(Policy.split(arranged: true, list), list)
+    }
+
+    /// Opened as the `@` opens it, so the framework's write-back of a
+    /// present keeps it (`InspectorPresentationPolicy`).
+    func testThePanelsAddressesMoveIntoTheInspectorAsTheSplitLeavesLaptopPose() {
+        let left = Policy.split(arranged: false, Policy.State(inspector: closed, inPanel: true))
+
+        XCTAssertEqual(left, Policy.State(inspector: open, inPanel: false))
+        XCTAssertEqual(InspectorPresentationPolicy.framework(wrote: true, to: left.inspector), open)
+        // The list in the panel leaves the inspector closed.
+        let list = Policy.State(inspector: closed, inPanel: false)
+        XCTAssertEqual(Policy.split(arranged: false, list), list)
+    }
+
+    func testAMessageOrAListOpenedEndsTheAddresses() {
+        let addresses = Policy.State(inspector: closed, inPanel: true)
+
+        XCTAssertEqual(Policy.ended(addresses), Policy.State(inspector: closed, inPanel: false))
+        // The inspector is not the panel's to close.
+        let inspector = Policy.State(inspector: open, inPanel: false)
+        XCTAssertEqual(Policy.ended(inspector), inspector)
+    }
+
+    func testWithAddressesThePanelRunsOverTheReadersBarToTheSplitsBottom() {
+        let band = CGRect(x: 0, y: 455.5, width: 669, height: 40)
+        let split = CGRect(x: 0, y: 0, width: 669, height: 951)
+        let bottom = Policy.panelReaderBottom(895, covered: true)
+
+        XCTAssertEqual(LaptopPanelPolicy.panelFrame(split: split, crease: band, readerBottom: bottom).maxY, 951)
+        XCTAssertEqual(Policy.panelReaderBottom(895, covered: false), 895)
+    }
+
+    func testTheMenusHearNothingOfACoveredReader() {
+        let covered = Policy.reported(selectionCount: 3, isOpen: true, covered: true)
+        XCTAssertEqual(covered.selectionCount, 0)
+        XCTAssertFalse(covered.isOpen)
+
+        let shown = Policy.reported(selectionCount: 3, isOpen: true, covered: false)
+        XCTAssertEqual(shown.selectionCount, 3)
+        XCTAssertTrue(shown.isOpen)
+    }
+}
