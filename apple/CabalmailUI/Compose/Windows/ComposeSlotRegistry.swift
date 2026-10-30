@@ -92,9 +92,10 @@ public final class ComposeSlotRegistry {
     struct ClosedCompose: Equatable {
         let session: Int
         let seedID: UUID
-        /// Whether the window has left the screen since, or closed out of
-        /// view (`ClosedComposeWindow`, #2257).
-        var hasLeftScreen = false
+        /// Whether the window is done with the composer it closed: it has
+        /// left the screen since, closed out of view, or stayed on screen
+        /// past `lingerLimit` (`ClosedComposeWindow`, #2257, #2271).
+        var isSpent = false
     }
 
     func closedCompose(for seed: Draft) -> ClosedCompose {
@@ -119,12 +120,11 @@ public final class ComposeSlotRegistry {
     /// A window that never closed always may. A closed one may for a new
     /// seed, which is its slot being handed out again. For the seed it closed
     /// on, it may only on its way out, so it keeps drawing its composer while
-    /// it animates away: in the session it closed in, until it has left the
-    /// screen.
+    /// it animates away: in the session it closed in, until it is spent.
     func mayCompose(_ seed: Draft, closedOn closed: ClosedCompose?) -> Bool {
         guard let closed else { return true }
         if closed.seedID != seed.id { return true }
-        return closed.session == session && !closed.hasLeftScreen
+        return closed.session == session && !closed.isSpent
     }
 
     /// Seed a restored scene composes from when this process never handed

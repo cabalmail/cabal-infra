@@ -118,6 +118,9 @@ final class ListColumnPolicyTests: XCTestCase {
         portrait.windowIsTall = true
         XCTAssertEqual(portrait.width, 360)
         XCTAssertEqual(portrait.readerFloor, 834)
+        // The one case with room to drag, which only the overlay hides.
+        XCTAssertFalse(portrait.handleIsShown)
+        XCTAssertFalse(portrait.canReset)
     }
 
     /// A split narrowed below its height in a wide window, by the addresses

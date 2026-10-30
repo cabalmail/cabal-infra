@@ -60,7 +60,7 @@ struct SplitShell: View {
     /// The split view's frame in the window, measured on the split itself,
     /// as `splitWidth` is.
     @State private var splitFrame: CGRect = .zero
-    /// Whether the list is over the reader, in a split taller than wide
+    /// Whether the list is over the reader, in a window taller than wide
     /// (`ListOverlay`, #1686).
     @State private var listOverlay = ListOverlay()
     /// Whether the window is taller than wide, measured outside the
@@ -527,10 +527,19 @@ extension SplitShell {
     private var listOverlays: Bool { listColumnLayout.overlaysReader }
 
     /// What the reader has open, the section's message or feed item; nil for
-    /// nothing.
+    /// nothing. The feed item only while the reader shows it: a search in
+    /// the Feeds section opens mail results (`WideMail.reader`). A message
+    /// by its folder too, so a search result with another folder's UID is a
+    /// new open.
     private var openReading: String? {
-        if mail.selectedFeedScope != nil { return mail.selectedFeedItem.map { "item:\($0.id)" } }
-        return mail.selectedEnvelope.map { "message:\($0.uid)" }
+        if readerShowsFeeds { return mail.selectedFeedItem.map { "item:\($0.id)" } }
+        return mail.selectedEnvelope.map { "message:\($0.folder ?? "")#\($0.uid)" }
+    }
+
+    /// Whether the reader shows the feed reader rather than mail, by the
+    /// rule `WideMail.reader` draws it by.
+    private var readerShowsFeeds: Bool {
+        mail.selectedFeedScope != nil && !mail.isSearching
     }
 
     /// The split's columns. Tiled, both, always: the pinned `.doubleColumn`
@@ -560,7 +569,7 @@ extension SplitShell {
                 } label: {
                     // A back button, as the spec draws it, rather than the
                     // folder panel's sidebar symbol.
-                    Label(listColumnTab == .feeds ? "Articles" : "Messages", systemImage: "chevron.backward")
+                    Label(readerShowsFeeds ? "Articles" : "Messages", systemImage: "chevron.backward")
                 }
                 .accessibilityIdentifier("reader.showList")
             }
