@@ -339,9 +339,8 @@ final class HTMLBodyCoordinator: NSObject, WKNavigationDelegate {
     /// SwiftUI re-layout; comparing against this value ensures the system
     /// print sheet only opens when the parent's counter actually advances.
     private var lastPrintTick: Int = 0
-    /// The last page request's tick (`handlePageRequest`); nil until the
-    /// first update sets the baseline.
-    var lastPageTick: Int?
+    /// The tall bar's page requests this body has seen (`ReaderPageGate`).
+    var pageGate = ReaderPageGate()
     /// Reports the current in-message scroll anchor to the reader. Set from
     /// `update*View`; invoked by the scroll bridge and the fallback poll.
     var onScrollCaptured: ((ScrollCapture) -> Void)?

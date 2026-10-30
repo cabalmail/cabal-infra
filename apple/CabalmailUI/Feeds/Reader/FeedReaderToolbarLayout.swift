@@ -38,6 +38,26 @@ enum FeedReaderMenuItem: Hashable {
     case readerMode, remoteContent, article, openInBrowser, shareLink, copyLink
 }
 
+/// A slot of the feed reader's own bar in a tall window: one of the
+/// reader's actions, a page button or Compose. The page buttons and Compose
+/// are not `FeedReaderAction`s: every other bar has them elsewhere, and the
+/// macOS stand-ins draw every action.
+enum FeedReaderBarSlot: Hashable {
+    case action(FeedReaderAction)
+    case page(ReaderPageRequest.Direction)
+    case compose
+
+    /// The slot's accessibility identifier.
+    var identifier: String {
+        switch self {
+        case .action(let action): return action.identifier
+        case .page(.upward): return "feed.reader.pageUp"
+        case .page(.downward): return "feed.reader.pageDown"
+        case .compose: return "feed.reader.compose"
+        }
+    }
+}
+
 /// Which feed reader actions each bar draws, in drawn order, and what its
 /// menus carry. Pure, so the order the view draws, the macOS stand-ins and
 /// the tests all read one list. The touch bar is held to
@@ -54,6 +74,22 @@ enum FeedReaderToolbarLayout {
     /// display and article controls (`viewMenu`). Inside
     /// `ReaderToolbarPolicy.topBarCapacity`.
     static let menuBar: [FeedReaderAction] = [.read, .favorite, .more]
+
+    /// The feed reader's own bar where it fills a window taller than wide
+    /// (`ReaderToolbarPolicy.placement`): Flag, Read, Page Up, Page Down,
+    /// the View menu and Compose, the iPhone Duo spec's order for a tall
+    /// window without the mail reader's Reply and Archive. The View menu
+    /// stands in for the spec's Message menu, and keeps Open article. The
+    /// list's bar, with its Compose, is behind the article there.
+    static let tallBar: [FeedReaderBarSlot] = [
+        .action(.favorite), .action(.read), .page(.upward), .page(.downward), .action(.more), .compose
+    ]
+
+    /// Whether the page buttons have anything to page: the publisher's page,
+    /// or the feed's own content.
+    static func pagingEnabled(showingArticle: Bool, hasFeedContent: Bool) -> Bool {
+        showingArticle || hasFeedContent
+    }
 
     /// The View menu's rows on the touch bar, in sections a divider
     /// separates. Remote content only while the feed's own content shows

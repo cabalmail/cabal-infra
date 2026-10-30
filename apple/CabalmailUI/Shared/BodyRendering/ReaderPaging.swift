@@ -19,7 +19,27 @@ struct ReaderPageRequest: Equatable, Sendable {
     }
 }
 
-/// How far a page moves, for both bodies.
+/// Which page requests a body acts on: none on its first update, which
+/// only takes the request it was built with as the baseline (a body built
+/// after a press, plain text switched back to HTML, doesn't replay it), and
+/// each later request once.
+struct ReaderPageGate: Equatable, Sendable {
+    private var last: Int?
+
+    /// The request to act on now, if any.
+    mutating func admit(_ request: ReaderPageRequest?) -> ReaderPageRequest? {
+        let tick = request?.tick ?? 0
+        guard let last else {
+            self.last = tick
+            return nil
+        }
+        guard let request, tick != last else { return nil }
+        self.last = tick
+        return request
+    }
+}
+
+/// How far a page moves, for every body.
 enum ReaderPaging {
     /// The share of the visible height a page moves: the last lines of the
     /// page stay in view, to read on from, as a browser's Page Down leaves
@@ -36,6 +56,21 @@ enum ReaderPaging {
         return min(max(0, moved), max(0, content - viewport))
     }
 
+    /// Where a scroll view scrolls to: a page from `offset`, within the
+    /// offsets its insets allow (`minOffset` is minus the top inset, and
+    /// `maxOffset` the content's height, plus the bottom inset, less the
+    /// bounds). `viewport` is the visible height between the insets. A page
+    /// shorter than its viewport stays where it is.
+    static func scrollTarget(
+        from offset: CGFloat, viewport: CGFloat, minOffset: CGFloat, maxOffset: CGFloat,
+        direction: ReaderPageRequest.Direction
+    ) -> CGFloat {
+        guard maxOffset > minOffset else { return offset }
+        let step = (viewport * pageFraction).rounded()
+        let moved = direction == .downward ? offset + step : offset - step
+        return min(max(minOffset, moved), maxOffset)
+    }
+
     /// The script that pages an HTML body, run in the app's own content
     /// world: the page's own JavaScript stays off, and the world shares the
     /// page's document, so it scrolls the window the message is drawn in.
@@ -50,11 +85,7 @@ extension HTMLBodyCoordinator {
     /// only sets the baseline, so a body built after a press (plain text
     /// switched back to HTML) doesn't move on its first layout.
     func handlePageRequest(_ request: ReaderPageRequest?, for webView: WKWebView) {
-        let tick = request?.tick ?? 0
-        guard let last = lastPageTick else { return lastPageTick = tick }
-        guard let request, tick != last else { return }
-        lastPageTick = tick
-        guard didFinishLoad else { return }
+        guard let request = pageGate.admit(request), didFinishLoad else { return }
         webView.evaluateJavaScript(ReaderPaging.script(request.direction), in: nil, in: .defaultClient)
     }
 }

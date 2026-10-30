@@ -17,8 +17,8 @@ import Observation
 enum LaptopPanelPolicy {
     /// Whether the split arranges itself for laptop pose: a crease running
     /// side to side through a window taller than wide, in the mail section.
-    /// The feed reader's actions sit in its navigation bar, so Feeds keeps
-    /// the floating list until they move below the fold too.
+    /// Feeds keeps the floating list until its list moves into the panel
+    /// too.
     static func isArranged(fold: FoldState, windowIsTall: Bool, showsFeeds: Bool) -> Bool {
         guard case .horizontal = fold else { return false }
         return windowIsTall && !showsFeeds

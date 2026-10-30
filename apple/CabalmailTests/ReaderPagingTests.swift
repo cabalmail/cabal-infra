@@ -35,3 +35,43 @@ final class ReaderPagingTests: XCTestCase {
         XCTAssertNotEqual(first, second)
     }
 }
+
+/// Which page requests a body acts on (`ReaderPageGate`), and where a
+/// scroll view pages to (`ReaderPaging.scrollTarget`).
+final class ReaderPageGateTests: XCTestCase {
+    func testTheFirstUpdateOnlySetsTheBaseline() {
+        var gate = ReaderPageGate()
+        let earlier = ReaderPageRequest(direction: .downward, tick: 3)
+
+        XCTAssertNil(gate.admit(earlier), "a body built after a press doesn't replay it")
+        XCTAssertNil(gate.admit(earlier), "the same press again is not a new one")
+        let next = ReaderPageRequest(direction: .upward, tick: 4)
+        XCTAssertEqual(gate.admit(next), next)
+    }
+
+    func testAFirstPressAfterNoneIsTaken() {
+        var gate = ReaderPageGate()
+        XCTAssertNil(gate.admit(nil))
+
+        let press = ReaderPageRequest(direction: .downward, tick: 1)
+        XCTAssertEqual(gate.admit(press), press)
+        XCTAssertNil(gate.admit(press))
+    }
+
+    /// A web view's scroll view: offsets run from minus the top inset to the
+    /// content's height plus the bottom inset, less the bounds.
+    func testAScrollViewPagesWithinItsInsets() {
+        let down = ReaderPaging.scrollTarget(from: -20, viewport: 400, minOffset: -20, maxOffset: 1_600,
+                                             direction: .downward)
+        XCTAssertEqual(down, 340)
+        XCTAssertEqual(ReaderPaging.scrollTarget(from: 1_500, viewport: 400, minOffset: -20, maxOffset: 1_600,
+                                                 direction: .downward), 1_600)
+        XCTAssertEqual(ReaderPaging.scrollTarget(from: 100, viewport: 400, minOffset: -20, maxOffset: 1_600,
+                                                 direction: .upward), -20)
+    }
+
+    func testAPageShorterThanItsViewportStaysPut() {
+        XCTAssertEqual(ReaderPaging.scrollTarget(from: -20, viewport: 400, minOffset: -20, maxOffset: -60,
+                                                 direction: .downward), -20)
+    }
+}
