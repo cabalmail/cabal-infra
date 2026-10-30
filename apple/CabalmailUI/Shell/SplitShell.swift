@@ -146,7 +146,11 @@ struct SplitShell: View {
         .onChange(of: laptopCrease, initial: true) { old, crease in
             // Before the list moves, so the list mounting takes the window's
             // selection and place.
-            if (old == nil) != (crease == nil) { navigator.listMoves() }
+            if (old == nil) != (crease == nil) { navigator.listMoves(isSearching: mail.isSearching) }
+            // The addresses inspector would run up the upright half, beside
+            // the message, so a fold closes it as a shell swap does; the
+            // panel's `@` opens it again.
+            if crease != nil, mail.addressInspectorPresented { mail.toggleAddressInspector() }
             laptopReader.crease = crease
         }
         // Revealing folders floats a panel OVER the message list rather than

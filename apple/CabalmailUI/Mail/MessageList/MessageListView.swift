@@ -628,6 +628,7 @@ extension MessageListView {
     /// window) leaves the list unselected — the graceful-degradation path.
     private func applyPendingRestore(model: MessageListViewModel) {
         guard let folder, navigator?.listMayTakeRestore(in: mailTree) != false,
+              listPlace.mayTakeParked(in: navigator),
               let restore = navigator?.restores.consumePendingRestore(for: folder.path)
         else { return }
         let match = restore.messageID.flatMap { messageID in

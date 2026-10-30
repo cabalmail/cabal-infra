@@ -92,3 +92,70 @@ final class SceneNavigatorListMoveTests: XCTestCase {
         XCTAssertFalse(navigator.mailSelection(for: "Archive") === column)
     }
 }
+
+/// Search results moving below a laptop fold hand over no folder selection,
+/// so the folder's own list starts afresh after the search, as it did.
+@MainActor
+final class SceneNavigatorSearchMoveTests: XCTestCase {
+    func testASearchMovingLeavesTheFolderSelectionBehind() async throws {
+        let navigator = SceneNavigator(coordinator: { nil }, hasClient: { true }, seed: .mail)
+        await navigator.mailTreeAppeared(UUID(), isWide: true)
+        navigator.foldersLoaded([Folder(path: "INBOX", isSubscribed: true)])
+        let before = navigator.mailSelection(for: "INBOX")
+
+        navigator.listMoves(isSearching: true)
+
+        XCTAssertFalse(navigator.mailSelection(for: "INBOX") === before)
+    }
+}
+
+/// A list replaced by another in the same tree takes nothing parked for its
+/// successor once it has left the screen (`ListPlaceTracker.mayTakeParked`):
+/// the split's list column, whose load can finish after its list moved
+/// below a laptop fold, must not take the open message's restore.
+@MainActor
+final class ListPlaceTrackerMoveTests: XCTestCase {
+    private var world: ListPagingWorld!
+    private var navigator: SceneNavigator!
+
+    override func setUp() async throws {
+        try await super.setUp()
+        world = ListPagingWorld()
+        navigator = SceneNavigator(coordinator: { nil }, hasClient: { true }, seed: .mail)
+    }
+
+    override func tearDown() async throws {
+        await world.tearDown()
+        world = nil
+        navigator = nil
+        try await super.tearDown()
+    }
+
+    func testAListMovedAwayAndOffScreenTakesNothingParked() async throws {
+        let model = try await world.openedList(preloaded: 50, stampsMessageIDs: true)
+        let column = ListPlaceTracker()
+        column.appeared(model, in: navigator)
+        XCTAssertTrue(column.mayTakeParked(in: navigator))
+
+        navigator.listMoves()
+        column.disappeared()
+
+        XCTAssertFalse(column.mayTakeParked(in: navigator))
+    }
+
+    /// A back-out voids the claim under a list that stays on screen; that
+    /// list still takes what is parked for it.
+    func testAListStillOnScreenTakesWhatIsParked() async throws {
+        let model = try await world.openedList(preloaded: 50, stampsMessageIDs: true)
+        let list = ListPlaceTracker()
+        list.appeared(model, in: navigator)
+
+        navigator.listMoves()
+
+        XCTAssertTrue(list.mayTakeParked(in: navigator))
+    }
+
+    func testAListThatNeverAppearedMayTake() {
+        XCTAssertTrue(ListPlaceTracker().mayTakeParked(in: navigator))
+    }
+}

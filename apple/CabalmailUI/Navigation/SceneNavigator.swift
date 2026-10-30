@@ -743,9 +743,11 @@ extension SceneNavigator {
 
     /// The split's list moves between its column and the panel below a
     /// laptop fold (`FolderListHold.move`): the list mounting next takes
-    /// the window's selection and place, as a layout swap's does.
-    func listMoves() {
-        listHold.move(folderPath: selectedFolder?.path, parkingIn: restores)
+    /// the window's selection and place, as a layout swap's does. While a
+    /// search holds the list the results move, and the folder's selection
+    /// stays put.
+    func listMoves(isSearching: Bool = false) {
+        listHold.move(folderPath: selectedFolder?.path, folderListMoves: !isSearching, parkingIn: restores)
     }
 }
 

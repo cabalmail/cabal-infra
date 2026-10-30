@@ -27,6 +27,11 @@ struct LaptopListPanel: View {
         NavigationStack {
             mail.content(header: { searchHeader })
                 .toolbar(removing: .sidebarToggle)
+                // The addresses inspector's one way in on the wide shells,
+                // which the hidden list column's bar can't offer (#1626).
+                .toolbar {
+                    mail.addressInspectorToolbarItem
+                }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button(action: showFolders) {

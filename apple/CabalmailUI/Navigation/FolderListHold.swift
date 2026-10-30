@@ -92,8 +92,13 @@ final class FolderListHold {
     /// for it; the moving list's claim is void. Unlike a layout swap's
     /// hand-off, nothing else about the window changes: the open message
     /// stays open, so the reader is not rebuilt.
-    func move(folderPath: String?, parkingIn restores: WindowRestores) {
-        handsOffSelection = listSelection?.folderPath == folderPath
+    ///
+    /// - Parameter folderListMoves: false when the list moving is the
+    ///   search results, which take no folder selection: the folder's own
+    ///   list mounting after the search then starts afresh, as it always
+    ///   did.
+    func move(folderPath: String?, folderListMoves: Bool = true, parkingIn restores: WindowRestores) {
+        handsOffSelection = folderListMoves && listSelection?.folderPath == folderPath
         if let place, place.folderPath == folderPath { restores.parkListAnchor(place) }
         generation += 1
     }
