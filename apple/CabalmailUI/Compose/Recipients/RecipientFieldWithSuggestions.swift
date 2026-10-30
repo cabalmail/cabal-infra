@@ -83,6 +83,7 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
             ContactPickerSheet(candidates: candidates) { picked in
                 applyPicked(picked)
             }
+            .windowShapedSheet()
         }
         .task {
             contactsAuthorization = await appState.contactsStore.authorizationStatus

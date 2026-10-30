@@ -91,7 +91,7 @@ struct FeedManagementSheets: ViewModifier {
         @Bindable var actions = actions
         content
             .sheet(item: $actions.sheet) { sheet in
-                if let management { sheetView(sheet, management: management) }
+                if let management { sheetView(sheet, management: management).windowShapedSheet() }
             }
             .confirmationPrompt(deleteTitle, isPresented: deleteBinding, titleVisibility: .visible) {
                 Button("Delete Folder", role: .destructive) { deletePendingFolder() }
