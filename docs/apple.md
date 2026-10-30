@@ -2055,7 +2055,10 @@ keeps the scene connected too (#1084). So once a closed window has left
 the screen, or if it closed while out of view, its composer goes
 (`ComposeSlotRegistry.mayCompose`), and one brought back to the front
 steps straight back out to the mail window (`ClosedComposeWindow`,
-#2257). That state lives in the running app: after a relaunch, the
+#2257). In Split View on a phone nothing covers a closed window, since
+the mail window it hands the screen to is already in the other half, so
+one still on screen a second after its close loses its composer too and
+says its message is closed (#2271). That state lives in the running app: after a relaunch, the
 system's restored compose windows come back with empty composers, and an
 older closed window rebuilt behind a newer one on a recycled slot keeps
 its frozen copy of the newer draft. A mailto: link that
