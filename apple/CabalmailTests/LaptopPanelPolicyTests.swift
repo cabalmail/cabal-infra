@@ -9,17 +9,15 @@ final class LaptopPanelPolicyTests: XCTestCase {
     private let band = CGRect(x: 0, y: 455.5, width: 669, height: 40)
     private let split = CGRect(x: 0, y: 0, width: 669, height: 951)
 
-    func testOnlyALaptopFoldAcrossATallWindowArrangesTheMailSplit() {
+    func testOnlyALaptopFoldAcrossATallWindowArrangesTheSplit() {
         let laptop = FoldState.horizontal(crease: band)
-        XCTAssertTrue(LaptopPanelPolicy.isArranged(fold: laptop, windowIsTall: true, showsFeeds: false))
+        XCTAssertTrue(LaptopPanelPolicy.isArranged(fold: laptop, windowIsTall: true))
 
-        // Flat, book pose, a wide window, or the feed reader, whose actions
-        // are still in its navigation bar.
-        XCTAssertFalse(LaptopPanelPolicy.isArranged(fold: .none, windowIsTall: true, showsFeeds: false))
+        // Flat, book pose, or a wide window.
+        XCTAssertFalse(LaptopPanelPolicy.isArranged(fold: .none, windowIsTall: true))
         let book = FoldState.vertical(crease: CGRect(x: 455.5, y: 0, width: 40, height: 669))
-        XCTAssertFalse(LaptopPanelPolicy.isArranged(fold: book, windowIsTall: false, showsFeeds: false))
-        XCTAssertFalse(LaptopPanelPolicy.isArranged(fold: laptop, windowIsTall: false, showsFeeds: false))
-        XCTAssertFalse(LaptopPanelPolicy.isArranged(fold: laptop, windowIsTall: true, showsFeeds: true))
+        XCTAssertFalse(LaptopPanelPolicy.isArranged(fold: book, windowIsTall: false))
+        XCTAssertFalse(LaptopPanelPolicy.isArranged(fold: laptop, windowIsTall: false))
     }
 
     func testTheReaderReservesWhatRunsPastTheFoldsTopEdge() {

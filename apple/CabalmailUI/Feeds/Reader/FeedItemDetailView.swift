@@ -34,6 +34,10 @@ struct FeedItemDetailView: View {
         Group {
             if let model {
                 content(model)
+                    // In the split's laptop arrangement the article ends
+                    // above the fold, inside the bar's inset, so the bar
+                    // stays at the window's bottom edge (`LaptopPanelPolicy`).
+                    .keepsAboveLaptopFold()
                     .toolbar {
                         FeedReaderToolbar(
                             model: model, hasArticle: model.articleURL != nil, isOffline: isOffline,

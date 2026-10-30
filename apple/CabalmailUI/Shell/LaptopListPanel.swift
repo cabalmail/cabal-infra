@@ -14,10 +14,11 @@ import SwiftUI
 /// the Search tab of the one-tree layout instead.
 ///
 /// The list moves here from the split's list column, which is hidden and
-/// holds no list meanwhile, and back again on leaving laptop pose; each way
-/// the window hands it its selection, checked rows and highlight included,
-/// and its place (`SceneNavigator.listMoves()`), so it opens where the other
-/// list was.
+/// holds no list meanwhile, and back again on leaving laptop pose. Each way
+/// a mail list takes the window's selection, checked rows and highlight
+/// included, and its place (`SceneNavigator.listMoves()`), and a feed list
+/// takes the moved list's model and top row (`FeedListHold`), so either
+/// opens where the other was.
 struct LaptopListPanel: View {
     let mail: WideMail
     /// Opens the split's floating folder panel.

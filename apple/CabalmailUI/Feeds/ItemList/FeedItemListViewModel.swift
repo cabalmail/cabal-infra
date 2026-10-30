@@ -148,10 +148,13 @@ final class FeedItemListViewModel {
 
     /// The view's `.task` while the list is up: re-reads the first page,
     /// then follows the store's changes until the view goes.
-    func observe() async {
+    /// - Parameter reloading: false for a model a list took over from the
+    ///   one that moved below a laptop fold or back (`FeedListHold`): its
+    ///   rows and pages stay, and it follows the store from here.
+    func observe(reloading: Bool = true) async {
         guard let store else { return }
         let changes = await store.changes()
-        await reload()
+        if reloading { await reload() }
         await FeedStoreChanges.follow(changes) { batch in await apply(batch) }
     }
 

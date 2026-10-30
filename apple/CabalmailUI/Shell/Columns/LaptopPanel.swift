@@ -16,12 +16,12 @@ import Observation
 /// the geometry is tested on the Mac host.
 enum LaptopPanelPolicy {
     /// Whether the split arranges itself for laptop pose: a crease running
-    /// side to side through a window taller than wide, in the mail section.
-    /// Feeds keeps the floating list until its list moves into the panel
-    /// too.
-    static func isArranged(fold: FoldState, windowIsTall: Bool, showsFeeds: Bool) -> Bool {
+    /// side to side through a window taller than wide, in Mail and Feeds
+    /// alike. Each reader keeps its actions in its own bar there, at the
+    /// window's bottom edge.
+    static func isArranged(fold: FoldState, windowIsTall: Bool) -> Bool {
         guard case .horizontal = fold else { return false }
-        return windowIsTall && !showsFeeds
+        return windowIsTall
     }
 
     /// How far a reader's content region, at `frame` in the window, runs past
