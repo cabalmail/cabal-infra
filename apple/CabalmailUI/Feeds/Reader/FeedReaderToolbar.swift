@@ -60,6 +60,9 @@ struct FeedReaderBarItem: View {
     let action: FeedReaderAction
     let model: FeedItemDetailViewModel
     let isOffline: Bool
+    /// The reader fills a window taller than wide, where its View menu
+    /// opens up from its own bar and carries Previous and Next.
+    @Environment(\.readerFillsTallWindow) private var fillsTallWindow
 
     var body: some View {
         barItem(action)
@@ -133,7 +136,8 @@ struct FeedReaderBarItem: View {
     /// content and the article (`FeedReaderToolbarLayout.viewMenu`).
     private var moreMenu: some View {
         let sections = FeedReaderToolbarLayout.viewMenu(
-            showingArticle: model.showingArticle, hasArticle: model.articleURL != nil
+            showingArticle: model.showingArticle, hasArticle: model.articleURL != nil,
+            fillsTallWindow: fillsTallWindow
         )
         return Menu {
             ForEach(sections.indices, id: \.self) { index in
@@ -145,6 +149,7 @@ struct FeedReaderBarItem: View {
         } label: {
             Label("View", systemImage: "ellipsis.circle")
         }
+        .menuOrderFromBottomBar(fillsTallWindow)
         .accessibilityIdentifier(FeedReaderAction.more.identifier)
     }
     #else
@@ -170,28 +175,37 @@ struct FeedReaderBarItem: View {
     @ViewBuilder
     private func menuRow(_ item: FeedReaderMenuItem, browserIcon: Bool) -> some View {
         switch item {
+        case .previousNext:
+            ReaderListStepRow()
         case .readerMode:
             readerModeButton
         case .remoteContent:
             remoteContentButton
         case .article:
             articleButton
-        case .openInBrowser:
+        case .openInBrowser, .shareLink, .copyLink:
             if let url = model.articleURL {
-                if browserIcon {
-                    Link(destination: url) { Label("Open in browser", systemImage: "safari") }
-                } else {
-                    Link("Open in browser", destination: url)
-                }
+                linkRow(item, url: url, browserIcon: browserIcon)
+            }
+        }
+    }
+
+    /// The rows that act on the item's article link.
+    @ViewBuilder
+    private func linkRow(_ item: FeedReaderMenuItem, url: URL, browserIcon: Bool) -> some View {
+        switch item {
+        case .openInBrowser:
+            if browserIcon {
+                Link(destination: url) { Label("Open in browser", systemImage: "safari") }
+            } else {
+                Link("Open in browser", destination: url)
             }
         case .shareLink:
-            if let url = model.articleURL {
-                ShareLink(item: url) { Label("Share link", systemImage: "square.and.arrow.up") }
-            }
+            ShareLink(item: url) { Label("Share link", systemImage: "square.and.arrow.up") }
         case .copyLink:
-            if let url = model.articleURL {
-                Button("Copy link") { copyToPasteboard(url.absoluteString) }
-            }
+            Button("Copy link") { copyToPasteboard(url.absoluteString) }
+        case .previousNext, .readerMode, .remoteContent, .article:
+            EmptyView()
         }
     }
 

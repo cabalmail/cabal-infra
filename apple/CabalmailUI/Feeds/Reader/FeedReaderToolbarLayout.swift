@@ -36,6 +36,10 @@ enum FeedReaderAction: String, CaseIterable {
 /// A row of one of the feed reader's menus.
 enum FeedReaderMenuItem: Hashable {
     case readerMode, remoteContent, article, openInBrowser, shareLink, copyLink
+    /// Previous Item and Next Item, one row of two buttons, in a tall
+    /// window's View menu, which stands in for the mail reader's Message
+    /// menu there (`ReaderListStepRow`).
+    case previousNext
 }
 
 /// A slot of the feed reader's own bar in a tall window: one of the
@@ -94,12 +98,17 @@ enum FeedReaderToolbarLayout {
     /// The View menu's rows on the touch bar, in sections a divider
     /// separates. Remote content only while the feed's own content shows
     /// (the publisher's page loads its own); the article rows only for an
-    /// item with a link.
-    static func viewMenu(showingArticle: Bool, hasArticle: Bool) -> [[FeedReaderMenuItem]] {
+    /// item with a link. In a tall window, where the menu opens up from the
+    /// reader's own bar, Previous Item and Next Item come first, nearest the
+    /// button, as in the mail reader's Message menu.
+    static func viewMenu(
+        showingArticle: Bool, hasArticle: Bool, fillsTallWindow: Bool = false
+    ) -> [[FeedReaderMenuItem]] {
         var display: [FeedReaderMenuItem] = [.readerMode]
         if !showingArticle { display.append(.remoteContent) }
-        guard hasArticle else { return [display] }
-        return [display, [.article, .openInBrowser, .shareLink, .copyLink]]
+        let steps: [[FeedReaderMenuItem]] = fillsTallWindow ? [[.previousNext]] : []
+        guard hasArticle else { return steps + [display] }
+        return steps + [display, [.article, .openInBrowser, .shareLink, .copyLink]]
     }
 
     /// The wide bar (macOS and visionOS), in drawn order: Read, Flag,
