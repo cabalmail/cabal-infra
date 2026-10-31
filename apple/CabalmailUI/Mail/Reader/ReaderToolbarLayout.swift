@@ -275,8 +275,9 @@ enum ReaderToolbarLayout {
     /// portrait. The list's bar, with Compose, is behind the message there
     /// or below a laptop fold, and the bar is the controls' one row under
     /// the thumb, so it carries the iPhone Duo spec's set in its order:
-    /// Reply, dispose, Flag, Read, Page Up, Page Down, the More menu (which
-    /// takes the display toggles) and Compose. Open tall and laptop pose
+    /// Reply, dispose, Flag, Read, Page Up, Page Down, the Message menu
+    /// (`ReaderMessageMenuLayout`, which takes the display toggles) and
+    /// Compose. Open tall and laptop pose
     /// keep the same controls, as Apple asks of a tabletop layout.
     static func tallBar(leading: LeadingReaderAction) -> [ReaderToolbarAction] {
         [
