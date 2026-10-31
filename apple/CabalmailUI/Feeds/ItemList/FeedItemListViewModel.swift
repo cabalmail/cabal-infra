@@ -48,6 +48,10 @@ final class FeedItemListViewModel {
     var hasMoreLocal = true
     var olderExhausted = false
     var errorMessage: String?
+    /// Where the reader's open item last sat among `items`, for Previous
+    /// and Next once a reload has dropped it (`FeedListStepping`). On the
+    /// model, so a list that takes the model over across a fold keeps it.
+    var stepPlace: ListStepPolicy.Place<String>?
     /// Items with a queued (not yet pushed) state change, for the row mark.
     var pendingIds: Set<String> = []
     /// What the All / Unread / Flagged pills count for this scope, over the

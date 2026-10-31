@@ -245,6 +245,8 @@ struct FeedItemListView: View {
                     proxy.scrollTo(itemID, anchor: .top)
                     landingItemID = nil
                 }
+                // The reader's Previous and Next (`FeedListStepping`).
+                .answersFeedSteps(model: model, open: selection, proxy: proxy) { selection = $0 }
         }
     }
 
