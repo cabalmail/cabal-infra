@@ -265,6 +265,9 @@ struct NewAddressSheet: View {
                 comment: comment.isEmpty ? nil : comment,
                 address: address
             )
+            // Every address list reads the list again, whichever surface
+            // opened this sheet (the Addresses list, compose's From picker).
+            appState.addressesChanged()
             await onCreate(address)
             dismiss()
         } catch let error as CabalmailError {

@@ -179,6 +179,8 @@ extension MessageDetailView {
             // Drop it from the owned set so the menu's "Compose From" / "Revoke"
             // items disappear on the next open without a full re-fetch.
             ownedAddresses.removeAll { $0.address == address.address }
+            // And every address list still showing it reads the list again.
+            appState.addressesChanged()
             showToast(.addressRevoked(address.address))
         } catch {
             showToast(Toast(kind: .error, message: "Couldn't revoke \(address.address)"))

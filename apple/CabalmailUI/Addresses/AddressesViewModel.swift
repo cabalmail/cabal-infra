@@ -85,10 +85,10 @@ final class AddressesViewModel {
     }
 
     /// Called after the inline "Create address" sheet reports success.
-    /// Forces a fresh `/list` round-trip so the new address appears.
+    /// Forces a fresh `/list` round-trip so the new address appears. The
+    /// sheet itself tells the other lists (`NewAddressSheet`).
     func onAddressCreated() async {
         await refresh(force: true)
-        changed()
     }
 
     /// Addresses the caller has favorited. Same ordering as `addresses`.
