@@ -14,7 +14,7 @@ final class RichTextEditorTextScaleTests: XCTestCase {
         try await super.setUp()
         controller = RichTextEditorController(readyTimeout: 120)
         await controller.waitUntilReady()
-        XCTAssertNil(controller.bridgeFailure, "editor bridge never booted in this runner")
+        try requireEditorBooted(controller)
     }
 
     override func tearDown() async throws {
