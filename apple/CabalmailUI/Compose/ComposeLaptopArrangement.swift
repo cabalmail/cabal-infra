@@ -22,12 +22,19 @@ final class ComposeLaptopArrangement {
     private(set) var crease: CGRect?
     /// Where the software keyboard ends up, or nil.
     private(set) var keyboard: CGRect?
+    /// A field or an editor has focus. The keyboard counts only then: a
+    /// posture change can take the focus and the keyboard away without a
+    /// hide notification, and the last frame, from the other orientation,
+    /// would keep the bars at the top (measured).
+    private(set) var isEditing = false
     /// The body and From header's places at rest, once sampled.
     private(set) var rest: ComposeLaptopPolicy.RestMetrics?
     /// How many times Edit Message has been pressed: `ComposerBody` puts
     /// the caret back on each.
     private(set) var editRequests = 0
 
+    @ObservationIgnored private var fieldEditing = false
+    @ObservationIgnored private var markdownEditing = false
     @ObservationIgnored private var fold: FoldState = .none
     @ObservationIgnored private var stacked = false
     @ObservationIgnored private var bodyFrameInWindow: CGRect?
@@ -48,7 +55,9 @@ final class ComposeLaptopArrangement {
     }
 
     var isLaptop: Bool { crease != nil }
-    var host: ComposeLaptopPolicy.BarHost { ComposeLaptopPolicy.barHost(crease: crease, keyboard: keyboard) }
+    var host: ComposeLaptopPolicy.BarHost {
+        ComposeLaptopPolicy.barHost(crease: crease, keyboard: isEditing ? keyboard : nil)
+    }
     var barsBelowFold: Bool { host == .laptopBottom }
     var sections: [ComposeFormSection] { ComposeFormSection.order(inLaptop: isLaptop) }
     var bodyFrame: ComposeLaptopPolicy.BodyFrame { ComposeLaptopPolicy.bodyFrame(crease: crease, rest: rest) }
@@ -71,6 +80,18 @@ final class ComposeLaptopArrangement {
     func keyboardChanged(_ keyboard: CGRect?) {
         if self.keyboard != keyboard { self.keyboard = keyboard }
         sample()
+    }
+
+    /// A recipient field, Subject or the rich editor has focus.
+    func fieldsEditing(_ editing: Bool) {
+        fieldEditing = editing
+        updateEditing()
+    }
+
+    /// The Markdown editor has focus.
+    func markdownEditing(_ editing: Bool) {
+        markdownEditing = editing
+        updateEditing()
     }
 
     func bodyMoved(_ frame: CGRect) {
@@ -102,6 +123,13 @@ final class ComposeLaptopArrangement {
     }
 
     // MARK: Derivation
+
+    private func updateEditing() {
+        let next = fieldEditing || markdownEditing
+        guard next != isEditing else { return }
+        isEditing = next
+        sample()
+    }
 
     private func updateCrease() {
         let next: CGRect? = if case .horizontal(let crease) = fold, stacked { crease } else { nil }

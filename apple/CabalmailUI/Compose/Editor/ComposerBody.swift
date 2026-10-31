@@ -65,6 +65,7 @@ struct ComposerBody: View {
         .frame(minHeight: bodyFloor)
         .composeLaptopBody(laptop)
         .onChange(of: laptop?.editRequests) { _, _ in resumeEditing() }
+        .onChange(of: markdownFocused) { _, focused in laptop?.markdownEditing(focused) }
     }
 
     /// Edit Message: the caret back where it was, the keyboard up.

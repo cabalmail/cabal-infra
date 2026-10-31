@@ -76,9 +76,11 @@ final class RichTextEditorCaretTests: XCTestCase {
         XCTAssertEqual(offset, 0)
     }
 
-    /// New content drops the old caret, so no range into removed nodes
-    /// comes back.
-    func testNewContentDropsTheOldCaret() async throws {
+    /// New content puts the caret at its start: a caret into what was
+    /// replaced never comes back. (The page drops the saved range in
+    /// `setHTML`; a live range would collapse to the editor's start anyway,
+    /// so this pins the outcome rather than the drop.)
+    func testNewContentPutsTheCaretAtTheStart() async throws {
         try await run("window.cabal.setHTML('<p>Hello world</p>', false, '')")
         try await placeCaretThenLeave(at: 5)
         try await run("window.cabal.setHTML('<p>Something else</p>', false, '')")

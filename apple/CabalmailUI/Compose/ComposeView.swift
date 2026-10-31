@@ -30,8 +30,10 @@ struct ComposeView: View {
     /// of the SwiftUI focus system; we route body focus through
     /// `RichTextEditorController.focusAtStart()` instead. The three
     /// recipient cases drive the autocomplete-suggestion list, which
-    /// renders below whichever recipient field currently holds focus.
-    enum Field: Hashable { case to, cc, bcc }
+    /// renders below whichever recipient field currently holds focus;
+    /// Subject is tracked so a fold into laptop pose can bring it back above
+    /// the keyboard.
+    enum Field: Hashable { case to, cc, bcc, subject }
 
     /// The compose model, built once per compose surface. It arrives as a
     /// factory rather than a value so a view struct SwiftUI is about to
@@ -316,6 +318,15 @@ struct ComposeView: View {
         ComposeToolbar(
             model: model,
             host: laptop.host,
+            canSend: model.canSend,
+            isSending: model.isSending,
+            mayEditMessage: ComposeLaptopPolicy.mayEditMessage(
+                hasStarted: model.hasStarted,
+                holdsDraft: model.holdsDraft,
+                isSending: model.isSending,
+                isMarkdown: model.editorMode == .markdown,
+                editorDown: model.editorUnavailable != nil
+            ),
             cancel: { await cancelOrAsk() },
             send: { await sendAndClose() },
             editMessage: {
@@ -433,21 +444,20 @@ extension ComposeView {
             // clears the bar at the bottom.
             .listSectionSpacing(laptop.isLaptop ? .compact : .default)
             .readsComposeLaptop(laptop, proxy: proxy)
+            .onChange(of: focusedField != nil || model.editorFocused, initial: true) { _, editing in
+                laptop.fieldsEditing(editing)
+            }
             .onChange(of: model.editorFocused) { _, focused in
                 scrollBodyClearOfKeyboard(focused: focused, proxy: proxy)
             }
             // A fold while typing moves what has focus, the body or a
-            // recipient field: bring it back above the keyboard.
+            // field: bring it back above the keyboard.
             .onChange(of: laptop.isLaptop) { _, _ in
                 scrollBodyClearOfKeyboard(focused: model.editorFocused, proxy: proxy)
-                if focusedField != nil {
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(ComposeFormSection.recipients, anchor: .top)
-                        }
-                    }
-                }
+                scrollFieldClearOfKeyboard(proxy: proxy)
+            }
+            .onChange(of: focusedField) { _, _ in
+                scrollFieldClearOfKeyboard(proxy: proxy)
             }
             // The other order: the editor takes focus with no keyboard up,
             // and the keyboard arrives afterwards. The scroll above then
@@ -457,6 +467,22 @@ extension ComposeView {
                 for: UIResponder.keyboardDidShowNotification
             )) { _ in
                 scrollBodyClearOfKeyboard(focused: model.editorFocused, proxy: proxy)
+            }
+        }
+    }
+
+    /// Brings the focused field above the keyboard in laptop pose, where the
+    /// keyboard fills the space below the fold and the fields sit there: a
+    /// keyboard arriving after focus, or a fold, doesn't scroll the field
+    /// into view itself (measured). Not with the bars below the fold (a
+    /// hardware keyboard), where the form goes back to its top instead.
+    private func scrollFieldClearOfKeyboard(proxy: ScrollViewProxy) {
+        guard laptop.isLaptop, let field = focusedField else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard laptop.isLaptop, !laptop.barsBelowFold, focusedField == field else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(field == .subject ? ComposeFormSection.subject : .recipients, anchor: .top)
             }
         }
     }
@@ -527,6 +553,7 @@ extension ComposeView {
         case .subject:
             Section("Subject") {
                 TextField("Subject", text: $model.subject)
+                    .focused($focusedField, equals: .subject)
                     .accessibilityIdentifier("compose.subject")
                     .takesDroppedAttachments(into: model)
             }

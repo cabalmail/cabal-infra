@@ -11,12 +11,20 @@ import SwiftUI
 /// exception to the rule of no taps above a laptop fold. Each identifier
 /// exists once in either placement, and the buttons hold no state, so
 /// moving them between bars costs nothing.
+///
+/// What the buttons show comes in as values `ComposeView` reads in its own
+/// body: a toolbar content type's body doesn't refresh for the model's
+/// reads (measured on the feed reader's bar), so Send would stay disabled
+/// over a finished form.
 struct ComposeToolbar<AttachMenu: View>: ToolbarContent {
     let model: ComposeViewModel
     let host: ComposeLaptopPolicy.BarHost
-    let cancel: () async -> Void
-    let send: () async -> Void
-    let editMessage: () -> Void
+    let canSend: Bool
+    let isSending: Bool
+    let mayEditMessage: Bool
+    let cancel: @MainActor () async -> Void
+    let send: @MainActor () async -> Void
+    let editMessage: @MainActor () -> Void
     @ViewBuilder let attachMenu: () -> AttachMenu
 
     /// Whether the window's bars are a side strip, where Cancel and Send
@@ -67,11 +75,11 @@ struct ComposeToolbar<AttachMenu: View>: ToolbarContent {
         Button {
             Task { await send() }
         } label: {
-            ComposeBarLabel.send(barsAreVertical: barsAreVertical, isSending: model.isSending)
+            ComposeBarLabel.send(barsAreVertical: barsAreVertical, isSending: isSending)
                 .label("Send", systemImage: "paperplane")
         }
-        .symbolEffect(.pulse, isActive: model.isSending)
-        .disabled(!model.canSend || model.isSending)
+        .symbolEffect(.pulse, isActive: isSending)
+        .disabled(!canSend || isSending)
         .accessibilityIdentifier("compose.send")
     }
 
@@ -79,13 +87,7 @@ struct ComposeToolbar<AttachMenu: View>: ToolbarContent {
         Button(action: editMessage) {
             Label("Edit Message", systemImage: "character.cursor.ibeam")
         }
-        .disabled(!ComposeLaptopPolicy.mayEditMessage(
-            hasStarted: model.hasStarted,
-            holdsDraft: model.holdsDraft,
-            isSending: model.isSending,
-            isMarkdown: model.editorMode == .markdown,
-            editorDown: model.editorUnavailable != nil
-        ))
+        .disabled(!mayEditMessage)
         .accessibilityIdentifier("compose.editMessage")
     }
 }

@@ -55,6 +55,7 @@ final class ComposeLaptopArrangementTests: XCTestCase {
         XCTAssertEqual(laptop.host, .laptopBottom)
         XCTAssertTrue(laptop.barsBelowFold)
 
+        laptop.fieldsEditing(true)
         laptop.keyboardChanged(keyboard)
         XCTAssertEqual(laptop.host, .laptopTop)
         XCTAssertNil(laptop.toastFloor)
@@ -62,6 +63,20 @@ final class ComposeLaptopArrangementTests: XCTestCase {
         laptop.keyboardChanged(nil)
         XCTAssertEqual(laptop.host, .laptopBottom)
         XCTAssertEqual(laptop.toastFloor, 495.5)
+    }
+
+    /// A keyboard frame left over from before a posture change, with
+    /// nothing being edited, doesn't hold the bars at the top.
+    func testTheKeyboardCountsOnlyWhileSomethingHasFocus() {
+        let laptop = arrangement()
+        inLaptop(laptop)
+        laptop.keyboardChanged(keyboard)
+        XCTAssertEqual(laptop.host, .laptopBottom)
+
+        laptop.markdownEditing(true)
+        XCTAssertEqual(laptop.host, .laptopTop)
+        laptop.markdownEditing(false)
+        XCTAssertEqual(laptop.host, .laptopBottom)
     }
 
     func testAKeyboardWithNoFoldLeavesTodaysBar() {
@@ -96,9 +111,11 @@ final class ComposeLaptopArrangementTests: XCTestCase {
         XCTAssertNil(laptop.rest, "scrolled 40 pt")
 
         laptop.scrolled(fromRest: 0)
+        laptop.fieldsEditing(true)
         laptop.keyboardChanged(keyboard)
         try await Task.sleep(for: .milliseconds(30))
         XCTAssertNil(laptop.rest, "the keyboard is up")
+        laptop.fieldsEditing(false)
 
         laptop.keyboardChanged(nil)
         laptop.scrollPhase(.interacting)
@@ -115,6 +132,7 @@ final class ComposeLaptopArrangementTests: XCTestCase {
         try await waitUntilOnMainActor { laptop.rest != nil }
         let frame = laptop.bodyFrame
 
+        laptop.fieldsEditing(true)
         laptop.keyboardChanged(keyboard)
         laptop.bodyMoved(CGRect(x: 44, y: 60, width: 581, height: 150))
         try await Task.sleep(for: .milliseconds(30))
