@@ -5,7 +5,9 @@
 /// ⌘-click to extend it, "N Messages Selected" in the reader, the context
 /// menu for the whole selection, and rows that drag onto a folder. The other
 /// is the touch path: a single selection that pushes the reader, with Select
-/// mode for several and a per-row context menu.
+/// mode for several and a per-row context menu. Rows drag on both: onto a
+/// folder list wherever one is on screen, and out of the app as an `.eml`
+/// (#1681); the touch path's rows from iOS 27 (`touchRowsDrag`).
 ///
 /// Decided by the window's shell rather than the list's own size class. A
 /// split column reports a compact size class even on a regular-width iPad, so
@@ -18,5 +20,16 @@ enum MessageListLayout {
         case .desktop, .split, .ornament: return true
         case .tabs: return false
         }
+    }
+
+    /// Whether the touch path's rows drag (#1681). From iOS 27, where a
+    /// row's swipe wrapper embeds no `List`: a held press opens the row's
+    /// menu and a held press that moves lifts the drag, measured on iOS
+    /// 27.1. Below 27 the menu sits in the wrapper's embedded `List` cell,
+    /// beside the drag, and that pairing has not been measured, so those
+    /// releases keep the touch path's rows still, as before.
+    static var touchRowsDrag: Bool {
+        if #available(iOS 27.0, *) { return true }
+        return false
     }
 }

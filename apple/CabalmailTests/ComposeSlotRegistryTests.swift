@@ -202,7 +202,7 @@ final class ComposeSlotRegistryTests: XCTestCase {
         let reply = Draft(subject: "Re: discarded")
         var closed = registry.closedCompose(for: reply)
 
-        closed.hasLeftScreen = true
+        closed.isSpent = true
 
         XCTAssertFalse(registry.mayCompose(reply, closedOn: closed))
     }
@@ -211,7 +211,7 @@ final class ComposeSlotRegistryTests: XCTestCase {
         let registry = ComposeSlotRegistry()
         let slot = registry.acquire(seed: Draft(subject: "Re: sent"))
         var closed = registry.closedCompose(for: try XCTUnwrap(registry.seed(for: slot)))
-        closed.hasLeftScreen = true
+        closed.isSpent = true
         registry.release(slot)
 
         let reused = registry.acquire(seed: Draft(subject: "Re: next"))

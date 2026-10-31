@@ -139,5 +139,54 @@ final class RichTextEditorBridgeHealthTests: XCTestCase {
         XCTAssertFalse(controller.isEditorFocused)
         XCTAssertEqual(observed, [true, false])
     }
+
+    /// The page names the files it is about to read, then delivers each:
+    /// its bytes, too large to read, or unreadable. A delivery it never
+    /// announced, or a second one, is ignored, so a host counting them holds
+    /// Send for exactly as long as it should.
+    func testDroppedFilesArriveOnceEachAsAnnounced() {
+        let controller = RichTextEditorController(readyTimeout: 600)
+        var started: [Int] = []
+        var files: [EditorFileDrops.File] = []
+        controller.fileDrops.onStarted = { started.append($0) }
+        controller.fileDrops.onFile = { files.append($0) }
+
+        controller.handleBridgeMessage(["type": "dropStarted", "files": [
+            ["id": 1, "name": "a.pdf"], ["id": 2, "name": "b.mov"], ["id": 3, "name": "c.png"]
+        ]])
+        let pdf = Data("%PDF".utf8).base64EncodedString()
+        controller.handleBridgeMessage(["type": "droppedFile", "id": 1, "base64": pdf])
+        controller.handleBridgeMessage(["type": "droppedFile", "id": 1, "base64": pdf])
+        controller.handleBridgeMessage(["type": "droppedFile", "id": 9, "base64": pdf])
+        controller.handleBridgeMessage(["type": "droppedFile", "id": 2, "tooLarge": true, "limit": 50_000_000])
+        controller.handleBridgeMessage(["type": "droppedFile", "id": 3, "failed": true])
+
+        XCTAssertEqual(started, [3])
+        XCTAssertEqual(files.map(\.id), [1, 2, 3])
+        XCTAssertEqual(files.map(\.name), ["a.pdf", "b.mov", "c.png"])
+        XCTAssertEqual(
+            files.map(\.contents),
+            [.data(Data("%PDF".utf8)), .tooLarge(limitBytes: 50_000_000), .unreadable]
+        )
+    }
+
+    /// Files still being read when the page's process stops will never come.
+    /// The host hears of each as unreadable, before the bridge failure, so
+    /// it isn't left holding Send for them.
+    func testFilesStillBeingReadArriveUnreadableWhenThePageStops() {
+        let controller = RichTextEditorController(readyTimeout: 600)
+        controller.handleBridgeMessage(["type": "ready"])
+        var events: [String] = []
+        controller.fileDrops.onFile = { events.append("\($0.name) \($0.contents == .unreadable)") }
+        controller.onBridgeError = { _ in events.append("bridge") }
+
+        controller.handleBridgeMessage(["type": "dropStarted", "files": [
+            ["id": 1, "name": "a.pdf"], ["id": 2, "name": "b.png"], ["id": 3, "name": "c.txt"]
+        ]])
+        controller.handleBridgeMessage(["type": "droppedFile", "id": 2, "base64": ""])
+        controller.webViewWebContentProcessDidTerminate(controller.webView)
+
+        XCTAssertEqual(events, ["b.png false", "a.pdf true", "c.txt true", "bridge"])
+    }
 }
 #endif

@@ -34,6 +34,7 @@ struct ComposeSnapshot {
     let richMirrorsMarkdown: Bool
     let editorMode: ComposeViewModel.EditorMode
     let attachments: [ComposeViewModel.ComposeAttachment]
+    let inlineImages: ComposeInlineImages
     let serverDraftRef: DraftServerRef?
     let replacedServerDraftUIDs: [UInt32]
     let inReplyTo: String?
@@ -70,6 +71,7 @@ struct ComposeSnapshot {
             richMirrorsMarkdown: model.richMirrorsMarkdown,
             editorMode: model.editorMode,
             attachments: model.attachments,
+            inlineImages: model.inlineImages,
             serverDraftRef: model.serverDraftRef,
             replacedServerDraftUIDs: model.replacedServerDraftUIDs,
             inReplyTo: model.inReplyTo,
@@ -88,7 +90,8 @@ struct ComposeSnapshot {
 extension ComposeSnapshot {
     /// A new composer's start: a reply, forward, new message, mailto or
     /// resumed draft. The only place the signature is added, so a moved
-    /// composer, which starts from `capture(from:)`, is never signed twice.
+    /// composer, which starts from `capture(from:)`, is never signed twice;
+    /// nor is a resumed draft, whose body already carries it.
     @MainActor
     init(seed: Draft, preferences: Preferences) {
         // Default From falls back to the user's preference *only* when the
@@ -102,8 +105,11 @@ extension ComposeSnapshot {
         // Replies / forwards seed with an attribution + quoted body; the
         // signature goes *above* that block so the user's reply text lands
         // with the signature on the line above the quoted original (the
-        // same shape every UNIX mail client has produced since Pine).
-        let seededBody = SignatureFormatter.seedBody(base: seed.body, signature: preferences.signature)
+        // same shape every UNIX mail client has produced since Pine). A
+        // resumed draft's body was signed when it was written (#2275).
+        let seededBody = seed.isResumedDraft == true
+            ? seed.body
+            : SignatureFormatter.seedBody(base: seed.body, signature: preferences.signature)
         self.init(
             draftID: seed.id,
             fromAddress: fromAddress,
@@ -118,6 +124,7 @@ extension ComposeSnapshot {
             richMirrorsMarkdown: true,
             editorMode: .rich,
             attachments: [],
+            inlineImages: ComposeInlineImages(),
             serverDraftRef: seed.serverRef,
             replacedServerDraftUIDs: [],
             inReplyTo: seed.inReplyTo,

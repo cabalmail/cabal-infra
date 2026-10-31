@@ -16,9 +16,11 @@ tester's direct-API unblock email -- arrived as a blank body in any client
 showing rich content, with the text the sender wrote hidden in the plain part.
 '''
 import os
+import re
 import sys
 import types
 import unittest
+from email import message_from_bytes, policy
 
 os.environ.setdefault('AWS_REGION', 'us-east-1')
 os.environ.setdefault('CONTROL_DOMAIN', 'test.example.com')
@@ -110,9 +112,8 @@ def _body_parts(msg):
             and not part.is_attachment()]
 
 
-class ComposeBodyPartsTest(unittest.TestCase):
-    '''A composed body is multipart/alternative only when both halves carry
-    content; otherwise it is the one half that does.'''
+class _ComposeTestCase(unittest.TestCase):
+    '''Composes messages against a fake preferences table.'''
 
     def setUp(self):
         # Bind compose's module-level preferences table rather than trusting
@@ -136,6 +137,11 @@ class ComposeBodyPartsTest(unittest.TestCase):
             {'to': body['to_list'][0], 'cc': '', 'bcc': '',
              'message_id': [], 'in_reply_to': [], 'references': []},
             text, html, attachments)
+
+
+class ComposeBodyPartsTest(_ComposeTestCase):
+    '''A composed body is multipart/alternative only when both halves carry
+    content; otherwise it is the one half that does.'''
 
     def test_both_halves_compose_as_alternatives(self):
         msg = self._compose('probe', '<p>probe</p>')
@@ -212,6 +218,184 @@ class ComposeBodyPartsTest(unittest.TestCase):
                             self.assertTrue(
                                 part.get_content().strip(),
                                 f'{part.get_content_type()} part is blank')
+
+
+PNG = b'\x89PNG\r\n\x1a\n' + b'\x00' * 8
+CID = 'f2b6a1d0-0c1e-4a52-9d55-0b1c2d3e4f50@cabalmail'
+
+
+def _image(content_id=CID, filename='photo.png', maintype='image', subtype='png'):
+    return {'data': PNG, 'maintype': maintype, 'subtype': subtype,
+            'filename': filename, 'content_id': content_id}
+
+
+def _pdf():
+    return {'data': b'%PDF-1.7', 'maintype': 'application',
+            'subtype': 'pdf', 'filename': 'probe.pdf'}
+
+
+def _tree(part, depth=0):
+    """The message's content types, depth-first, indented by nesting."""
+    lines = ['  ' * depth + part.get_content_type()]
+    if part.is_multipart():
+        for child in part.iter_parts():
+            lines.extend(_tree(child, depth + 1))
+    return lines
+
+
+def _inline_parts(msg):
+    return [part for part in msg.walk() if part.get('Content-ID')]
+
+
+class ComposeInlineImagesTest(_ComposeTestCase):
+    """An image the HTML body shows by Content-ID goes beside it in a
+    multipart/related; anything that can't be shown that way is attached,
+    as before."""
+
+    def _compose_inline(self, text, html, attachments):
+        return self._compose(text, html, attachments=attachments)
+
+    def test_a_shown_image_goes_inline_beside_the_html(self):
+        html = f'<p>Look:</p><p><img src="cid:{CID}" alt="photo"></p>'
+        msg = self._compose_inline('Look: ![photo](cid:x)', html, [_image()])
+
+        self.assertEqual(_tree(msg), [
+            'multipart/alternative',
+            '  text/plain',
+            '  multipart/related',
+            '    text/html',
+            '    image/png',
+        ])
+        related = next(p for p in msg.walk() if p.get_content_type() == 'multipart/related')
+        self.assertEqual(related.get_param('type'), 'text/html')
+        (image,) = _inline_parts(msg)
+        # Exactly what /fetch_inline_image looks up for `cid:<id>`.
+        self.assertEqual(image['Content-ID'], f'<{CID}>')
+        self.assertEqual(image.get_content_disposition(), 'inline')
+        self.assertEqual(image.get_filename(), 'photo.png')
+        self.assertEqual(image.get_content(), PNG)
+        self.assertEqual(list(msg.iter_attachments()), [])
+
+    def test_an_html_only_body_becomes_the_related_root(self):
+        msg = self._compose_inline('', f'<img src="cid:{CID}">', [_image()])
+
+        self.assertEqual(_tree(msg), ['multipart/related', '  text/html', '  image/png'])
+
+    def test_an_attachment_beside_an_inline_image_still_attaches(self):
+        msg = self._compose_inline('probe', f'<img src="cid:{CID}">', [_pdf(), _image()])
+
+        self.assertEqual(_tree(msg), [
+            'multipart/mixed',
+            '  multipart/alternative',
+            '    text/plain',
+            '    multipart/related',
+            '      text/html',
+            '      image/png',
+            '  application/pdf',
+        ])
+        self.assertEqual([p.get_filename() for p in msg.iter_attachments()], ['probe.pdf'])
+
+    def test_the_reference_may_be_single_quoted_or_upper_case(self):
+        for html in (f"<img src='cid:{CID}'>", f'<IMG SRC = "CID:{CID}">'):
+            with self.subTest(html=html):
+                msg = self._compose_inline('probe', html, [_image()])
+                self.assertEqual(len(_inline_parts(msg)), 1)
+
+    def test_an_image_the_html_does_not_show_is_attached(self):
+        cases = {
+            'no reference': '<p>probe</p>',
+            'named in text only': f'<p>[cid:{CID}]</p>',
+            'another id': '<img src="cid:other@cabalmail">',
+            'a longer id': f'<img src="cid:{CID}x">',
+        }
+        for case, html in cases.items():
+            with self.subTest(case=case):
+                msg = self._compose_inline('probe', html, [_image()])
+                self.assertEqual(_inline_parts(msg), [])
+                self.assertEqual([p.get_filename() for p in msg.iter_attachments()],
+                                 ['photo.png'])
+
+    def test_what_cannot_go_inline_is_attached(self):
+        html = '<img src="cid:a/b@cabalmail"><img src="cid:doc@cabalmail">'
+        cases = {
+            'an id a reader cannot fetch': _image(content_id='a/b@cabalmail'),
+            'not an image': _image(content_id='doc@cabalmail', filename='doc.pdf',
+                                   maintype='application', subtype='pdf'),
+            'not a string': _image(content_id=7),
+        }
+        for case, attachment in cases.items():
+            with self.subTest(case=case):
+                msg = self._compose_inline('probe', html + f'<img src="cid:{CID}">', [attachment])
+                self.assertEqual(_inline_parts(msg), [])
+                self.assertEqual(len(list(msg.iter_attachments())), 1)
+
+    def test_an_id_the_header_cannot_carry_literally_is_attached(self):
+        # The stdlib would write these as RFC 2047 encoded-words, which no
+        # other mail client matches against the HTML's cid:.
+        for content_id in ('a' * 66 + '@example.org',      # 78 characters
+                           'bild-\u00e4@example.org',
+                           '=?utf-8?q?x?=@example.org'):
+            with self.subTest(content_id=content_id):
+                msg = self._compose_inline(
+                    'probe', f'<img src="cid:{content_id}">', [_image(content_id=content_id)])
+                self.assertEqual(_inline_parts(msg), [])
+                self.assertEqual(len(list(msg.iter_attachments())), 1)
+
+    def test_the_longest_inline_id_reaches_the_wire_as_written(self):
+        content_id = 'a' * 63 + '@example.org'     # 75 characters
+        msg = self._compose_inline('probe', f'<img src="cid:{content_id}">',
+                                   [_image(content_id=content_id)])
+
+        wire = msg.as_bytes(policy=msg.policy.clone(linesep='\r\n'))
+        self.assertNotIn(b'=?', wire)
+        for read_policy in (policy.default, policy.compat32):
+            with self.subTest(policy=read_policy):
+                (image,) = _inline_parts(message_from_bytes(wire, policy=read_policy))
+                header = re.sub(r'\s+', '', str(image['Content-ID']))
+                self.assertEqual(header, f'<{content_id}>')
+
+    def test_a_text_only_body_attaches_its_images(self):
+        msg = self._compose_inline(f'![photo](cid:{CID})', '', [_image()])
+
+        self.assertEqual(_tree(msg), ['multipart/mixed', '  text/plain', '  image/png'])
+        self.assertEqual(_inline_parts(msg), [])
+
+    def test_a_second_image_with_the_same_id_is_attached(self):
+        second = _image(filename='again.png')
+        msg = self._compose_inline('probe', f'<img src="cid:{CID}">', [_image(), second])
+
+        self.assertEqual(len(_inline_parts(msg)), 1)
+        self.assertEqual([p.get_filename() for p in msg.iter_attachments()], ['again.png'])
+
+    def test_a_request_without_content_ids_composes_as_before(self):
+        pdf = _pdf()
+        image = _image(content_id=None)
+        msg = self._compose_inline('probe', f'<img src="cid:{CID}">', [pdf, image])
+
+        self.assertEqual(_tree(msg), [
+            'multipart/mixed',
+            '  multipart/alternative',
+            '    text/plain',
+            '    text/html',
+            '  application/pdf',
+            '  image/png',
+        ])
+        self.assertNotIn('Content-ID', msg.as_string())
+
+    def test_staging_passes_the_content_id_through(self):
+        saved = compose.get_object
+        compose.get_object = lambda _bucket, _key: PNG
+        try:
+            decoded = compose.load_attachments([
+                {'filename': 'photo.png', 'mime_type': 'image/png',
+                 's3_key': 'outbound/testuser/u1/photo.png', 'content_id': CID},
+                {'filename': 'probe.pdf', 'mime_type': 'application/pdf',
+                 's3_key': 'outbound/testuser/u2/probe.pdf'},
+            ], 'bucket', 'testuser')
+        finally:
+            compose.get_object = saved
+
+        self.assertEqual([entry['content_id'] for entry in decoded], [CID, None])
 
 
 if __name__ == '__main__':

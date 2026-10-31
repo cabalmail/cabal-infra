@@ -107,6 +107,14 @@ final class FeedItemDetailViewModel {
     /// the feed's (#2060).
     var effectiveReaderMode: Bool { pageReaderOverride ?? readerMode }
 
+    /// The tall bar's last Page Up or Page Down, which the body or the
+    /// publisher's page pages for (`ReaderPaging`).
+    private(set) var pageRequest: ReaderPageRequest?
+
+    func requestPage(_ direction: ReaderPageRequest.Direction) {
+        pageRequest = .next(after: pageRequest, direction)
+    }
+
     func toggleArticle() {
         showingArticle.toggle()
         // The article view is rebuilt from scratch either way, so the page

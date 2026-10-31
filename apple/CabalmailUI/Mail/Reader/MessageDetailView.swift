@@ -87,6 +87,9 @@ struct MessageDetailView: View {
     // A side strip (`verticalBars()`, published at the window's root) moves
     // the actions to bottom items, which join it.
     @Environment(\.barsAreVertical) var barsAreVertical
+    // A reader filling a window taller than wide draws the tall bar, with
+    // the page buttons and Compose (`ReaderToolbarLayout.tallBar`).
+    @Environment(\.readerFillsTallWindow) var readerFillsTallWindow
     // Measured width of the pane-scoped action bar, fed to
     // `ReaderToolbarLayout.ownBar` so the item set tracks the pane as the
     // user drags the split divider. Starts at 0, which draws the compact
@@ -183,6 +186,11 @@ struct MessageDetailView: View {
                 }
             }
         }
+        // In the split's laptop arrangement the message ends above the fold,
+        // and the action bar pinned below stays at the window's bottom edge,
+        // under the list's panel (`LaptopPanelPolicy`). Inside that bar's
+        // inset, so the bar is not moved with it.
+        .keepsAboveLaptopFold()
         #if os(macOS)
         // macOS renders the subject in the window's title bar (its own chrome),
         // separate from the reading area, so it doesn't duplicate the header
@@ -214,9 +222,11 @@ struct MessageDetailView: View {
         #endif
         .sheet(isPresented: $moveSheetPresented) {
             moveSheet
+                .windowShapedSheet()
         }
         .sheet(item: $sourceSheetTab) { tab in
             sourceSheet(initialTab: tab)
+                .windowShapedSheet()
         }
         #if os(iOS) || os(visionOS)
         .sheet(item: $contactEditorRequest) { request in

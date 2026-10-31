@@ -415,17 +415,21 @@ extension MessageListView {
         chromeLayer
         .sheet(isPresented: $filtersPresented) {
             filtersSheet
+                .windowShapedSheet()
         }
         .sheet(item: $envelopeToMove) { envelope in
             moveSheet(for: envelope)
+                .windowShapedSheet()
         }
         .sheet(isPresented: $bulkMoveSheetPresented) {
             if let model {
                 bulkMoveSheet(model: model)
+                    .windowShapedSheet()
             }
         }
         .sheet(item: $moveCandidate) { candidate in
             selectionMoveSheet(for: candidate)
+                .windowShapedSheet()
         }
         .confirmationPrompt(
             "Delete Forever?",
@@ -628,6 +632,7 @@ extension MessageListView {
     /// window) leaves the list unselected — the graceful-degradation path.
     private func applyPendingRestore(model: MessageListViewModel) {
         guard let folder, navigator?.listMayTakeRestore(in: mailTree) != false,
+              listPlace.mayTakeParked(in: navigator),
               let restore = navigator?.restores.consumePendingRestore(for: folder.path)
         else { return }
         let match = restore.messageID.flatMap { messageID in

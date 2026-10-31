@@ -27,7 +27,8 @@ extension SaveDraftRequest: ComposeWireBody {}
 extension ComposeWireBody {
     /// The compose payload as the Lambdas expect it: snake_case keys, the
     /// threading headers nested under `other_headers`, and the already-
-    /// uploaded attachments as `{filename, mime_type, s3_key}` objects.
+    /// uploaded attachments as `{filename, mime_type, s3_key}` objects, with
+    /// `content_id` for an inline image.
     var composeJson: [String: Any] {
         let headersJson: [String: Any] = [
             "message_id": otherHeaders.messageId,
@@ -35,11 +36,15 @@ extension ComposeWireBody {
             "references": otherHeaders.references,
         ]
         let attachmentsJson: [[String: Any]] = attachments.map { attachment in
-            [
+            var json: [String: Any] = [
                 "filename": attachment.filename,
                 "mime_type": attachment.mimeType,
                 "s3_key": attachment.s3Key,
             ]
+            if let contentID = attachment.contentID {
+                json["content_id"] = contentID
+            }
+            return json
         }
         return [
             "host": host,

@@ -17,6 +17,11 @@ struct FeedItemDetailView: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
+    /// Whether the reader fills a window taller than wide (`SplitShell`),
+    /// where it draws its own bar, and whether the window's bars are a side
+    /// strip, where it never does (`ReaderToolbarPolicy.placement`).
+    @Environment(\.readerFillsTallWindow) private var readerFillsTallWindow
+    @Environment(\.barsAreVertical) private var barsAreVertical
     @State private var model: FeedItemDetailViewModel?
     @State private var isOffline = false
     /// Where the reader was in this item's body last time it was open, from
@@ -29,8 +34,21 @@ struct FeedItemDetailView: View {
         Group {
             if let model {
                 content(model)
+                    // In the split's laptop arrangement the article ends
+                    // above the fold, inside the bar's inset, so the bar
+                    // stays at the window's bottom edge (`LaptopPanelPolicy`).
+                    .keepsAboveLaptopFold()
                     .toolbar {
-                        FeedReaderToolbar(model: model, hasArticle: model.articleURL != nil, isOffline: isOffline)
+                        FeedReaderToolbar(
+                            model: model, hasArticle: model.articleURL != nil, isOffline: isOffline,
+                            drawsOwnBar: drawsOwnBar
+                        )
+                    }
+                    // The bar under the pane in a tall window. Always
+                    // present, empty elsewhere, so a turn that brings it or
+                    // takes it away reflows the body and never rebuilds it.
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if drawsOwnBar { FeedReaderActionBar(model: model, isOffline: isOffline) }
                     }
             } else {
                 ProgressView()
@@ -76,23 +94,33 @@ struct FeedItemDetailView: View {
         .task(id: model.map(ObjectIdentifier.init)) { await model?.observe() }
     }
 
-    /// True when the body runs under the bottom chrome's glass. On iOS that
-    /// follows where `ReaderToolbarPolicy` puts the feed reader's actions:
-    /// the system top bar at every width, so the bottom edge is the section
-    /// tab bar's and the body runs under it, as the mail reader's does on its
-    /// compact top bar. The other platforms keep it under their bottom chrome
-    /// as before.
-    private var bodyRunsUnderBottomBar: Bool {
+    /// Where the reader's actions go, and whether the body runs under the
+    /// bottom chrome's glass. On iOS the actions are the system top bar's,
+    /// or the reader's own bar in a tall window (`ReaderToolbarPolicy`); the
+    /// body runs under the glass at compact width only, where the bottom
+    /// edge is the section tab bar's, by width alone so that a turn which
+    /// brings the own bar never rebuilds the body's web view. The other
+    /// platforms keep the top bar and run under their bottom chrome as
+    /// before.
+    private var chrome: (placement: ReaderToolbarPolicy.Placement, bodyRunsUnderBottomBar: Bool) {
         #if os(iOS)
         let isOS27OrLater: Bool
         if #available(iOS 27.0, *) { isOS27OrLater = true } else { isOS27OrLater = false }
-        return ReaderToolbarPolicy.placement(
-            for: .feeds, isRegularWidth: horizontalSizeClass == .regular, isOS27OrLater: isOS27OrLater
-        ) == .topBar
+        let isRegularWidth = horizontalSizeClass == .regular
+        let placement = ReaderToolbarPolicy.placement(
+            for: .feeds, isRegularWidth: isRegularWidth, isOS27OrLater: isOS27OrLater,
+            barsAreVertical: barsAreVertical, fillsTallWindow: readerFillsTallWindow
+        )
+        return (placement, ReaderToolbarPolicy.bodyRunsUnderBottomBar(for: .feeds, isRegularWidth: isRegularWidth))
         #else
-        return true
+        return (.topBar, true)
         #endif
     }
+
+    /// Whether the reader draws its own bar under its pane.
+    private var drawsOwnBar: Bool { chrome.placement == .ownBar }
+
+    private var bodyRunsUnderBottomBar: Bool { chrome.bodyRunsUnderBottomBar }
 
     /// The item's key in the reading-position cache.
     private var positionKey: String { ReadingPositionKey.feed(itemID: item.id) }
@@ -114,6 +142,7 @@ struct FeedItemDetailView: View {
         if model.showingArticle, let url = model.articleURL {
             ArticleWebView(url: url, dataStoreID: model.dataStoreID,
                            readerMode: model.effectiveReaderMode, isOffline: isOffline,
+                           pageRequest: model.pageRequest,
                            onLeftReader: { model.leftReaderThroughLink() })
                 .id(url)
         } else {
@@ -136,6 +165,7 @@ struct FeedItemDetailView: View {
                         inlineImages: [:],
                         allowRemote: model.remoteContentAllowed,
                         readerMode: model.readerMode,
+                        pageRequest: model.pageRequest,
                         restoreAnchor: restoreAnchor,
                         // Under the tab bar's glass rather than above a black
                         // strip. The live article page (`ArticleWebView`)

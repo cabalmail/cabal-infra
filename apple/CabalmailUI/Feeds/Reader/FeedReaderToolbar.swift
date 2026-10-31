@@ -19,6 +19,11 @@ struct FeedReaderToolbar: ToolbarContent {
     let hasArticle: Bool
     /// The article control says when it needs a connection.
     let isOffline: Bool
+    /// Whether the reader draws its own bar under its pane, in a tall
+    /// window on iOS (`FeedReaderActionBar`), which then carries these
+    /// actions: the navigation bar draws none, so no identifier is drawn
+    /// twice.
+    var drawsOwnBar = false
 
     var body: some ToolbarContent {
         #if os(iOS)
@@ -29,10 +34,12 @@ struct FeedReaderToolbar: ToolbarContent {
         // only route to its demoted actions.
         // `FeedReaderToolbarLayoutTests` pins the list as Read, Flag, View.
         let actions = FeedReaderToolbarLayout.menuBar
-        ToolbarItem { item(actions[0]) }
-        ToolbarItem { item(actions[1]) }
-        ToolbarItem { item(actions[2]) }
-            .keepsInBarFirst()
+        if !drawsOwnBar {
+            ToolbarItem { item(actions[0]) }
+            ToolbarItem { item(actions[1]) }
+            ToolbarItem { item(actions[2]) }
+                .keepsInBarFirst()
+        }
         #else
         let actions = FeedReaderToolbarLayout.wideBar(hasArticle: hasArticle)
         ForEach(actions, id: \.self) { action in

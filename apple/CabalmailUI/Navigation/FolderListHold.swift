@@ -58,7 +58,7 @@ final class FolderListHold {
         return fresh
     }
 
-    // MARK: Swaps, folder changes and back-outs
+    // MARK: Swaps, moves, folder changes and back-outs
 
     /// The window's layout changed, away from the wide one or to it: a
     /// folder list in the layout it left goes with its tree, so its claim is
@@ -83,6 +83,38 @@ final class FolderListHold {
         handsOffSelection = listSelection?.model.handOff(toWide: isWide) ?? false
         if let place, place.folderPath == folderPath { restores.parkListAnchor(place) }
         generation += 1
+    }
+
+    /// The window's list is moving within its tree, between the split's
+    /// list column and the panel below a laptop fold (#1649): the next list
+    /// for the folder takes the selection whatever it holds, so a single
+    /// row's highlight goes with the checked ones, and the place is parked
+    /// for it; the moving list's claim is void. Unlike a layout swap's
+    /// hand-off, nothing else about the window changes: the open message
+    /// stays open, so the reader is not rebuilt.
+    ///
+    /// - Parameter folderListMoves: false when the list moving is the
+    ///   search results, which take no folder selection: the folder's own
+    ///   list mounting after the search then starts afresh, as it always
+    ///   did.
+    func move(folderPath: String?, folderListMoves: Bool = true, parkingIn restores: WindowRestores) {
+        handsOffSelection = folderListMoves && listSelection?.folderPath == folderPath
+        if let place, place.folderPath == folderPath { restores.parkListAnchor(place) }
+        generation += 1
+    }
+
+    /// Messages that left their folders while no folder list of the window's
+    /// was mounted to drop them (the laptop panel's address list covering
+    /// the reader): they leave the selection the next list takes, as a
+    /// mounted list's removal drops them. Returns what is left selected, or
+    /// nil when the window holds no folder selection.
+    @discardableResult
+    func dropFromSelection(_ refs: Set<MessageRef>) -> Int? {
+        guard let model = listSelection?.model else { return nil }
+        model.selected.subtract(refs)
+        if let cursor = model.cursor, refs.contains(cursor) { model.cursor = nil }
+        if let anchor = model.anchor, refs.contains(anchor) { model.setAnchor(nil) }
+        return model.selected.count
     }
 
     /// The window moved to another folder (`folderPath`, nil for none): the

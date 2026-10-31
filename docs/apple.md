@@ -761,10 +761,10 @@ own CI files, on pushes to `main` and `stage` that do, and on
 | `kit-test` | Every run but a `main` push reported tested | SwiftLint and the platform-conditionals check (macOS leg only), then `xcodebuild test` on the CabalmailKit package (scheme `CabalmailKit-Package`) on macOS and iOS, and on visionOS too except on a PR into a branch other than `main` |
 | `app-test` | Same | The `CabalmailMacTests` app-layer suite, hosted by `CabalmailMac` |
 | `ios-app-test` | Same | The `CabalmailiOSTests` app-layer suite, hosted by the iOS app on a simulator |
-| `ios-duo-test` | `stage` pushes, `workflow_dispatch`, and PRs whose branch name contains `duo` | The same suite on an iPhone Duo simulator (closed), the one leg that runs code behind `#available(iOS 27.1, *)`. Advisory: `continue-on-error`, and in neither `apple-gate`'s nor `approval`'s `needs` (see [iPhone Duo](#iphone-duo-the-fold-and-the-side-strip)) |
+| `ios-duo-test` | `stage` pushes, `workflow_dispatch`, and PRs whose branch name contains `duo` | The same suite on an iPhone Duo simulator (closed), the one leg that runs code behind `#available(iOS 27.1, *)`. Required where it runs: in `apple-gate`'s and `approval`'s `needs`, which take its skip elsewhere as a pass (see [iPhone Duo](#iphone-duo-the-fold-and-the-side-strip)). It needs the runner image's iOS 27.1 runtime; if an image drops it, put `continue-on-error: true` back on the job until one is restored |
 | `app-build` | PRs, and `workflow_dispatch` from a branch other than `main` or `stage` | Unsigned `xcodebuild build`: `CabalmailVision` (visionOS) and `CabalmailWatch` (watchOS) on a PR, where the two test suites already build the iOS and Mac apps; all four schemes, adding `Cabalmail` (iOS) and `CabalmailMac` (macOS), from another branch. Skipped on `main` and `stage` runs, whose upload archives are the device builds |
-| `apple-gate` | Every run | The one check that sums up the test and build jobs above, `ios-duo-test` aside |
-| `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass, or straight after `promotion-verdict` on a `main` push it reports tested |
+| `apple-gate` | Every run | The one check that sums up the test and build jobs above |
+| `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass and `ios-duo-test` passes or is skipped, or straight after `promotion-verdict` on a `main` push it reports tested |
 | `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → attach to the branch's internal test group |
 | `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
 
@@ -1230,8 +1230,8 @@ for more than one platform names each in `#available`, as
 compiled, and `FoldAPICompiledTests` in the iOS-hosted suite asserts it.
 An Xcode without the iOS 27.1 SDK would compile every Duo change out
 without a word and run the app boxed in on both displays; the required
-`ios-app-test` leg fails first. The advisory `ios-duo-test` leg runs the
-same suite on a closed Duo simulator, the only place the code behind
+`ios-app-test` leg fails first. The `ios-duo-test` leg, required where it
+runs, runs the same suite on a closed Duo simulator, the only place the code behind
 `#available(iOS 27.1, *)` actually runs in CI. Neither leg can fold.
 
 **The fold: `Platform/FoldGeometry.swift`.** `foldGeometry()`, applied
@@ -1289,6 +1289,98 @@ clears the width. Widths are per window and per list, in scene storage
 (`cabalmail.window.listColumnWidth.<list>`). The pure rules are tested on
 the Mac host, and the one view tree's splits are meant to reuse them,
 passing the width of any column tiled before the list.
+
+**The list over the reader: `Shell/Columns/ListOverlay.swift`.** In a
+window taller than wide (the Duo open upright, and an iPad in portrait)
+the list doesn't tile: it floats over a reader that takes the whole
+split, at 360 pt, with no handle. `ListColumnPolicy` declares the whole
+split as the reader's floor there, which is what keeps UIKit from
+tiling, and `SplitShell` drives the split's column visibility from
+`ListOverlay`: the list is shown first while nothing is open, gives way
+to an opened message or feed item, and comes back from the reader's
+Messages (or Articles) button, a swipe from the leading edge, or the
+message closing; a tap on the reader puts it away. UIKit puts the
+floating column away on its own as the split turns to overlaying, so
+that request is ignored while nothing is open. The window's shape is
+measured outside the addresses inspector, which narrows the split in a
+wide window without making it tall. A window wider than tall tiles as
+before.
+
+**Laptop pose: `Shell/Columns/LaptopPanel.swift`.** With a horizontal
+fold across a tall window, in Mail and Feeds alike, the split hides the
+list column and the reader its navigation bar, and the message ends
+above the fold (`keepsAboveLaptopFold()`, plain bottom padding: behind a
+safe-area inset of that size the web view drew nothing). The reader's
+own action bar stays at the window's bottom edge, and `LaptopListPanel`
+fills the space between the fold and that bar with the list and its bar,
+in a navigation stack of its own; the folder panel opens below the fold
+over it. The panel's bar carries the folder button and Settings at its
+leading end and the addresses `@` at its trailing end. The inspector
+would run up the upright half, so in laptop pose the `@` turns the
+panel into the address list, down to the window's bottom edge, under a
+cover over the message (`LaptopAddressesPolicy`): the reader stays
+mounted beneath, disabled, and marked hidden from VoiceOver (the
+accessibility tree still lists its own bar and its web view, so whether
+VoiceOver skips them waits for the device), and the menus hear nothing
+open and no feed scope. Addresses carry across a fold both ways (an open
+inspector becomes the panel's list, and the panel's list the inspector),
+and a message opened or parked for the list, or a folder or feed list
+opened, ends them. With no list mounted to hear them, messages another
+window or the composer removes meanwhile leave the reader and the
+selection the next list takes (`CoveredMessageWatch`); a feed list's
+hand-off nobody took is let go when the window leaves its scope
+(`FeedListHold.releaseUntakenHandOff()`); and leaving laptop pose from
+the address list moves no list, since none is mounted. Every address
+list reads the list again whenever an address changes anywhere in the
+process (`AppState.addressesChanged()`: the lists themselves, the
+new-address sheet, the reader's address menu and the address intents,
+held by `AddressChangeSignalSourceScanTests` and the model's own tests),
+so the panel's and the
+inspector's agree. The reader reports
+where its content ends through `\.laptopReader`, which is how the panel
+knows where the bar starts. Every change is a value on a modifier that
+is always present, so the message's web view reflows and is never
+rebuilt. The list itself moves, one at a time: the column holds none
+while the panel does, and `SceneNavigator.listMoves()` hands the
+mounting list the window's selection (a single highlighted row included,
+which a layout swap does not carry; none while search results move) and
+its place, each way, and a list the move replaced takes no pending
+restore once off screen (`ListPlaceTracker.mayTakeParked`). A feed list
+moves the same way through the split's `FeedListHold`: the list mounting
+next for the same scope takes the moved one's model, with its rows,
+pages, filter and search, and lands on its top row, so a fold reloads
+nothing: the model catches up with the store's marks and counts as it
+starts following it again, and syncs only if no sync of it ran to the
+end. The feed reader's actions are in its own bar in a tall window
+(below), so laptop pose hiding the navigation bar loses none of them.
+
+**The reader's bar in a tall window: `ReaderToolbarLayout.tallBar`.**
+Where the reader fills a window taller than wide
+(`\.readerFillsTallWindow`, which `SplitShell` publishes while the list
+floats over the reader or sits below a laptop fold), its own bar (iOS 27
+and later, where the reader draws its own bar at regular width; earlier
+releases keep the system bottom bar) draws the iPhone Duo spec's set in
+its order whatever its width: Reply, dispose, Flag, Read, Page Up, Page
+Down, the More menu and Compose. Edit Draft's button is a pencil there,
+as everywhere, so a draft's bar doesn't show two Compose faces. The
+list's bar, with its Compose, is behind the message or below the fold
+there, so the reader's bar carries Compose too, and the display toggles
+(remote content, reader view) move to the More menu to make room. Page
+Up and Page Down page the body by 90% of its visible height
+(`ReaderPaging`): an HTML body through a script in the app's own content
+world, which shares the page's document while page JavaScript stays off,
+and a plain-text body through its `ScrollPosition`. The feed reader does
+the same where it fills a tall window (`ReaderToolbarPolicy.placement`'s
+`fillsTallWindow`): `FeedReaderActionBar` draws Flag, Read, Page Up,
+Page Down, the View menu and Compose
+(`FeedReaderToolbarLayout.tallBar`), and its navigation bar draws none
+of them meanwhile. Its body no longer runs under the bottom edge at
+regular width (`bodyRunsUnderBottomBar` is compact width alone for both
+readers), so a turn that brings the bar reflows the body and never
+rebuilds its web view. A publisher's page pages through its own scroll
+view (`ReaderPaging.scrollTarget`), so nothing runs in the page, and
+every web view takes a press once through `ReaderPageGate` (a plain-text
+body acts on each change of the request).
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
@@ -1629,6 +1721,39 @@ address and drops inline style, which can fetch too
 message fetches nothing from its sender's servers. The images in the
 user's own signature stay, and a new compose, a mailto, a reopened draft
 and a paste keep theirs.
+
+#### Dropped and pasted files, and inline images
+
+Files dropped or pasted onto the rich pane never go into the page as the
+page received them (WebKit's own insertion of a file skips the
+sanitizer). The page names them (`dropStarted`), reads them one at a time,
+refusing one over 50 MB unread, and hands each over the bridge
+(`droppedFile`); `EditorFileDrops` delivers each named file to the host
+once, as unreadable if the page's process stops first. The host
+(`DroppedAttachment.takeEditorDrops`) holds Send and the move to a window
+for the named files (`pendingDrops`), then decides. An image goes inline:
+JPEG, PNG and GIF as they are, any other image the device can read (HEIC
+from the photo library, WebP, TIFF) re-encoded off the main actor as a
+JPEG at most 4096 pixels on its longest side (`InlineImageEncoding`). It is stored under a new Content-ID
+(`ComposeInlineImages`), and the page shows it where it was dropped as
+`<img src="cid:<id>">` (`placeDroppedImage`), which it builds itself and
+only for a `cid:` the host names. `InlineImageSchemeHandler` serves those
+`cid:` loads from the composer's store, so the editor holds the reference
+the message carries, unchanged by Markdown round trips. Anything else is
+attached. A drag that carries markup as well (a selection from a page or
+a document) takes the paste path instead; a drop onto the Markdown pane
+attaches, like a drop onto the form's rows.
+
+At send and draft save, only the images the HTML body still shows go on
+the wire, each as an attachment with its `content_id`; the Lambda
+(`lambda/api/_shared/compose.py`) sends those inline in a
+`multipart/related` beside the HTML. A deleted image stays in the store,
+so undo can bring it back; the size warning counts only the images the
+body showed after its last edit, which the page reports with each `input`.
+A reply, a forward and a resumed draft keep the message's inline images
+(`MimeAttachmentPlan.inlineParts`) that their seeded body shows, and leave
+the rest out, as a quote always did; a resumed draft also carries its
+attachments.
 
 #### Why a WKWebView instead of native NSTextView / UITextView
 
@@ -2007,7 +2132,10 @@ keeps the scene connected too (#1084). So once a closed window has left
 the screen, or if it closed while out of view, its composer goes
 (`ComposeSlotRegistry.mayCompose`), and one brought back to the front
 steps straight back out to the mail window (`ClosedComposeWindow`,
-#2257). That state lives in the running app: after a relaunch, the
+#2257). In Split View on a phone nothing covers a closed window, since
+the mail window it hands the screen to is already in the other half, so
+one still on screen a second after its close loses its composer too and
+says its message is closed (#2271). That state lives in the running app: after a relaunch, the
 system's restored compose windows come back with empty composers, and an
 older closed window rebuilt behind a newer one on a recycled slot keeps
 its frozen copy of the newer draft. A mailto: link that

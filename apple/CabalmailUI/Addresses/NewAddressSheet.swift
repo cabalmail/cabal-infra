@@ -266,6 +266,11 @@ struct NewAddressSheet: View {
                 address: address
             )
             await onCreate(address)
+            // Every address list reads the list again, whichever surface
+            // opened this sheet (the Addresses list, compose's From picker).
+            // After the opener's own forced fetch, so the others read the
+            // list it just cached rather than each fetching it.
+            appState.addressesChanged()
             dismiss()
         } catch let error as CabalmailError {
             errorMessage = error.localizedDescription

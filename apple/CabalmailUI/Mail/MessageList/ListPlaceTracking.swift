@@ -129,6 +129,18 @@ final class ListPlaceTracker {
         isOnScreen = false
     }
 
+    /// Whether the list may take what its window parks for its list, a
+    /// restore among them: it holds the window's claim, has none yet, or is
+    /// on screen (a back-out voids the claim under a list that stays alive).
+    /// A list that a newer one replaced in the same tree and that has left
+    /// the screen takes nothing: the split's list column, whose load can
+    /// finish after its list moved below a laptop fold, would otherwise take
+    /// the open message's restore from the panel's list.
+    func mayTakeParked(in navigator: SceneNavigator?) -> Bool {
+        guard let claim, let navigator, !isOnScreen else { return true }
+        return navigator.listHold.holds(claim)
+    }
+
     /// The landing: once per list, after it has appeared and loaded. Takes
     /// the anchor parked for the list's folder, or the window's place when
     /// it is that folder's, and scrolls there. A list that does not land

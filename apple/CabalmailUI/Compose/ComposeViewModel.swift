@@ -64,6 +64,11 @@ final class ComposeViewModel {
     var markdownBody: String = ""
     var editorMode: EditorMode = .rich
     var attachments: [ComposeAttachment] = []
+    var inlineImages = ComposeInlineImages()
+    /// Dropped items still being read (`DroppedAttachment`). Send
+    /// (`canSend`) and the move to a window (`ComposeWindowOfferItem`,
+    /// `ComposeWindowMove`) wait for them, so neither leaves one out.
+    var pendingDrops = 0
 
     var availableAddresses: [Address] = []
     var isSending = false
@@ -219,6 +224,7 @@ final class ComposeViewModel {
         self.richMirrorsMarkdown = start.richMirrorsMarkdown
         self.editorMode = start.editorMode
         self.attachments = start.attachments
+        self.inlineImages = start.inlineImages
         self.availableAddresses = start.availableAddresses
         self.serverDraftRef = start.serverDraftRef
         self.replacedServerDraftUIDs = start.replacedServerDraftUIDs
@@ -232,30 +238,7 @@ final class ComposeViewModel {
             placeholder: "Compose your message…",
             readyTimeout: handoff == nil ? 10 : ComposeWindowMove.editorReadyTimeout
         )
-        self.editorController.onSelectionChanged = { [weak self] selection in
-            self?.richSelection = selection
-        }
-        self.editorController.onEditorFocusChanged = { [weak self] focused in
-            self?.editorFocused = focused
-        }
-        // The user's first character mutates rich-only state; the mirror
-        // flag flips and the send logic stops treating the rich pane as a
-        // pure echo of the markdown source.
-        self.editorController.onContentChanged = { [weak self] in
-            self?.richMirrorsMarkdown = false
-        }
-        // A bridge that dies while bootstrapping never posts `ready`, so
-        // the rich pane (and send-time conversion) is out of commission
-        // for this compose. Say so instead of failing silently (#734).
-        self.editorController.onBridgeError = { [weak self] message in
-            self?.noteEditorUnavailable(message)
-        }
-        // A `ready` that lands after the failure means the boot was merely
-        // slow; the controller has already cleared its own failure, so drop
-        // the banner and re-enable Send rather than stranding the compose.
-        self.editorController.onReady = { [weak self] in
-            self?.noteEditorRecovered()
-        }
+        ComposeEditorLink.connect(editorController, to: self)
     }
 
     /// Cancel the autosave loops. Called from the view's `onDisappear` and
@@ -330,7 +313,7 @@ final class ComposeViewModel {
     /// bridge disables it too: the body can't be assembled, so the send
     /// would only be refused (#745) — better not to offer the tap (#812).
     var canSend: Bool {
-        guard editorUnavailable == nil, holdsDraft else { return false }
+        guard editorUnavailable == nil, holdsDraft, pendingDrops == 0 else { return false }
         guard fromAddress != nil, !subject.isEmpty else { return false }
         return !parseRecipients(toText).isEmpty
             || !parseRecipients(ccText).isEmpty
@@ -350,12 +333,14 @@ final class ComposeViewModel {
     /// Whether the draft may move to a window ("Open in New Window"): not
     /// before the composer has started, nor while it is being sent, cancelled
     /// or discarded, or moving already, nor with the editor down, when there
-    /// is no rich text to hand over.
+    /// is no rich text to hand over. The move also waits for dropped items
+    /// still being read (`pendingDrops`, read where the move is offered).
     var mayHandOff: Bool { hasStarted && holdsDraft && !isSending && !isFinishing && editorUnavailable == nil }
 
-    /// Sum of the attached file sizes in bytes. Drives the soft-warn banner.
+    /// Sum of the attached file and inline image sizes in bytes. Drives the
+    /// soft-warn banner.
     var attachmentTotalBytes: Int {
-        attachments.reduce(0) { $0 + $1.data.count }
+        attachments.reduce(inlineImages.byteCount) { $0 + $1.data.count }
     }
 
     /// True when the total attachment payload is over the soft-warn threshold.

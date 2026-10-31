@@ -84,6 +84,9 @@ extension ForegroundContinuableIntent {
     func finishAddressCreation(
         _ address: String
     ) async -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        // An address list on screen in a window of this process reads the
+        // list again, as it does for one made in the app.
+        IntentBridge.shared.appState?.addressesChanged()
         if IntentClipboard.copy(address) {
             return .result(
                 value: address,

@@ -5,6 +5,111 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.41.0] - 2026-10-31
+
+### Added
+- Apple: **Drop files and images into a message.** On iPhone, iPad
+  and iPhone Duo, files and messages dropped onto a message being
+  written become attachments: onto the From, recipient or subject row,
+  an attachment, or the message body. On the Mac, the message body takes
+  them the same way. An image dropped or pasted onto the Rich Text body
+  shows there, where it was dropped, and goes inline in the sent
+  message (a photo the recipient's mail app may not show, such as HEIC,
+  as JPEG); elsewhere it is attached. Replies, forwards and resumed
+  drafts keep the inline images their body shows. Files can come from
+  Files, Photos or another app beside Cabalmail, or, as an .eml, from a
+  Cabalmail message list in another window. Send waits for a dropped
+  item the composer is still reading. Text dropped onto a field still
+  lands in it, and text or a formatted selection dropped onto the body
+  is still inserted. The Rich Text body takes files up to 50 MB, and
+  several messages dragged onto it together get a note to drag them one
+  at a time.
+- Apple: **Feed articles get page buttons in a tall window.** On an iPhone
+  Duo open upright and on iPad in portrait on iPadOS 27 and later, the
+  feed reader's actions move to a bar under the article: Flag, Read, Page
+  Up, Page Down, View and Compose. Page Up and Page Down move the feed's
+  text or the publisher's page by most of a screen. Elsewhere at regular
+  width (wide windows, and every iPad window before iPadOS 27) the feed's
+  text now stops just above the bottom edge instead of running under it.
+- **Inline images in composed mail.** `/send` and `/save_draft` take an
+  optional `content_id` on an attachment. An image the HTML body shows
+  as `<img src="cid:<id>">` goes beside the HTML in a
+  `multipart/related` part with that Content-ID instead of being
+  attached. Anything that can't go inline (an id a reader couldn't
+  fetch or the header couldn't carry as written, a non-image, an id the
+  HTML doesn't show, a text-only body, a repeated id) is attached as
+  before, and a request without the field composes exactly as before.
+- Apple: **Laptop pose puts the list below the fold.** On an iPhone
+  Duo folded like a laptop, the message fills the upper half and the list,
+  with its bar, sits in a panel below the fold, above the message's
+  actions. The list keeps its place, its selection and its checked rows
+  as it moves in and out of the panel, and the message doesn't reload.
+  Feeds works the same way: the article above the fold and the item list
+  below, which keeps its loaded items, filter and place without
+  reloading. The panel's bar has Settings beside the folder button, and
+  its Addresses button turns the panel into your address list, with the
+  message covered until you go back to the list; addresses open in the
+  inspector as you unfold.
+- Apple: **Page buttons and Compose under a message in a tall window.** On
+  an iPhone Duo open upright or folded like a laptop, and on iPad in
+  portrait on iPadOS 27 and later, the bar under the message carries
+  Reply, Archive or Delete, Flag, Read, Page Up, Page Down, More and
+  Compose. Page Up and Page Down move the message by most of a screen;
+  Show Remote Content and Reader View move into More. Edit Draft's
+  button is now a pencil, so it doesn't look like Compose.
+
+### Changed
+- Apple: **Messages drag out of the list on iPhone.** On iOS 27, a
+  message row in the phone layout (an iPhone, an iPhone Duo's outer
+  display or a Split View half of its inner one, and a narrow iPad
+  window) can be dragged out of the app as an .eml file, as it already
+  could on iPad and the Mac (#1681). A held press still opens the row's
+  menu; a held press that moves lifts the message instead. Earlier iOS
+  releases keep the phone layout's rows still, as before.
+- **The iPhone Duo CI leg is required where it runs.** `ios-duo-test`,
+  the one Apple leg that runs the iOS 27.1 code on a Duo simulator, now
+  fails `apple-gate` and holds the stage uploads when it goes red, after
+  46 green runs as an advisory leg. It still runs only on stage pushes,
+  manual runs and PRs whose branch name contains `duo`, and its skip
+  elsewhere counts as a pass.
+- Apple: **The empty reader gives the folder's unread count.** With no
+  message open beside the list, on iPhone Duo open, iPad and the Mac,
+  the reader says how many messages in the folder are unread, rather
+  than only asking you to pick one.
+- Apple: **The list floats over the message in a tall window.** On an
+  iPhone Duo open upright and on iPad in portrait, the message takes the
+  window's full width and the list slides over it: shown first when
+  nothing is open, brought back by the reader's back button or a swipe
+  from the leading edge, and put away by a tap on the message. Wide
+  windows keep the list and the message side by side.
+- Apple: **Sheets sit by the window's shape.** On an iPhone Duo held
+  wide and on iPad in landscape, Cabalmail's sheets (Move, Filters, New
+  Folder, New Address, Settings, Source, an invitation, the contact
+  picker and the feed sheets) open on the trailing side, as compose
+  does, leaving the list in view. In laptop pose on the Duo they take
+  only the half below the fold.
+
+### Fixed
+- Apple: **Address lists stay in step.** A favorite, suspension,
+  revocation or new address now shows in every address list, in the same
+  window or another, without closing and reopening them, whether it was
+  made in a list, from a message's address menu, from compose's New
+  Address or with the Create Address shortcuts. Starring then quickly
+  unstarring an address no longer brings the star back when the first
+  change lands.
+- Apple: **Edit Draft keeps the draft's attachments.** Resuming a draft
+  from the Drafts folder brings its attachments back into the composer.
+  They were left out, and the first autosave then replaced the server
+  copy with one that had none.
+- Apple: **Edit Draft keeps one signature.** Resuming a draft from the
+  Drafts folder added the signature again, above the one the draft was
+  written with.
+- Apple: **A closed compose window in Split View lets go.** On iPhone
+  Duo with Cabalmail in both halves of Split View, a compose window
+  kept showing its message after Send, Save Draft or Discard, since the
+  system keeps such a window on screen. It now says the message is
+  closed.
+
 ## [1.40.0] - 2026-10-29
 
 ### Added

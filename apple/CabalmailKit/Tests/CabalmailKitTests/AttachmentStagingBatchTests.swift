@@ -71,6 +71,26 @@ final class AttachmentStagingBatchTests: XCTestCase {
         }
     }
 
+    func testAnInlineImageKeepsItsContentIDThroughStaging() async throws {
+        let transport = RecordingHTTPTransport(responses: responses(forBatches: [2]))
+        let outgoing = OutgoingMessage(
+            from: EmailAddress(name: nil, mailbox: "alice", host: "cabalmail.example"),
+            to: [EmailAddress(name: nil, mailbox: "bob", host: "x.example")],
+            subject: "hello",
+            textBody: "hi",
+            attachments: [
+                Attachment(filename: "file-0.bin", mimeType: "application/octet-stream", data: Data([0])),
+                Attachment(filename: "file-1.bin", mimeType: "image/png", data: Data([1]), contentID: "a1@cabalmail"),
+            ]
+        )
+
+        let staged = try await CabalmailClient.stageAttachments(
+            outgoing, api: makeClient(transport: transport), imapHost: "imap.cabalmail.example"
+        )
+
+        XCTAssertEqual(staged.map(\.contentID), [nil, "a1@cabalmail"])
+    }
+
     func testBundleLargerThanOneBatchStagesAcrossSeveralCalls() async throws {
         let transport = RecordingHTTPTransport(responses: responses(forBatches: [32, 8]))
         let staged = try await CabalmailClient.stageAttachments(

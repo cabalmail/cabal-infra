@@ -54,6 +54,9 @@ public struct ComposeWindowScene: Scene {
                 // window on an iPhone Duo has a side strip, where Cancel and
                 // Send carry symbols (`ComposeBarLabel`), as over the sheet.
                 .verticalBars()
+                // Where this window's sheets sit (`\.sheetsSitTrailing`):
+                // New Address and the contact picker, by the window's shape.
+                .windowSheetPlacement()
                 .environment(appState)
                 .environment(preferences)
                 // A scene is its own appearance root — the main window's
@@ -122,6 +125,15 @@ private struct ComposeWindowContent: View {
             phase = new
             windowPhaseChanged(from: old, to: new)
         }
+        // A closed window nothing has covered by now stays in view: Split
+        // View on a phone (#2271).
+        .task(id: closedOn) {
+            guard closedOn?.isSpent == false else { return }
+            try? await Task.sleep(for: ComposeSlotRegistry.ClosedCompose.lingerLimit)
+            guard !Task.isCancelled, var closed = closedOn, !closed.isSpent else { return }
+            closed.lingered()
+            closedOn = closed
+        }
         .onOpenURL { url in
             // On macOS the main window group declines external events
             // (`handlesExternalEvents(matching: [])`, see CabalmailMacApp)
@@ -160,9 +172,14 @@ private struct ComposeWindowContent: View {
                 )
             )
         } else {
-            // Closed before the last sign-out, and only still here because
-            // SwiftUI keeps closed windows mounted: nothing to compose.
-            Color.clear
+            // Closed, and only still here because the system keeps closed
+            // windows: off screen, or on a phone in Split View, where nothing
+            // covers it (#2271). Nothing to compose.
+            ContentUnavailableView(
+                "Message closed",
+                systemImage: "envelope",
+                description: Text("You can close this window.")
+            )
         }
     }
 

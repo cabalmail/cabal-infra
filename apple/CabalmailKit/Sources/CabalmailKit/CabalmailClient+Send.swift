@@ -159,7 +159,8 @@ extension CabalmailClient {
                 wireAttachments.append(ApiSendAttachment(
                     filename: attachment.filename,
                     mimeType: attachment.mimeType,
-                    s3Key: upload.key
+                    s3Key: upload.key,
+                    contentID: attachment.contentID
                 ))
             }
         }

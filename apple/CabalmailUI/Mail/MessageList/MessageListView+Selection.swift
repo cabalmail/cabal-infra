@@ -295,7 +295,7 @@ extension MessageListView {
                     .frame(height: rowHeight, alignment: .center)
                     .background(background)
             } else {
-                // `draggableRow` (drag-to-folder) wraps OUTSIDE `SwipeActionRow`
+                // `draggableRow` (the row drag) wraps OUTSIDE `SwipeActionRow`
                 // so the drag sits on the row container, not inside the embedded
                 // List that owns the swipe -- a `.draggable` within that List row
                 // is swallowed on macOS and never lifts.

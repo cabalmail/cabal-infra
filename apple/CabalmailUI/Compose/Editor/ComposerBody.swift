@@ -99,6 +99,7 @@ struct ComposerBody: View {
             TextEditor(text: $model.markdownBody)
                 .font(.body.monospaced())
                 .frame(minHeight: 180)
+                .takesDroppedAttachments(into: model)
                 // Same reason as the rich pane: a bare TextEditor lands as an
                 // unlabelled, unidentified text view (#1157).
                 .accessibilityIdentifier("compose.body.markdown")
