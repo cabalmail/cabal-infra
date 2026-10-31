@@ -1374,7 +1374,13 @@ the same where it fills a tall window (`ReaderToolbarPolicy.placement`'s
 `fillsTallWindow`): `FeedReaderActionBar` draws Flag, Read, Page Up,
 Page Down, the View menu and Compose
 (`FeedReaderToolbarLayout.tallBar`), and its navigation bar draws none
-of them meanwhile. Its body no longer runs under the bottom edge at
+of them meanwhile. The View menu stands in for the Message menu there: it
+opens up from the bar with Previous and Next nearest its button, which the
+feed list answers the way the message list does (`FeedListStepping`, the
+same `WindowCommand.step` and `ListStepPolicy`, the open item's last place
+kept on the list's model so a fold's move keeps it). Only the reader's own
+bar carries the row (`FeedReaderBarItem.inOwnBar`): a tall window on iPadOS
+18 to 26 keeps the system top bar, whose View menu stays as it was. Its body no longer runs under the bottom edge at
 regular width (`bodyRunsUnderBottomBar` is compact width alone for both
 readers), so a turn that brings the bar reflows the body and never
 rebuilds its web view. A publisher's page pages through its own scroll
