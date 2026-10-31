@@ -5,8 +5,12 @@ import CabalmailKit
 /// opens the row above or below the open message the way a tap does, scrolls
 /// to it, reports which steps it can take for the reader's buttons to dim,
 /// and keeps the next page loading as the open message moves, since a list
-/// put away behind the reader runs none of its rows' own loads.
+/// put away behind the reader runs none of its rows' own loads. In Select
+/// mode it takes no step: a step there would check a row, not open it.
 private struct MessageListStepping: ViewModifier {
+    /// Where the open message last sat, for a step once a refresh has
+    /// dropped it from the rows (`ListStepPolicy.Place`).
+    @State private var lastPlace: ListStepPolicy.Place<MessageRef>?
     let model: MessageListViewModel
     /// The message open in the reader, if this list's.
     let open: MessageRef?
@@ -29,8 +33,18 @@ private struct MessageListStepping: ViewModifier {
         return { filter.includes($0) }
     }
 
+    private var loaded: ListStepPolicy.Rows<Envelope, MessageRef> {
+        let model = model
+        return ListStepPolicy.Rows(rows: model.envelopes, id: { model.rowRef(for: $0) }, isShown: isShown)
+    }
+
+    private var place: ListStepPolicy.Place<MessageRef>? {
+        ListStepPolicy.place(of: open, in: loaded)
+    }
+
     private var availability: ListStepAvailability {
-        ListStepPolicy.availability(from: openIndex, in: model.envelopes, isShown: isShown)
+        guard !model.bulkMode else { return .none }
+        return ListStepPolicy.availability(from: open, last: lastPlace, in: loaded)
     }
 
     func body(content: Content) -> some View {
@@ -39,12 +53,17 @@ private struct MessageListStepping: ViewModifier {
                 if case .step(let step) = command { take(step) }
             }
             .reportsListStep(availability)
+            .onChange(of: place, initial: true) { _, new in
+                if let new { lastPlace = new }
+            }
             .onChange(of: open, initial: true) { _, _ in loadAhead() }
     }
 
     private func take(_ step: ListStep) {
-        let rows = model.envelopes
-        guard let index = ListStepPolicy.target(from: openIndex, step, in: rows, isShown: isShown) else { return }
+        guard !model.bulkMode else { return }
+        let loaded = loaded
+        let rows = loaded.rows
+        guard let index = ListStepPolicy.target(from: open, last: lastPlace, step, in: loaded) else { return }
         let target = rows[index]
         select(target)
         // The same scroll the arrow keys make: the virtualized list is keyed

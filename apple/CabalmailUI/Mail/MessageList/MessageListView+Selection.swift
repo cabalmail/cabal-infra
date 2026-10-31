@@ -452,10 +452,20 @@ extension MessageListView {
 
     /// Opens `envelope` for a Previous or Next step: the selection a plain
     /// tap writes (on compact, the reader's binding), without the tap's
-    /// focus, since the step came from the reader's menu.
+    /// focus, since the step came from the reader's menu. Like a tap, it
+    /// opens a row that is already the whole selection while the pane shows
+    /// another (`ReadingPaneSelectionPolicy.reopens`).
     func stepSelect(_ envelope: Envelope, model: MessageListViewModel) {
         guard isWideLayout else { selection = envelope; return }
         let ref = model.rowRef(for: envelope)
+        if ReadingPaneSelectionPolicy.reopens(
+            selectedRefs: model.selectedRefs,
+            tapped: ref,
+            paneShowing: selection.map { model.rowRef(for: $0) },
+            bulkMode: model.bulkMode
+        ) {
+            selection = envelope
+        }
         model.selectedRefs = [ref]
         model.setSelectionAnchor(ref)
         model.selectionCursor = ref

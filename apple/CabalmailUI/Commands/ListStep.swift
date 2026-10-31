@@ -50,6 +50,74 @@ enum ListStepPolicy {
             canNext: target(from: index, .next, in: rows, isShown: isShown) != nil
         )
     }
+
+    /// Where the open row last sat among the loaded rows, and its shown
+    /// neighbours then: what a step goes by once the row has left them. A
+    /// re-run of the Unread pill's search drops a message once it is read,
+    /// and a window that slides or reloads can drop the open row too, while
+    /// the reader still shows it.
+    struct Place<ID: Equatable>: Equatable {
+        let open: ID
+        let index: Int
+        let previous: ID?
+        let next: ID?
+    }
+
+    /// A list's loaded rows in its order, with each row's identity and
+    /// whether its filter shows it.
+    struct Rows<Row, ID: Equatable> {
+        let rows: [Row]
+        let id: (Row) -> ID
+        let isShown: (Row) -> Bool
+
+        func index(of id: ID) -> Int? {
+            rows.firstIndex { self.id($0) == id }
+        }
+    }
+
+    /// The open row's place in `loaded`, or nil when it isn't loaded.
+    static func place<Row, ID>(of open: ID?, in loaded: Rows<Row, ID>) -> Place<ID>? {
+        guard let open, let index = loaded.index(of: open) else { return nil }
+        let rows = loaded.rows
+        return Place(
+            open: open,
+            index: index,
+            previous: target(from: index, .previous, in: rows, isShown: loaded.isShown).map { loaded.id(rows[$0]) },
+            next: target(from: index, .next, in: rows, isShown: loaded.isShown).map { loaded.id(rows[$0]) }
+        )
+    }
+
+    /// The index a step from `open` lands on: the walk from its row while it
+    /// is loaded; once it has left the rows, the neighbour it had on that
+    /// side if that is still loaded and shown, else the nearest shown row on
+    /// that side of where it sat (`last`). Nil with no open row, or one that
+    /// left the rows before its place was known.
+    static func target<Row, ID>(from open: ID?, last: Place<ID>?, _ step: ListStep, in loaded: Rows<Row, ID>) -> Int? {
+        guard let open else { return nil }
+        let rows = loaded.rows
+        if let index = loaded.index(of: open) {
+            return target(from: index, step, in: rows, isShown: loaded.isShown)
+        }
+        guard let last, last.open == open else { return nil }
+        let neighbour = step == .next ? last.next : last.previous
+        if let neighbour, let index = loaded.index(of: neighbour), loaded.isShown(rows[index]) {
+            return index
+        }
+        let gap = min(last.index, rows.count)
+        let candidates = step == .next
+            ? stride(from: gap, to: rows.count, by: 1)
+            : stride(from: gap - 1, to: -1, by: -1)
+        return candidates.first { loaded.isShown(rows[$0]) }
+    }
+
+    static func availability<Row, ID>(
+        from open: ID?, last: Place<ID>?, in loaded: Rows<Row, ID>
+    ) -> ListStepAvailability {
+        ListStepAvailability(
+            canPrevious: target(from: open, last: last, .previous, in: loaded) != nil,
+            canNext: target(from: open, last: last, .next, in: loaded) != nil
+        )
+    }
 }
 
 private struct ListStepReporter: ViewModifier {

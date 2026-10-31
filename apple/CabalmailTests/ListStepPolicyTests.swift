@@ -57,3 +57,69 @@ final class ListStepPolicyTests: XCTestCase {
         XCTAssertFalse(first.allows(.previous))
     }
 }
+
+/// A step once the open message has left the loaded rows
+/// (`ListStepPolicy.Place`): a re-run of the Unread pill's search drops it
+/// once it is read, while the reader still shows it.
+final class ListStepPolicyLeftRowTests: XCTestCase {
+    private func target(
+        _ open: String?, last: ListStepPolicy.Place<String>?, _ step: ListStep, in rows: [String],
+        shown: Set<String>? = nil
+    ) -> String? {
+        let loaded = ListStepPolicy.Rows(rows: rows, id: { $0 }, isShown: { shown?.contains($0) ?? true })
+        return ListStepPolicy.target(from: open, last: last, step, in: loaded).map { rows[$0] }
+    }
+
+    func testTheOpenRowsPlaceRecordsItsShownNeighbours() {
+        let rows = ListStepPolicy.Rows(rows: ["a", "b", "c", "d", "e"], id: { $0 }, isShown: { $0 != "b" })
+        let other = ListStepPolicy.Rows(rows: ["a"], id: { $0 }, isShown: { _ in true })
+
+        XCTAssertEqual(
+            ListStepPolicy.place(of: "c", in: rows),
+            ListStepPolicy.Place(open: "c", index: 2, previous: "a", next: "d")
+        )
+        XCTAssertNil(ListStepPolicy.place(of: "z", in: other))
+    }
+
+    /// The pill's search ran again without the message just read: a step
+    /// goes to the neighbours it had.
+    func testAStepFromADroppedRowGoesToItsNeighbours() {
+        let last = ListStepPolicy.Place(open: "c", index: 2, previous: "b", next: "d")
+        let rows = ["a", "b", "d", "e"]
+
+        XCTAssertEqual(target("c", last: last, .next, in: rows), "d")
+        XCTAssertEqual(target("c", last: last, .previous, in: rows), "b")
+    }
+
+    /// Neighbours gone too (read in another window): the nearest shown row
+    /// on that side of where the open row sat.
+    func testWithItsNeighboursGoneAStepGoesByPosition() {
+        let last = ListStepPolicy.Place(open: "c", index: 2, previous: "b", next: "d")
+        let rows = ["a", "x", "y", "z"]
+
+        XCTAssertEqual(target("c", last: last, .next, in: rows), "y")
+        XCTAssertEqual(target("c", last: last, .previous, in: rows), "x")
+        XCTAssertEqual(target("c", last: last, .next, in: rows, shown: ["a", "z"]), "z")
+    }
+
+    /// A place belongs to the message it was taken for, and a row still
+    /// loaded walks from where it is now.
+    func testAPlaceServesOnlyItsOwnMessage() {
+        let last = ListStepPolicy.Place(open: "c", index: 2, previous: "b", next: "d")
+
+        XCTAssertNil(target("q", last: last, .next, in: ["a", "b", "d"]))
+        XCTAssertNil(target(nil, last: last, .next, in: ["a", "b", "d"]))
+        XCTAssertEqual(target("a", last: last, .next, in: ["a", "b", "d"]), "b")
+    }
+
+    func testAvailabilityFollowsTheDroppedRowsPlace() {
+        let last = ListStepPolicy.Place(open: "a", index: 0, previous: nil, next: "b")
+
+        let rows = ListStepPolicy.Rows(rows: ["b", "c"], id: { $0 }, isShown: { _ in true })
+
+        XCTAssertEqual(
+            ListStepPolicy.availability(from: "a", last: last, in: rows),
+            ListStepAvailability(canPrevious: false, canNext: true)
+        )
+    }
+}
