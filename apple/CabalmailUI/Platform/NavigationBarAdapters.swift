@@ -38,4 +38,16 @@ extension View {
         toolbar(.hidden, for: .navigationBar)
         #endif
     }
+
+    /// A menu that opens from a bar at the window's bottom edge with its
+    /// first row nearest the button (`fromBottomBar`), and in the system's
+    /// order otherwise. Only iOS draws such a bar; macOS has no such order,
+    /// and visionOS keeps the system's.
+    func menuOrderFromBottomBar(_ fromBottomBar: Bool) -> some View {
+        #if os(iOS)
+        menuOrder(fromBottomBar ? .priority : .automatic)
+        #else
+        self
+        #endif
+    }
 }
