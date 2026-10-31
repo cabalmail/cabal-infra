@@ -88,10 +88,13 @@ enum ListStepPolicy {
     }
 
     /// The index a step from `open` lands on: the walk from its row while it
-    /// is loaded; once it has left the rows, the neighbour it had on that
-    /// side if that is still loaded and shown, else the nearest shown row on
-    /// that side of where it sat (`last`). Nil with no open row, or one that
-    /// left the rows before its place was known.
+    /// is loaded. Once it has left the rows, the walk starts from the gap it
+    /// left: just before the neighbour it had below, if that is still
+    /// loaded, else just after the one it had above, else where it sat
+    /// (`last`). A reload of the Unread pill drops every row read above the
+    /// open one too, so the old index alone would put the gap too low. Nil
+    /// with no open row, or one that left the rows before its place was
+    /// known.
     static func target<Row, ID>(from open: ID?, last: Place<ID>?, _ step: ListStep, in loaded: Rows<Row, ID>) -> Int? {
         guard let open else { return nil }
         let rows = loaded.rows
@@ -99,11 +102,9 @@ enum ListStepPolicy {
             return target(from: index, step, in: rows, isShown: loaded.isShown)
         }
         guard let last, last.open == open else { return nil }
-        let neighbour = step == .next ? last.next : last.previous
-        if let neighbour, let index = loaded.index(of: neighbour), loaded.isShown(rows[index]) {
-            return index
-        }
-        let gap = min(last.index, rows.count)
+        let gap = last.next.flatMap(loaded.index(of:))
+            ?? last.previous.flatMap(loaded.index(of:)).map { $0 + 1 }
+            ?? min(last.index, rows.count)
         let candidates = step == .next
             ? stride(from: gap, to: rows.count, by: 1)
             : stride(from: gap - 1, to: -1, by: -1)

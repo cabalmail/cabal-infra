@@ -102,6 +102,26 @@ final class ListStepPolicyLeftRowTests: XCTestCase {
         XCTAssertEqual(target("c", last: last, .next, in: rows, shown: ["a", "z"]), "z")
     }
 
+    /// A reload of the Unread pill drops the rows read above the open one
+    /// as well: the gap follows the neighbour below, so Previous dims with
+    /// nothing unread above rather than opening a row below.
+    func testTheGapFollowsTheNeighboursNotTheOldIndex() {
+        let last = ListStepPolicy.Place(open: "b", index: 1, previous: "a", next: "c")
+        let rows = ["c", "d", "e"]
+
+        XCTAssertEqual(target("b", last: last, .next, in: rows), "c")
+        XCTAssertNil(target("b", last: last, .previous, in: rows))
+        XCTAssertEqual(target("b", last: last, .previous, in: ["new", "c", "d"]), "new")
+    }
+
+    /// With the neighbour below gone, the one above places the gap.
+    func testTheNeighbourAbovePlacesTheGapWhenTheOneBelowIsGone() {
+        let last = ListStepPolicy.Place(open: "c", index: 5, previous: "b", next: "d")
+
+        XCTAssertEqual(target("c", last: last, .next, in: ["b", "e"]), "e")
+        XCTAssertEqual(target("c", last: last, .previous, in: ["b", "e"]), "b")
+    }
+
     /// A place belongs to the message it was taken for, and a row still
     /// loaded walks from where it is now.
     func testAPlaceServesOnlyItsOwnMessage() {
