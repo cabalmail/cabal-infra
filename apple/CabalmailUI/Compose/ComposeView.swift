@@ -454,7 +454,7 @@ extension ComposeView {
             // field: bring it back above the keyboard.
             .onChange(of: laptop.isLaptop) { _, _ in
                 scrollBodyClearOfKeyboard(focused: model.editorFocused, proxy: proxy)
-                scrollFieldClearOfKeyboard(proxy: proxy)
+                scrollFieldClearOfKeyboard(proxy: proxy, afterFold: true)
             }
             .onChange(of: focusedField) { _, _ in
                 scrollFieldClearOfKeyboard(proxy: proxy)
@@ -471,16 +471,18 @@ extension ComposeView {
         }
     }
 
-    /// Brings the focused field above the keyboard in laptop pose, where the
-    /// keyboard fills the space below the fold and the fields sit there: a
-    /// keyboard arriving after focus, or a fold, doesn't scroll the field
-    /// into view itself (measured). Not with the bars below the fold (a
-    /// hardware keyboard), where the form goes back to its top instead.
-    private func scrollFieldClearOfKeyboard(proxy: ScrollViewProxy) {
-        guard laptop.isLaptop, let field = focusedField else { return }
+    /// Brings the focused field above the keyboard: in laptop pose, where
+    /// the keyboard fills the space below the fold and the fields sit there,
+    /// when it takes focus; and after a fold either way, which moves the
+    /// sections under it. Neither a keyboard arriving after focus nor a fold
+    /// scrolls the field into view itself (measured). Not with the bars
+    /// below the fold (a hardware keyboard), where the form goes back to its
+    /// top instead.
+    private func scrollFieldClearOfKeyboard(proxy: ScrollViewProxy, afterFold: Bool = false) {
+        guard afterFold || laptop.isLaptop, let field = focusedField else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
-            guard laptop.isLaptop, !laptop.barsBelowFold, focusedField == field else { return }
+            guard afterFold || laptop.isLaptop, !laptop.barsBelowFold, focusedField == field else { return }
             withAnimation(.easeOut(duration: 0.2)) {
                 proxy.scrollTo(field == .subject ? ComposeFormSection.subject : .recipients, anchor: .top)
             }

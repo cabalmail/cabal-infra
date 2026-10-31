@@ -77,6 +77,12 @@ final class ComposeLaptopArrangementTests: XCTestCase {
         XCTAssertEqual(laptop.host, .laptopTop)
         laptop.markdownEditing(false)
         XCTAssertEqual(laptop.host, .laptopBottom)
+
+        // The link prompt takes the keyboard from the editor.
+        laptop.promptEditing(true)
+        XCTAssertEqual(laptop.host, .laptopTop)
+        laptop.promptEditing(false)
+        XCTAssertEqual(laptop.host, .laptopBottom)
     }
 
     func testAKeyboardWithNoFoldLeavesTodaysBar() {

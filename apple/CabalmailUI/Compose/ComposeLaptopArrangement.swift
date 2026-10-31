@@ -35,6 +35,7 @@ final class ComposeLaptopArrangement {
 
     @ObservationIgnored private var fieldEditing = false
     @ObservationIgnored private var markdownEditing = false
+    @ObservationIgnored private var promptEditing = false
     @ObservationIgnored private var fold: FoldState = .none
     @ObservationIgnored private var stacked = false
     @ObservationIgnored private var bodyFrameInWindow: CGRect?
@@ -94,6 +95,14 @@ final class ComposeLaptopArrangement {
         updateEditing()
     }
 
+    /// A prompt over the composer with a text field of its own is up (the
+    /// formatting bar's Add Link): it takes the keyboard while the editor
+    /// it came from loses focus.
+    func promptEditing(_ editing: Bool) {
+        promptEditing = editing
+        updateEditing()
+    }
+
     func bodyMoved(_ frame: CGRect) {
         bodyFrameInWindow = frame
         sample()
@@ -125,7 +134,7 @@ final class ComposeLaptopArrangement {
     // MARK: Derivation
 
     private func updateEditing() {
-        let next = fieldEditing || markdownEditing
+        let next = fieldEditing || markdownEditing || promptEditing
         guard next != isEditing else { return }
         isEditing = next
         sample()
