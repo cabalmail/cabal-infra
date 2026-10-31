@@ -10,6 +10,13 @@
 /// merely off screen. That cost a send-blocking error banner (#812) and
 /// the staged-attachment list (#858).
 ///
+/// Laptop pose is the one exception (`order(inLaptop:)`): the body leads,
+/// held above the fold at a fixed height (`ComposeLaptopPolicy.bodyFrame`),
+/// so it isn't greedy, and the fields follow below the fold, panned on
+/// their own rows rather than on the web view. Both orders hold the same
+/// five ids, so a fold moves sections and rebuilds none: the editor keeps
+/// its web view, caret and undo (measured, 2026-10-31).
+///
 /// The error banner is deliberately absent from the list. A scrolling
 /// section can't carry it: the form is already scrolled down to clear the
 /// keyboard when the error appears, and nothing scrolls it back, so the
@@ -22,4 +29,10 @@ enum ComposeFormSection: CaseIterable {
     case subject
     case attachments
     case message
+
+    /// The sections in drawn order: the body first in laptop pose, the case
+    /// order everywhere else.
+    static func order(inLaptop: Bool) -> [ComposeFormSection] {
+        inLaptop ? [.message, .from, .recipients, .subject, .attachments] : allCases
+    }
 }
