@@ -1334,7 +1334,8 @@ the address list moves no list, since none is mounted. Every address
 list reads the list again whenever an address changes anywhere in the
 process (`AppState.addressesChanged()`: the lists themselves, the
 new-address sheet, the reader's address menu and the address intents,
-held by `AddressChangeSignalSourceScanTests`), so the panel's and the
+held by `AddressChangeSignalSourceScanTests` and the model's own tests),
+so the panel's and the
 inspector's agree. The reader reports
 where its content ends through `\.laptopReader`, which is how the panel
 knows where the bar starts. Every change is a value on a modifier that

@@ -22,12 +22,23 @@ final class AddressChangeSignalSourceScanTests: XCTestCase {
 
     /// Whether `body` sends the signal: the call itself, the intents' shared
     /// tail, which sends it (pinned below), or the lists' model calling the
-    /// `changed` hook its view hands it (`AddressesViewModel`, pinned in
-    /// `LaptopAddressesWiringSourceScanTests`).
+    /// `changed` hook its view hands it (`AddressesViewModel`; the hook's
+    /// wiring is pinned in `LaptopAddressesWiringSourceScanTests`).
     private static func signals(_ body: String) -> Bool {
-        body.contains("addressesChanged()")
-            || body.contains("finishAddressCreation(")
-            || body.range(of: #"(?m)^\s*changed\(\)$"#, options: .regularExpression) != nil
+        let code = withoutComments(body)
+        return code.contains("addressesChanged()")
+            || code.contains("finishAddressCreation(")
+            || code.range(of: #"(?m)^\s*changed\(\)$"#, options: .regularExpression) != nil
+    }
+
+    /// `body` with its line comments cut, so a doc comment naming the
+    /// signal can't stand in for a call to it. Which of the model's calls
+    /// send it is held by `AddressRevokeConfirmationTests` and
+    /// `AddressFavoriteRefreshTests`.
+    private static func withoutComments(_ body: String) -> String {
+        body.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line in line.range(of: "//").map { String(line[..<$0.lowerBound]) } ?? String(line) }
+            .joined(separator: "\n")
     }
 
     func testEveryAddressChangeTellsTheLists() throws {
