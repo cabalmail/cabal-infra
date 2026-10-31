@@ -11,7 +11,10 @@ final class ReaderMessageMenuLayoutTests: XCTestCase {
     private let html = Layout.Content(hasHTML: true, hasPlainAlternative: true, attachmentCount: 2, addressCount: 3)
 
     func testAnHTMLMessageWithAddressesShowsEveryRowInOrder() {
-        XCTAssertEqual(Layout.rows(for: html), [.loadImages, .attachments, .addresses, .moveToFolder, .display, .more])
+        XCTAssertEqual(
+            Layout.rows(for: html),
+            [.previousNext, .loadImages, .attachments, .addresses, .moveToFolder, .display, .more]
+        )
         XCTAssertEqual(Layout.displayRows(for: html), [.readerView, .plainText])
     }
 
@@ -20,7 +23,7 @@ final class ReaderMessageMenuLayoutTests: XCTestCase {
     func testAPlainTextMessageHasNoImageOrDisplayRows() {
         let plain = Layout.Content(hasHTML: false, hasPlainAlternative: true, attachmentCount: 0, addressCount: 1)
 
-        XCTAssertEqual(Layout.rows(for: plain), [.addresses, .moveToFolder, .more])
+        XCTAssertEqual(Layout.rows(for: plain), [.previousNext, .addresses, .moveToFolder, .more])
         XCTAssertEqual(Layout.displayRows(for: plain), [])
     }
 
@@ -44,10 +47,18 @@ final class ReaderMessageMenuLayoutTests: XCTestCase {
         XCTAssertFalse(Layout.rows(for: none).contains(.attachments))
     }
 
-    /// The spec's budget: seven rows fit between the fold and the bar, and
-    /// Previous and Next, still to join, need one.
-    func testTheMenuLeavesRoomForTheRowsStillToJoin() {
-        XCTAssertLessThanOrEqual(Layout.rows(for: html).count, 6)
+    /// The spec's budget: seven rows fit between the fold and the bar.
+    func testTheFullMenuFitsTheSpecsBudget() {
+        XCTAssertLessThanOrEqual(Layout.rows(for: html).count, 7)
+    }
+
+    /// Previous and Next sit nearest the bar's button in every message;
+    /// they dim rather than leave where the list has nowhere to go.
+    func testPreviousAndNextAlwaysComeFirst() {
+        let bare = Layout.Content(hasHTML: false, hasPlainAlternative: false, attachmentCount: 0, addressCount: 0)
+
+        XCTAssertEqual(Layout.rows(for: bare).first, .previousNext)
+        XCTAssertEqual(Layout.rows(for: html).first, .previousNext)
     }
 
     // MARK: The Addresses submenu

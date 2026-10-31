@@ -5,7 +5,7 @@ import CabalmailKit
 /// laptop pose it is the one way below the fold to what the message header
 /// holds above it, where nothing may be tapped.
 ///
-/// Its rows, from the bar's button outward, and the ones later rows join:
+/// Its rows, from the bar's button outward:
 /// Previous and Next, Show Remote Content (the spec's Load Images),
 /// Attachments, Addresses, Move to Folder, Display (Reader View, Plain
 /// Text) and More (View Source, View Headers, Print). Seven at most,
@@ -13,6 +13,9 @@ import CabalmailKit
 /// shows only when it applies to the open message.
 /// Every other placement keeps the overflow menu as it was.
 enum ReaderMessageMenuRow: Hashable {
+    /// Previous and Next, one row of two buttons, always shown: they dim
+    /// where the list has no row to step to (`ListStepAvailability`).
+    case previousNext
     /// The remote-content toggle, which only an HTML body has.
     case loadImages
     /// A row per attachment, opening it as its chip does.
@@ -42,7 +45,7 @@ enum ReaderMessageMenuLayout {
     }
 
     static func rows(for content: Content) -> [ReaderMessageMenuRow] {
-        var rows: [ReaderMessageMenuRow] = []
+        var rows: [ReaderMessageMenuRow] = [.previousNext]
         if content.hasHTML { rows.append(.loadImages) }
         if content.attachmentCount > 0 { rows.append(.attachments) }
         if content.addressCount > 0 { rows.append(.addresses) }
