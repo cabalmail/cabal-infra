@@ -37,8 +37,8 @@ final class CommandTickCharacterizationTests: XCTestCase {
     // MARK: - T1: one count per command
 
     func testTheTableCoversEveryWindowCommandFromZero() {
-        XCTAssertEqual(Self.everyWindowCommand.count, 21, "nine commands, eight feed and four tree")
-        XCTAssertEqual(Set(Self.everyWindowCommand).count, 21, "each listed once")
+        XCTAssertEqual(Self.everyWindowCommand.count, 23, "nine commands, eight feed, four tree and two steps")
+        XCTAssertEqual(Set(Self.everyWindowCommand).count, 23, "each listed once")
         let window = makeWindow()
         XCTAssertTrue(Self.everyWindowCommand.allSatisfy { window.count(of: $0) == 0 }, "every count starts at zero")
         XCTAssertTrue(ticks(AppState()).values.allSatisfy { $0 == 0 })
@@ -325,11 +325,12 @@ extension CommandTickCharacterizationTests {
         .reply, .replyAll, .forward, .toggleSeen, .toggleFlagged, .moveSelection, .refresh, .markFolderRead, .settings,
     ] as [WindowCommand]).map(listedCommand)
         + everyFeedCommand.map(WindowCommand.feed) + everySidebarTreeCommand.map(WindowCommand.sidebarTree)
+        + [ListStep.previous, .next].map(WindowCommand.step)
 
     nonisolated private static func listedCommand(_ command: WindowCommand) -> WindowCommand {
         switch command {
         case .reply, .replyAll, .forward, .toggleSeen, .toggleFlagged, .moveSelection: command
-        case .refresh, .markFolderRead, .settings, .feed, .sidebarTree: command
+        case .refresh, .markFolderRead, .settings, .feed, .sidebarTree, .step: command
         }
     }
 

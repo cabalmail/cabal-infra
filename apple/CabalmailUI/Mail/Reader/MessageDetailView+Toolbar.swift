@@ -373,6 +373,8 @@ extension MessageDetailView {
         )
         ForEach(ReaderMessageMenuLayout.rows(for: content), id: \.self) { row in
             switch row {
+            case .previousNext:
+                ReaderListStepRow()
             case .loadImages:
                 remoteContentMenuItem
             case .attachments:

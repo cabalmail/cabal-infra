@@ -87,6 +87,13 @@ extension MessageListView {
                 }
                 // Where the list is scrolled, for its window to keep (`ListPlaceTracking`).
                 .tracksListPlace(listPlace, model: model, rowHeight: rowHeight, proxy: proxy)
+                // The reader's Previous and Next, which open the row above or
+                // below the open message as a tap does (`MessageListStepping`).
+                .answersListSteps(
+                    model: model, open: selection.map(model.rowRef(for:)), visible: visible, proxy: proxy
+                ) { envelope in
+                    stepSelect(envelope, model: model)
+                }
                 // 27 and later: scopes swipe-action coordination to this scroll
                 // view, so at most one row's actions are revealed at a time and
                 // a tap on blank space or a vertical scroll retracts them
@@ -430,6 +437,27 @@ extension MessageListView {
         // for `wideList`'s `.onChange` to hear, so the pane would keep an
         // emptiness a popped reader or a layout swap left behind and the tap
         // would do nothing (`ReadingPaneSelectionPolicy.reopens`, #2033/#2034).
+        if ReadingPaneSelectionPolicy.reopens(
+            selectedRefs: model.selectedRefs,
+            tapped: ref,
+            paneShowing: selection.map { model.rowRef(for: $0) },
+            bulkMode: model.bulkMode
+        ) {
+            selection = envelope
+        }
+        model.selectedRefs = [ref]
+        model.setSelectionAnchor(ref)
+        model.selectionCursor = ref
+    }
+
+    /// Opens `envelope` for a Previous or Next step: the selection a plain
+    /// tap writes (on compact, the reader's binding), without the tap's
+    /// focus, since the step came from the reader's menu. Like a tap, it
+    /// opens a row that is already the whole selection while the pane shows
+    /// another (`ReadingPaneSelectionPolicy.reopens`).
+    func stepSelect(_ envelope: Envelope, model: MessageListViewModel) {
+        guard isWideLayout else { selection = envelope; return }
+        let ref = model.rowRef(for: envelope)
         if ReadingPaneSelectionPolicy.reopens(
             selectedRefs: model.selectedRefs,
             tapped: ref,
