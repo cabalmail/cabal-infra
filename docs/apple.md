@@ -1325,10 +1325,15 @@ VoiceOver skips them waits for the device), and the menus hear nothing
 open and no feed scope. Addresses carry across a fold both ways (an open
 inspector becomes the panel's list, and the panel's list the inspector),
 and a message opened or parked for the list, or a folder or feed list
-opened, ends them. With no list mounted to hear it, a removal of the open
-message posted meanwhile drops it (`CoveredMessageWatch`), and a feed
-list's hand-off nobody took is let go when the window leaves its scope
-(`FeedListHold.releaseUntakenHandOff()`). The reader reports
+opened, ends them. With no list mounted to hear them, messages another
+window or the composer removes meanwhile leave the reader and the
+selection the next list takes (`CoveredMessageWatch`); a feed list's
+hand-off nobody took is let go when the window leaves its scope
+(`FeedListHold.releaseUntakenHandOff()`); and leaving laptop pose from
+the address list moves no list, since none is mounted. Every address
+list reads the list again when another one changes an address
+(`AppState.addressesChanged()`), so the panel's and the inspector's
+agree. The reader reports
 where its content ends through `\.laptopReader`, which is how the panel
 knows where the bar starts. Every change is a value on a modifier that
 is always present, so the message's web view reflows and is never

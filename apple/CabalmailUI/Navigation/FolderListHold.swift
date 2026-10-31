@@ -103,6 +103,20 @@ final class FolderListHold {
         generation += 1
     }
 
+    /// Messages that left their folders while no folder list of the window's
+    /// was mounted to drop them (the laptop panel's address list covering
+    /// the reader): they leave the selection the next list takes, as a
+    /// mounted list's removal drops them. Returns what is left selected, or
+    /// nil when the window holds no folder selection.
+    @discardableResult
+    func dropFromSelection(_ refs: Set<MessageRef>) -> Int? {
+        guard let model = listSelection?.model else { return nil }
+        model.selected.subtract(refs)
+        if let cursor = model.cursor, refs.contains(cursor) { model.cursor = nil }
+        if let anchor = model.anchor, refs.contains(anchor) { model.setAnchor(nil) }
+        return model.selected.count
+    }
+
     /// The window moved to another folder (`folderPath`, nil for none): the
     /// old list's selection went with it, as it did when the selection lived
     /// on the list's view model, and so do its place and an anchor parked

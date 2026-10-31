@@ -165,7 +165,10 @@ struct SplitShell: View {
             // Before the list moves, so the list mounting takes the window's
             // selection and place.
             if (old == nil) != (crease == nil) {
-                listMoves()
+                // Unless the panel's address list is leaving: its list moved
+                // when the address list took its place, and none is mounted
+                // now to hand over.
+                if crease != nil || !mail.laptopPanelShowsAddresses { listMoves() }
                 // The addresses inspector would run up the upright half,
                 // beside the message, so its list moves into the panel, and
                 // back into the inspector on leaving laptop pose.

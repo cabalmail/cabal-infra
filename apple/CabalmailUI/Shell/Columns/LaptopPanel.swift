@@ -110,37 +110,53 @@ enum LaptopAddressesPolicy {
     static func reportsScope(_ hasScope: Bool, covered: Bool) -> Bool {
         hasScope && !covered
     }
+
+    /// The message `CoveredMessageWatch` follows: the open one, by its own
+    /// folder (a search result's) or else the sidebar's, while the address
+    /// list covers the reader; nil otherwise.
+    static func coveredMessage(covered: Bool, open envelope: Envelope?, folderPath: String?) -> MessageRef? {
+        guard covered, let envelope else { return nil }
+        return envelope.ref(defaultFolder: folderPath ?? "")
+    }
 }
 
-/// Hears the open message leave while the laptop panel's address list
-/// covers the reader (`LaptopAddressesPolicy`). No message list is mounted
-/// then to hear a removal another window or the composer posts, and the
-/// list that comes back hydrates from a cache that has forgotten the
-/// message, so the window would keep it open. The watch drops it, as a list
-/// drops the selection on a row that leaves with nothing to advance to
-/// (`MessageListViewModel.windowDidRemoveRows`); a draft a compose session
-/// retired goes the same way.
+/// Hears messages leave while the laptop panel's address list covers the
+/// reader (`LaptopAddressesPolicy`). No message list is mounted then to hear
+/// a removal another window or the composer posts, and the list that comes
+/// back hydrates from a cache that has forgotten the messages, so the window
+/// would keep them: the open one in the reader, and checked ones in the
+/// selection the next list takes. The watch hands them on to be dropped, as
+/// a list drops rows that leave with nothing to advance to
+/// (`MessageListViewModel.windowDidRemoveRows`). A list would advance past a
+/// removed open message, or re-point at the copy a compose session saved in
+/// place of a retired draft; with no rows to walk, the window drops it.
 @MainActor
 final class CoveredMessageWatch: MailEventSubscriber {
-    /// The open message while the reader is covered; nil otherwise.
-    var watched: MessageRef?
-    /// Drops the window's open message.
-    var dropOpenMessage: () -> Void = {}
+    /// Whether the address list covers the reader.
+    var isCovering = false
+    /// The open message while covered (`LaptopAddressesPolicy.coveredMessage`).
+    var openMessage: MessageRef?
+    /// Takes the messages that left, and whether the open one is among them.
+    var onRemoved: (_ refs: Set<MessageRef>, _ openMessageLeft: Bool) -> Void = { _, _ in }
 
     func receive(_ event: MailEvent) {
-        guard let watched, Self.change(event.change, removes: watched) else { return }
-        self.watched = nil
-        dropOpenMessage()
+        guard isCovering else { return }
+        let refs = Self.removed(by: event.change)
+        guard !refs.isEmpty else { return }
+        let openMessageLeft = openMessage.map(refs.contains) ?? false
+        if openMessageLeft { openMessage = nil }
+        onRemoved(refs, openMessageLeft)
     }
 
-    private static func change(_ change: MailEvent.Change, removes ref: MessageRef) -> Bool {
+    /// The messages a change takes out of their folders.
+    static func removed(by change: MailEvent.Change) -> Set<MessageRef> {
         switch change {
         case .removed(let refs):
-            return refs.contains(ref)
+            return Set(refs)
         case .draftReplaced(let folderPath, let replacement):
-            return folderPath == ref.folder && replacement.retiredUIDs.contains(ref.uid)
+            return Set(replacement.retiredUIDs.map { MessageRef(folder: folderPath, uid: $0) })
         case .restored, .flagsChanged, .readAdvance:
-            return false
+            return []
         }
     }
 }

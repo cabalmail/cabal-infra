@@ -91,6 +91,28 @@ final class SceneNavigatorListMoveTests: XCTestCase {
 
         XCTAssertFalse(navigator.mailSelection(for: "Archive") === column)
     }
+
+    /// Messages another window removed while the laptop panel's address
+    /// list covered the reader, with no list mounted to drop them, leave the
+    /// selection the moved list hands back (`FolderListHold.dropFromSelection`).
+    func testMessagesRemovedWhileNoListIsMountedLeaveTheHandedSelection() async throws {
+        let (navigator, _) = try await landed()
+        let gone = MessageRef(folder: "INBOX", uid: 9)
+        let kept = MessageRef(folder: "INBOX", uid: 4)
+        let column = navigator.mailSelection(for: "INBOX")
+        column.selected = [gone, kept]
+        column.cursor = gone
+        column.setAnchor(gone)
+        navigator.listMoves()
+
+        XCTAssertEqual(navigator.listHold.dropFromSelection([gone]), 1)
+
+        let panel = navigator.mailSelection(for: "INBOX")
+        XCTAssertTrue(panel === column)
+        XCTAssertEqual(panel.selected, [kept])
+        XCTAssertNil(panel.cursor)
+        XCTAssertNil(panel.anchor)
+    }
 }
 
 /// Search results moving below a laptop fold hand over no folder selection,

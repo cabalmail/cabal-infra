@@ -150,72 +150,100 @@ final class LaptopAddressesPolicyTests: XCTestCase {
     }
 }
 
-/// The open message leaving while the laptop panel's address list covers
-/// the reader, with no list mounted to hear it (`CoveredMessageWatch`).
+/// Messages leaving while the laptop panel's address list covers the
+/// reader, with no list mounted to hear them (`CoveredMessageWatch`).
 @MainActor
 final class CoveredMessageWatchTests: XCTestCase {
     private let open = MessageRef(folder: "INBOX", uid: 9)
 
-    private final class Drops {
-        var count = 0
+    private final class Heard {
+        var removals: [(refs: Set<MessageRef>, openMessageLeft: Bool)] = []
     }
 
-    private func watching(_ ref: MessageRef?) -> (CoveredMessageWatch, Drops) {
+    private func covering(_ ref: MessageRef?) -> (CoveredMessageWatch, Heard) {
         let watch = CoveredMessageWatch()
-        let drops = Drops()
-        watch.watched = ref
-        watch.dropOpenMessage = { drops.count += 1 }
-        return (watch, drops)
+        let heard = Heard()
+        watch.isCovering = true
+        watch.openMessage = ref
+        watch.onRemoved = { heard.removals.append(($0, $1)) }
+        return (watch, heard)
     }
 
-    func testARemovalPostedOnTheStoreDropsTheCoveredMessageOnce() {
-        let (watch, drops) = watching(open)
+    func testARemovalOnTheStoreTakesTheOpenMessageOnce() {
+        let (watch, heard) = covering(open)
+        let checked = MessageRef(folder: "INBOX", uid: 4)
         let events = MailEvents()
         events.subscribe(watch)
 
-        events.post(.removed([MessageRef(folder: "INBOX", uid: 4), open]), from: UUID())
+        events.post(.removed([checked, open]), from: UUID())
         events.post(.removed([open]), from: nil)
 
-        XCTAssertEqual(drops.count, 1)
-        XCTAssertNil(watch.watched)
+        XCTAssertEqual(heard.removals.map(\.refs), [[checked, open], [open]])
+        XCTAssertEqual(heard.removals.map(\.openMessageLeft), [true, false], "the open message goes once")
+        XCTAssertNil(watch.openMessage)
     }
 
-    func testOtherMessagesAndOtherChangesLeaveIt() {
-        let (watch, drops) = watching(open)
+    /// Checked rows leave the selection whether or not the open message is
+    /// among them.
+    func testARemovalOfOtherMessagesIsHeardWithTheOpenOneKept() {
+        let (watch, heard) = covering(open)
+
+        watch.receive(MailEvent(change: .removed([MessageRef(folder: "Archive", uid: 9)]), origin: nil))
+
+        XCTAssertEqual(heard.removals.first?.openMessageLeft, false)
+        XCTAssertEqual(watch.openMessage, open)
+    }
+
+    func testChangesThatRemoveNothingAreNotHeard() {
+        let (watch, heard) = covering(open)
 
         for change: MailEvent.Change in [
-            .removed([MessageRef(folder: "INBOX", uid: 10)]),
-            .removed([MessageRef(folder: "Archive", uid: 9)]),
             .flagsChanged([open], flag: .seen, added: true),
             .restored(open, markUnread: false),
             .readAdvance(open, advance: .stay),
+            .draftReplaced(folderPath: "Drafts", replacement: DraftReplacement(retiredUIDs: [], survivingUID: 6)),
         ] {
             watch.receive(MailEvent(change: change, origin: nil))
         }
 
-        XCTAssertEqual(drops.count, 0)
-        XCTAssertEqual(watch.watched, open)
+        XCTAssertTrue(heard.removals.isEmpty)
     }
 
-    func testARetiredDraftCopyDropsIt() {
+    /// A list would re-point at the saved copy; with no rows to walk, the
+    /// retired one leaves.
+    func testARetiredDraftCopyLeaves() {
         let draft = MessageRef(folder: "Drafts", uid: 5)
-        let (watch, drops) = watching(draft)
+        let (watch, heard) = covering(draft)
 
-        let elsewhere = DraftReplacement(retiredUIDs: [5], survivingUID: 6)
-        watch.receive(MailEvent(change: .draftReplaced(folderPath: "Other", replacement: elsewhere), origin: nil))
-        XCTAssertEqual(drops.count, 0)
+        let replacement = DraftReplacement(retiredUIDs: [5], survivingUID: 6)
+        watch.receive(MailEvent(change: .draftReplaced(folderPath: "Drafts", replacement: replacement), origin: nil))
 
-        let retiring = DraftReplacement(retiredUIDs: [5], survivingUID: 6)
-        watch.receive(MailEvent(change: .draftReplaced(folderPath: "Drafts", replacement: retiring), origin: nil))
-        XCTAssertEqual(drops.count, 1)
+        XCTAssertEqual(heard.removals.first?.refs, [draft])
+        XCTAssertEqual(heard.removals.first?.openMessageLeft, true)
     }
 
-    /// Nothing covered, nothing watched: the lists mounted then see to it.
-    func testWithNothingCoveredNothingIsDropped() {
-        let (watch, drops) = watching(nil)
+    /// Uncovered, the mounted lists see to their own rows.
+    func testUncoveredNothingIsHeard() {
+        let (watch, heard) = covering(open)
+        watch.isCovering = false
 
         watch.receive(MailEvent(change: .removed([open]), origin: nil))
 
-        XCTAssertEqual(drops.count, 0)
+        XCTAssertTrue(heard.removals.isEmpty)
+    }
+
+    func testTheWatchFollowsTheOpenMessageOnlyWhileCovered() {
+        let envelope = TestFixtures.makeEnvelope(uid: 9)
+        typealias Policy = LaptopAddressesPolicy
+
+        XCTAssertEqual(Policy.coveredMessage(covered: true, open: envelope, folderPath: "INBOX"), open)
+        XCTAssertNil(Policy.coveredMessage(covered: false, open: envelope, folderPath: "INBOX"))
+        XCTAssertNil(Policy.coveredMessage(covered: true, open: nil, folderPath: "INBOX"))
+        // A search result carries its own folder.
+        let result = envelope.inFolder("Archive")
+        XCTAssertEqual(
+            Policy.coveredMessage(covered: true, open: result, folderPath: "INBOX"),
+            MessageRef(folder: "Archive", uid: 9)
+        )
     }
 }

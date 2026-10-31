@@ -107,8 +107,8 @@ extension View {
 /// What the laptop panel's address list owes the window while no list is
 /// mounted beside the reader (`LaptopAddressesPolicy`): a message parked for
 /// the list ends it, a feed list's hand-off nobody took is let go once the
-/// window leaves its scope, and the open message goes if another window or
-/// the composer removes it (`CoveredMessageWatch`).
+/// window leaves its scope, and messages another window or the composer
+/// removes leave the reader and the selection (`CoveredMessageWatch`).
 private struct LaptopAddressesLifecycle: ViewModifier {
     let mail: WideMail
     let feedListHold: FeedListHold
@@ -128,22 +128,47 @@ private struct LaptopAddressesLifecycle: ViewModifier {
             .onChange(of: mail.selectedFeedScope) {
                 feedListHold.releaseUntakenHandOff()
             }
+            .onChange(of: mail.laptopPanelShowsAddresses, initial: true) { _, covered in
+                watch.isCovering = covered
+            }
             .onChange(of: coveredMessage, initial: true) { _, ref in
-                watch.watched = ref
+                watch.openMessage = ref
             }
             .task {
                 let mail = mail
-                watch.dropOpenMessage = {
-                    mail.navigator.selectMessage(nil, isSearching: mail.isSearching, from: mail.tree)
+                watch.onRemoved = { refs, openMessageLeft in
+                    Self.drop(refs, openMessageLeft: openMessageLeft, in: mail)
                 }
                 appState.mailStore.events.subscribe(watch)
             }
     }
 
-    /// The open message, while the address list covers the reader.
     private var coveredMessage: MessageRef? {
-        guard mail.laptopPanelShowsAddresses, let envelope = mail.selectedEnvelope else { return nil }
-        return envelope.ref(defaultFolder: mail.selectedFolder?.path ?? "")
+        LaptopAddressesPolicy.coveredMessage(
+            covered: mail.laptopPanelShowsAddresses, open: mail.selectedEnvelope, folderPath: mail.selectedFolder?.path
+        )
+    }
+
+    /// What a mounted list does with rows that leave with nothing to
+    /// advance to: they leave the selection the next list takes (the
+    /// folder's, held by the navigator, and the search's, whose model stays
+    /// alive), the open message closes if it went, and the reader hears
+    /// the count that is left.
+    private static func drop(_ refs: Set<MessageRef>, openMessageLeft: Bool, in mail: WideMail) {
+        let folderLeft = mail.navigator.listHold.dropFromSelection(refs)
+        var left = folderLeft
+        if let search = mail.state.searchModel {
+            search.selectedRefs.subtract(refs)
+            if mail.isSearching { left = search.selectedRefs.count }
+        }
+        if openMessageLeft {
+            mail.navigator.selectMessage(nil, isSearching: mail.isSearching, from: mail.tree)
+        }
+        if let left {
+            mail.setListSelectionCount(left)
+        } else if openMessageLeft {
+            mail.setListSelectionCount(0)
+        }
     }
 }
 

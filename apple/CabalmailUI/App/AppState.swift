@@ -77,6 +77,12 @@ public final class AppState {
     /// window clears the route its scene stores (`StoredRoute`).
     private(set) var accountForgottenTick = 0
 
+    /// Bumped each time an address change lands on the server, so every
+    /// address list, the window's others and other windows', reads the list
+    /// again (`AddressesViewModel`). The inspector and the laptop panel's
+    /// address list are two lists in one window.
+    private(set) var addressListRevision = 0
+
     /// Where a notification, a Spotlight result or Siri's Open Folder opens:
     /// one main window (`DeepLinkRouter`). The app entries' state takes the
     /// app's router; `AppState()` makes its own.
@@ -277,5 +283,12 @@ extension AppState {
             sourceList: sourceList,
             tick: moveRequestTick
         )
+    }
+}
+
+extension AppState {
+    /// An address change landed: every address list reads the list again.
+    func addressesChanged() {
+        addressListRevision += 1
     }
 }
