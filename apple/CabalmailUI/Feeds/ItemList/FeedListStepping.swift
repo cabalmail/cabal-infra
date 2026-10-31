@@ -8,9 +8,8 @@ import CabalmailKit
 /// behind the reader runs none of its rows' own loads. The list's items are
 /// its filter's already, so every row is shown; an item read in the Unread
 /// pill stays until a reload, after which the step goes by where it sat
-/// (`ListStepPolicy.Place`).
+/// (`ListStepPolicy.Place`, kept on the model so a fold's move keeps it).
 private struct FeedListStepping: ViewModifier {
-    @State private var lastPlace: ListStepPolicy.Place<String>?
     let model: FeedItemListViewModel
     /// The item open in the reader.
     let open: RssItem?
@@ -30,7 +29,7 @@ private struct FeedListStepping: ViewModifier {
     }
 
     private var availability: ListStepAvailability {
-        ListStepPolicy.availability(from: open?.id, last: lastPlace, in: loaded)
+        ListStepPolicy.availability(from: open?.id, last: model.stepPlace, in: loaded)
     }
 
     func body(content: Content) -> some View {
@@ -40,21 +39,28 @@ private struct FeedListStepping: ViewModifier {
             }
             .reportsListStep(availability)
             .onChange(of: place, initial: true) { _, new in
-                if let new { lastPlace = new }
+                if let new { model.stepPlace = new }
             }
             .onChange(of: open?.id, initial: true) { _, _ in loadAhead() }
+            // A reload cuts the list back to its first page, which can drop
+            // an open item from further down: ask for the pages again.
+            .onChange(of: model.items.count) { _, _ in loadAhead() }
     }
 
     private func take(_ step: ListStep) {
         let loaded = loaded
-        guard let index = ListStepPolicy.target(from: open?.id, last: lastPlace, step, in: loaded) else { return }
+        guard let index = ListStepPolicy.target(from: open?.id, last: model.stepPlace, step, in: loaded) else { return }
         let target = loaded.rows[index]
         select(target)
         withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(target.id, anchor: .center) }
     }
 
+    /// Asks for the next page when the open item is near the end of the
+    /// loaded items, or sat beyond them before a reload dropped it.
     private func loadAhead() {
-        guard let id = open?.id, let index = loaded.index(of: id),
+        guard let id = open?.id else { return }
+        let lastIndex = model.stepPlace?.open == id ? model.stepPlace?.index : nil
+        guard let index = loaded.index(of: id) ?? lastIndex,
               index >= model.items.count - Self.prefetchMargin else { return }
         Task { await model.loadMore() }
     }

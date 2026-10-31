@@ -60,9 +60,11 @@ struct FeedReaderBarItem: View {
     let action: FeedReaderAction
     let model: FeedItemDetailViewModel
     let isOffline: Bool
-    /// The reader fills a window taller than wide, where its View menu
-    /// opens up from its own bar and carries Previous and Next.
-    @Environment(\.readerFillsTallWindow) private var fillsTallWindow
+    /// Drawn in the reader's own bar in a tall window
+    /// (`FeedReaderActionBar`), where its View menu opens up from the bar
+    /// and carries Previous and Next. The navigation bar's copy never does,
+    /// as the mail reader's menu doesn't there either.
+    var inOwnBar = false
 
     var body: some View {
         barItem(action)
@@ -137,7 +139,7 @@ struct FeedReaderBarItem: View {
     private var moreMenu: some View {
         let sections = FeedReaderToolbarLayout.viewMenu(
             showingArticle: model.showingArticle, hasArticle: model.articleURL != nil,
-            fillsTallWindow: fillsTallWindow
+            fillsTallWindow: inOwnBar
         )
         return Menu {
             ForEach(sections.indices, id: \.self) { index in
@@ -149,7 +151,7 @@ struct FeedReaderBarItem: View {
         } label: {
             Label("View", systemImage: "ellipsis.circle")
         }
-        .menuOrderFromBottomBar(fillsTallWindow)
+        .menuOrderFromBottomBar(inOwnBar)
         .accessibilityIdentifier(FeedReaderAction.more.identifier)
     }
     #else
