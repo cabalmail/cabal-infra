@@ -15,6 +15,8 @@ import CabalmailKit
 enum ReaderMessageMenuRow: Hashable {
     /// The remote-content toggle, which only an HTML body has.
     case loadImages
+    /// A row per attachment, opening it as its chip does.
+    case attachments
     /// A submenu per address in the header.
     case addresses
     case moveToFolder
@@ -29,6 +31,7 @@ enum ReaderMessageMenuLayout {
     struct Content: Equatable {
         var hasHTML: Bool
         var hasPlainAlternative: Bool
+        var attachmentCount: Int
         var addressCount: Int
     }
 
@@ -41,6 +44,7 @@ enum ReaderMessageMenuLayout {
     static func rows(for content: Content) -> [ReaderMessageMenuRow] {
         var rows: [ReaderMessageMenuRow] = []
         if content.hasHTML { rows.append(.loadImages) }
+        if content.attachmentCount > 0 { rows.append(.attachments) }
         if content.addressCount > 0 { rows.append(.addresses) }
         rows.append(.moveToFolder)
         if !displayRows(for: content).isEmpty { rows.append(.display) }

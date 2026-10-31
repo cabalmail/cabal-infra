@@ -368,28 +368,17 @@ extension MessageDetailView {
         let content = ReaderMessageMenuLayout.Content(
             hasHTML: model.htmlBody != nil,
             hasPlainAlternative: model.plainText != nil,
+            attachmentCount: model.attachments.count,
             addressCount: addresses.count
         )
         ForEach(ReaderMessageMenuLayout.rows(for: content), id: \.self) { row in
             switch row {
             case .loadImages:
                 remoteContentMenuItem
+            case .attachments:
+                ReaderAttachmentsMenu(attachments: model.attachments)
             case .addresses:
-                Menu {
-                    ForEach(addresses, id: \.self) { entry in
-                        if entry.actionsInline {
-                            Section(entry.address.formatted) {
-                                addressMenu(for: entry.address, divided: false)
-                            }
-                        } else {
-                            Menu(entry.address.formatted) {
-                                addressMenu(for: entry.address)
-                            }
-                        }
-                    }
-                } label: {
-                    Label("Addresses", systemImage: "at")
-                }
+                addressesMenu(addresses)
             case .moveToFolder:
                 moveToFolderMenuItem
             case .display:
@@ -411,6 +400,26 @@ extension MessageDetailView {
                     Label("More", systemImage: "ellipsis")
                 }
             }
+        }
+    }
+
+    /// The Addresses submenu: the first of the user's own addresses with
+    /// its actions under it as a heading, every other address a submenu.
+    private func addressesMenu(_ entries: [ReaderMessageMenuLayout.AddressEntry]) -> some View {
+        Menu {
+            ForEach(entries, id: \.self) { entry in
+                if entry.actionsInline {
+                    Section(entry.address.formatted) {
+                        addressMenu(for: entry.address, divided: false)
+                    }
+                } else {
+                    Menu(entry.address.formatted) {
+                        addressMenu(for: entry.address)
+                    }
+                }
+            }
+        } label: {
+            Label("Addresses", systemImage: "at")
         }
     }
 
