@@ -66,6 +66,41 @@ final class FeedListHoldTests: XCTestCase {
         XCTAssertNil(hold.mount(scope: scope).handoff, "the held list went with the scope change")
     }
 
+    /// The address list took the moved list's place in the laptop panel,
+    /// and the window went to another list before the feed list came back:
+    /// the same scope picked later starts afresh.
+    func testAHandOffNoListTookIsReleased() throws {
+        let hold = FeedListHold()
+        let panel = hold.mount(scope: scope)
+        hold.register(try model(), scope: scope, under: panel.claim)
+        hold.move()
+
+        hold.releaseUntakenHandOff()
+
+        XCTAssertNil(hold.mount(scope: scope).handoff)
+    }
+
+    /// Released after the next list has taken the hand-off, it leaves that
+    /// list's claim and model alone.
+    func testReleasingATakenHandOffChangesNothing() throws {
+        let hold = FeedListHold()
+        let column = hold.mount(scope: scope)
+        let held = try model()
+        hold.register(held, scope: scope, under: column.claim)
+        hold.move()
+        let panel = hold.mount(scope: scope)
+        hold.register(held, scope: scope, under: panel.claim)
+
+        hold.releaseUntakenHandOff()
+        XCTAssertTrue(hold.holds(panel.claim))
+        hold.record(topItemID: "item-7", under: panel.claim)
+        hold.move()
+
+        let next = try XCTUnwrap(hold.mount(scope: scope).handoff)
+        XCTAssertTrue(next.model === held)
+        XCTAssertEqual(next.topItemID, "item-7")
+    }
+
     func testTheNewListTakesTheClaim() throws {
         let hold = FeedListHold()
         let column = hold.mount(scope: scope)

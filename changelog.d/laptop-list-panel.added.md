@@ -5,4 +5,7 @@
   as it moves in and out of the panel, and the message doesn't reload.
   Feeds works the same way: the article above the fold and the item list
   below, which keeps its loaded items, filter and place without
-  reloading.
+  reloading. The panel's bar has Settings beside the folder button, and
+  its Addresses button turns the panel into your address list, with the
+  message covered until you go back to the list; addresses open in the
+  inspector as you unfold.

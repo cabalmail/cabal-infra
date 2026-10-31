@@ -130,7 +130,16 @@ struct SplitShell: View {
             // hides the navigation bar a stock split leaves on the upright
             // half (`LaptopPanelPolicy`). Values only, so a fold reflows the
             // web view and never rebuilds it.
+            //
+            // While the laptop panel's address list covers it, the reader
+            // stays mounted, marked hidden from VoiceOver and disabled, so
+            // nothing acts on a message the user can't see
+            // (`LaptopAddressesPolicy`). Disabled as well: the hiding doesn't
+            // reach its own bar or its web view, which the accessibility tree
+            // still lists (Duo simulator, 2026-10-30).
             mail.reader(mailPlaceholder: LaptopFoldClearance(), feedPlaceholder: LaptopFoldClearance())
+                .accessibilityHidden(mail.laptopPanelShowsAddresses)
+                .disabled(mail.laptopPanelShowsAddresses)
                 .padding(.leading, readerCreaseInset)
                 .navigationSplitViewColumnWidth(min: readerColumnMinWidth, ideal: readerColumnMinWidth)
                 .toolbar { messagesButton }
@@ -142,7 +151,11 @@ struct SplitShell: View {
         // away; none open brings it back (`ListOverlay`).
         .onChange(of: openReading, initial: true) { _, opened in
             listOverlay.messageChanged(isOpen: opened != nil)
+            // A message opened ends the laptop panel's addresses
+            // (`LaptopAddressesPolicy`).
+            if opened != nil { mail.endLaptopPanelAddresses() }
         }
+        .laptopAddressesLifecycle(mail, feedListHold: feedListHold)
         // Laptop pose: the list in a panel below the fold, under the folder
         // panel, which floats over it as it does over the list column.
         .overlay(alignment: .top) {
@@ -151,11 +164,16 @@ struct SplitShell: View {
         .onChange(of: laptopCrease, initial: true) { old, crease in
             // Before the list moves, so the list mounting takes the window's
             // selection and place.
-            if (old == nil) != (crease == nil) { listMoves() }
-            // The addresses inspector would run up the upright half, beside
-            // the message, so a fold closes it as a shell swap does; the
-            // panel's `@` opens it again.
-            if crease != nil, mail.addressInspectorPresented { mail.toggleAddressInspector() }
+            if (old == nil) != (crease == nil) {
+                // Unless the panel's address list is leaving: its list moved
+                // when the address list took its place, and none is mounted
+                // now to hand over.
+                if crease != nil || !mail.laptopPanelShowsAddresses { listMoves() }
+                // The addresses inspector would run up the upright half,
+                // beside the message, so its list moves into the panel, and
+                // back into the inspector on leaving laptop pose.
+                mail.laptopArrangement(isArranged: crease != nil)
+            }
             laptopReader.crease = crease
         }
         // Revealing folders floats a panel OVER the message list rather than
@@ -615,19 +633,37 @@ extension SplitShell {
         laptopReader.crease.map { max(0, $0.maxY - splitFrame.minY) } ?? 0
     }
 
-    /// The list's panel, from the crease to the reader's own bar.
+    /// The list's panel, from the crease to the reader's own bar; with its
+    /// address list, to the split's bottom, under a cover over the reader.
     @ViewBuilder
     private var laptopPanel: some View {
         if let crease = laptopReader.crease {
+            let covered = mail.laptopPanelShowsAddresses
             let frame = LaptopPanelPolicy.panelFrame(
-                split: splitFrame, crease: crease, readerBottom: laptopReader.readerBottom
+                split: splitFrame,
+                crease: crease,
+                readerBottom: LaptopAddressesPolicy.panelReaderBottom(laptopReader.readerBottom, covered: covered)
             )
-            LaptopListPanel(mail: mail) {
-                withAnimation(folderPanelAnimation) { folderPanelPresented = true }
+            ZStack(alignment: .top) {
+                if covered {
+                    LaptopAddressesCover(height: frame.minY, foldHeight: crease.height)
+                }
+                LaptopListPanel(
+                    mail: mail,
+                    showFolders: { withAnimation(folderPanelAnimation) { folderPanelPresented = true } },
+                    toggleAddresses: toggleLaptopPanelAddresses
+                )
+                .frame(width: frame.width, height: frame.height)
+                .padding(.top, frame.minY)
             }
-            .frame(width: frame.width, height: frame.height)
-            .padding(.top, frame.minY)
         }
+    }
+
+    /// The panel's `@`. The list leaving the panel hands its state to the
+    /// one that comes back, as on a fold (`listMoves()`).
+    private func toggleLaptopPanelAddresses() {
+        if !mail.laptopPanelShowsAddresses { listMoves() }
+        mail.toggleLaptopPanelAddresses()
     }
 }
 #endif

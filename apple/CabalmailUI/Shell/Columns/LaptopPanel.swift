@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import CabalmailKit
 
 /// iPhone Duo's laptop pose in the split (#1649, the spec's laptop layout):
 /// the message takes the window's full width above the fold with the
@@ -41,6 +42,122 @@ enum LaptopPanelPolicy {
         let top = crease.maxY - split.minY
         let bottom = min(readerBottom ?? split.maxY, split.maxY) - split.minY
         return CGRect(x: 0, y: top, width: split.width, height: max(0, bottom - top))
+    }
+}
+
+/// Addresses in laptop pose (#1649, the spec's "Addresses puts its list
+/// there"): the panel's `@` turns the panel into the address list and covers
+/// the message above the fold, rather than opening the inspector, which
+/// would run up the upright half beside it. The reader stays mounted under
+/// the cover, so the list coming back shows it without rebuilding its web
+/// view.
+///
+/// Addresses carry across a fold both ways: an inspector open as the split
+/// arranges becomes the panel's address list, and the panel's address list
+/// as the split leaves laptop pose becomes the inspector. A message opened,
+/// or a folder or feed list opened, ends them, so the list it opens shows.
+/// Pure, so the rules are tested on the Mac host.
+enum LaptopAddressesPolicy {
+    struct State: Equatable {
+        var inspector: InspectorPresentationPolicy.State
+        /// Whether the laptop panel shows the address list.
+        var inPanel: Bool
+    }
+
+    /// The panel's `@`: the address list or the list it covered, in turn.
+    static func toggled(_ state: State) -> State {
+        var next = state
+        next.inPanel.toggle()
+        return next
+    }
+
+    /// The split arranged itself for laptop pose (`arranged`), or left it.
+    static func split(arranged: Bool, _ state: State) -> State {
+        if arranged, state.inspector.presented {
+            return State(inspector: .init(presented: false, requested: false), inPanel: true)
+        }
+        if !arranged, state.inPanel {
+            // Asked for, so the framework's own write-back keeps it open.
+            return State(inspector: .init(presented: true, requested: true), inPanel: false)
+        }
+        return state
+    }
+
+    /// A message or a list opened: the panel shows the list again.
+    static func ended(_ state: State) -> State {
+        var next = state
+        next.inPanel = false
+        return next
+    }
+
+    /// Where the panel ends: at the reader's bar, or, while the address
+    /// list covers the reader, at the split's bottom, over the bar as well
+    /// (`LaptopPanelPolicy.panelFrame`).
+    static func panelReaderBottom(_ readerBottom: CGFloat?, covered: Bool) -> CGFloat? {
+        covered ? nil : readerBottom
+    }
+
+    /// What the menus hear of the reader: nothing selected and nothing open
+    /// while the address list covers it, so no command or chord acts on a
+    /// message the user can't see.
+    static func reported(selectionCount: Int, isOpen: Bool, covered: Bool) -> (selectionCount: Int, isOpen: Bool) {
+        covered ? (0, false) : (selectionCount, isOpen)
+    }
+
+    /// Whether the Feeds menu hears a scope: not while the address list
+    /// covers the reader, when no feed list is mounted to answer Mark All
+    /// as Read.
+    static func reportsScope(_ hasScope: Bool, covered: Bool) -> Bool {
+        hasScope && !covered
+    }
+
+    /// The message `CoveredMessageWatch` follows: the open one, by its own
+    /// folder (a search result's) or else the sidebar's, while the address
+    /// list covers the reader; nil otherwise.
+    static func coveredMessage(covered: Bool, open envelope: Envelope?, folderPath: String?) -> MessageRef? {
+        guard covered, let envelope else { return nil }
+        return envelope.ref(defaultFolder: folderPath ?? "")
+    }
+}
+
+/// Hears messages leave while the laptop panel's address list covers the
+/// reader (`LaptopAddressesPolicy`). No message list is mounted then to hear
+/// a removal another window or the composer posts, and the list that comes
+/// back hydrates from a cache that has forgotten the messages, so the window
+/// would keep them: the open one in the reader, and checked ones in the
+/// selection the next list takes. The watch hands them on to be dropped, as
+/// a list drops rows that leave with nothing to advance to
+/// (`MessageListViewModel.windowDidRemoveRows`). A list would advance past a
+/// removed open message, or re-point at the copy a compose session saved in
+/// place of a retired draft; with no rows to walk, the window drops it.
+@MainActor
+final class CoveredMessageWatch: MailEventSubscriber {
+    /// Whether the address list covers the reader.
+    var isCovering = false
+    /// The open message while covered (`LaptopAddressesPolicy.coveredMessage`).
+    var openMessage: MessageRef?
+    /// Takes the messages that left, and whether the open one is among them.
+    var onRemoved: (_ refs: Set<MessageRef>, _ openMessageLeft: Bool) -> Void = { _, _ in }
+
+    func receive(_ event: MailEvent) {
+        guard isCovering else { return }
+        let refs = Self.removed(by: event.change)
+        guard !refs.isEmpty else { return }
+        let openMessageLeft = openMessage.map(refs.contains) ?? false
+        if openMessageLeft { openMessage = nil }
+        onRemoved(refs, openMessageLeft)
+    }
+
+    /// The messages a change takes out of their folders.
+    static func removed(by change: MailEvent.Change) -> Set<MessageRef> {
+        switch change {
+        case .removed(let refs):
+            return Set(refs)
+        case .draftReplaced(let folderPath, let replacement):
+            return Set(replacement.retiredUIDs.map { MessageRef(folder: folderPath, uid: $0) })
+        case .restored, .flagsChanged, .readAdvance:
+            return []
+        }
     }
 }
 

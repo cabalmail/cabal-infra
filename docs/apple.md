@@ -1314,8 +1314,26 @@ safe-area inset of that size the web view drew nothing). The reader's
 own action bar stays at the window's bottom edge, and `LaptopListPanel`
 fills the space between the fold and that bar with the list and its bar,
 in a navigation stack of its own; the folder panel opens below the fold
-over it. The panel's bar carries the addresses `@`; a fold closes an
-open inspector, which would run up the upright half. The reader reports
+over it. The panel's bar carries the folder button and Settings at its
+leading end and the addresses `@` at its trailing end. The inspector
+would run up the upright half, so in laptop pose the `@` turns the
+panel into the address list, down to the window's bottom edge, under a
+cover over the message (`LaptopAddressesPolicy`): the reader stays
+mounted beneath, disabled, and marked hidden from VoiceOver (the
+accessibility tree still lists its own bar and its web view, so whether
+VoiceOver skips them waits for the device), and the menus hear nothing
+open and no feed scope. Addresses carry across a fold both ways (an open
+inspector becomes the panel's list, and the panel's list the inspector),
+and a message opened or parked for the list, or a folder or feed list
+opened, ends them. With no list mounted to hear them, messages another
+window or the composer removes meanwhile leave the reader and the
+selection the next list takes (`CoveredMessageWatch`); a feed list's
+hand-off nobody took is let go when the window leaves its scope
+(`FeedListHold.releaseUntakenHandOff()`); and leaving laptop pose from
+the address list moves no list, since none is mounted. Every address
+list reads the list again when another one changes an address
+(`AppState.addressesChanged()`), so the panel's and the inspector's
+agree. The reader reports
 where its content ends through `\.laptopReader`, which is how the panel
 knows where the bar starts. Every change is a value on a modifier that
 is always present, so the message's web view reflows and is never

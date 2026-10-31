@@ -78,6 +78,17 @@ final class FeedListHold {
         claim.generation == generation
     }
 
+    /// The window left the scope a move was handing over, with no list for
+    /// it mounted in between: the panel's address list took the list's
+    /// place, and a pick or an open ended it on another list. Nothing takes
+    /// the hand-off, so a later list for that scope starts afresh. A
+    /// mounted list's claim and model are untouched.
+    func releaseUntakenHandOff() {
+        guard handsOff else { return }
+        handsOff = false
+        held = nil
+    }
+
     /// Waits for a sync still running on a handed-over model to wind down:
     /// the one the moved list started, whose cancelled pass still re-reads
     /// the store before it lets go, and until then `sync()` refuses another.

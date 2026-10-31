@@ -137,9 +137,20 @@ struct AddressListView: View {
             actions: suspendDialogActions,
             message: suspendDialogMessage
         )
+        // A change another address list made landed: the window's other
+        // list (the inspector and the laptop panel's) or another window's.
+        .onChange(of: appState.addressListRevision) {
+            Task { await model?.refresh() }
+        }
         .task {
-            if model == nil, let client = appState.client {
-                let newModel = AddressesViewModel(client: client)
+            if let model {
+                // Back on screen: the inspector keeps this view while it is
+                // closed, and a change made in another list meanwhile may not
+                // have reached a view off screen. The client's cache answers
+                // unless a change invalidated it.
+                await model.refresh()
+            } else if let client = appState.client {
+                let newModel = AddressesViewModel(client: client, changed: { appState.addressesChanged() })
                 model = newModel
                 await newModel.refresh()
             }
