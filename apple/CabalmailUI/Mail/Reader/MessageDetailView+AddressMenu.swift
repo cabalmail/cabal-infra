@@ -52,8 +52,11 @@ extension MessageDetailView {
     }
 
     /// Right-click / long-press menu for a single header address.
+    /// `divided: false` drops the dividers, for a copy laid out under the
+    /// address as a heading in another menu: a divider there splits the
+    /// actions into groups, and the heading labels only one of them.
     @ViewBuilder
-    func addressMenu(for address: EmailAddress) -> some View {
+    func addressMenu(for address: EmailAddress, divided: Bool = true) -> some View {
         let email = canonicalEmail(for: address)
         Button {
             copyToPasteboard(email)
@@ -67,7 +70,7 @@ extension MessageDetailView {
             Label("Copy Name", systemImage: "person.text.rectangle")
         }
 
-        Divider()
+        if divided { Divider() }
 
         Button {
             composeTo(address)
@@ -95,7 +98,7 @@ extension MessageDetailView {
         // grantable; a denied / restricted book hides them. macOS omits them
         // entirely (no native modal contact editor).
         if contactsAuth.isAccessible || contactsAuth == .notDetermined {
-            Divider()
+            if divided { Divider() }
             Button {
                 requestContactEditor(.addExisting, for: address)
             } label: {
@@ -118,6 +121,12 @@ extension MessageDetailView {
         if let client = appState.client, let list = try? await client.addresses() {
             ownedAddresses = list
         }
+    }
+
+    /// Whether `address` is one of the user's own, which they can compose
+    /// from and revoke.
+    func isOwnedAddress(_ address: EmailAddress) -> Bool {
+        ownedMatch(for: address) != nil
     }
 
     private func canonicalEmail(for address: EmailAddress) -> String {

@@ -1361,11 +1361,11 @@ floats over the reader or sits below a laptop fold), its own bar (iOS 27
 and later, where the reader draws its own bar at regular width; earlier
 releases keep the system bottom bar) draws the iPhone Duo spec's set in
 its order whatever its width: Reply, dispose, Flag, Read, Page Up, Page
-Down, the More menu and Compose. Edit Draft's button is a pencil there,
+Down, the Message menu and Compose. Edit Draft's button is a pencil there,
 as everywhere, so a draft's bar doesn't show two Compose faces. The
 list's bar, with its Compose, is behind the message or below the fold
 there, so the reader's bar carries Compose too, and the display toggles
-(remote content, reader view) move to the More menu to make room. Page
+(remote content, reader view) move to the Message menu to make room. Page
 Up and Page Down page the body by 90% of its visible height
 (`ReaderPaging`): an HTML body through a script in the app's own content
 world, which shares the page's document while page JavaScript stays off,
@@ -1381,6 +1381,26 @@ rebuilds its web view. A publisher's page pages through its own scroll
 view (`ReaderPaging.scrollTarget`), so nothing runs in the page, and
 every web view takes a press once through `ReaderPageGate` (a plain-text
 body acts on each change of the request).
+
+**The Message menu: `ReaderMessageMenuLayout`.** The tall bar's menu is
+titled Message (`drawsMessageMenu`); everywhere else the reader's menu
+stays More actions. In laptop pose it is the one way below the fold to
+what the message header holds above it, where nothing may be tapped. Its
+rows, from the bar's button outward: Show Remote Content (the spec's
+Load Images; an HTML body only), Addresses, Move to Folder, Display
+(Reader View, and Plain Text when the message has both parts) and More
+(View Source, View Headers, Print). It
+opens up from the bar with its first row nearest the button
+(`menuOrderFromBottomBar`, a `Platform/` adapter: `.priority` on iOS,
+which macOS lacks). The Addresses submenu lists each address in the
+header once, the user's own first: the first of those lays its actions
+out under the address as a heading, with no dividers (a divider splits
+them into groups the heading doesn't label), so Revoke is one level
+down, and every other address opens the header menu's actions as a
+submenu. In laptop pose the system keeps a menu to the region below the
+fold and scrolls one taller than that region. Links in the body are the
+one exception to the no-taps-above-the-fold rule, so the menu has no
+Links row.
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
