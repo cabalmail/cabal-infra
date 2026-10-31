@@ -1387,9 +1387,11 @@ titled Message (`drawsMessageMenu`); everywhere else the reader's menu
 stays More actions. In laptop pose it is the one way below the fold to
 what the message header holds above it, where nothing may be tapped. Its
 rows, from the bar's button outward: Show Remote Content (the spec's
-Load Images; an HTML body only), Addresses, Move to Folder, Display
-(Reader View, and Plain Text when the message has both parts) and More
-(View Source, View Headers, Print). It
+Load Images; an HTML body only), Attachments (a row per attachment,
+opening it as its chip does through the presenter below:
+`ReaderAttachmentsMenu`, with the chip's symbol from `AttachmentIcon`),
+Addresses, Move to Folder, Display (Reader View, and Plain Text when the
+message has both parts) and More (View Source, View Headers, Print). It
 opens up from the bar with its first row nearest the button
 (`menuOrderFromBottomBar`, a `Platform/` adapter: `.priority` on iOS,
 which macOS lacks). The Addresses submenu lists each address in the
@@ -1401,6 +1403,17 @@ submenu. In laptop pose the system keeps a menu to the region below the
 fold and scrolls one taller than that region. Links in the body are the
 one exception to the no-taps-above-the-fold rule, so the menu has no
 Links row.
+
+**Opening attachments: `Platform/AttachmentPresentation.swift`.** The
+reader hosts one attachment presenter (`presentsAttachments()`, applied
+outside the per-message content) and publishes it as `\.openAttachment`,
+which every control that offers an attachment calls: Quick Look on iOS
+and visionOS, an invitation with an event in `CalendarEventSheet` (the
+rule is `AttachmentOpenRoute`, since Calendar takes no `.ics` from a
+third-party app there), and the system's own handler on macOS. A control
+reads `\.openAttachment` from inside the presenter, so it must be a view
+of its own within the reader's body: the reader's own environment comes
+from outside the modifier it applies.
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
