@@ -228,6 +228,9 @@ struct MessageDetailView: View {
             sourceSheet(initialTab: tab)
                 .windowShapedSheet()
         }
+        // The attachment chips open their files here (`\.openAttachment`),
+        // outside the per-message content, which a new message rebuilds.
+        .presentsAttachments()
         #if os(iOS) || os(visionOS)
         .sheet(item: $contactEditorRequest) { request in
             ContactEditorView(request: request) { contactEditorRequest = nil }
