@@ -1402,6 +1402,17 @@ fold and scrolls one taller than that region. Links in the body are the
 one exception to the no-taps-above-the-fold rule, so the menu has no
 Links row.
 
+**Opening attachments: `Platform/AttachmentPresentation.swift`.** The
+reader hosts one attachment presenter (`presentsAttachments()`, applied
+outside the per-message content) and publishes it as `\.openAttachment`,
+which every control that offers an attachment calls: Quick Look on iOS
+and visionOS, an invitation with an event in `CalendarEventSheet` (the
+rule is `AttachmentOpenRoute`, since Calendar takes no `.ics` from a
+third-party app there), and the system's own handler on macOS. A control
+reads `\.openAttachment` from inside the presenter, so it must be a view
+of its own within the reader's body: the reader's own environment comes
+from outside the modifier it applies.
+
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
 starting values to tune on hardware.
