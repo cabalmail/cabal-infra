@@ -288,7 +288,11 @@ extension AppState {
 
 extension AppState {
     /// An address change landed: every address list reads the list again.
-    func addressesChanged() {
+    /// Called wherever an address is made, revoked or changed, the lists'
+    /// own models, the new-address sheet, the reader's address menu and the
+    /// app's address intents, which `AddressChangeSignalSourceScanTests`
+    /// holds to it.
+    public func addressesChanged() {
         addressListRevision += 1
     }
 }

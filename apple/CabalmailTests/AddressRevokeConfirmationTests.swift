@@ -51,21 +51,42 @@ final class AddressRevokeConfirmationTests: XCTestCase {
         XCTAssertNotNil(failing.errorMessage)
     }
 
+    /// A revoke or a suspension that lands tells the other address lists,
+    /// through the hook the view hands the model
+    /// (`AppState.addressesChanged()`); one that fails tells no one.
+    func testOnlyAChangeThatLandsTellsTheOtherLists() async throws {
+        let landing = Changes()
+        let landed = try makeModel(status: 200, changes: landing)
+        _ = await landed.revoke(Self.target)
+        await landed.setSuspended(Self.kept, to: true)
+        await landed.setSuspended(Self.kept, to: false)
+        XCTAssertEqual(landing.count, 3)
+
+        let failing = Changes()
+        let failed = try makeModel(status: 500, changes: failing)
+        _ = await failed.revoke(Self.target)
+        await failed.setSuspended(Self.kept, to: true)
+        XCTAssertEqual(failing.count, 0)
+    }
+
     // MARK: - Fixtures
 
     private static let target = Address(
         address: "burn@a.example", subdomain: "a", tld: "example"
     )
+    private static let kept = Address(address: "keep@b.example", subdomain: "b", tld: "example")
 
-    private func makeModel(status: Int) throws -> AddressesViewModel {
+    /// How many times the model told the other lists.
+    private final class Changes {
+        var count = 0
+    }
+
+    private func makeModel(status: Int, changes: Changes? = nil) throws -> AddressesViewModel {
         let client = try TestFixtures.makeClient(
             imap: FakeImapClient(), transport: FixedStatusTransport(status: status)
         )
-        let model = AddressesViewModel(client: client)
-        model.addresses = [
-            Self.target,
-            Address(address: "keep@b.example", subdomain: "b", tld: "example"),
-        ]
+        let model = AddressesViewModel(client: client, changed: { changes?.count += 1 })
+        model.addresses = [Self.target, Self.kept]
         return model
     }
 }

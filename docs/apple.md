@@ -1331,9 +1331,12 @@ selection the next list takes (`CoveredMessageWatch`); a feed list's
 hand-off nobody took is let go when the window leaves its scope
 (`FeedListHold.releaseUntakenHandOff()`); and leaving laptop pose from
 the address list moves no list, since none is mounted. Every address
-list reads the list again when another one changes an address
-(`AppState.addressesChanged()`), so the panel's and the inspector's
-agree. The reader reports
+list reads the list again whenever an address changes anywhere in the
+process (`AppState.addressesChanged()`: the lists themselves, the
+new-address sheet, the reader's address menu and the address intents,
+held by `AddressChangeSignalSourceScanTests` and the model's own tests),
+so the panel's and the
+inspector's agree. The reader reports
 where its content ends through `\.laptopReader`, which is how the panel
 knows where the bar starts. Every change is a value on a modifier that
 is always present, so the message's web view reflows and is never
