@@ -6,10 +6,11 @@ import CabalmailKit
 /// holds above it, where nothing may be tapped.
 ///
 /// Its rows, from the bar's button outward, and the ones later rows join:
-/// Previous and Next, Load Images, Attachments, Addresses, Move to Folder,
-/// Display (Reader View, Plain Text) and More (View Source, View Headers,
-/// Print). Seven at most, which is what fits between the fold and the bar
-/// (about 400 pt). A row shows only when it applies to the open message.
+/// Previous and Next, Show Remote Content (the spec's Load Images),
+/// Attachments, Addresses, Move to Folder, Display (Reader View, Plain
+/// Text) and More (View Source, View Headers, Print). Seven at most,
+/// which is what fits between the fold and the bar (about 400 pt). A row
+/// shows only when it applies to the open message.
 /// Every other placement keeps the overflow menu as it was.
 enum ReaderMessageMenuRow: Hashable {
     /// The remote-content toggle, which only an HTML body has.

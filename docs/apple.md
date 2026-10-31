@@ -1386,9 +1386,10 @@ body acts on each change of the request).
 titled Message (`drawsMessageMenu`); everywhere else the reader's menu
 stays More actions. In laptop pose it is the one way below the fold to
 what the message header holds above it, where nothing may be tapped. Its
-rows, from the bar's button outward: Load Images (an HTML body only),
-Addresses, Move to Folder, Display (Reader View, and Plain Text when the
-message has both parts) and More (View Source, View Headers, Print). It
+rows, from the bar's button outward: Show Remote Content (the spec's
+Load Images; an HTML body only), Addresses, Move to Folder, Display
+(Reader View, and Plain Text when the message has both parts) and More
+(View Source, View Headers, Print). It
 opens up from the bar with its first row nearest the button
 (`menuOrderFromBottomBar`, a `Platform/` adapter: `.priority` on iOS,
 which macOS lacks). The Addresses submenu lists each address in the
