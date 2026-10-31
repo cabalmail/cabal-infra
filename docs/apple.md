@@ -1319,11 +1319,16 @@ leading end and the addresses `@` at its trailing end. The inspector
 would run up the upright half, so in laptop pose the `@` turns the
 panel into the address list, down to the window's bottom edge, under a
 cover over the message (`LaptopAddressesPolicy`): the reader stays
-mounted beneath, disabled and hidden from VoiceOver, and the menus hear
-nothing open. Addresses carry across a fold both ways (an open inspector
-becomes the panel's list, and the panel's list the inspector), and a
-message opened or parked for the list, or a folder or feed list opened,
-ends them. The reader reports
+mounted beneath, disabled, and marked hidden from VoiceOver (the
+accessibility tree still lists its own bar and its web view, so whether
+VoiceOver skips them waits for the device), and the menus hear nothing
+open and no feed scope. Addresses carry across a fold both ways (an open
+inspector becomes the panel's list, and the panel's list the inspector),
+and a message opened or parked for the list, or a folder or feed list
+opened, ends them. With no list mounted to hear it, a removal of the open
+message posted meanwhile drops it (`CoveredMessageWatch`), and a feed
+list's hand-off nobody took is let go when the window leaves its scope
+(`FeedListHold.releaseUntakenHandOff()`). The reader reports
 where its content ends through `\.laptopReader`, which is how the panel
 knows where the bar starts. Every change is a value on a modifier that
 is always present, so the message's web view reflows and is never

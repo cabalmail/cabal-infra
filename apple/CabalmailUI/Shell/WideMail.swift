@@ -416,7 +416,9 @@ private struct WideMailReporting: ViewModifier {
             .reportsFeedMenuAvailability(
                 selectedCount: item.selectionCount,
                 hasOpenItem: item.isOpen,
-                hasScope: mail.selectedFeedScope != nil && !mail.isSearching
+                hasScope: LaptopAddressesPolicy.reportsScope(
+                    mail.selectedFeedScope != nil && !mail.isSearching, covered: covered
+                )
             )
             .reportsActiveSection(mail.selectedFeedScope != nil && !mail.isSearching ? .feeds : .mail)
             // Track the split view's overall width so the list column's max

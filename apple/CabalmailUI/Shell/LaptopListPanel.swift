@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import CabalmailKit
 
 /// The list's panel below a laptop fold (#1649): the split's list, with its
 /// bar, in a navigation stack of its own across the window's width, between
@@ -92,6 +93,57 @@ struct LaptopListPanel: View {
                 .padding(.top, 4)
                 .padding(.bottom, 6)
         }
+    }
+}
+
+extension View {
+    /// The laptop panel's address list's ties to the rest of the window
+    /// (`LaptopAddressesLifecycle`).
+    func laptopAddressesLifecycle(_ mail: WideMail, feedListHold: FeedListHold) -> some View {
+        modifier(LaptopAddressesLifecycle(mail: mail, feedListHold: feedListHold))
+    }
+}
+
+/// What the laptop panel's address list owes the window while no list is
+/// mounted beside the reader (`LaptopAddressesPolicy`): a message parked for
+/// the list ends it, a feed list's hand-off nobody took is let go once the
+/// window leaves its scope, and the open message goes if another window or
+/// the composer removes it (`CoveredMessageWatch`).
+private struct LaptopAddressesLifecycle: ViewModifier {
+    let mail: WideMail
+    let feedListHold: FeedListHold
+    @Environment(AppState.self) private var appState
+    @State private var watch = CoveredMessageWatch()
+
+    func body(content: Content) -> some View {
+        content
+            // A tapped notification, the resume banner, a Spotlight result
+            // or a rebuilt tree's open message: parked for the list, which
+            // opens it only once it is back to select it.
+            .onChange(of: mail.navigator.restores.pendingRestore) { _, restore in
+                if restore != nil { mail.endLaptopPanelAddresses() }
+            }
+            // The address list took the moved feed list's place and the
+            // window went on to another list (`FeedListHold`).
+            .onChange(of: mail.selectedFeedScope) {
+                feedListHold.releaseUntakenHandOff()
+            }
+            .onChange(of: coveredMessage, initial: true) { _, ref in
+                watch.watched = ref
+            }
+            .task {
+                let mail = mail
+                watch.dropOpenMessage = {
+                    mail.navigator.selectMessage(nil, isSearching: mail.isSearching, from: mail.tree)
+                }
+                appState.mailStore.events.subscribe(watch)
+            }
+    }
+
+    /// The open message, while the address list covers the reader.
+    private var coveredMessage: MessageRef? {
+        guard mail.laptopPanelShowsAddresses, let envelope = mail.selectedEnvelope else { return nil }
+        return envelope.ref(defaultFolder: mail.selectedFolder?.path ?? "")
     }
 }
 

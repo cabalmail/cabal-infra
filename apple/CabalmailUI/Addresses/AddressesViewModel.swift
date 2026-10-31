@@ -81,6 +81,9 @@ final class AddressesViewModel {
         applyFavorite(addressId: address.id, to: target)
         do {
             try await client.setFavorite(address: address.address, favorite: target)
+            // Again: a refresh while the call was out (the list back on
+            // screen) read the cache from before it and put the old flag back.
+            applyFavorite(addressId: address.id, to: target)
             errorMessage = nil
         } catch {
             applyFavorite(addressId: address.id, to: !target)

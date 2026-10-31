@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import CabalmailKit
 
 /// iPhone Duo's laptop pose in the split (#1649, the spec's laptop layout):
 /// the message takes the window's full width above the fold with the
@@ -101,6 +102,46 @@ enum LaptopAddressesPolicy {
     /// message the user can't see.
     static func reported(selectionCount: Int, isOpen: Bool, covered: Bool) -> (selectionCount: Int, isOpen: Bool) {
         covered ? (0, false) : (selectionCount, isOpen)
+    }
+
+    /// Whether the Feeds menu hears a scope: not while the address list
+    /// covers the reader, when no feed list is mounted to answer Mark All
+    /// as Read.
+    static func reportsScope(_ hasScope: Bool, covered: Bool) -> Bool {
+        hasScope && !covered
+    }
+}
+
+/// Hears the open message leave while the laptop panel's address list
+/// covers the reader (`LaptopAddressesPolicy`). No message list is mounted
+/// then to hear a removal another window or the composer posts, and the
+/// list that comes back hydrates from a cache that has forgotten the
+/// message, so the window would keep it open. The watch drops it, as a list
+/// drops the selection on a row that leaves with nothing to advance to
+/// (`MessageListViewModel.windowDidRemoveRows`); a draft a compose session
+/// retired goes the same way.
+@MainActor
+final class CoveredMessageWatch: MailEventSubscriber {
+    /// The open message while the reader is covered; nil otherwise.
+    var watched: MessageRef?
+    /// Drops the window's open message.
+    var dropOpenMessage: () -> Void = {}
+
+    func receive(_ event: MailEvent) {
+        guard let watched, Self.change(event.change, removes: watched) else { return }
+        self.watched = nil
+        dropOpenMessage()
+    }
+
+    private static func change(_ change: MailEvent.Change, removes ref: MessageRef) -> Bool {
+        switch change {
+        case .removed(let refs):
+            return refs.contains(ref)
+        case .draftReplaced(let folderPath, let replacement):
+            return folderPath == ref.folder && replacement.retiredUIDs.contains(ref.uid)
+        case .restored, .flagsChanged, .readAdvance:
+            return false
+        }
     }
 }
 

@@ -132,11 +132,11 @@ struct SplitShell: View {
             // web view and never rebuilds it.
             //
             // While the laptop panel's address list covers it, the reader
-            // stays mounted, hidden from VoiceOver and disabled, so nothing
-            // acts on a message the user can't see (`LaptopAddressesPolicy`).
-            // Disabled as well: the hiding doesn't reach its own bar, whose
-            // buttons the accessibility tree still lists (Duo simulator,
-            // 2026-10-30).
+            // stays mounted, marked hidden from VoiceOver and disabled, so
+            // nothing acts on a message the user can't see
+            // (`LaptopAddressesPolicy`). Disabled as well: the hiding doesn't
+            // reach its own bar or its web view, which the accessibility tree
+            // still lists (Duo simulator, 2026-10-30).
             mail.reader(mailPlaceholder: LaptopFoldClearance(), feedPlaceholder: LaptopFoldClearance())
                 .accessibilityHidden(mail.laptopPanelShowsAddresses)
                 .disabled(mail.laptopPanelShowsAddresses)
@@ -155,12 +155,7 @@ struct SplitShell: View {
             // (`LaptopAddressesPolicy`).
             if opened != nil { mail.endLaptopPanelAddresses() }
         }
-        // So does one parked for the list (a tapped notification, the resume
-        // banner, a deep link, a rebuilt tree's open message), which opens
-        // only once the list is back to select it.
-        .onChange(of: navigator.restores.pendingRestore) { _, restore in
-            if restore != nil { mail.endLaptopPanelAddresses() }
-        }
+        .laptopAddressesLifecycle(mail, feedListHold: feedListHold)
         // Laptop pose: the list in a panel below the fold, under the folder
         // panel, which floats over it as it does over the list column.
         .overlay(alignment: .top) {
