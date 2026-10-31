@@ -1354,6 +1354,33 @@ starts following it again, and syncs only if no sync of it ran to the
 end. The feed reader's actions are in its own bar in a tall window
 (below), so laptop pose hiding the navigation bar loses none of them.
 
+**Laptop pose: compose (`Compose/ComposeLaptopArrangement.swift`).** With
+a horizontal fold across the compose sheet, the body sits above the fold
+and From, To, Cc, Bcc, Subject and the attachments below it
+(`ComposeFormSection.order(inLaptop:)`, a move of the same five sections
+in one `ForEach`, so a fold rebuilds no row and the editor keeps its web
+view, caret and undo). The arrangement reads the window's fold and the
+form's own pieces with the keyboard ignored, the software keyboard's
+frame (`onSoftwareKeyboardChange`, a `Platform/` adapter) and the form's
+scroll. The body's height comes from where it and the From header sat at
+rest (sampled only at the form's top, idle, with the keyboard down): it
+reaches the fold, and any space the rows leave is padding under it that
+carries the header below the band (`ComposeLaptopPolicy.bodyFrame`);
+compact section spacing keeps Subject clear of the bar. While the
+keyboard is down, `ComposeToolbar` puts Cancel, Attach, Edit Message,
+Open in New Window and Send in a bar at the bottom and the formatting
+controls fold away by value (`collapsed(_:)`); while the software keyboard
+is up it fills the space below the fold, so Cancel, Attach and Send go
+back to the top bar, the one exception to the no-taps-above-the-fold
+rule. Edit Message puts the caret back where it was
+(`RichTextEditorController.focusRestoringCaret()`, which makes the web
+view first responder so the keyboard rises), or focuses the Markdown
+editor. A toast and the send-error banner sit below the fold at rest. A
+fold while typing brings the focused body or recipient field back above
+the keyboard. Every one of these is a value on a modifier that is always
+present: an `if` or `.id` around the body or a field would rebuild the
+editor's web view.
+
 **The reader's bar in a tall window: `ReaderToolbarLayout.tallBar`.**
 Where the reader fills a window taller than wide
 (`\.readerFillsTallWindow`, which `SplitShell` publishes while the list
