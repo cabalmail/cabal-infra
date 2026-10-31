@@ -12,6 +12,32 @@ import CabalmailKit
 /// markdown / HTML manipulation of its own.
 struct ComposerBody: View {
     @Bindable var model: ComposeViewModel
+    /// Laptop pose (`ComposeLaptopArrangement`): the body's height above the
+    /// fold, the formatting controls folded away at rest, and Edit Message.
+    /// Nil outside the iOS compose form, where every value is today's.
+    @Environment(\.composeLaptop) private var laptop
+    @FocusState private var markdownFocused: Bool
+
+    /// The picker and formatting controls fold away at rest in laptop pose.
+    private var formattingHidden: Bool {
+        ComposeLaptopPolicy.formattingHidden(
+            host: laptop?.host ?? .navigationBar,
+            editorFocused: model.editorFocused,
+            markdownFocused: markdownFocused
+        )
+    }
+
+    /// The editors' own floor, which under a laptop height gives way to the
+    /// controls coming back rather than overflow the row.
+    private var editorFloor: CGFloat {
+        laptop?.bodyFrame.height == nil ? 180 : 0
+    }
+
+    /// The body's own floor, which a laptop height replaces
+    /// (`ComposeLaptopPolicy.bodyFloor`).
+    private var bodyFloor: CGFloat {
+        laptop?.bodyFrame.height == nil ? 240 : 0
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,6 +53,7 @@ struct ComposerBody: View {
             .padding(.horizontal, 6)
             .padding(.top, 6)
             .accessibilityIdentifier("compose.body.mode")
+            .collapsed(formattingHidden)
 
             switch model.editorMode {
             case .rich:
@@ -35,7 +62,19 @@ struct ComposerBody: View {
                 markdownPane
             }
         }
-        .frame(minHeight: 240)
+        .frame(minHeight: bodyFloor)
+        .composeLaptopBody(laptop)
+        .onChange(of: laptop?.editRequests) { _, _ in resumeEditing() }
+    }
+
+    /// Edit Message: the caret back where it was, the keyboard up.
+    private func resumeEditing() {
+        switch model.editorMode {
+        case .rich:
+            Task { await model.editorController.focusRestoringCaret() }
+        case .markdown:
+            markdownFocused = true
+        }
     }
 
     @ViewBuilder
@@ -48,11 +87,12 @@ struct ComposerBody: View {
                     Task { await model.importFromMarkdown() }
                 }
             )
+            .collapsed(formattingHidden)
             #if os(macOS)
             Divider()
             #endif
             RichTextEditorView(controller: model.editorController)
-                .frame(minHeight: 180)
+                .frame(minHeight: editorFloor)
                 // The pane's only addressable descendants are web content,
                 // which publishes no identifier and is not hittable. Without
                 // an identifier here the body is reachable only by coordinate
@@ -95,10 +135,12 @@ struct ComposerBody: View {
             }
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
+            .collapsed(formattingHidden)
 
             TextEditor(text: $model.markdownBody)
                 .font(.body.monospaced())
-                .frame(minHeight: 180)
+                .frame(minHeight: editorFloor)
+                .focused($markdownFocused)
                 .takesDroppedAttachments(into: model)
                 // Same reason as the rich pane: a bare TextEditor lands as an
                 // unlabelled, unidentified text view (#1157).

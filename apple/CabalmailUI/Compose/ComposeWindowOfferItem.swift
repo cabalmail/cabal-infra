@@ -17,18 +17,31 @@ struct ComposeWindowOfferItem: ToolbarContent {
     @Environment(\.composeWindowOffer) private var offer
 
     var body: some ToolbarContent {
-        if let offer {
+        if offer != nil {
             ToolbarItem {
-                Button {
-                    offer.open(model)
-                } label: {
-                    // Titled, so the item survives a vertical bar's
-                    // overflow, which draws a row from the title (#1787).
-                    Label("Open in New Window", systemImage: "macwindow.badge.plus")
-                }
-                .disabled(!model.mayHandOff || model.pendingDrops > 0)
-                .accessibilityIdentifier("compose.openInNewWindow")
+                ComposeWindowOfferButton(model: model)
             }
+        }
+    }
+}
+
+/// The button itself, which the top bar's item and the laptop bar
+/// (`ComposeToolbar`) both draw. Nothing without an offer.
+struct ComposeWindowOfferButton: View {
+    let model: ComposeViewModel
+    @Environment(\.composeWindowOffer) private var offer
+
+    var body: some View {
+        if let offer {
+            Button {
+                offer.open(model)
+            } label: {
+                // Titled, so the item survives a vertical bar's
+                // overflow, which draws a row from the title (#1787).
+                Label("Open in New Window", systemImage: "macwindow.badge.plus")
+            }
+            .disabled(!model.mayHandOff || model.pendingDrops > 0)
+            .accessibilityIdentifier("compose.openInNewWindow")
         }
     }
 }

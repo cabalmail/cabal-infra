@@ -64,11 +64,22 @@ final class ComposeLaptopPolicyTests: XCTestCase {
         XCTAssertEqual(166 + 278.5 + 13 + 38, 495.5)
     }
 
-    /// At large text sizes the body keeps its own floor.
-    func testTheFloorHolds() {
-        let frame = Policy.bodyFrame(crease: crease, rest: .init(bodyTop: 260, gap: 50), cellOutset: 11)
+    /// Measured on the Duo simulator: the body starts at 219.3 with its row
+    /// 15 pt below it and the From header 32.7 pt below that, which leaves
+    /// 221 pt above the fold and 22.3 pt of padding to carry the header
+    /// below it.
+    func testTheSheetsMeasuredRestFitsAboveTheFold() {
+        let frame = Policy.bodyFrame(crease: crease, rest: .init(bodyTop: 219.5, gap: 32.5))
 
-        XCTAssertEqual(frame, .init(height: 240, bridge: 0))
+        XCTAssertEqual(frame, .init(height: 221, bridge: 22.5))
+        XCTAssertEqual(219.5 + 221 + 22.5 + 32.5, 495.5)
+    }
+
+    /// At large text sizes the body keeps a few lines.
+    func testTheFloorHolds() {
+        let frame = Policy.bodyFrame(crease: crease, rest: .init(bodyTop: 340, gap: 50), cellOutset: 11)
+
+        XCTAssertEqual(frame, .init(height: 120, bridge: 0))
         XCTAssertEqual(Policy.bodyFrame(crease: crease, rest: nil), .natural)
     }
 
@@ -76,6 +87,17 @@ final class ComposeLaptopPolicyTests: XCTestCase {
         let rest = Policy.restMetrics(bodyFrame: CGRect(x: 0, y: 166.2, width: 669, height: 291.5), fieldsTop: 495.6)
 
         XCTAssertEqual(rest, .init(bodyTop: 166, gap: 38))
+    }
+
+    /// The layout reads back half a point either side of a height; only a
+    /// real move replaces the metrics, or the two would chase each other.
+    func testOnlyAMoveOfMoreThanAPointReplacesTheRest() {
+        let rest = Policy.RestMetrics(bodyTop: 219.5, gap: 42.5)
+
+        XCTAssertTrue(Policy.restMoved(from: nil, to: rest))
+        XCTAssertFalse(Policy.restMoved(from: rest, to: .init(bodyTop: 219.5, gap: 43)))
+        XCTAssertTrue(Policy.restMoved(from: rest, to: .init(bodyTop: 219.5, gap: 32.5)))
+        XCTAssertTrue(Policy.restMoved(from: rest, to: .init(bodyTop: 179.5, gap: 42.5)))
     }
 
     func testRestIsSampledOnlyIdleAtTheTopWithTheBarsBelow() {

@@ -40,9 +40,9 @@ struct ComposeView: View {
     var model: ComposeViewModel { deferredModel.model }
 
     @Environment(AppState.self) private var appState
-    /// Whether the window's bars are a side strip, where Cancel and Send
-    /// carry symbols (`ComposeBarLabel`).
-    @Environment(\.barsAreVertical) private var barsAreVertical
+    /// Laptop pose: the body above the fold, the fields and the bar below
+    /// it (`ComposeLaptopArrangement`).
+    @State private var laptop = ComposeLaptopArrangement()
     /// Whether this composer's window is in front, which a window taking
     /// over a sheet's draft waits for before it claims it.
     @Environment(\.scenePhase) private var scenePhase
@@ -192,7 +192,7 @@ struct ComposeView: View {
             } message: {
                 Text("Keep a copy of the draft for later, discard it now, or go back to editing.")
             }
-            .toastOverlay($composeToast)
+            .toastOverlay($composeToast, below: laptop.toastFloor)
         }
         // A window taking over a sheet's draft shows it at once, but the
         // sheet may still take it back until the window has claimed it.
@@ -242,6 +242,21 @@ struct ComposeView: View {
         // drops any server copy the autosave left, removes the local one,
         // closes.
         await model.cancel()
+    }
+
+    /// Send: closes the composer once the message is on its way.
+    private func sendAndClose() async {
+        #if os(macOS)
+        // Send dismisses the window on success; pre-approve so
+        // the close-button intercept doesn't pop the dialog
+        // in front of a message the user already committed.
+        closeCoordinator.allowsClose = true
+        #endif
+        let sent = await model.send()
+        #if os(macOS)
+        if !sent { closeCoordinator.allowsClose = false }
+        #endif
+        if sent { outcomeReport.sent() }
     }
 
     /// Runs the outcome the user picked in the cancel-compose dialog. Stays
@@ -295,45 +310,20 @@ struct ComposeView: View {
         ComposeOutcomeReport(model: model, appState: appState)
     }
 
-    @ToolbarContentBuilder
+    /// Compose's bar buttons, in the navigation bar or, in laptop pose at
+    /// rest, a bar below the fold (`ComposeToolbar`).
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .cancellationAction) {
-            Button {
-                Task { await cancelOrAsk() }
-            } label: {
-                ComposeBarLabel.cancel(barsAreVertical: barsAreVertical).label("Cancel", systemImage: "xmark")
-            }
-            .accessibilityIdentifier("compose.cancel")
-        }
-        .keepsInBar()
-        ToolbarItem {
-            attachMenu
-        }
-        ComposeWindowOfferItem(model: model)
-        ToolbarItem(placement: .confirmationAction) {
-            Button {
-                Task {
-                    #if os(macOS)
-                    // Send dismisses the window on success; pre-approve so
-                    // the close-button intercept doesn't pop the dialog
-                    // in front of a message the user already committed.
-                    closeCoordinator.allowsClose = true
-                    #endif
-                    let sent = await model.send()
-                    #if os(macOS)
-                    if !sent { closeCoordinator.allowsClose = false }
-                    #endif
-                    if sent { outcomeReport.sent() }
-                }
-            } label: {
-                ComposeBarLabel.send(barsAreVertical: barsAreVertical, isSending: model.isSending)
-                    .label("Send", systemImage: "paperplane")
-            }
-            .symbolEffect(.pulse, isActive: model.isSending)
-            .disabled(!model.canSend || model.isSending)
-            .accessibilityIdentifier("compose.send")
-        }
-        .keepsInBarFirst()
+        ComposeToolbar(
+            model: model,
+            host: laptop.host,
+            cancel: { await cancelOrAsk() },
+            send: { await sendAndClose() },
+            editMessage: {
+                focusedField = nil
+                laptop.requestEdit()
+            },
+            attachMenu: { attachMenu }
+        )
     }
 
     @ViewBuilder
@@ -425,15 +415,39 @@ extension ComposeView {
     private var composeForm: some View {
         ScrollViewReader { proxy in
             Form {
-                ForEach(ComposeFormSection.allCases, id: \.self) { section in
+                // The body leads in laptop pose (`ComposeFormSection.order`),
+                // a move by value that rebuilds no row.
+                ForEach(ComposeFormSection.order(inLaptop: laptop.isLaptop), id: \.self) { section in
                     formSection(section)
                 }
             }
+            // Above the form, or at rest in laptop pose below it, above the
+            // bar and below the fold.
             .safeAreaInset(edge: .top, spacing: 0) {
-                composeErrorBanner
+                if !laptop.barsBelowFold { composeErrorBanner }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if laptop.barsBelowFold { composeErrorBanner }
+            }
+            // Laptop pose packs the fields under the fold, so Subject
+            // clears the bar at the bottom.
+            .listSectionSpacing(laptop.isLaptop ? .compact : .default)
+            .readsComposeLaptop(laptop, proxy: proxy)
             .onChange(of: model.editorFocused) { _, focused in
                 scrollBodyClearOfKeyboard(focused: focused, proxy: proxy)
+            }
+            // A fold while typing moves what has focus, the body or a
+            // recipient field: bring it back above the keyboard.
+            .onChange(of: laptop.isLaptop) { _, _ in
+                scrollBodyClearOfKeyboard(focused: model.editorFocused, proxy: proxy)
+                if focusedField != nil {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo(ComposeFormSection.recipients, anchor: .top)
+                        }
+                    }
+                }
             }
             // The other order: the editor takes focus with no keyboard up,
             // and the keyboard arrives afterwards. The scroll above then
@@ -461,6 +475,7 @@ extension ComposeView {
         guard focused, ComposeBodyScrollPolicy.appMustScrollBodyIntoView else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
+            guard ComposeBodyScrollPolicy.scrollsBodyIntoView(barsBelowFold: laptop.barsBelowFold) else { return }
             withAnimation(.easeOut(duration: 0.2)) {
                 proxy.scrollTo(ComposeBodyScrollPolicy.bodyScrollTarget, anchor: .top)
             }
@@ -496,12 +511,16 @@ extension ComposeView {
         @Bindable var model = model
         switch section {
         case .from:
-            Section("From") {
+            Section {
                 FromPicker(
                     model: model,
                     onCreateAddress: { showNewAddressSheet = true }
                 )
                 .takesDroppedAttachments(into: model)
+            } header: {
+                // Where the fields start, which laptop pose keeps below
+                // the fold.
+                Text("From").composeLaptopFieldsStart(laptop)
             }
         case .recipients:
             recipientsSection

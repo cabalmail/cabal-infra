@@ -162,17 +162,26 @@ extension View {
     /// hidden behind the presented content. A toast carrying a `copyAddress`
     /// renders a Copy button that copies the address and swaps in the shared
     /// "successfully copied" confirmation.
+    ///
+    /// `below` sits the toast under a window y rather than at the top of the
+    /// view: compose's laptop pose puts it below the fold
+    /// (`ComposeLaptopPolicy.toastFloor`).
     func toastOverlay(
         _ toast: Binding<Toast?>,
-        duration: TimeInterval = 7
+        duration: TimeInterval = 7,
+        below windowY: CGFloat? = nil
     ) -> some View {
-        modifier(ToastOverlayModifier(toast: toast, duration: duration))
+        modifier(ToastOverlayModifier(toast: toast, duration: duration, below: windowY))
     }
 }
 
 private struct ToastOverlayModifier: ViewModifier {
     @Binding var toast: Toast?
     let duration: TimeInterval
+    let below: CGFloat?
+    /// The overlay's safe top in window coordinates, which `below` is
+    /// measured from.
+    @State private var safeTop: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
@@ -183,9 +192,16 @@ private struct ToastOverlayModifier: ViewModifier {
                         onAction: copyHandler(for: toast),
                         onDismiss: { self.toast = nil }
                     )
-                        .padding(.top, 6)
+                        .padding(.top, ToastPlacement.topPadding(below: below, safeTop: safeTop))
                         .padding(.horizontal, 12)
                         .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .background {
+                Color.clear.onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.frame(in: .global).minY
+                } action: { top in
+                    safeTop = top
                 }
             }
             .animation(.default, value: toast)

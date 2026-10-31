@@ -51,9 +51,11 @@ enum ComposeLaptopPolicy {
         static let natural = BodyFrame(height: nil, bridge: 0)
     }
 
-    /// The body's own minimum height (`ComposerBody`), which a laptop
-    /// height never goes under.
-    static let bodyFloor: CGFloat = 240
+    /// The least a laptop height gives the body: a few lines. Less than the
+    /// body's own 240 pt elsewhere, which counts the formatting controls
+    /// that laptop pose folds away at rest; the sheet's bar and the body's
+    /// section header leave about 220 pt above the fold (measured).
+    static let bodyFloor: CGFloat = 120
     /// The grouped row's blank under the body, measured on the Duo
     /// simulator (the row's bottom 15 pt below the editor's).
     static let bodyCellOutset: CGFloat = 15
@@ -92,6 +94,15 @@ enum ComposeLaptopPolicy {
     /// padding) and the From header's top, to the half point.
     static func restMetrics(bodyFrame: CGRect, fieldsTop: CGFloat) -> RestMetrics {
         RestMetrics(bodyTop: halfPoint(bodyFrame.minY), gap: halfPoint(fieldsTop - bodyFrame.maxY))
+    }
+
+    /// Whether a new sample replaces the rest metrics: by more than a point.
+    /// The layout a height produces reads back half a point either side, so
+    /// a smaller change would publish, re-lay out and read back the other
+    /// half point, forever (measured).
+    static func restMoved(from old: RestMetrics?, to new: RestMetrics) -> Bool {
+        guard let old else { return true }
+        return abs(new.bodyTop - old.bodyTop) > 1 || abs(new.gap - old.gap) > 1
     }
 
     /// Whether the frames now are the rest the body's height is worked out
