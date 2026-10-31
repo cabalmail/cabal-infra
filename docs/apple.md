@@ -1386,7 +1386,13 @@ body acts on each change of the request).
 titled Message (`drawsMessageMenu`); everywhere else the reader's menu
 stays More actions. In laptop pose it is the one way below the fold to
 what the message header holds above it, where nothing may be tapped. Its
-rows, from the bar's button outward: Show Remote Content (the spec's
+rows, from the bar's button outward: Previous and Next, one row of two
+buttons that open the message above or below in the window's list (the
+list answers `WindowCommand.step`, `MessageListStepping`, walking its
+loaded rows to the nearest one its filter shows, with no wrap, by
+`ListStepPolicy`, and reports what it can step to for the buttons to dim;
+a list put away behind the reader keeps answering and keeps its next page
+loading), Show Remote Content (the spec's
 Load Images; an HTML body only), Attachments (a row per attachment,
 opening it as its chip does through the presenter below:
 `ReaderAttachmentsMenu`, with the chip's symbol from `AttachmentIcon`),
