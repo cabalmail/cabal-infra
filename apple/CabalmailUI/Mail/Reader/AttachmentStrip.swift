@@ -36,7 +36,7 @@ private struct AttachmentChip: View {
 
     var body: some View {
         HStack {
-            Image(systemName: iconName)
+            Image(systemName: AttachmentIcon.systemImage(for: attachment))
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.filename)
@@ -52,7 +52,15 @@ private struct AttachmentChip: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private var iconName: String {
+    private func formatSize(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+}
+
+/// The symbol an attachment shows, on its chip and in the Message menu's
+/// Attachments submenu alike.
+enum AttachmentIcon {
+    static func systemImage(for attachment: MessageDetailViewModel.Attachment) -> String {
         if ICalendar.isCalendarAttachment(mimeType: attachment.mimeType, filename: attachment.filename) {
             return "calendar"
         }
@@ -64,8 +72,27 @@ private struct AttachmentChip: View {
         default:       return "paperclip"
         }
     }
+}
 
-    private func formatSize(_ bytes: Int) -> String {
-        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+/// The Message menu's Attachments submenu: a row per attachment that opens
+/// it as its chip does. A view of its own so that it reads
+/// `\.openAttachment` inside the reader's presenter: the reader's own
+/// environment comes from outside the `presentsAttachments()` it applies.
+struct ReaderAttachmentsMenu: View {
+    let attachments: [MessageDetailViewModel.Attachment]
+    @Environment(\.openAttachment) private var openAttachment
+
+    var body: some View {
+        Menu {
+            ForEach(attachments) { attachment in
+                Button {
+                    openAttachment?(attachment)
+                } label: {
+                    Label(attachment.filename, systemImage: AttachmentIcon.systemImage(for: attachment))
+                }
+            }
+        } label: {
+            Label("Attachments", systemImage: "paperclip")
+        }
     }
 }

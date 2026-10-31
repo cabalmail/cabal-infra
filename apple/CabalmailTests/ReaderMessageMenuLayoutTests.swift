@@ -8,40 +8,57 @@ import CabalmailKit
 final class ReaderMessageMenuLayoutTests: XCTestCase {
     private typealias Layout = ReaderMessageMenuLayout
 
-    private let html = Layout.Content(hasHTML: true, hasPlainAlternative: true, addressCount: 3)
+    private let html = Layout.Content(hasHTML: true, hasPlainAlternative: true, attachmentCount: 2, addressCount: 3)
 
     func testAnHTMLMessageWithAddressesShowsEveryRowInOrder() {
-        XCTAssertEqual(Layout.rows(for: html), [.loadImages, .addresses, .moveToFolder, .display, .more])
+        XCTAssertEqual(
+            Layout.rows(for: html),
+            [.previousNext, .loadImages, .attachments, .addresses, .moveToFolder, .display, .more]
+        )
         XCTAssertEqual(Layout.displayRows(for: html), [.readerView, .plainText])
     }
 
     /// A plain-text message has no remote content to load and nothing to
     /// display another way.
     func testAPlainTextMessageHasNoImageOrDisplayRows() {
-        let plain = Layout.Content(hasHTML: false, hasPlainAlternative: true, addressCount: 1)
+        let plain = Layout.Content(hasHTML: false, hasPlainAlternative: true, attachmentCount: 0, addressCount: 1)
 
-        XCTAssertEqual(Layout.rows(for: plain), [.addresses, .moveToFolder, .more])
+        XCTAssertEqual(Layout.rows(for: plain), [.previousNext, .addresses, .moveToFolder, .more])
         XCTAssertEqual(Layout.displayRows(for: plain), [])
     }
 
     /// Plain Text toggles only between two parts the message has.
     func testAnHTMLOnlyMessageDisplaysReaderViewAlone() {
-        let htmlOnly = Layout.Content(hasHTML: true, hasPlainAlternative: false, addressCount: 1)
+        let htmlOnly = Layout.Content(hasHTML: true, hasPlainAlternative: false, attachmentCount: 0, addressCount: 1)
 
         XCTAssertEqual(Layout.displayRows(for: htmlOnly), [.readerView])
         XCTAssertTrue(Layout.rows(for: htmlOnly).contains(.display))
     }
 
     func testNoAddressesNoAddressesRow() {
-        let none = Layout.Content(hasHTML: true, hasPlainAlternative: false, addressCount: 0)
+        let none = Layout.Content(hasHTML: true, hasPlainAlternative: false, attachmentCount: 1, addressCount: 0)
 
         XCTAssertFalse(Layout.rows(for: none).contains(.addresses))
     }
 
-    /// The spec's budget: seven rows fit between the fold and the bar, and
-    /// the rows still to join (Previous and Next, Attachments) need two.
-    func testTheMenuLeavesRoomForTheRowsStillToJoin() {
-        XCTAssertLessThanOrEqual(Layout.rows(for: html).count, 5)
+    func testNoAttachmentsNoAttachmentsRow() {
+        let none = Layout.Content(hasHTML: true, hasPlainAlternative: true, attachmentCount: 0, addressCount: 1)
+
+        XCTAssertFalse(Layout.rows(for: none).contains(.attachments))
+    }
+
+    /// The spec's budget: seven rows fit between the fold and the bar.
+    func testTheFullMenuFitsTheSpecsBudget() {
+        XCTAssertLessThanOrEqual(Layout.rows(for: html).count, 7)
+    }
+
+    /// Previous and Next sit nearest the bar's button in every message;
+    /// they dim rather than leave where the list has nowhere to go.
+    func testPreviousAndNextAlwaysComeFirst() {
+        let bare = Layout.Content(hasHTML: false, hasPlainAlternative: false, attachmentCount: 0, addressCount: 0)
+
+        XCTAssertEqual(Layout.rows(for: bare).first, .previousNext)
+        XCTAssertEqual(Layout.rows(for: html).first, .previousNext)
     }
 
     // MARK: The Addresses submenu
