@@ -185,10 +185,6 @@ public final class WindowCommands {
     func report(_ availability: ListStepAvailability, in tab: CompactTab?, by reporter: UUID) {
         stepReports.set(availability, for: CommandSurface(tab: tab), by: reporter)
     }
-
-    func withdrawStepReport(in tab: CompactTab?, by reporter: UUID) {
-        stepReports.clear(CommandSurface(tab: tab), by: reporter)
-    }
 }
 
 extension EnvironmentValues {

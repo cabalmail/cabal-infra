@@ -120,6 +120,11 @@ enum ListStepPolicy {
     }
 }
 
+/// Keeps the report while the list is out of sight: in a tall window the
+/// list is put away behind the open message (`ListOverlay`), which takes
+/// it off screen without removing it, and it still answers the steps. The
+/// next list in its surface replaces the report, as a fold or a folder
+/// change mounts one.
 private struct ListStepReporter: ViewModifier {
     @Environment(\.windowCommands) private var commands
     @Environment(\.commandTab) private var tab
@@ -130,7 +135,6 @@ private struct ListStepReporter: ViewModifier {
         content
             .onAppear { commands?.report(availability, in: tab, by: reporter) }
             .onChange(of: availability) { _, new in commands?.report(new, in: tab, by: reporter) }
-            .onDisappear { commands?.withdrawStepReport(in: tab, by: reporter) }
     }
 }
 
