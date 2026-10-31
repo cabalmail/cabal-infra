@@ -1376,8 +1376,11 @@ rule. Edit Message puts the caret back where it was
 (`RichTextEditorController.focusRestoringCaret()`, which makes the web
 view first responder so the keyboard rises), or focuses the Markdown
 editor. A toast and the send-error banner sit below the fold at rest. A
-fold while typing brings the focused body or recipient field back above
-the keyboard. Every one of these is a value on a modifier that is always
+focused field or body is scrolled above the keyboard when it takes focus
+and after a fold, since neither scrolls it there itself, and the keyboard
+counts only while something has focus. The bar takes what it shows as
+values from `ComposeView`'s body, since a toolbar content type's body
+doesn't refresh for the model's reads. Every one of these is a value on a modifier that is always
 present: an `if` or `.id` around the body or a field would rebuild the
 editor's web view.
 
