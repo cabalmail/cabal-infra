@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.42.1] - 2026-11-01
+
+### Changed
+- **Apple CI's Xcode-selection comment no longer lists versions.** The
+  `XCODE_VERSION` comment in `apple.yml` had fallen behind the `xcode-27`
+  runner image: it still named 27.0 as the default and said `latest-stable`
+  skips pre-release Xcodes, when it also picks release candidates. It now
+  describes how the selection behaves, where a run's log records the image
+  and Xcode it used, and which runner-images readme lists what is installed.
+- **API Gateway's logging role grants log-group actions on log-group
+  ARNs.** CloudWatch Logs stops honouring a log-stream ARN for log-group
+  actions on 2027-04-26, and `cabal_cloudwatch_role` granted
+  `CreateLogGroup`, `DescribeLogStreams` and `FilterLogEvents` only through
+  `log-group:*:*`. Its policy is now two statements: those actions on
+  `log-group:*`, and the stream actions (`CreateLogStream`,
+  `PutLogEvents`, `GetLogEvents`) on the stream ARN as before. A scan of
+  every IAM policy in the stage and prod accounts found no other statement
+  the change affects.
+
+### Security
+- **dnspython 2.9.0 in the API Lambdas.** Bumps the pinned `dnspython` from 2.3.0 to 2.9.0 in every `lambda/api/*/requirements.txt` to resolve CVE-2026-114605 (excessive CPU use in `dns.name.from_wire_parser()`).
+
 ## [1.42.0] - 2026-11-01
 
 ### Added

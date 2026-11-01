@@ -196,7 +196,7 @@ All Lambda functions are Python, fronted by API Gateway with Cognito authorizer.
 - S3 message caching (raw email bodies cached at `{user}/{folder}/{id}/raw`)
 - Presigned URL generation for attachments (24hr expiry)
 
-Key dependencies: `imapclient==2.3.1`, `dnspython==2.3.0` (bundled per function via `requirements.txt`; previously shipped as a Lambda layer, removed in 0.9.x). IMAP folder paths use `.` internally but `/` in API requests — all functions normalize with `.replace("/", ".")`.
+Key dependencies: `imapclient==2.3.1`, `dnspython==2.9.0` (bundled per function via `requirements.txt`; previously shipped as a Lambda layer, removed in 0.9.x). IMAP folder paths use `.` internally but `/` in API requests — all functions normalize with `.replace("/", ".")`.
 
 Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted from `event['requestContext']['authorizer']['claims']['cognito:username']`.
 
