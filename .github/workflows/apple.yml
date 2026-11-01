@@ -41,25 +41,30 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  # Track the runner image's newest stable Xcode. Pinning a specific version
-  # (e.g. '27.0') is more reproducible but fragile: runner images rotate the
+  # Track the runner image's newest non-beta Xcode. Pinning a specific
+  # version is more reproducible but fragile: runner images rotate the
   # SDK/runtimes independently and a too-old Xcode won't know about the
   # simulator runtimes that ARE installed, causing test destinations to
-  # resolve as "ineligible" ("iOS 18.1 is not installed").
+  # resolve as "ineligible" ("iOS 18.1 is not installed"). A pin must name an
+  # Xcode the image actually has installed.
   #
-  # Every macOS job runs on GitHub's `xcode-27` image. Since 2026-07 GitHub
-  # keys its macOS images to ONE major Xcode version each, not to the host
-  # OS: `macos-26` tops out at Xcode 26.6 forever and there is no `macos-27`
-  # label, so `xcode-27` is the only image that carries Xcode 27 (27.0 GA as
-  # the default, plus the 27.1/27.2 betas) and the macOS 27 host. GitHub
-  # still calls it a preview. It carries only 27.x simulator runtimes; the
-  # older runtimes the deployment targets admit are not exercised in CI.
-  # setup-xcode reads the beta flag from each Xcode's LicenseInfo.plist, so
-  # 'latest-stable' resolves to the GA build and skips the betas.
+  # setup-xcode counts an Xcode as beta only when its LicenseInfo.plist
+  # says so, and release candidates don't, so 'latest-stable' picks up an
+  # RC as soon as the image adds one, even while the image's default is an
+  # older release. It reaches the final build only when a later image swaps
+  # the RC out. To see what a run used: the "Runner Image" group at the top
+  # of a job's log names the image version, and the setup-xcode step logs
+  # "Xcode is set to <version> (<build>)".
   #
-  # If reproducibility becomes important, pin to a specific version here AND
-  # ensure it matches a Xcode actually preinstalled on the `xcode-27` runner
-  # image.
+  # The macOS jobs run on the image their `runs-on` names. GitHub keys its
+  # macOS images to one major Xcode version each (`xcode-NN`), not to the
+  # host OS, so adopting a new Xcode major means moving every `runs-on` to
+  # that major's image. What an image carries right now (its Xcodes and
+  # which is the default, SDKs, simulator runtimes, and the devices each
+  # runtime supports) is in its readme in actions/runner-images,
+  # images/macos/xcode-NN-arm64-Readme.md. CI exercises an older OS the
+  # deployment targets admit only if the image installs a simulator runtime
+  # for it.
   #
   # The runner image's HOST macOS version is load-bearing, not just a
   # freshness preference: compiling the Liquid Glass AppIcon.icon for
