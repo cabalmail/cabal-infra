@@ -17,6 +17,9 @@ struct RichTextToolbar: View {
 
     @State private var showLinkPrompt = false
     @State private var linkUrl = ""
+    /// Compose's laptop pose, which counts the link prompt's keyboard as
+    /// editing; nil outside the iOS compose form.
+    @Environment(\.composeLaptop) private var laptop
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -115,6 +118,7 @@ struct RichTextToolbar: View {
         } message: {
             Text("URL to link the selected text to.")
         }
+        .onChange(of: showLinkPrompt) { _, shown in laptop?.promptEditing(shown) }
     }
 
     private var divider: some View {

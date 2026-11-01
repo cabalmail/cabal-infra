@@ -295,6 +295,23 @@ public final class RichTextEditorController: NSObject {
         await call("focusAtStart")
     }
 
+    /// Focuses the editor with the caret back where it last was in it, or at
+    /// the start when it has none (Edit Message, compose in laptop pose).
+    /// The web view becomes first responder first: WebKit starts an input
+    /// session, and raises the software keyboard, only for a first
+    /// responder, which a bare JS focus doesn't make it.
+    public func focusRestoringCaret() async {
+        await waitUntilReady()
+        #if canImport(AppKit)
+        if let window = webView.window {
+            window.makeFirstResponder(webView)
+        }
+        #elseif canImport(UIKit)
+        _ = webView.becomeFirstResponder()
+        #endif
+        await call("focusRestoringCaret")
+    }
+
     /// Scales the editor's text by `scale`, the system text size as a
     /// ratio of the default (`DynamicTypeSize.bodyTextScale` in the app
     /// layer), so the composer follows Dynamic Type the way the SwiftUI

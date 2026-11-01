@@ -1,34 +1,24 @@
 import SwiftUI
 import CabalmailKit
-#if os(iOS) || os(visionOS)
-import UIKit
-import QuickLook
-#endif
 
-/// Horizontal strip of attachment chips under the message body.
+/// Horizontal strip of attachment chips under the message header.
 ///
-/// Tapping a chip opens the file in the platform's preview UI — on iOS /
-/// visionOS via `QLPreviewController`, on macOS via `NSWorkspace.open(_:)`.
-/// Calendar invites (`.ics`) are the exception on iOS / visionOS: QuickLook
-/// can only display them and Calendar offers no share-sheet route, so they
-/// open in `CalendarEventSheet` with an Add to Calendar flow instead (an
-/// unparseable invite still falls back to QuickLook). On macOS the plain
-/// `open` already lands in Calendar's own import prompt. Phase 7 polish
-/// will replace the macOS path with `NSSharingServicePicker` so the user
-/// can forward / save from the chip directly.
+/// Tapping a chip opens the file through the reader's attachment presenter
+/// (`\.openAttachment`, `presentsAttachments()`): Quick Look on iOS and
+/// visionOS, with an invitation in `CalendarEventSheet`, and the system's
+/// own handler on macOS. Phase 7 polish will replace the macOS path with
+/// `NSSharingServicePicker` so the user can forward / save from the chip
+/// directly.
 struct AttachmentStrip: View {
     let attachments: [MessageDetailViewModel.Attachment]
-    @State private var previewURL: URL?
-    #if canImport(EventKitUI)
-    @State private var calendarInvite: CalendarInvite?
-    #endif
+    @Environment(\.openAttachment) private var openAttachment
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(attachments) { attachment in
                     Button {
-                        open(attachment)
+                        openAttachment?(attachment)
                     } label: {
                         AttachmentChip(attachment: attachment)
                     }
@@ -38,32 +28,6 @@ struct AttachmentStrip: View {
             }
             .padding(.horizontal)
         }
-        #if os(iOS) || os(visionOS)
-        .quickLookPreview($previewURL)
-        #endif
-        #if canImport(EventKitUI)
-        .sheet(item: $calendarInvite) { invite in
-            CalendarEventSheet(invite: invite)
-                .windowShapedSheet()
-        }
-        #endif
-    }
-
-    private func open(_ attachment: MessageDetailViewModel.Attachment) {
-        #if os(macOS)
-        NSWorkspace.shared.open(attachment.fileURL)
-        #else
-        #if canImport(EventKitUI)
-        if ICalendar.isCalendarAttachment(mimeType: attachment.mimeType, filename: attachment.filename),
-           let data = try? Data(contentsOf: attachment.fileURL),
-           let calendar = ICalendarParser.parse(data),
-           !calendar.events.isEmpty {
-            calendarInvite = CalendarInvite(calendar: calendar)
-            return
-        }
-        #endif
-        previewURL = attachment.fileURL
-        #endif
     }
 }
 
@@ -72,7 +36,7 @@ private struct AttachmentChip: View {
 
     var body: some View {
         HStack {
-            Image(systemName: iconName)
+            Image(systemName: AttachmentIcon.systemImage(for: attachment))
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.filename)
@@ -88,7 +52,15 @@ private struct AttachmentChip: View {
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private var iconName: String {
+    private func formatSize(_ bytes: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    }
+}
+
+/// The symbol an attachment shows, on its chip and in the Message menu's
+/// Attachments submenu alike.
+enum AttachmentIcon {
+    static func systemImage(for attachment: MessageDetailViewModel.Attachment) -> String {
         if ICalendar.isCalendarAttachment(mimeType: attachment.mimeType, filename: attachment.filename) {
             return "calendar"
         }
@@ -100,8 +72,27 @@ private struct AttachmentChip: View {
         default:       return "paperclip"
         }
     }
+}
 
-    private func formatSize(_ bytes: Int) -> String {
-        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+/// The Message menu's Attachments submenu: a row per attachment that opens
+/// it as its chip does. A view of its own so that it reads
+/// `\.openAttachment` inside the reader's presenter: the reader's own
+/// environment comes from outside the `presentsAttachments()` it applies.
+struct ReaderAttachmentsMenu: View {
+    let attachments: [MessageDetailViewModel.Attachment]
+    @Environment(\.openAttachment) private var openAttachment
+
+    var body: some View {
+        Menu {
+            ForEach(attachments) { attachment in
+                Button {
+                    openAttachment?(attachment)
+                } label: {
+                    Label(attachment.filename, systemImage: AttachmentIcon.systemImage(for: attachment))
+                }
+            }
+        } label: {
+            Label("Attachments", systemImage: "paperclip")
+        }
     }
 }

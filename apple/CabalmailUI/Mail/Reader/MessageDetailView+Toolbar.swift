@@ -73,6 +73,14 @@ extension MessageDetailView {
     }
     #endif
 
+    /// Whether the bar's menu is the Message menu
+    /// (`ReaderMessageMenuLayout`): the reader draws its own bar in a window
+    /// taller than wide, which in laptop pose is the one way below the fold
+    /// to the header's address actions.
+    var drawsMessageMenu: Bool {
+        drawsOwnActionBar && readerFillsTallWindow
+    }
+
     /// True while the display toggles are drawn on the pane-scoped bar, in
     /// which case the overflow menu must not offer a second copy — two views
     /// would otherwise share one accessibility identifier.
@@ -351,6 +359,79 @@ extension MessageDetailView {
     }
 
     #if os(iOS)
+    /// The Message menu's rows in a tall window (`ReaderMessageMenuLayout`),
+    /// from the bar's button outward. The header's address actions are
+    /// above a laptop fold; the Addresses submenu repeats them below it.
+    @ViewBuilder
+    func messageMenuRows(model: MessageDetailViewModel) -> some View {
+        let addresses = messageMenuAddresses
+        let content = ReaderMessageMenuLayout.Content(
+            hasHTML: model.htmlBody != nil,
+            hasPlainAlternative: model.plainText != nil,
+            attachmentCount: model.attachments.count,
+            addressCount: addresses.count
+        )
+        ForEach(ReaderMessageMenuLayout.rows(for: content), id: \.self) { row in
+            switch row {
+            case .previousNext:
+                ReaderListStepRow()
+            case .loadImages:
+                remoteContentMenuItem
+            case .attachments:
+                ReaderAttachmentsMenu(attachments: model.attachments)
+            case .addresses:
+                addressesMenu(addresses)
+            case .moveToFolder:
+                moveToFolderMenuItem
+            case .display:
+                Menu {
+                    ForEach(ReaderMessageMenuLayout.displayRows(for: content), id: \.self) { display in
+                        switch display {
+                        case .readerView: readerModeMenuItem
+                        case .plainText: plainTextMenuItem(model: model)
+                        }
+                    }
+                } label: {
+                    Label("Display", systemImage: "textformat")
+                }
+            case .more:
+                Menu {
+                    sourceMenuItems
+                    printMenuItem
+                } label: {
+                    Label("More", systemImage: "ellipsis")
+                }
+            }
+        }
+    }
+
+    /// The Addresses submenu: the first of the user's own addresses with
+    /// its actions under it as a heading, every other address a submenu.
+    private func addressesMenu(_ entries: [ReaderMessageMenuLayout.AddressEntry]) -> some View {
+        Menu {
+            ForEach(entries, id: \.self) { entry in
+                if entry.actionsInline {
+                    Section(entry.address.formatted) {
+                        addressMenu(for: entry.address, divided: false)
+                    }
+                } else {
+                    Menu(entry.address.formatted) {
+                        addressMenu(for: entry.address)
+                    }
+                }
+            }
+        } label: {
+            Label("Addresses", systemImage: "at")
+        }
+    }
+
+    /// The header's addresses, the user's own first.
+    private var messageMenuAddresses: [ReaderMessageMenuLayout.AddressEntry] {
+        ReaderMessageMenuLayout.addresses(
+            from: envelope.from, to: envelope.to, cc: envelope.cc, isOwned: isOwnedAddress
+        )
+    }
+
     /// Second home for the leading control of the compact navigation bar and
     /// of the side strip's bottom items. Both have unmeasured budgets, and a
     /// bar can fold even a ranked item into a system overflow, which this
@@ -400,6 +481,9 @@ extension MessageDetailView {
         Menu {
             if let model {
                 #if os(iOS)
+                if drawsMessageMenu {
+                    messageMenuRows(model: model)
+                }
                 // A second home for Reply wherever the bar may fold it away:
                 // the compact navigation bar, and the short side strip.
                 if actionPlacement == .topBar || actionPlacement == .bottomItems {
@@ -407,62 +491,87 @@ extension MessageDetailView {
                     Divider()
                 }
                 #endif
-
-                Button {
-                    moveSheetPresented = true
-                } label: {
-                    Label("Move to folder…", systemImage: "folder")
+                if !drawsMessageMenu {
+                    overflowRows(model: model)
                 }
-
-                #if os(iOS)
-                // The compact navigation bar leaves Flag off to stay inside
-                // `ReaderToolbarLayout.topBarCapacity`; the menu carries it.
-                if actionPlacement == .topBar {
-                    flagMenuItems
-                }
-                #endif
-
-                #if os(iOS) || os(visionOS)
-                if !displayTogglesAreOnBar {
-                    Divider()
-
-                    readerModeMenuItem
-                    remoteContentMenuItem
-                }
-                #endif
-
-                // Plain text alternative only makes sense when both parts
-                // exist; suppress the item otherwise so we don't show a
-                // toggle that does nothing.
-                if model.htmlBody != nil && model.plainText != nil {
-                    Button {
-                        model.forcePlainText.toggle()
-                    } label: {
-                        ReaderToggleFace.plainText(isOn: model.forcePlainText).label
-                    }
-                }
-
-                Divider()
-
-                Button {
-                    sourceSheetTab = .full
-                } label: {
-                    Label("View source", systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-
-                Button {
-                    sourceSheetTab = .headers
-                } label: {
-                    Label("View headers", systemImage: "list.bullet.rectangle")
-                }
-
-                Divider()
-
-                printMenuItem
             }
         } label: {
-            Label("More actions", systemImage: "ellipsis.circle")
+            Label(drawsMessageMenu ? "Message" : "More actions", systemImage: "ellipsis.circle")
         }
+        // In a tall window the menu opens up from the bar: its first row,
+        // Previous and Next once they join, sits nearest the button.
+        .menuOrderFromBottomBar(drawsMessageMenu)
         .accessibilityIdentifier("reader.overflow")
+    }
+
+    /// The overflow menu's rows everywhere but a tall window.
+    @ViewBuilder
+    private func overflowRows(model: MessageDetailViewModel) -> some View {
+        moveToFolderMenuItem
+
+        #if os(iOS)
+        // The compact navigation bar leaves Flag off to stay inside
+        // `ReaderToolbarLayout.topBarCapacity`; the menu carries it.
+        if actionPlacement == .topBar {
+            flagMenuItems
+        }
+        #endif
+
+        #if os(iOS) || os(visionOS)
+        if !displayTogglesAreOnBar {
+            Divider()
+
+            readerModeMenuItem
+            remoteContentMenuItem
+        }
+        #endif
+
+        // Plain text alternative only makes sense when both parts
+        // exist; suppress the item otherwise so we don't show a
+        // toggle that does nothing.
+        if model.htmlBody != nil && model.plainText != nil {
+            plainTextMenuItem(model: model)
+        }
+
+        Divider()
+
+        sourceMenuItems
+
+        Divider()
+
+        printMenuItem
+    }
+
+    var moveToFolderMenuItem: some View {
+        Button {
+            moveSheetPresented = true
+        } label: {
+            Label("Move to folder…", systemImage: "folder")
+        }
+    }
+
+    func plainTextMenuItem(model: MessageDetailViewModel) -> some View {
+        Button {
+            model.forcePlainText.toggle()
+        } label: {
+            ReaderToggleFace.plainText(isOn: model.forcePlainText).label
+        }
+    }
+
+    /// View source and View headers, the raw RFC 5322 the reader already
+    /// fetched.
+    @ViewBuilder
+    var sourceMenuItems: some View {
+        Button {
+            sourceSheetTab = .full
+        } label: {
+            Label("View source", systemImage: "chevron.left.forwardslash.chevron.right")
+        }
+
+        Button {
+            sourceSheetTab = .headers
+        } label: {
+            Label("View headers", systemImage: "list.bullet.rectangle")
+        }
     }
 }

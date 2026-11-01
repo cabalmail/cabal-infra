@@ -20,6 +20,9 @@
 //                                            \n -> <br> (paste w/o format)
 //   window.cabal.activeStates()           -> snapshot of bold/italic/etc.
 //                                            for the SwiftUI toolbar
+//   window.cabal.focusRestoringCaret()    -> focus with the caret where it
+//                                            last was in the editor, else
+//                                            at the start (Edit Message)
 //   window.cabal.setTextScale(scale)      -> display-only text size ratio
 //                                            (Dynamic Type); never in the
 //                                            HTML getHTML() returns
@@ -274,6 +277,8 @@
       ? { blockRemote: true, keepSources: imageSources(trustedMarkdown) }
       : BLOCK_NOTHING;
     editor.replaceChildren(sanitize(html, policy));
+    // The content the caret was in is gone.
+    lastRange = null;
   }
 
   // Tag names that should keep contenteditable's default Enter behavior
@@ -535,6 +540,8 @@
     let walker = node;
     while (walker) {
       if (walker === editor) {
+        // Where the caret was, for focusRestoringCaret.
+        lastRange = sel.getRangeAt(0).cloneRange();
         postNative({ type: 'selection', states: activeStates() });
         return;
       }
@@ -674,6 +681,29 @@
     editor.focus();
   }
 
+  // The caret's last place in the editor (`selectionchange`); null until the
+  // caret has been in it, and after setHTML replaced what it was in.
+  let lastRange = null;
+
+  // Edit Message: focuses the editor with the caret back where it last was,
+  // or at the start when there is no such place still in the editor. The
+  // range is read first, since focusing fires selectionchange itself.
+  function focusRestoringCaret() {
+    const saved = lastRange;
+    if (!saved || !editor.contains(saved.startContainer)) {
+      focusAtStart();
+      return;
+    }
+    editor.focus();
+    try {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(saved);
+    } catch (error) {
+      focusAtStart();
+    }
+  }
+
   // Places the caret at the very beginning of the editor before focusing,
   // so reply/reply-all opens with the cursor above the seeded separator +
   // attribution + quoted original block.
@@ -719,6 +749,7 @@
     insertPlainText: insertPlainText,
     focus: focus,
     focusAtStart: focusAtStart,
+    focusRestoringCaret: focusRestoringCaret,
     setPlaceholder: setPlaceholder,
     setTextScale: setTextScale,
     placeDroppedImage: placeDroppedImage,

@@ -38,7 +38,7 @@ struct FeedReaderActionBar: View {
     private func control(for slot: FeedReaderBarSlot) -> some View {
         switch slot {
         case .action(let action):
-            FeedReaderBarItem(action: action, model: model, isOffline: isOffline)
+            FeedReaderBarItem(action: action, model: model, isOffline: isOffline, inOwnBar: true)
         case .page(let direction):
             Button {
                 model.requestPage(direction)

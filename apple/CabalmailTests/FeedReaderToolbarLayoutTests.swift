@@ -43,6 +43,26 @@ final class FeedReaderToolbarLayoutTests: XCTestCase {
     /// Today's View menu: Reader view, then Remote content while the feed's
     /// own content shows; then, for an item with a link, a divider and the
     /// article and link rows.
+    /// In a tall window the View menu opens up from the reader's own bar,
+    /// with Previous Item and Next Item nearest the button; elsewhere it
+    /// has no such row.
+    func testATallWindowsViewMenuLeadsWithPreviousAndNext() {
+        XCTAssertEqual(
+            FeedReaderToolbarLayout.viewMenu(showingArticle: false, hasArticle: true, fillsTallWindow: true),
+            [[.previousNext], [.readerMode, .remoteContent], [.article, .openInBrowser, .shareLink, .copyLink]]
+        )
+        XCTAssertEqual(
+            FeedReaderToolbarLayout.viewMenu(showingArticle: true, hasArticle: false, fillsTallWindow: true),
+            [[.previousNext], [.readerMode]]
+        )
+        for state in Self.states {
+            XCTAssertFalse(
+                FeedReaderToolbarLayout.viewMenu(showingArticle: state.showingArticle, hasArticle: state.hasArticle)
+                    .flatMap { $0 }.contains(.previousNext)
+            )
+        }
+    }
+
     func testTheViewMenuRowsAndSections() {
         XCTAssertEqual(
             FeedReaderToolbarLayout.viewMenu(showingArticle: false, hasArticle: false),

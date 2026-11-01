@@ -13,6 +13,7 @@ public enum WindowCommand: Hashable, Sendable {
     case refresh, markFolderRead, settings
     case feed(FeedCommand)
     case sidebarTree(SidebarTreeCommand)
+    case step(ListStep)
 }
 
 /// Where a surface sits in its window: one of the tab layouts' tabs, or the
@@ -99,6 +100,8 @@ public final class WindowCommands {
     /// What the Feeds menu's item commands can act on, per surface
     /// (`reportsFeedMenuAvailability`).
     private(set) var feedReports = SurfaceReports<FeedMenuAvailability>()
+    /// Which steps each surface's list can take (`reportsListStep`).
+    private(set) var stepReports = SurfaceReports<ListStepAvailability>()
     /// The section the wide layouts' split reports (`reportsActiveSection`).
     var reportedSection: ResumeSession.Section = .mail
     /// What the macOS Mailbox menu can act on in this window.
@@ -171,6 +174,16 @@ public final class WindowCommands {
 
     func withdrawFeedReport(in tab: CompactTab?, by reporter: UUID) {
         feedReports.clear(CommandSurface(tab: tab), by: reporter)
+    }
+
+    /// Which steps the list beside a reader in `tab` can take: its own
+    /// surface's report, since the reader and its list share one.
+    func listStep(in tab: CompactTab?) -> ListStepAvailability {
+        stepReports.value(for: CommandSurface(tab: tab)) ?? .none
+    }
+
+    func report(_ availability: ListStepAvailability, in tab: CompactTab?, by reporter: UUID) {
+        stepReports.set(availability, for: CommandSurface(tab: tab), by: reporter)
     }
 }
 

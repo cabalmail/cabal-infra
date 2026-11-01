@@ -40,7 +40,6 @@ Mail/MessageList/MessageListView.swift 1
 Mail/MessageList/SwipeActionRow.swift 4
 Mail/MessageList/TrackpadSwipe.swift 2
 Mail/MoveToFolderSheet.swift 1
-Mail/Reader/AttachmentStrip.swift 6
 Mail/Reader/EmptyDetailToolbar.swift 1
 Mail/Reader/MessageDetailView+AddressMenu.swift 2
 Mail/Reader/MessageDetailView+DisposeOptions.swift 2

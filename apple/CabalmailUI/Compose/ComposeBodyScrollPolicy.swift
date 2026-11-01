@@ -38,4 +38,13 @@ enum ComposeBodyScrollPolicy {
     static var appMustScrollBodyIntoView: Bool {
         appMustScrollBodyIntoView(on: .current)
     }
+
+    /// Whether the body is scrolled to the top once it has focus. Not while
+    /// compose's bars sit below a laptop fold: no software keyboard covers
+    /// the body then (a hardware keyboard), and scrolling it to the top
+    /// would lift From into the fold. Read after the focus settle, by which
+    /// time a software keyboard has moved the bars to the top.
+    static func scrollsBodyIntoView(barsBelowFold: Bool) -> Bool {
+        !barsBelowFold
+    }
 }

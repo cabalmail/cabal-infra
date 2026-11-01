@@ -77,6 +77,11 @@ struct MessageDetailView: View {
     /// The window's navigator, whose parked reading position this reader
     /// opens the restored message at; nil outside a main window.
     @Environment(SceneNavigator.self) var navigator: SceneNavigator?
+    // A reader filling a window taller than wide draws the tall bar, with
+    // the page buttons and Compose (`ReaderToolbarLayout.tallBar`), and its
+    // menu is the Message menu (`drawsMessageMenu`). Published on every
+    // platform; only iOS's split sets it.
+    @Environment(\.readerFillsTallWindow) var readerFillsTallWindow
     #if os(iOS)
     // Drives `actionPlacement`: compact width puts the actions in the
     // navigation bar; at regular width the reader shares the window with the
@@ -87,9 +92,6 @@ struct MessageDetailView: View {
     // A side strip (`verticalBars()`, published at the window's root) moves
     // the actions to bottom items, which join it.
     @Environment(\.barsAreVertical) var barsAreVertical
-    // A reader filling a window taller than wide draws the tall bar, with
-    // the page buttons and Compose (`ReaderToolbarLayout.tallBar`).
-    @Environment(\.readerFillsTallWindow) var readerFillsTallWindow
     // Measured width of the pane-scoped action bar, fed to
     // `ReaderToolbarLayout.ownBar` so the item set tracks the pane as the
     // user drags the split divider. Starts at 0, which draws the compact
@@ -228,6 +230,9 @@ struct MessageDetailView: View {
             sourceSheet(initialTab: tab)
                 .windowShapedSheet()
         }
+        // The attachment chips open their files here (`\.openAttachment`),
+        // outside the per-message content, which a new message rebuilds.
+        .presentsAttachments()
         #if os(iOS) || os(visionOS)
         .sheet(item: $contactEditorRequest) { request in
             ContactEditorView(request: request) { contactEditorRequest = nil }

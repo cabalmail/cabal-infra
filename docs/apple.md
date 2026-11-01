@@ -1354,6 +1354,36 @@ starts following it again, and syncs only if no sync of it ran to the
 end. The feed reader's actions are in its own bar in a tall window
 (below), so laptop pose hiding the navigation bar loses none of them.
 
+**Laptop pose: compose (`Compose/ComposeLaptopArrangement.swift`).** With
+a horizontal fold across the compose sheet, the body sits above the fold
+and From, To, Cc, Bcc, Subject and the attachments below it
+(`ComposeFormSection.order(inLaptop:)`, a move of the same five sections
+in one `ForEach`, so a fold rebuilds no row and the editor keeps its web
+view, caret and undo). The arrangement reads the window's fold and the
+form's own pieces with the keyboard ignored, the software keyboard's
+frame (`onSoftwareKeyboardChange`, a `Platform/` adapter) and the form's
+scroll. The body's height comes from where it and the From header sat at
+rest (sampled only at the form's top, idle, with the keyboard down): it
+reaches the fold, and any space the rows leave is padding under it that
+carries the header below the band (`ComposeLaptopPolicy.bodyFrame`);
+compact section spacing keeps Subject clear of the bar. While the
+keyboard is down, `ComposeToolbar` puts Cancel, Attach, Edit Message,
+Open in New Window and Send in a bar at the bottom and the formatting
+controls fold away by value (`collapsed(_:)`); while the software keyboard
+is up it fills the space below the fold, so Cancel, Attach and Send go
+back to the top bar, the one exception to the no-taps-above-the-fold
+rule. Edit Message puts the caret back where it was
+(`RichTextEditorController.focusRestoringCaret()`, which makes the web
+view first responder so the keyboard rises), or focuses the Markdown
+editor. A toast and the send-error banner sit below the fold at rest. A
+focused field or body is scrolled above the keyboard when it takes focus
+and after a fold, since neither scrolls it there itself, and the keyboard
+counts only while something has focus. The bar takes what it shows as
+values from `ComposeView`'s body, since a toolbar content type's body
+doesn't refresh for the model's reads. Every one of these is a value on a modifier that is always
+present: an `if` or `.id` around the body or a field would rebuild the
+editor's web view.
+
 **The reader's bar in a tall window: `ReaderToolbarLayout.tallBar`.**
 Where the reader fills a window taller than wide
 (`\.readerFillsTallWindow`, which `SplitShell` publishes while the list
@@ -1361,11 +1391,11 @@ floats over the reader or sits below a laptop fold), its own bar (iOS 27
 and later, where the reader draws its own bar at regular width; earlier
 releases keep the system bottom bar) draws the iPhone Duo spec's set in
 its order whatever its width: Reply, dispose, Flag, Read, Page Up, Page
-Down, the More menu and Compose. Edit Draft's button is a pencil there,
+Down, the Message menu and Compose. Edit Draft's button is a pencil there,
 as everywhere, so a draft's bar doesn't show two Compose faces. The
 list's bar, with its Compose, is behind the message or below the fold
 there, so the reader's bar carries Compose too, and the display toggles
-(remote content, reader view) move to the More menu to make room. Page
+(remote content, reader view) move to the Message menu to make room. Page
 Up and Page Down page the body by 90% of its visible height
 (`ReaderPaging`): an HTML body through a script in the app's own content
 world, which shares the page's document while page JavaScript stays off,
@@ -1374,13 +1404,58 @@ the same where it fills a tall window (`ReaderToolbarPolicy.placement`'s
 `fillsTallWindow`): `FeedReaderActionBar` draws Flag, Read, Page Up,
 Page Down, the View menu and Compose
 (`FeedReaderToolbarLayout.tallBar`), and its navigation bar draws none
-of them meanwhile. Its body no longer runs under the bottom edge at
+of them meanwhile. The View menu stands in for the Message menu there: it
+opens up from the bar with Previous and Next nearest its button, which the
+feed list answers the way the message list does (`FeedListStepping`, the
+same `WindowCommand.step` and `ListStepPolicy`, the open item's last place
+kept on the list's model so a fold's move keeps it). Only the reader's own
+bar carries the row (`FeedReaderBarItem.inOwnBar`): a tall window on iPadOS
+18 to 26 keeps the system top bar, whose View menu stays as it was. Its body no longer runs under the bottom edge at
 regular width (`bodyRunsUnderBottomBar` is compact width alone for both
 readers), so a turn that brings the bar reflows the body and never
 rebuilds its web view. A publisher's page pages through its own scroll
 view (`ReaderPaging.scrollTarget`), so nothing runs in the page, and
 every web view takes a press once through `ReaderPageGate` (a plain-text
 body acts on each change of the request).
+
+**The Message menu: `ReaderMessageMenuLayout`.** The tall bar's menu is
+titled Message (`drawsMessageMenu`); everywhere else the reader's menu
+stays More actions. In laptop pose it is the one way below the fold to
+what the message header holds above it, where nothing may be tapped. Its
+rows, from the bar's button outward: Previous and Next, one row of two
+buttons that open the message above or below in the window's list (the
+list answers `WindowCommand.step`, `MessageListStepping`, walking its
+loaded rows to the nearest one its filter shows, with no wrap, by
+`ListStepPolicy`, and reports what it can step to for the buttons to dim;
+a list put away behind the reader keeps answering and keeps its next page
+loading), Show Remote Content (the spec's
+Load Images; an HTML body only), Attachments (a row per attachment,
+opening it as its chip does through the presenter below:
+`ReaderAttachmentsMenu`, with the chip's symbol from `AttachmentIcon`),
+Addresses, Move to Folder, Display (Reader View, and Plain Text when the
+message has both parts) and More (View Source, View Headers, Print). It
+opens up from the bar with its first row nearest the button
+(`menuOrderFromBottomBar`, a `Platform/` adapter: `.priority` on iOS,
+which macOS lacks). The Addresses submenu lists each address in the
+header once, the user's own first: the first of those lays its actions
+out under the address as a heading, with no dividers (a divider splits
+them into groups the heading doesn't label), so Revoke is one level
+down, and every other address opens the header menu's actions as a
+submenu. In laptop pose the system keeps a menu to the region below the
+fold and scrolls one taller than that region. Links in the body are the
+one exception to the no-taps-above-the-fold rule, so the menu has no
+Links row.
+
+**Opening attachments: `Platform/AttachmentPresentation.swift`.** The
+reader hosts one attachment presenter (`presentsAttachments()`, applied
+outside the per-message content) and publishes it as `\.openAttachment`,
+which every control that offers an attachment calls: Quick Look on iOS
+and visionOS, an invitation with an event in `CalendarEventSheet` (the
+rule is `AttachmentOpenRoute`, since Calendar takes no `.ics` from a
+third-party app there), and the system's own handler on macOS. A control
+reads `\.openAttachment` from inside the presenter, so it must be a view
+of its own within the reader's body: the reader's own environment comes
+from outside the modifier it applies.
 
 The pure rules (`FoldState`, `FoldPieces`, `FoldSettler`, `FoldHold`) are
 tested on the Mac host; the 50 ms confirmation and the 0.6 s grace are
