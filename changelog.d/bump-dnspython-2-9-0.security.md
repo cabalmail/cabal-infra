@@ -1,1 +1,0 @@
-- **dnspython 2.9.0 in the API Lambdas.** Bumps the pinned `dnspython` from 2.3.0 to 2.9.0 in every `lambda/api/*/requirements.txt` to resolve CVE-2026-114605 (excessive CPU use in `dns.name.from_wire_parser()`).
