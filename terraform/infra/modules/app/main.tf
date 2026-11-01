@@ -165,6 +165,13 @@ resource "aws_iam_role" "cloudwatch" {
 DOC
 }
 
+# Two statements because CloudWatch Logs authorizes the two halves against
+# different ARNs. From 2027-04-26 log-group actions are checked against the
+# bare group ARN (log-group:NAME), which the stream-format log-group:*:* no
+# longer matches; only CreateLogStream, PutLogEvents, GetLogEvents and
+# DeleteLogStream stay on the stream ARN. log-group:* also matches the
+# stream-format ARN those group actions are checked against until then, so
+# the split holds on either side of the cutover.
 resource "aws_iam_role_policy" "cloudwatch" {
   name   = "cabal_cloudwatch_role"
   role   = aws_iam_role.cloudwatch.id
@@ -173,13 +180,21 @@ resource "aws_iam_role_policy" "cloudwatch" {
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "LogGroupActions",
       "Effect": "Allow",
       "Action": [
         "logs:CreateLogGroup",
-        "logs:CreateLogStream",
         "logs:DescribeLogGroups",
         "logs:DescribeLogStreams",
-        "logs:FilterLogEvents",
+        "logs:FilterLogEvents"
+      ],
+      "Resource": "arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:*"
+    },
+    {
+      "Sid": "LogStreamActions",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
         "logs:GetLogEvents",
         "logs:PutLogEvents"
       ],
