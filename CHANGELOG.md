@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.42.0] - 2026-11-01
+
+### Added
+- Apple: **Compose in laptop pose.** On an iPhone Duo folded like a
+  laptop, the message you're writing sits above the fold and From, To,
+  Cc, Bcc, Subject and the attachments below it. While the keyboard is
+  down, Cancel, Attach, Edit Message, Open in New Window and Send sit in
+  a bar at the bottom and the formatting controls fold away; Edit
+  Message puts the caret back where it was. While you type, Cancel,
+  Attach and Send move back to the top bar. Other devices and poses are
+  unchanged.
+- Apple: **Previous and Next in the feed reader's View menu.** On an
+  iPhone Duo open upright or folded like a laptop, and on iPad in
+  portrait on iPadOS 27 and later, the View menu under an article opens
+  the item above or below it in the list, from a row nearest the menu's
+  button, and dims at either end of the list.
+- Apple: **A Message menu under a message in a tall window.** On an
+  iPhone Duo open upright or folded like a laptop, and on iPad in
+  portrait on iPadOS 27 and later, the menu on the bar under the message
+  is now the Message menu: Previous and Next, which open the message
+  above or below in the list, Show Remote Content, the message's
+  attachments, its addresses with their actions (your own address first,
+  its Revoke one level down), Move to Folder, Display (Reader View and
+  Plain Text) and More (View Source, View Headers and Print). It opens up
+  from the bar, so in laptop pose none of them needs a tap above the
+  fold.
+
+### Changed
+- **Reader attachments open through one presenter.** The chips under a
+  message's header ask the reader's attachment presenter
+  (`presentsAttachments()`, a `Platform/` adapter) to open a file,
+  ready for the Message menu's Attachments submenu to share it; the
+  strip drops its six platform conditionals, and which attachments open
+  as an invitation is a tested rule (`AttachmentOpenRoute`).
+- **Live-editor tests skip a visionOS editor that never loads.** The
+  text-size and caret tests skip, rather than fail, on visionOS when the
+  simulator's WebKit never finishes loading the editor page (#2252),
+  which turned stage runs red at random; on every other platform it is
+  still a failure.
+
 ## [1.41.0] - 2026-10-31
 
 ### Added
