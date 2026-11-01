@@ -1,0 +1,1 @@
+- **Dependency security bumps.** `dnspython` 2.3.0 to 2.9.0 across the API Lambdas (CVE-2026-114605), `pyasn1` 0.6.4 to 0.6.5 in `push_dispatch` (CVE-2026-119194 through CVE-2026-119197), and `follow-redirects` 1.16.1 to 1.16.2 in the React admin lockfile (CVE-2026-116689).
