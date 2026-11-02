@@ -1,10 +1,11 @@
 # Pure-python only, on purpose: the APNs provider API requires HTTP/2 and
 # ES256 provider tokens, and the obvious stacks for both (httpx[http2],
-# cryptography) drag in platform-specific binary wheels. CI could install
-# arm64 binary wheels for this arm64 function (pip --platform, or the
-# ubuntu-24.04-arm runners the docker job already uses), but that build
-# machinery isn't worth it here: h2 (+hpack/hyperframe) gives HTTP/2 framing
-# and python-ecdsa gives ES256, all as universal wheels — the same trade
+# cryptography) drag in platform-specific binary wheels. When this was
+# written the zips were built on x86_64 runners, which would have packaged
+# the wrong wheels for this arm64 function. app.yml's lambda-api job now
+# builds on arm64, so binary wheels would install correctly, but pure python
+# still suffices: h2 (+hpack/hyperframe) gives HTTP/2 framing and
+# python-ecdsa gives ES256, all as universal wheels — the same trade
 # fetch_bimi made when it kept its pip closure pure. The one ES256 signature
 # per ~45 minutes per warm container makes ecdsa's pure-python slowness
 # irrelevant.
@@ -15,8 +16,8 @@
 # at the once-per-45-minutes cadence above with no attacker-observable timing
 # oracle, and the key at stake is the revocable APNs push key, not user data.
 # The Dependabot alert (#165) is dismissed on that basis; migrating ES256 to
-# cryptography (with an arm64-wheel install per the note above) is the escape
-# hatch if that calculus ever changes.
+# cryptography (an ordinary pip install, now that the build runs on arm64) is
+# the escape hatch if that calculus ever changes.
 h2==4.2.0 \
     --hash=sha256:479a53ad425bb29af087f3458a61d30780bc818e4ebcf01f0b536ba916462ed0
 hpack==4.1.0 \
