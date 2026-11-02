@@ -54,6 +54,7 @@ Add an MFA-assurance check to the admin preamble, directly after the group check
 - In **enforce** mode, a missing or password-only `amr` returns 403 with a distinct message (`'MFA-verified session required'`), so a denial is distinguishable from a group denial in both the client and the audit log.
 - A **missing claim denies in enforce mode.** By the time any environment enforces, the rollout is universal and every freshly-minted token carries the claim; a token without it is stale or anomalous. Audit mode is the mechanism that proves this safe before the flip — if audit logging shows legitimate claim-less tokens, enforcement waits.
 - Expected blast radius: zero for legitimate use. Admin-group members have no MFA grace window, so every real admin session is TOTP-backed already; the gate converts an assumption into a check. The probe never calls admin endpoints. Whether any `EXEMPT_USERS` service account holds the admin group is exactly what the audit soak confirms.
+- **Restore-client sessions.** If the [Android Zero-Tap Sign-In plan](android-zero-tap-sign-in-plan.md) has landed, `cabal_restore_client` issues tokens from a custom-auth sign-in that performed no MFA. Those must not satisfy the gate: confirm that their `amr` carries no MFA method, and deny them by `aud` if it does.
 - Tests in `test_shared_admin_guard.py`: the Phase 0 rendering variants, audit vs. enforce behavior, the missing-claim case in each mode, and a negative control (a `pwd`-only claim passing in audit mode must still log `would_block`).
 
 **Status:** Not started.
