@@ -7,7 +7,7 @@ Restore the Android client's signed-in session when a user moves to a new Androi
 | Phase | Status |
 |---|---|
 | 0. Spike: device and Cognito unknowns | Not started |
-| 1. Backend: restore keys, custom-auth triggers, restore client (inert) | arm64 build runners in review (#2309); the rest not started, its shape depending on Phase 0's gate |
+| 1. Backend: restore keys, custom-auth triggers, restore client (inert) | arm64 build runners done (#2309); the rest not started, its shape depending on Phase 0's gate |
 | 2. Android client: key lifecycle, restore hint, first-launch restore | Not started |
 | 3. Device verification on stage (device-to-device and cloud) | Not started |
 | 4. Production rollout and as-implemented docs | Not started |
@@ -165,11 +165,11 @@ In the development pool, with the triggers stubbed to accept any answer:
 
 ### Phase 1: Backend (inert)
 
-First, move `app.yml`'s `lambda-api` and `lambda-counter` jobs to `ubuntu-24.04-arm` (D2), and make `build-api-one.sh` fail when an x86_64 function's zip contains a compiled extension. This can ship on its own, ahead of everything else. Because every current dependency is pure Python and the zips are reproducible, the first stage deploy after it should skip every function as already matching, which is the proof the move changed nothing.
+First, move `app.yml`'s `lambda-api` and `lambda-counter` jobs to `ubuntu-24.04-arm` (D2), and make `build-api-one.sh` fail when an x86_64 function's zip contains a compiled extension. This can ship on its own, ahead of everything else.
 
 Then the table, the three API Lambdas, the three custom-auth triggers, the restore client and the `restore_sign_in` variable, with `restoreClientId` empty everywhere until Phase 3. Unit tests for every verification check and its negative control. Apply to development, then stage with the variable still false. The per-account CI Terraform policy is managed by hand, so check it covers anything new (Cognito trigger wiring, the table) before the first apply.
 
-**Status:** arm64 build runners and the `fetch_bimi` guard in review in #2309. The rest not started.
+**Status:** arm64 build runners and the `fetch_bimi` guard done (#2309, deployed to stage 2026-11-02). The first stage run built on `ubuntu-24.04-arm`, and 69 of 76 functions matched their deployed zips byte for byte (the other two aren't deployed on stage). The remaining five (`push_dispatch`, `fetch_bimi`, `rss_fetch`, `rss_subscribe`, `rss_opml_import`) redeployed once. Diffing their old and new zips showed every module, and `fetch_bimi`'s resvg binary, identical. The only change was the shebang of pip's unused `bin/` console-script launchers (from `rsa` and `publicsuffixlist`), which names the build interpreter's path and changed from `x64` to `arm64`, and those launchers' `RECORD` lines. The rest of Phase 1 is not started.
 
 ### Phase 2: Android client
 
