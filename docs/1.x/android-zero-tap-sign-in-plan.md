@@ -7,7 +7,7 @@ Restore the Android client's signed-in session when a user moves to a new Androi
 | Phase | Status |
 |---|---|
 | 0. Spike: device and Cognito unknowns | Not started |
-| 1. Backend: restore keys, custom-auth triggers, restore client (inert) | Not started; shape depends on Phase 0's gate |
+| 1. Backend: restore keys, custom-auth triggers, restore client (inert) | arm64 build runners in review (#2309); the rest not started, its shape depending on Phase 0's gate |
 | 2. Android client: key lifecycle, restore hint, first-launch restore | Not started |
 | 3. Device verification on stage (device-to-device and cloud) | Not started |
 | 4. Production rollout and as-implemented docs | Not started |
@@ -169,7 +169,7 @@ First, move `app.yml`'s `lambda-api` and `lambda-counter` jobs to `ubuntu-24.04-
 
 Then the table, the three API Lambdas, the three custom-auth triggers, the restore client and the `restore_sign_in` variable, with `restoreClientId` empty everywhere until Phase 3. Unit tests for every verification check and its negative control. Apply to development, then stage with the variable still false. The per-account CI Terraform policy is managed by hand, so check it covers anything new (Cognito trigger wiring, the table) before the first apply.
 
-**Status:** Not started.
+**Status:** arm64 build runners and the `fetch_bimi` guard in review in #2309. The rest not started.
 
 ### Phase 2: Android client
 
