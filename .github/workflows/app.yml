@@ -605,7 +605,12 @@ jobs:
   lambda-api:
     needs: [setup, approval]
     if: needs.setup.outputs.lambda_api == 'true'
-    runs-on: ubuntu-latest
+    # arm64, like the functions it builds: pip installs wheels for the
+    # runner's own platform, so a dependency with compiled code lands in the
+    # zip built for the processor that runs it. The one x86_64 function,
+    # fetch_bimi, must keep a pure-python pip closure; build-api-one.sh fails
+    # its build otherwise.
+    runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -720,7 +725,8 @@ jobs:
   lambda-counter:
     needs: [setup, approval]
     if: needs.setup.outputs.lambda_counter == 'true'
-    runs-on: ubuntu-latest
+    # arm64, like the pool triggers it builds (see lambda-api).
+    runs-on: ubuntu-24.04-arm
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
