@@ -785,6 +785,15 @@ jobs:
         role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
         aws-region: ${{ secrets.AWS_REGION }}
 
+    # Pinned rather than the runner image's default Node, so the bundle that
+    # ships is built on the same Node that lint.yml lints and tests it on.
+    - name: setup-node
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+      with:
+        node-version: '26'
+        cache: npm
+        cache-dependency-path: react/admin/package-lock.json
+
     - name: build
       # No NODE_ENV here: vite build makes React's production build only
       # when NODE_ENV is unset or `production`, and vite.config.js refuses
