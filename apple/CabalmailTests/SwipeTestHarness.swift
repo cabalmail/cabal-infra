@@ -111,12 +111,13 @@ final class SwipeTestHarness {
     }
 }
 
-private typealias SetWindowLocation = @convention(c) (CGEvent, CGPoint) -> Void
+typealias SetWindowLocation = @convention(c) (CGEvent, CGPoint) -> Void
 
 /// `CGEventSetWindowLocation`, looked up at run time: the only way to give a
-/// synthetic scroll event a window-relative location, which is what lets the
-/// harness address an offscreen window without posting anything globally.
-private let setWindowLocation: SetWindowLocation? = {
+/// synthetic event a window-relative location, which is what lets a harness
+/// address its own window without posting anything globally. Shared with
+/// `HitTargetOracle`'s clicks.
+let setWindowLocation: SetWindowLocation? = {
     guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGEventSetWindowLocation") else { return nil }
     return unsafeBitCast(symbol, to: SetWindowLocation.self)
 }()
