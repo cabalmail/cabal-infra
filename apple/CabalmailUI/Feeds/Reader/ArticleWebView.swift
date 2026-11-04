@@ -194,6 +194,11 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         webView.navigationDelegate = self
         #if os(iOS) || os(visionOS)
         webView.allowsBackForwardNavigationGestures = true
+        #else
+        // Off by default on macOS: without it a pinch does nothing, on the
+        // publisher's page and the reader rendering alike. iOS zooms both
+        // already.
+        webView.allowsMagnification = true
         #endif
         pageURL = url
         webView.load(URLRequest(url: url))
