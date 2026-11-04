@@ -40,6 +40,13 @@ pub enum CabalmailError {
     /// explain themselves in `{"status": "..."}`) when it lands in Phase 3.
     Http { status: u16, body: String },
 
+    /// The server refused with a named reason and a sentence for the user —
+    /// how Cognito answers: `{"__type": "CodeMismatchException", "message":
+    /// "Invalid verification code provided, please try again."}`. `code` is
+    /// the name, without Cognito's namespace prefix; callers branch on it (an
+    /// unconfirmed account goes to the confirmation page, not an error).
+    Rejected { code: String, message: String },
+
     /// The response arrived intact but did not decode into the expected type.
     Decode(String),
 
@@ -87,6 +94,10 @@ pub enum Disposition {
 /// the floor for it would be indefensible.
 const RETRYABLE_STATUSES: &[u16] = &[408, 429, 502, 503, 504];
 
+/// Named refusals that mean "not now": Cognito's throttle and its own internal
+/// failure.
+const RETRYABLE_CODES: &[&str] = &["TooManyRequestsException", "InternalErrorException"];
+
 impl CabalmailError {
     /// Classifies the failure for retry.
     ///
@@ -102,9 +113,14 @@ impl CabalmailError {
             Self::Http { status, .. } if RETRYABLE_STATUSES.contains(status) => {
                 Disposition::Transient
             }
-            Self::Http { .. } | Self::Auth(_) | Self::Decode(_) | Self::Protocol(_) => {
-                Disposition::Permanent
+            Self::Rejected { code, .. } if RETRYABLE_CODES.contains(&code.as_str()) => {
+                Disposition::Transient
             }
+            Self::Http { .. }
+            | Self::Rejected { .. }
+            | Self::Auth(_)
+            | Self::Decode(_)
+            | Self::Protocol(_) => Disposition::Permanent,
         }
     }
 
@@ -126,12 +142,15 @@ impl fmt::Display for CabalmailError {
         match self {
             Self::Network(detail) => explain(f, "Couldn't reach the server.", detail),
             Self::Auth(failure) => f.write_str(failure.message()),
-            // The server's own explanation lives in the body, but extracting
-            // it means decoding JSON, which the kit has no dependency for yet.
-            // The API client does that when it constructs the error in
-            // Phase 3; until then the status is the honest thing to show.
+            // A body this layer could not name a reason from: an HTML error
+            // page, or a Lambda's `{"status": ...}` until the API client (Phase
+            // 3, work item 4) reads it. The status is the honest thing to
+            // show; a server that explains itself arrives as `Rejected`.
             Self::Http { status, .. } => {
                 write!(f, "The server couldn't complete that request ({status}).")
+            }
+            Self::Rejected { message, .. } => {
+                sentence(f, "The server refused that request.", message)
             }
             Self::Decode(detail) => explain(f, "Couldn't read the server's reply.", detail),
             Self::Protocol(detail) => explain(f, "The server sent something unexpected.", detail),
@@ -217,6 +236,20 @@ fn explain(f: &mut fmt::Formatter<'_>, lead: &str, detail: &str) -> fmt::Result 
     }
 }
 
+/// The server's own sentence, punctuated, or `fallback` when it sent none.
+/// Unlike [`explain`], the server's message stands alone: Cognito writes its
+/// messages for the person at the keyboard.
+fn sentence(f: &mut fmt::Formatter<'_>, fallback: &str, message: &str) -> fmt::Result {
+    let message = message.trim();
+    if message.is_empty() {
+        f.write_str(fallback)
+    } else if message.ends_with(['.', '!', '?']) {
+        f.write_str(message)
+    } else {
+        write!(f, "{message}.")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,6 +313,14 @@ mod tests {
             CabalmailError::Auth(AuthFailure::InvalidCredentials),
             CabalmailError::Auth(AuthFailure::Expired),
             http(500),
+            CabalmailError::Rejected {
+                code: "CodeMismatchException".into(),
+                message: "Invalid verification code provided, please try again".into(),
+            },
+            CabalmailError::Rejected {
+                code: "CodeMismatchException".into(),
+                message: String::new(),
+            },
             CabalmailError::Decode("expected an array".into()),
             CabalmailError::Protocol("uid 7 not in the requested set".into()),
             CabalmailError::Cancelled,
@@ -296,6 +337,30 @@ mod tests {
                 !rendered.contains('{') && !rendered.contains('"'),
                 "{error:?} renders `{rendered}`, which looks like a debug form"
             );
+        }
+    }
+
+    #[test]
+    fn a_named_refusal_shows_the_servers_sentence() {
+        let error = CabalmailError::Rejected {
+            code: "CodeMismatchException".into(),
+            message: "Invalid verification code provided, please try again.".into(),
+        };
+        assert_eq!(
+            error.to_string(),
+            "Invalid verification code provided, please try again."
+        );
+        assert_eq!(error.disposition(), Disposition::Permanent);
+    }
+
+    #[test]
+    fn a_throttled_refusal_is_retried() {
+        for code in ["TooManyRequestsException", "InternalErrorException"] {
+            let error = CabalmailError::Rejected {
+                code: code.into(),
+                message: "Rate exceeded".into(),
+            };
+            assert!(error.is_transient(), "{code}");
         }
     }
 
