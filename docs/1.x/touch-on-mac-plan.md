@@ -84,7 +84,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started |
 | 6 | Composer web view under touch | Not started |
-| 7 | Article view back/forward swipe on Mac | In review (PR pending) |
+| 7 | Article view back/forward swipe on Mac | In review, PR #2325 |
 | 8 | Things that should just work (spot checks) | Not started |
 | 9 | Device pass on the MacBook Pro | Not started (device expected ~2026-11-06) |
 
@@ -191,7 +191,7 @@ The sanitizer and drop-handling invariants listed in `CLAUDE.md` ("Page JavaScri
 
 ## Item 7 — Article view back/forward swipe on Mac
 
-**Status:** In review (PR pending, 2026-11-04).
+**Status:** In review (PR #2325, 2026-11-04).
 
 `ArticleWebCoordinator.makeWebView` set `allowsBackForwardNavigationGestures` on iOS and visionOS only, so on a Mac a two-finger trackpad swipe didn't go back on the publisher's page. The worry was the back/forward list: the reader rendering is a separate `loadHTMLString` in the same web view, so a swipe might land on a page the coordinator's state didn't expect.
 
