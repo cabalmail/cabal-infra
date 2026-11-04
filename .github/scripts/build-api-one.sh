@@ -96,7 +96,17 @@ fi
 # binary (fetched + sha256-verified at build time, not committed). It ships
 # at the zip root so the handler can exec /var/task/resvg. resvg only has a
 # linux-x86_64 build, so this Lambda is x86_64 (terraform .../call/lambda.tf).
+# app.yml builds every zip on an arm64 runner, though, so pip would install
+# arm64 builds of any compiled dependency this function gained, and its
+# imports would break at runtime. Fail the build instead: its pip closure
+# must stay pure python.
 if [ "${FUNC}" = "fetch_bimi" ]; then
+  compiled=$(find ./build -type f \( -name '*.so' -o -name '*.so.*' \) -print)
+  if [ -n "${compiled}" ]; then
+    echo "[build-api-one] ${FUNC} runs on x86_64, but its dependencies include compiled code built for this runner:" >&2
+    echo "${compiled}" >&2
+    exit 1
+  fi
   # cwd here is lambda/api/<FUNC>, so the repo root is three levels up.
   ../../../.github/scripts/fetch-resvg.sh ./build/resvg
 fi

@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.42.2] - 2026-11-04
+
+### Changed
+- **CI Node runtime 22 → 26.** The `lint.yml`, `android.yml` and
+  `extensions.yml` jobs now run on Node 26 (Active LTS) instead of Node 22,
+  which enters maintenance. The webmail's deploy build in `app.yml` and the
+  `apple.yml` jobs that vendor marked and turndown from `react/admin`, which
+  used the runner image's default Node, are now pinned to Node 26 too.
+- **Lambda zips build on arm64 runners.** `app.yml`'s `lambda-api` and
+  `lambda-counter` jobs moved from `ubuntu-latest` to `ubuntu-24.04-arm`,
+  matching the arm64 functions they build, so a dependency with compiled
+  code installs the wheels for the processor that runs it. Every current
+  dependency is pure Python, so the code in the zips is unchanged. The
+  five functions whose dependencies ship console scripts (`rsa`,
+  `publicsuffixlist`) redeployed once, because pip writes the build
+  interpreter's path into those unused `bin/` launchers. `fetch_bimi`, the
+  one x86_64 function, now fails its build if its dependencies include
+  compiled code.
+
+### Security
+- **Dependabot high-severity fixes.** Bumped `follow-redirects` to 1.16.2
+  (CVE-2026-116689) in the React lockfile and `pyasn1` to 0.6.5
+  (CVE-2026-119194 through CVE-2026-119197) in the push_dispatch Lambda
+  requirements.
+- **follow-redirects 1.16.2.** Resolves CVE-2026-116689 (cross-realm
+  sensitive headers dropped, custom credentials following redirects) in the
+  React admin app's lockfile.
+- **pyasn1 0.6.5.** Resolves CVE-2026-119194, CVE-2026-119195,
+  CVE-2026-119196 and CVE-2026-119197 (quadratic-complexity decoding denial
+  of service) in the `push_dispatch` Lambda, where it is a dependency of
+  `rsa`.
+
 ## [1.42.1] - 2026-11-01
 
 ### Changed

@@ -171,6 +171,15 @@ jobs:
         working-directory: apple
         run: xcodegen generate
 
+      - name: Set up Node
+        # Pinned rather than the image default, so sync-vendored.sh's
+        # `npm ci` runs on the same Node that lint.yml lints react/admin on.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
+
       - name: Sync vendored CabalmailKit resources (marked + turndown)
         # marked.umd.js + turndown.js live in react/admin/package.json as
         # the version-of-truth and are gitignored under apple/. The script
@@ -337,6 +346,14 @@ jobs:
         working-directory: apple
         run: xcodegen generate
 
+      - name: Set up Node
+        # See the kit-test job for the rationale.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
+
       - name: Sync vendored CabalmailKit resources (marked + turndown)
         working-directory: apple
         run: scripts/sync-vendored.sh
@@ -414,6 +431,14 @@ jobs:
       - name: Generate Xcode project
         working-directory: apple
         run: xcodegen generate
+
+      - name: Set up Node
+        # See the kit-test job for the rationale.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
 
       - name: Sync vendored CabalmailKit resources (marked + turndown)
         working-directory: apple
@@ -515,6 +540,14 @@ jobs:
       - name: Generate Xcode project
         working-directory: apple
         run: xcodegen generate
+
+      - name: Set up Node
+        # See the kit-test job for the rationale.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
 
       - name: Sync vendored CabalmailKit resources (marked + turndown)
         working-directory: apple
@@ -621,6 +654,14 @@ jobs:
       - name: Generate Xcode project
         working-directory: apple
         run: xcodegen generate
+
+      - name: Set up Node
+        # See the kit-test job for the rationale.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
 
       - name: Sync vendored CabalmailKit resources (marked + turndown)
         # See the kit-test job for the rationale. Same script, same files.
@@ -841,6 +882,15 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         run: xcodegen generate
+
+      - name: Set up Node
+        # See the kit-test job for the rationale.
+        if: steps.check.outputs.enabled == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
 
       - name: Sync vendored CabalmailKit resources (marked + turndown)
         # See the kit-test job for the rationale. Same script, same files.
@@ -1255,6 +1305,15 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         working-directory: apple
         run: xcodegen generate
+
+      - name: Set up Node
+        # See the kit-test job for the rationale.
+        if: steps.check.outputs.enabled == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: react/admin/package-lock.json
 
       - name: Sync vendored CabalmailKit resources (marked + turndown)
         if: steps.check.outputs.enabled == 'true'
