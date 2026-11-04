@@ -23,7 +23,9 @@ struct RichTextToolbar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
+            // No spacing and no vertical padding of the bar's own: each
+            // button takes that room as its `hitPadding`.
+            HStack(spacing: 0) {
                 toolbarButton(
                     "Import from Markdown",
                     systemImage: "arrow.uturn.left.square",
@@ -102,8 +104,7 @@ struct RichTextToolbar: View {
                     Task { await controller.execute(.redo) }
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 6 - Self.hitPadding.leading)
         }
         .alert("Add link", isPresented: $showLinkPrompt) {
             TextField("https://example.com", text: $linkUrl)
@@ -121,10 +122,22 @@ struct RichTextToolbar: View {
         .onChange(of: showLinkPrompt) { _, shown in laptop?.promptEditing(shown) }
     }
 
+    /// What a button takes taps over beyond the face it draws: the gap
+    /// around the face, which the bar used to leave as stack spacing (4 pt)
+    /// and vertical padding (4 pt). With the `contentShape` that claims it,
+    /// a target is 28 x 32 pt over a 24 pt face; without one a button took
+    /// taps on its glyph alone (8 x 10 pt for Bold). The faces, the bar's
+    /// height and the spacing between faces are where they were. A touch
+    /// target wants 36 pt on a Mac and 44 on iOS; reaching either would
+    /// spread the bar out, a visible change.
+    static let hitPadding = EdgeInsets(top: 4, leading: 2, bottom: 4, trailing: 2)
+
+    /// The rule between groups. Its padding makes up the stack spacing the
+    /// buttons' hit padding no longer reaches, so a group's gap stays 13 pt.
     private var divider: some View {
         Divider()
             .frame(height: 18)
-            .padding(.horizontal, 2)
+            .padding(.horizontal, 4)
     }
 
     @ViewBuilder
@@ -137,6 +150,8 @@ struct RichTextToolbar: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .frame(minWidth: 24, minHeight: 24)
+                .padding(Self.hitPadding)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .disabled(!enabled)
@@ -156,6 +171,8 @@ struct RichTextToolbar: View {
                 .frame(minWidth: 24, minHeight: 24)
                 .background(isOn ? ColorTokens.accentForestWash : .clear)
                 .cornerRadius(4)
+                .padding(Self.hitPadding)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .help(help)
@@ -175,6 +192,8 @@ struct RichTextToolbar: View {
                 .frame(minWidth: 26, minHeight: 24)
                 .background(isOn ? ColorTokens.accentForestWash : .clear)
                 .cornerRadius(4)
+                .padding(Self.hitPadding)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .help(help)
