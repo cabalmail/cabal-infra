@@ -1,0 +1,232 @@
+# Touch on Mac — macOS Client Plan
+
+Written 2026-11-04 against `stage` at `f1596eef8` (release 1.42.2). Line numbers are as of that commit; re-check them before starting.
+
+## Context
+
+Apple announced the first touchscreen Mac on 2026-10-28: the MacBook Pro with PROLED XDR Display (14.2″ and 16.3″, M5 Pro and M5 Max, 10–120 Hz ProMotion, a Dynamic Island in place of the notch). It runs macOS 27 and goes on sale 2026-11-06. Touch is an extra input alongside the keyboard and trackpad, not a new mode: Apple's design guidance is that macOS on a touch Mac "doesn't look any different", and that apps should keep their layout and control sizes and make *tap targets* bigger, not the controls.
+
+This plan audits the macOS Cabalmail client for touch and lists what to fix. The plan doc itself is all that can be written before the hardware arrives (expected around 2026-11-06), apart from one item that helps every Mac today (item 0).
+
+### What macOS does for an app that changes nothing
+
+- **Standard AppKit and SwiftUI controls are touch-native:** buttons, controls, tables, collections, split views, tabs and scrolling all work with no code change. Menus show slightly larger rows under a finger, and steppers, sliders and dials expand while touched.
+- **Everything else gets mouse emulation** (TN3212 and Apple's AppKit article "Adopting gesture recognizers in your app"):
+  - A tap becomes `mouseDown` then `mouseUp`.
+  - A touch that pans immediately becomes **trackpad scroll events**.
+  - A long press without movement becomes `rightMouseDown` (a context menu).
+  - A touch held briefly and then moved becomes a **drag** (`mouseDown` / `mouseDragged` / `mouseUp`).
+  - A two-finger pinch or rotation becomes trackpad magnify and rotate.
+  - Emulation covers one or two fingers only.
+- **What touch does not do:**
+  - There is no hover. `NSTrackingArea` and `mouseMoved` are pointer-only, and Apple says tooltips "shouldn't be revealed on touch".
+  - Direct touches never reach event monitors, `NSApp.sendEvent` or the responder chain. Gesture recognizers are the only way to receive them.
+  - AppKit does not turn touch swipes into `trackSwipeEvent` swipes.
+  - `NSApp.currentEvent` and `NSEvent.pressedMouseButtons` are not reliable for touch.
+- **The tap target is 36 pt on each axis**, the physical equivalent of iOS's 44 pt. This figure comes from Apple's tech talk "Bring Touch to your Mac app"; the HIG gives no number.
+- **Apple advises against branching on "is this a touch Mac".** `NSScreen.touchCapabilities.contains(.multiTouch)` exists, but on macOS 27 it reports true for every display whenever a Sidecar iPad is connected.
+
+### New API (macOS 27)
+
+- SwiftUI `GestureInputKinds`: `.directTouch`, `.indirectTouch`, `.pointer`, `.pencil`, `.all`. It is accepted by `onTapGesture(count:coordinateSpace:inputKinds:perform:)`, `onLongPressGesture(…inputKinds:…)` and the gesture initializers. It filters which input a gesture accepts; it does not detect touch.
+- AppKit gesture recognizers:
+  - `allowedTouchTypes = .direct` together with `buttonMask = 0` gives a touch-only recognizer.
+  - `isCancellableByScrollGesture`.
+  - `NSPanGestureRecognizer.minimumNumberOfTouches` and `maximumNumberOfTouches`.
+  - Subclasses built with the 27 SDK must override `location(in:)`.
+  - `NSView.exclusiveGestureBehavior`.
+- `NSControl.Events` (`primaryActionTriggered` and others).
+- `NSScrollView` gains touch-scrolling properties and pull-to-refresh through `NSRefreshController`.
+- `NSIsTouchNative` (Info.plist) opts out of the extra emulation. Most AppKit apps don't need it, and neither do we.
+- `directTouchSystemGesturesDisabled()` and its AppKit and Catalyst counterparts arrive with the Xcode 27.3 beta (released 2026-11-03). We have no use for them.
+
+The deployment floor is macOS 15 (`apple/project.yml`), so any of this goes behind `#available(macOS 27, *)`, as the 27 swipe-container path already does.
+
+### Testing without the device
+
+Apple: "Use Sidecar to test touch input without a Mac that has a touch display … AppKit then routes touch on its screen the same way it does on a Mac with a touch display." This needs an iPad on iPadOS 27 connected to a Mac on macOS 27. Everything in the audit below except the final device pass can run that way. There is no simulator path, and the cloud containers can't run any of it.
+
+### Sources
+
+- Apple Newsroom, 2026-10-28: <https://www.apple.com/newsroom/2026/10/apple-unveils-groundbreaking-macbook-pro-with-proled-xdr-display/>
+- Touch on Mac hub (videos, labs on Nov 18 and 19): <https://developer.apple.com/touch-on-mac/>
+- TN3212, Adopting gesture recognizers for Sidecar touch support: <https://developer.apple.com/documentation/technotes/tn3212-adopting-gesture-recognizers-for-sidecar-touch-support>
+- Adopting gesture recognizers in your app: <https://developer.apple.com/documentation/appkit/adopting-gesture-recognizers-in-your-app>
+- `GestureInputKinds`: <https://developer.apple.com/documentation/swiftui/gestureinputkinds>
+- HIG, Gestures: <https://developer.apple.com/design/human-interface-guidelines/gestures>
+- Tech talks "Bring Touch to your Mac app" (111468) and "Design for Touch on Mac" (111456), as quoted in <https://blakecrosley.com/blog/touch-on-mac-for-developers>
+
+Apple's documentation pages are JavaScript-rendered. Their text is readable at the `https://developer.apple.com/tutorials/data/<path>.json` form of each URL.
+
+## What the audit found
+
+A sweep of `apple/CabalmailUI/` and `apple/CabalmailMac/` at the commit above found:
+
+- **No `mouseDown`/`mouseDragged` overrides, no `NSTrackingArea`, `onHover` or `onContinuousHover`, no `NSEvent` monitors, no `trackSwipeEvent`.** None of the code paths that touch breaks outright are present.
+- **The Mac client is SwiftUI throughout.** The AppKit it touches is the three `WKWebView` representables plus small `NSViewRepresentable` hooks (`SplitViewAutosaveDisabler`, `ComposeWindowCloseInterceptor`, `HostingWindowReader`) that take no input.
+
+So the work is verification plus a few targeted fixes, not an input-layer rewrite.
+
+## Decisions
+
+1. **Branch on input, not on device.** Follow Apple: no "is this a touch Mac" checks and no touch-only layouts. Where something needs a touch path, use `GestureInputKinds` or a recognizer whose `allowedTouchTypes` is `.direct`. *Recommended; the default if unanswered.*
+2. **Tap targets grow invisibly.** Where a Mac control's hit area is under 36 pt, widen its hit area (`contentShape` over a larger frame, or padding inside the button's label with the visual unchanged) rather than drawing it larger. This matches the HIG's "Make tap targets bigger, not the controls themselves". *Recommended; the default if unanswered.*
+3. **Sidecar first, device second.** Run items 1–8 over Sidecar as soon as there is time, and keep the device pass (item 9) for what Sidecar can't show: palm rejection, a finger near the trackpad, hinge wobble and real-world target sizes. *Recommended.*
+
+## Progress
+
+| # | Item | Status |
+|---|---|---|
+| 0 | Pinch-to-zoom in the Mac readers | In review, PR #2321 |
+| 1 | Message-list swipe actions under touch | Not started |
+| 2 | Long press on rows: context menu vs drag | Not started |
+| 3 | Tap targets under 36 pt | Not started |
+| 4 | Meaning carried only by a tooltip | Not started |
+| 5 | Pull-to-refresh vs toolbar Reload | Not started |
+| 6 | Composer web view under touch | Not started |
+| 7 | Article view back/forward swipe on Mac | Not started |
+| 8 | Things that should just work (spot checks) | Not started |
+| 9 | Device pass on the MacBook Pro | Not started (device expected ~2026-11-06) |
+
+## Item 0 — Pinch-to-zoom in the Mac readers
+
+**Status:** In review (PR #2321, 2026-11-04).
+
+`WKWebView.allowsMagnification` defaults to false on macOS, so a trackpad pinch did nothing in the mail reader or the feed article view, while iOS zooms both. PR #2321 turns it on in `makeReaderWebView` and in `ArticleWebCoordinator.makeWebView`. It helps every Mac with a trackpad today. On the touch Mac, a pinch is emulated as a trackpad magnify, so the same switch should cover it; item 9 confirms that.
+
+`ReaderMagnificationTests` pins both settings, and pins that a message loaded into a zoomed reader opens at 1×. WebKit resets the zoom on a new load by itself. A probe during that PR showed `visualViewport.scale` following the Mac magnification, so the link bridge's popover anchor stays correct when zoomed.
+
+**Left for the device pass:** a smart-zoom double-tap (two-finger double-tap on a trackpad) should also work with magnification on; confirm it. Also check that the plain-text body, a SwiftUI `Text` in a `ScrollView`, doesn't feel broken by comparison. It does not zoom, and making it zoom is not in scope.
+
+## Item 1 — Message-list swipe actions under touch
+
+**Status:** Not started.
+
+This is the highest-risk item. On macOS 27 the message list's swipe-to-dispose and toggle-read come from SwiftUI's `.swipeActions` outside a `List`, coordinated by `.swipeActionsContainer()` (`apple/CabalmailUI/Mail/MessageList/SwipeActionRow.swift`). On macOS that container reads the trackpad's two-finger horizontal scroll natively (`TrackpadSwipe.swift:16-17`). Below 27, each row borrows a single-row `List` for the same thing. The same `.swipeActions` question applies to the folder list (`FolderListView.swift:366`), the address list (`AddressListView.swift:317,327`) and the feed item list (`FeedItemListView.swift:296,299`), which use plain `List` rows.
+
+No source documents how SwiftUI `.swipeActions` behaves under touch on macOS. Two outcomes are plausible:
+
+- **It works already.** SwiftUI is touch-native and treats a horizontal finger drag as a swipe, or the emulation turns the pan into trackpad scroll events, which the container already reads.
+- **It doesn't.** The pan is taken as vertical scrolling, or as a drag lift (see item 2), and no row reveals.
+
+**Steps:**
+1. Over Sidecar, swipe a message row leading and trailing, partially (the reveal, then a tap on the capsule) and fully (the action runs), on the 27 path.
+2. Do the same on the folder, address and feed-item lists.
+3. Check that only one row is revealed at a time (#901's property), and that a vertical finger scroll over a revealed row retracts it.
+
+**If it fails:** add a touch half the way `TrackpadSwipe.swift` adds a trackpad half on iPadOS, but the other way round. That is a recognizer that sees direct touches only (`allowedTouchTypes = .direct`, `buttonMask = 0`, `isCancellableByScrollGesture = true`), behind `#available(macOS 27, *)`, driving the existing `TrackpadSwipePolicy` / `TrackpadSwipeTracker` rules and reveal. SwiftUI has no API to open its own reveal from code, which is why the iPad half draws its own. A `DragGesture(…, inputKinds: .directTouch)` may be enough in place of an AppKit recognizer; try it first. `SwipeActionContainerSourceScanTests` pins the container's shape: keep it green and don't edit its expected text.
+
+## Item 2 — Long press on rows: context menu vs drag
+
+**Status:** Not started.
+
+Message rows carry both `.draggable` (`MessageListView+Rows.swift:169`, the drag onto a folder) and a context menu (`rowContextMenu`, and the list-level `contextMenu(forSelectionType:)` on wide layouts). Under touch, "touch and hold" opens a context menu and "touch and hold, then drag" lifts an item. The two have to share the gesture.
+
+**Steps:**
+1. Long-press a message row: the menu opens, and it acts on the row pressed. On a wide layout with a multi-selection, check what it acts on.
+2. Long-press, then drag a message onto a folder in the sidebar: the drop moves it.
+3. Repeat on the folder rows (`FolderListView.swift:369`), the address rows, which are `.draggable` as well as menu-bearing (`AddressListView.swift:309`), the feed sidebar (`FeedSidebarContent.swift`) and the feed items (`FeedItemListView.swift:302`).
+4. Long-press a sender in the reader header (`MessageDetailView+Header.swift:78`): the address menu opens.
+5. Long-press a link in the HTML reader: the system WebKit menu opens (link preview stays off, #789), and a plain tap still opens our link menu (`HTMLBodyView+LinkBridge.swift`).
+
+Fix only what fails. A likely fix, if the menu fires before a drag can start, is a `.draggable` that begins on touch movement. Check against Apple's guidance before writing one.
+
+## Item 3 — Tap targets under 36 pt
+
+**Status:** Not started.
+
+Standard SwiftUI controls get a proper tap target from the system. The candidates below are views whose hit area is drawn by us:
+
+- **The composer's rich-text toolbar:** 24 × 24 pt borderless icon buttons (`Compose/Editor/RichTextToolbar.swift:139-145`, and the toggles beside them). This is the clearest case.
+- **The recipient picker button:** a plain-style `person.crop.circle.badge.plus` image (`Compose/Recipients/RecipientFieldWithSuggestions.swift:57-68`).
+- **Mini switches:** `miniSwitchStyleOnMac()` draws the Rules rows' toggles at `.controlSize(.mini)` (`Platform/ListAndFormStyles.swift:52-56`). Apple says standard controls get a proper target automatically. Confirm that holds at `.mini`, and don't change the size if it does (#2040 settled the shape).
+- **Small toolbar and banner controls:** `.controlSize(.small)` buttons in the unsubscribed-folder banner (`MessageListView+UnsubscribedBanner.swift:92`) and the Rules view (`RulesView.swift:290,300`).
+- **The toast's close and trailing-action buttons** (`Shared/Banners/ToastBanner.swift`).
+
+Measure each over Sidecar: tap near the edge, and tap between neighbouring buttons. Apply decision 2 where a target misses. This must not move anything for pointer users: the visual frame stays the same and only the hit area grows.
+
+## Item 4 — Meaning carried only by a tooltip
+
+**Status:** Not started.
+
+A touch has no hover, so `.help` text never shows under a finger. Every `.help` in the shared layer already pairs with an `accessibilityLabel`, so VoiceOver is fine. The question is a sighted touch user. Of the seven uses:
+
+- **Fine:** the "Import from Rich Text" button (`ComposerBody.swift:133`) and the recipient picker carry a visible label or an obvious glyph, and the tooltip only repeats it.
+- **Small gap:** the sort control (`MessageListView+Sort.swift:28`) is fine when enabled, but when a search disables it, the reason ("Search results are listed newest first") is only in the tooltip. A tap on a disabled control does nothing, so a touch user never learns why. Low priority; a footnote in the search results header would cover it.
+- **Probably fine:** the rich-text toolbar's tooltips (`RichTextToolbar.swift:143,161,180`) name standard formatting glyphs.
+- **Needs a decision:** the feed health badge (`Feeds/Sidebar/FeedSidebarSection.swift:63`) is a bare warning or stopped icon whose explanation exists only as a tooltip. Under touch there is no way to learn what it means. Proposed: make the badge a button that opens the same summary in a popover. That also helps iPad and visionOS, which have no tooltips either.
+
+The reader's link status pill (`HTMLBodyView.swift`, `hoveredHref`) is hover-only by nature. A tap already opens the link menu, which shows the URL, so nothing is lost.
+
+## Item 5 — Pull-to-refresh vs toolbar Reload
+
+**Status:** Not started.
+
+macOS 27 adds pull-to-refresh to `NSScrollView` (`NSRefreshController`), and Apple's Mail, Safari and Calendar use it. We attach `.refreshable` to the message list (`MessageListView.swift:292`), the folder list, the feed sidebar and feed items, the address list, Settings and Users. On macOS before 27 that modifier did nothing visible, and the toolbar Reload button is the Mac's refresh.
+
+**Steps:** on 27, over Sidecar, pull down on each list.
+- **If `.refreshable` now drives the system's pull-to-refresh:** check it runs the same refresh as Reload, the spinner and `RefreshActivityIcon` don't both show, and a pull during a running refresh doesn't start a second one (`MessageListViewModel+Refresh.swift:37-39` explains why the pull's task is kept apart from the request).
+- **If it does nothing:** decide whether pull-to-refresh is wanted on the Mac at all. The toolbar Reload already exists, so the default is to do nothing.
+
+## Item 6 — Composer web view under touch
+
+**Status:** Not started.
+
+The composer is a `WKWebView` running our own editor page (`RichTextEditorController`, `editor-bridge.js`) with JavaScript on. `editor-bridge.js` registers paste and drag/drop listeners (`dragstart`, `dragend`, `dragover`, `drop`) but no mouse, pointer or touch listeners, so caret placement and selection come from WebKit's default handling. Whether a touch on macOS WebKit fires touch events, pointer events or emulated mouse events to page script is not documented anywhere I could find.
+
+**Steps:** over Sidecar:
+- tap to place the caret;
+- drag-select text, then long-press for the editing menu;
+- tap the toolbar's buttons (item 3) with a selection active, and check that the selection survives the tap;
+- drag an image within the body;
+- drop a file onto the body: it should still go to the app, not into the page.
+
+The sanitizer and drop-handling invariants listed in `CLAUDE.md` ("Page JavaScript in the three web views") must hold. `RichTextEditorControllerTests` and `RichTextEditorFileDropTests` cover them in tests; this item checks them by hand under touch.
+
+## Item 7 — Article view back/forward swipe on Mac
+
+**Status:** Not started.
+
+`ArticleWebCoordinator.makeWebView` sets `allowsBackForwardNavigationGestures` on iOS and visionOS only (`Feeds/Reader/ArticleWebView.swift:196`), so on a Mac a two-finger trackpad swipe doesn't go back on the publisher's page. A touch swipe doesn't either. Turning it on for macOS would help trackpad users today. It is like item 0, but needs more thought. The reader rendering is a separate `loadHTMLString` load in the same web view, so the back/forward list has to land somewhere sensible: does swiping back from the reader rendering go to the live page, and does that agree with `ArticleNavigationPolicy` (#2060)?
+
+Steps:
+1. Prototype it on macOS.
+2. Walk the list: live page → reader → a link out → back → back.
+3. Ship it only if every step lands where the toolbar's own controls would.
+
+Our own swipe navigation would have to honour `NSEvent.isTouchSwipeNavigationEnabled`. WebKit's built-in gesture presumably honours it itself; confirm on the device.
+
+## Item 8 — Things that should just work (spot checks)
+
+**Status:** Not started.
+
+Over Sidecar, each of these should pass with no change:
+- **Column resizing:** native `NSSplitView` on macOS (`Shell/Columns/ColumnResizeHandle.swift:64-67`).
+- **The toolbar's split buttons** and their menus (`ReaderToolbarControlShape.swift`).
+- **The menu-bar extra:** `MenuBarExtra`, `CabalmailMac/MenuBarExtraMenu.swift`.
+- **Settings:** the Settings window's tabs and forms.
+- **Address management:** the address inspector and new-address sheet.
+- **Toasts:** dismissing a toast by dragging (`ToastBanner.swift:93`, a `DragGesture` that touch emulation turns into a drag).
+- **Scrolling:** one-finger scrolling in every list and both reader bodies, including the index-addressed message list's paging (`WindowPager`, page cap 250) during a fast flick.
+- **Keyboard:** list navigation (`MessageListView+Selection.swift:132-150`) still works after a touch has moved the selection.
+
+File anything that fails as its own issue and add a row to the progress table here.
+
+## Item 9 — Device pass on the MacBook Pro
+
+**Status:** Not started (device expected around 2026-11-06).
+
+Re-run items 0–8 on the hardware, then add what Sidecar can't show:
+- a palm resting on the trackpad while tapping;
+- tapping near the keyboard and near the screen edges, where the system's edge swipes (Dock, menu bar, Notification Center) win;
+- the screen wobbling under a tap;
+- reading comfort at arm's length;
+- whether the Dynamic Island crowds the toolbar.
+
+Record what you find here, in each item's **Status:** line.
+
+**Out of scope until something changes:** Live Activities in the Dynamic Island. Apple's talk says Golden Gate apps can create them, but the macOS 27.0 and 27.2 SDKs mark ActivityKit's macOS API unavailable. Mail has no natural Live Activity either; a long send queue or a sync progress would be the only candidates.
+
+## Session brief
+
+> Read `docs/1.x/touch-on-mac-plan.md` and `docs/1.x/post-wave-3/00-working-agreements.md`. Confirm item 0 (PR #2321) merged. With an iPad on iPadOS 27 connected over Sidecar to a Mac on macOS 27, run items 1–8 in order and record each result in its **Status:** line in this file. Each item that needs code gets its own PR to `stage`, one Apple PR in CI at a time, each with an `Apple:` changelog fragment and a behavioural test where the behaviour can be driven in-process. Item 1 is the one most likely to need code; start there. Add no `#if os(...)` outside `Shell/` and `Platform/`; branch on input (`GestureInputKinds`, `allowedTouchTypes`), never on "is a touch Mac".
