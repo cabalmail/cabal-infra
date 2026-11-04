@@ -80,7 +80,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | 0 | Pinch-to-zoom in the Mac readers | Merged to `stage`, PR #2321 |
 | 1 | Message-list swipe actions under touch | Not started |
 | 2 | Long press on rows: context menu vs drag | Not started |
-| 3 | Tap targets under 36 pt | Composer toolbar in review (PR pending); the rest waits for Sidecar |
+| 3 | Tap targets under 36 pt | Composer toolbar in review, PR #2323; the rest waits for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started |
 | 6 | Composer web view under touch | Not started |
@@ -133,7 +133,7 @@ Fix only what fails. A likely fix, if the menu fires before a drag can start, is
 
 ## Item 3 — Tap targets under 36 pt
 
-**Status:** Composer toolbar in review (2026-11-04); the other candidates wait for Sidecar.
+**Status:** Composer toolbar in review (PR #2323, 2026-11-04); the other candidates wait for Sidecar.
 
 **The composer toolbar, done first.** Measured through the accessibility API, its buttons took taps on their glyph alone, not the 24 × 24 pt face their frame draws: Bold was 8 × 10 pt and Heading 1 was 16 × 15, because the label had no `contentShape`. The bar is shared, so this was as small on iPhone and iPad as on a Mac. The fix gives each button the gap around its face as hit area (`RichTextToolbar.hitPadding`): the stack's 4 pt spacing and the bar's 4 pt vertical padding. Each target is now 28 × 32 pt, with the faces, their spacing and the bar's height unchanged. That is short of 36 pt (and of iOS's 44), which only spreading the bar out could reach; that would be a visible change, and it waits for a look on the device. `RichTextToolbarHitTargetTests` pins the target size (it fails on the old toolbar), that neighbours don't overlap, and that the spacing and height are unchanged.
 
