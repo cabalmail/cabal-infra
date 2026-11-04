@@ -84,7 +84,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started |
 | 6 | Composer web view under touch | Not started |
-| 7 | Article view back/forward swipe on Mac | In review, PR #2325 |
+| 7 | Article view back/forward swipe on Mac | Draft, PR #2325; one check left (below) |
 | 8 | Things that should just work (spot checks) | Not started |
 | 9 | Device pass on the MacBook Pro | Not started (device expected ~2026-11-06) |
 
@@ -191,16 +191,16 @@ The sanitizer and drop-handling invariants listed in `CLAUDE.md` ("Page JavaScri
 
 ## Item 7 — Article view back/forward swipe on Mac
 
-**Status:** In review (PR #2325, 2026-11-04).
+**Status:** Draft (PR #2325, 2026-11-04), waiting on one check on iOS, below.
 
 `ArticleWebCoordinator.makeWebView` set `allowsBackForwardNavigationGestures` on iOS and visionOS only, so on a Mac a two-finger trackpad swipe didn't go back on the publisher's page. The worry was the back/forward list: the reader rendering is a separate `loadHTMLString` in the same web view, so a swipe might land on a page the coordinator's state didn't expect.
 
-Two checks settled it:
+One check settled most of it, and one is still open:
 
 - **The reader toggle adds no history.** A probe served the article from a custom URL scheme, since WebKit refuses a handler for `https` and tests here open no sockets, so the web view kept a real back/forward list. Both the reader rendering (`loadHTMLString` with the page as its base URL) and the toggle's return to the live page load the page's own URL, and WebKit replaces the current entry rather than adding one. After reader, toggle off and toggle on, the back list was still empty. A swipe only walks pages the user reached through links, so it can't put the toggle and the page out of step.
-- **A swipe back after a link out of the reader (#2060's path) is right.** The in-process tests can't drive this one, because only an `http`/`https` link counts as leaving the reader. iOS has had the swipe all along, and a check on an iPhone 16 Pro Max (2026-11-04) found that swiping back after following a link returns to the article in reader mode, with the toggle in the right state.
+- **Open: a swipe back after a link out of the article view's reader (#2060's path).** The in-process tests can't drive it, because only an `http`/`https` link counts as leaving the reader. iOS has had the swipe all along, so it can be checked there. Note which view: the feed item's own content renders in `HTMLBodyView`, whose links open the link menu and never navigate, so a check there exercises nothing here. The path is the in-app article page (the toolbar's article button) with its reader mode on. Tap a link in the extracted article, which loads the linked page in place; then swipe back. Two things to note: what comes back (the reader rendering, or the publisher's page), and whether the toolbar's reader toggle matches it. Reading the coordinator, after a link out it clears its reader state (`leftReaderThroughLink`, `article = nil`) and does nothing on the way back. So a page that WebKit restores from its back-forward cache as the reader rendering would sit under a toggle that reads off. A first check (2026-11-04) was made in the feed item's own content, so it does not count.
 
-So the Mac now sets it too, with the same behaviour. `ArticleWebViewGestureTests` pins the setting (it fails on the old code).
+PR #2325 sets the swipe on the Mac too. `ArticleWebViewGestureTests` pins the setting (it fails on the old code). If the open check shows the mismatch, it is an existing iOS bug: fix it in the coordinator first (say, by recording which back-forward item holds the reader rendering and reading it back in `didFinish`), then bring the swipe to the Mac.
 
 **Left for the device pass:** whether a one-finger touch swipe on the touch display navigates too. AppKit doesn't turn touch swipes into navigation for apps that track swipes themselves, and it is not documented whether WebKit's own gesture takes direct touch. It should honour the system's "Swipe between pages" setting (`NSEvent.isTouchSwipeNavigationEnabled` for touch); confirm both on the device.
 
