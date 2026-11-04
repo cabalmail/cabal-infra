@@ -3,6 +3,7 @@ import XCTest
 import SwiftUI
 import AppKit
 import ApplicationServices
+import os
 import CabalmailKit
 @testable import CabalmailUI
 
@@ -86,16 +87,19 @@ final class RichTextToolbarHitTargetTests: XCTestCase {
         window.contentView = NSHostingView(rootView: Harness(controller: RichTextEditorController()))
         window.orderFront(nil)
 
-        var frames: [String: CGRect] = [:]
+        // The read's result crosses back from the global queue through a
+        // lock: a captured `var` written there is a data race to the compiler.
+        let frames = OSAllocatedUnfairLock<[String: CGRect]>(initialState: [:])
         let done = expectation(description: "accessibility read")
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
             var found: [String: CGRect] = [:]
             Self.walk(AXUIElementCreateApplication(getpid()), depth: 0, labels: labels, into: &found)
-            frames = found
+            let read = found
+            frames.withLock { $0 = read }
             done.fulfill()
         }
         wait(for: [done], timeout: 20)
-        return frames
+        return frames.withLock { $0 }
     }
 
     nonisolated private static func walk(
