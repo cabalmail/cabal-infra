@@ -301,6 +301,11 @@ private struct MacHTMLView: NSViewRepresentable {
 /// read receipt for anyone who sends a uniquely-keyed link. The useful
 /// actions are already covered by our own link menu on primary activation
 /// (see `HTMLBodyView+LinkBridge`), so nothing is lost by turning it off.
+///
+/// On macOS it also turns on `allowsMagnification`, which defaults to false
+/// there, so a trackpad pinch (or a pinch on a touch display) zooms the body
+/// the way it already does on iOS, where WebKit's scroll view zooms any page
+/// whose viewport allows it (`HTMLRewrite`'s default viewport does).
 @MainActor
 func makeReaderWebView(coordinator: HTMLBodyCoordinator) -> WKWebView {
     let configuration = WKWebViewConfiguration()
@@ -314,6 +319,9 @@ func makeReaderWebView(coordinator: HTMLBodyCoordinator) -> WKWebView {
     let view = WKWebView(frame: .zero, configuration: configuration)
     view.navigationDelegate = coordinator
     view.allowsLinkPreview = false
+    #if os(macOS)
+    view.allowsMagnification = true
+    #endif
     return view
 }
 
