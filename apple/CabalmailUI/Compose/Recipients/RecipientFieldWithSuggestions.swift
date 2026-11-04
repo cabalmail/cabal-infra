@@ -54,7 +54,10 @@ struct RecipientFieldWithSuggestions<FocusValue: Hashable>: View {
                     .textEntry(.email)
                     .focused(focusBinding, equals: focusValue)
                     .accessibilityIdentifier(identifier)
-                Button {
+                // Takes taps half-way into the spacing before it and a few
+                // points around (`HitPaddedButton`); the glyph alone was
+                // 21 x 18 pt. Short of the suggestion list, 4 pt below.
+                HitPaddedButton(hitPadding: EdgeInsets(top: 3, leading: 4, bottom: 3, trailing: 4)) {
                     tapPicker()
                 } label: {
                     Image(systemName: "person.crop.circle.badge.plus")

@@ -80,7 +80,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | 0 | Pinch-to-zoom in the Mac readers | Merged to `stage`, PR #2321 |
 | 1 | Message-list swipe actions under touch | Not started |
 | 2 | Long press on rows: context menu vs drag | Not started |
-| 3 | Tap targets under 36 pt | Composer toolbar in review, PR #2323; the rest waits for Sidecar |
+| 3 | Tap targets under 36 pt | Composer toolbar merged (#2323); toast, banner and picker buttons in review, PR #2324; system controls wait for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started |
 | 6 | Composer web view under touch | Not started |
@@ -133,18 +133,24 @@ Fix only what fails. A likely fix, if the menu fires before a drag can start, is
 
 ## Item 3 — Tap targets under 36 pt
 
-**Status:** Composer toolbar in review (PR #2323, 2026-11-04); the other candidates wait for Sidecar.
+**Status:** Composer toolbar merged to `stage` (PR #2323, 2026-11-04). The toast, unsubscribed-banner and Contacts-picker buttons are in review (PR #2324, 2026-11-04). The two system controls wait for Sidecar.
 
 **The composer toolbar, done first.** Measured through the accessibility API, its buttons took taps on their glyph alone, not the 24 × 24 pt face their frame draws: Bold was 8 × 10 pt and Heading 1 was 16 × 15, because the label had no `contentShape`. The bar is shared, so this was as small on iPhone and iPad as on a Mac. The fix gives each button the gap around its face as hit area (`RichTextToolbar.hitPadding`): the stack's 4 pt spacing and the bar's 4 pt vertical padding. Each target is now 28 × 32 pt, with the faces, their spacing and the bar's height unchanged. That is short of 36 pt (and of iOS's 44), which only spreading the bar out could reach; that would be a visible change, and it waits for a look on the device. `RichTextToolbarHitTargetTests` pins the target size (it fails on the old toolbar), that neighbours don't overlap, and that the spacing and height are unchanged.
 
-Standard SwiftUI controls get a proper tap target from the system. The remaining candidates are views whose hit area is drawn by us. The toolbar's oracle (`RichTextToolbarHitTargetTests`) can measure any of them in-process, so a glyph-only hit area like the toolbar's shows up without Sidecar:
+**The other candidates, measured in-process (2026-11-04).** Standard SwiftUI controls get a proper tap target from the system, so the question was the views whose hit area is drawn by us. Measured through the accessibility API in a test window (`HitTargetOracle`), in points:
 
-- **The recipient picker button:** a plain-style `person.crop.circle.badge.plus` image (`Compose/Recipients/RecipientFieldWithSuggestions.swift:57-68`).
-- **Mini switches:** `miniSwitchStyleOnMac()` draws the Rules rows' toggles at `.controlSize(.mini)` (`Platform/ListAndFormStyles.swift:52-56`). Apple says standard controls get a proper target automatically. Confirm that holds at `.mini`, and don't change the size if it does (#2040 settled the shape).
-- **Small toolbar and banner controls:** `.controlSize(.small)` buttons in the unsubscribed-folder banner (`MessageListView+UnsubscribedBanner.swift:92`) and the Rules view (`RulesView.swift:290,300`).
-- **The toast's close and trailing-action buttons** (`Shared/Banners/ToastBanner.swift`).
+| Candidate | Before | After (at least) |
+|---|---|---|
+| Toast close (`Shared/Banners/ToastBanner.swift`) | 10 × 10 | 30 × 26 |
+| Toast action ("Copy", "Resume") | 46 × 13 | 60 × 29 |
+| Unsubscribed-folder refresh (`MessageListView+UnsubscribedBanner.swift`) | 12 × 14 | 32 × 30 |
+| Recipient Contacts picker (`RecipientFieldWithSuggestions.swift`) | 21 × 18 | 27 × 26 |
+| Rules mini switch (`miniSwitchStyleOnMac()`) | 36 × 16 | unchanged: a system control |
+| Rules "Retry" (`.bordered`, `.small`) | 48 × 20 | unchanged: a system control |
 
-Measure each over Sidecar: tap near the edge, and tap between neighbouring buttons. Apply decision 2 where a target misses. This must not move anything for pointer users: the visual frame stays the same and only the hit area grows.
+The first four took taps on their glyph alone. Unlike the toolbar, they sit in rows with no spare spacing to hand over, so they use `HitPaddedButton` (`Shared/Chrome/HitPaddedButton.swift`): the label is padded inside the button, which grows the button's frame and hit area, and the button hands the padding back to its parent as negative padding, so every row keeps its size. Real clicks showed this is the way it has to be done on macOS: a `contentShape` larger than the view (`Rectangle().inset(by: -8)`) takes no clicks beyond the button's frame. Each site's padding stays inside the padding its row already has and short of any neighbouring control. `HitPaddedButtonTests` drives real clicks into the padding (with a plain button as the control), pins each target's size (each fails on the old code), and pins each row's height.
+
+**Left for Sidecar:** whether macOS's own touch handling gives the mini switch and the small bordered button a larger target than their accessibility frame shows, as Apple says it does for standard controls. Leave them alone if it does (#2040 settled the switch's shape).
 
 ## Item 4 — Meaning carried only by a tooltip
 
