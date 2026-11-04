@@ -77,11 +77,11 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 | # | Item | Status |
 |---|---|---|
-| 0 | Pinch-to-zoom in the Mac readers | In review, PR #2321 |
+| 0 | Pinch-to-zoom in the Mac readers | Merged to `stage`, PR #2321 |
 | 1 | Message-list swipe actions under touch | Not started |
 | 2 | Long press on rows: context menu vs drag | Not started |
-| 3 | Tap targets under 36 pt | Not started |
-| 4 | Meaning carried only by a tooltip | Not started |
+| 3 | Tap targets under 36 pt | Composer toolbar in review (PR pending); the rest waits for Sidecar |
+| 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started |
 | 6 | Composer web view under touch | Not started |
 | 7 | Article view back/forward swipe on Mac | Not started |
@@ -90,7 +90,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 ## Item 0 — Pinch-to-zoom in the Mac readers
 
-**Status:** In review (PR #2321, 2026-11-04).
+**Status:** Merged to `stage` (PR #2321, 2026-11-04); not yet released.
 
 `WKWebView.allowsMagnification` defaults to false on macOS, so a trackpad pinch did nothing in the mail reader or the feed article view, while iOS zooms both. PR #2321 turns it on in `makeReaderWebView` and in `ArticleWebCoordinator.makeWebView`. It helps every Mac with a trackpad today. On the touch Mac, a pinch is emulated as a trackpad magnify, so the same switch should cover it; item 9 confirms that.
 
@@ -133,11 +133,12 @@ Fix only what fails. A likely fix, if the menu fires before a drag can start, is
 
 ## Item 3 — Tap targets under 36 pt
 
-**Status:** Not started.
+**Status:** Composer toolbar in review (2026-11-04); the other candidates wait for Sidecar.
 
-Standard SwiftUI controls get a proper tap target from the system. The candidates below are views whose hit area is drawn by us:
+**The composer toolbar, done first.** Measured through the accessibility API, its buttons took taps on their glyph alone, not the 24 × 24 pt face their frame draws: Bold was 8 × 10 pt and Heading 1 was 16 × 15, because the label had no `contentShape`. The bar is shared, so this was as small on iPhone and iPad as on a Mac. The fix gives each button the gap around its face as hit area (`RichTextToolbar.hitPadding`): the stack's 4 pt spacing and the bar's 4 pt vertical padding. Each target is now 28 × 32 pt, with the faces, their spacing and the bar's height unchanged. That is short of 36 pt (and of iOS's 44), which only spreading the bar out could reach; that would be a visible change, and it waits for a look on the device. `RichTextToolbarHitTargetTests` pins the target size (it fails on the old toolbar), that neighbours don't overlap, and that the spacing and height are unchanged.
 
-- **The composer's rich-text toolbar:** 24 × 24 pt borderless icon buttons (`Compose/Editor/RichTextToolbar.swift:139-145`, and the toggles beside them). This is the clearest case.
+Standard SwiftUI controls get a proper tap target from the system. The remaining candidates are views whose hit area is drawn by us. The toolbar's oracle (`RichTextToolbarHitTargetTests`) can measure any of them in-process, so a glyph-only hit area like the toolbar's shows up without Sidecar:
+
 - **The recipient picker button:** a plain-style `person.crop.circle.badge.plus` image (`Compose/Recipients/RecipientFieldWithSuggestions.swift:57-68`).
 - **Mini switches:** `miniSwitchStyleOnMac()` draws the Rules rows' toggles at `.controlSize(.mini)` (`Platform/ListAndFormStyles.swift:52-56`). Apple says standard controls get a proper target automatically. Confirm that holds at `.mini`, and don't change the size if it does (#2040 settled the shape).
 - **Small toolbar and banner controls:** `.controlSize(.small)` buttons in the unsubscribed-folder banner (`MessageListView+UnsubscribedBanner.swift:92`) and the Rules view (`RulesView.swift:290,300`).
@@ -147,14 +148,13 @@ Measure each over Sidecar: tap near the edge, and tap between neighbouring butto
 
 ## Item 4 — Meaning carried only by a tooltip
 
-**Status:** Not started.
+**Status:** No change needed (2026-11-04).
 
-A touch has no hover, so `.help` text never shows under a finger. Every `.help` in the shared layer already pairs with an `accessibilityLabel`, so VoiceOver is fine. The question is a sighted touch user. Of the seven uses:
+A touch has no hover, so `.help` text never shows under a finger. Every `.help` in the shared layer pairs with an `accessibilityLabel`, so VoiceOver is covered; the question was a sighted touch user. Of the seven uses:
 
-- **Fine:** the "Import from Rich Text" button (`ComposerBody.swift:133`) and the recipient picker carry a visible label or an obvious glyph, and the tooltip only repeats it.
-- **Small gap:** the sort control (`MessageListView+Sort.swift:28`) is fine when enabled, but when a search disables it, the reason ("Search results are listed newest first") is only in the tooltip. A tap on a disabled control does nothing, so a touch user never learns why. Low priority; a footnote in the search results header would cover it.
-- **Probably fine:** the rich-text toolbar's tooltips (`RichTextToolbar.swift:143,161,180`) name standard formatting glyphs.
-- **Needs a decision:** the feed health badge (`Feeds/Sidebar/FeedSidebarSection.swift:63`) is a bare warning or stopped icon whose explanation exists only as a tooltip. Under touch there is no way to learn what it means. Proposed: make the badge a button that opens the same summary in a popover. That also helps iPad and visionOS, which have no tooltips either.
+- **The feed health badge** (`Feeds/Sidebar/FeedSidebarSection.swift:63`) is a bare warning or stopped icon whose sidebar tooltip is its only label. But selecting the feed, which is what a tap on the row does, shows the full explanation at the top of its item list, with the fetcher's own error text, which the tooltip lacks (`FeedItemListView+FilterBar.swift:80`, `FeedHealth.headline(for:)`). This works on every platform. A button on the badge would repeat that, and a button inside a selectable sidebar row would compete with the row's own tap.
+- **The sort control** (`MessageListView+Sort.swift:28`) explains in its tooltip only why a search disables it ("Search results are listed newest first"). The results are visibly newest first, and a permanent footnote would shift the results layout to explain a button nobody can use there. Left as is.
+- **The others are fine:** the "Import from Rich Text" button (`ComposerBody.swift:133`), the recipient picker and the rich-text toolbar carry a visible label or a standard glyph, and the tooltip only repeats it.
 
 The reader's link status pill (`HTMLBodyView.swift`, `hoveredHref`) is hover-only by nature. A tap already opens the link menu, which shows the URL, so nothing is lost.
 
