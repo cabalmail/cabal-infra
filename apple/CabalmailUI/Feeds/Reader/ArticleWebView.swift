@@ -218,9 +218,13 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         ReaderTextScale.install(on: configuration.userContentController)
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
-        #if os(iOS) || os(visionOS)
+        // A swipe goes back and forward between pages: an edge swipe on iOS,
+        // a two-finger trackpad swipe on the Mac. The reader toggle adds no
+        // history (both its loads replace the page's entry), so only links
+        // the user followed are walked, and the page a swipe brings back is
+        // read for its state (`adoptRestoredPage`).
         webView.allowsBackForwardNavigationGestures = true
-        #else
+        #if os(macOS)
         // Off by default on macOS: without it a pinch does nothing, on the
         // publisher's page and the reader rendering alike. iOS zooms both
         // already.

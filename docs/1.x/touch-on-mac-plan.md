@@ -80,11 +80,11 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | 0 | Pinch-to-zoom in the Mac readers | Merged to `stage`, PR #2321 |
 | 1 | Message-list swipe actions under touch | Not started |
 | 2 | Long press on rows: context menu vs drag | Not started |
-| 3 | Tap targets under 36 pt | Composer toolbar merged (#2323); toast, banner and picker buttons in review, PR #2324; system controls wait for Sidecar |
+| 3 | Tap targets under 36 pt | Composer toolbar (#2323) and toast, banner and picker buttons (#2324) merged; system controls wait for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started |
 | 6 | Composer web view under touch | Not started |
-| 7 | Article view back/forward swipe on Mac | Not started |
+| 7 | Article view back/forward swipe on Mac | In review, PR #2325 (after the iOS fix, #2326) |
 | 8 | Things that should just work (spot checks) | Not started |
 | 9 | Device pass on the MacBook Pro | Not started (device expected ~2026-11-06) |
 
@@ -133,7 +133,7 @@ Fix only what fails. A likely fix, if the menu fires before a drag can start, is
 
 ## Item 3 — Tap targets under 36 pt
 
-**Status:** Composer toolbar merged to `stage` (PR #2323, 2026-11-04). The toast, unsubscribed-banner and Contacts-picker buttons are in review (PR #2324, 2026-11-04). The two system controls wait for Sidecar.
+**Status:** Composer toolbar merged to `stage` (PR #2323, 2026-11-04). The toast, unsubscribed-banner and Contacts-picker buttons are merged to `stage` (PR #2324, 2026-11-04). The two system controls wait for Sidecar.
 
 **The composer toolbar, done first.** Measured through the accessibility API, its buttons took taps on their glyph alone, not the 24 × 24 pt face their frame draws: Bold was 8 × 10 pt and Heading 1 was 16 × 15, because the label had no `contentShape`. The bar is shared, so this was as small on iPhone and iPad as on a Mac. The fix gives each button the gap around its face as hit area (`RichTextToolbar.hitPadding`): the stack's 4 pt spacing and the bar's 4 pt vertical padding. Each target is now 28 × 32 pt, with the faces, their spacing and the bar's height unchanged. That is short of 36 pt (and of iOS's 44), which only spreading the bar out could reach; that would be a visible change, and it waits for a look on the device. `RichTextToolbarHitTargetTests` pins the target size (it fails on the old toolbar), that neighbours don't overlap, and that the spacing and height are unchanged.
 
@@ -191,16 +191,21 @@ The sanitizer and drop-handling invariants listed in `CLAUDE.md` ("Page JavaScri
 
 ## Item 7 — Article view back/forward swipe on Mac
 
-**Status:** Not started.
+**Status:** In review (PR #2325, 2026-11-04), after the iOS fix it needed (#2326, merged to `stage` 2026-11-04).
 
-`ArticleWebCoordinator.makeWebView` sets `allowsBackForwardNavigationGestures` on iOS and visionOS only (`Feeds/Reader/ArticleWebView.swift:196`), so on a Mac a two-finger trackpad swipe doesn't go back on the publisher's page. A touch swipe doesn't either. Turning it on for macOS would help trackpad users today. It is like item 0, but needs more thought. The reader rendering is a separate `loadHTMLString` load in the same web view, so the back/forward list has to land somewhere sensible: does swiping back from the reader rendering go to the live page, and does that agree with `ArticleNavigationPolicy` (#2060)?
+`ArticleWebCoordinator.makeWebView` set `allowsBackForwardNavigationGestures` on iOS and visionOS only, so on a Mac a two-finger trackpad swipe didn't go back on the publisher's page. The worry was the back/forward list: the reader rendering is a separate `loadHTMLString` in the same web view, so a swipe might land on a page the coordinator's state didn't expect.
 
-Steps:
-1. Prototype it on macOS.
-2. Walk the list: live page → reader → a link out → back → back.
-3. Ship it only if every step lands where the toolbar's own controls would.
+- **The reader toggle adds no history.** A probe served the article from a custom URL scheme, since WebKit refuses a handler for `https` and tests here open no sockets, so the web view kept a real back/forward list. Both the reader rendering (`loadHTMLString` with the page as its base URL) and the toggle's return to the live page load the page's own URL, and WebKit replaces the current entry rather than adding one. After reader, toggle off and toggle on, the back list was still empty. A swipe only walks pages the user reached through links.
+- **A swipe back after a link out of the reader was broken on iOS.** This is #2060's path, in the in-app article page (the toolbar's **Open article**). It is not the feed item's own content, which renders in `HTMLBodyView`, whose links open the link menu and never navigate; a first check made there didn't count. A check on an iPhone 16 Pro Max (2026-11-04), reproduced on macOS against a live macrumors.com article, found two problems:
+  - Going back restored the reader rendering from WebKit's back-forward cache under a toggle reading "original", and the next toggle changed nothing.
+  - The coordinator could also keep the linked page's URL, so a later toggle loaded the linked page in place of the article.
 
-Our own swipe navigation would have to honour `NSEvent.isTouchSwipeNavigationEnabled`. WebKit's built-in gesture presumably honours it itself; confirm on the device.
+  The coordinator had never handled back or forward. #2326 fixed it on every platform: a main-frame `.backForward` navigation is read at its commit for its URL, whether it is the reader rendering (a marker the reader document carries) and whether it is complete, and the toggle is told what is on screen. `ArticleHistoryRestoreTests` drives a real link tap in the reader and fails with the fix off.
+- **Still unexplained:** on the iPhone, a link out of the reader opened the linked page and then switched it to reader view, where #2060 keeps it as served. A scripted tap on macOS keeps it as served. Look at it on the device.
+
+With #2326 in, the Mac takes the swipe too. `ArticleWebViewGestureTests` pins the setting (it fails on the old code).
+
+**Left for the device pass:** whether a one-finger touch swipe on the touch display navigates too. AppKit doesn't turn touch swipes into navigation for apps that track swipes themselves, and it is not documented whether WebKit's own gesture takes direct touch. It should honour the system's "Swipe between pages" setting (`NSEvent.isTouchSwipeNavigationEnabled` for touch); confirm both on the device.
 
 ## Item 8 — Things that should just work (spot checks)
 
