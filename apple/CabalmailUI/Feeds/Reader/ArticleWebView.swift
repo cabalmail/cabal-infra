@@ -25,6 +25,9 @@ struct ArticleWebView: View {
     /// view model can leave the reader for that page without touching the
     /// feed's saved styling (#2060).
     let onLeftReader: @MainActor () -> Void
+    /// Reports the styling of a page back or forward put on screen (true
+    /// for the reader rendering), so the toggle can say what is showing.
+    var onRestoredPage: @MainActor (_ showingReader: Bool) -> Void = { _ in }
 
     /// The last top-level load error, cleared when a load finishes.
     @State private var failure: String?
@@ -35,7 +38,8 @@ struct ArticleWebView: View {
     var body: some View {
         ArticleWebViewRepresentable(url: url, dataStoreID: dataStoreID, readerMode: readerMode,
                                     textScale: dynamicTypeSize.bodyTextScale, pageRequest: pageRequest,
-                                    onFailure: { failure = $0 }, onLeftReader: onLeftReader)
+                                    onFailure: { failure = $0 }, onLeftReader: onLeftReader,
+                                    onRestoredPage: onRestoredPage)
             .id(attempt)
             .overlay {
                 if failure != nil { failureNotice }
@@ -71,9 +75,10 @@ private struct ArticleWebViewRepresentable: NSViewRepresentable {
     let pageRequest: ReaderPageRequest?
     let onFailure: @MainActor (String?) -> Void
     let onLeftReader: @MainActor () -> Void
+    let onRestoredPage: @MainActor (Bool) -> Void
 
     func makeCoordinator() -> ArticleWebCoordinator {
-        ArticleWebCoordinator(onFailure: onFailure, onLeftReader: onLeftReader)
+        ArticleWebCoordinator(onFailure: onFailure, onLeftReader: onLeftReader, onRestoredPage: onRestoredPage)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -93,9 +98,10 @@ private struct ArticleWebViewRepresentable: UIViewRepresentable {
     let pageRequest: ReaderPageRequest?
     let onFailure: @MainActor (String?) -> Void
     let onLeftReader: @MainActor () -> Void
+    let onRestoredPage: @MainActor (Bool) -> Void
 
     func makeCoordinator() -> ArticleWebCoordinator {
-        ArticleWebCoordinator(onFailure: onFailure, onLeftReader: onLeftReader)
+        ArticleWebCoordinator(onFailure: onFailure, onLeftReader: onLeftReader, onRestoredPage: onRestoredPage)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -161,16 +167,33 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     /// model's own per-page state arrives a render later, after this page
     /// may already have finished loading.
     private var leftReaderThroughLink = false
+    /// A back or forward navigation is loading. WebKit may put the page
+    /// back from its back-forward cache exactly as it was left, the reader
+    /// rendering included, and may not report the load finished; so at its
+    /// commit the coordinator reads what came back rather than assuming
+    /// (`adoptRestoredPage`).
+    private var historyNavigation = false
+    /// The restored page is being read: nothing reconciles against the old
+    /// state until it answers.
+    private var readingRestoredPage = false
+    /// The schemes of a publisher's page. Tests add the one their URL scheme
+    /// handler serves, which is how a page gets real history, and links out
+    /// of the reader, without a network.
+    var webSchemes = ArticleNavigationPolicy.webSchemes
     /// Reports a top-level load failure (or nil once a load finishes) to the
     /// SwiftUI layer, which draws the notice.
     private let onFailure: @MainActor (String?) -> Void
     /// Reports a link out of the reader to the view model (#2060).
     private let onLeftReader: @MainActor () -> Void
+    /// Reports the styling of a page back or forward restored.
+    private let onRestoredPage: @MainActor (Bool) -> Void
 
     init(onFailure: @escaping @MainActor (String?) -> Void,
-         onLeftReader: @escaping @MainActor () -> Void) {
+         onLeftReader: @escaping @MainActor () -> Void,
+         onRestoredPage: @escaping @MainActor (Bool) -> Void = { _ in }) {
         self.onFailure = onFailure
         self.onLeftReader = onLeftReader
+        self.onRestoredPage = onRestoredPage
     }
 
     /// What the view asks for, with #2060's rule applied.
@@ -178,8 +201,11 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         ArticleNavigationPolicy.showsReader(wantsReader: wantsReader, leftThroughLink: leftReaderThroughLink)
     }
 
-    func makeWebView(url: URL, dataStoreID: UUID?) -> WKWebView {
-        let configuration = WKWebViewConfiguration()
+    /// `configuration` is new for every view the app builds; tests hand in
+    /// one carrying a URL scheme handler, so a page has real history without
+    /// a network.
+    func makeWebView(url: URL, dataStoreID: UUID?,
+                     configuration: WKWebViewConfiguration = WKWebViewConfiguration()) -> WKWebView {
         if let dataStoreID {
             configuration.websiteDataStore = WKWebsiteDataStore(forIdentifier: dataStoreID)
         }
@@ -219,7 +245,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     }
 
     private func reconcile(on webView: WKWebView) {
-        guard pageLoaded, !extracting else { return }
+        guard pageLoaded, !extracting, !readingRestoredPage else { return }
         let rendersReader = self.rendersReader
         if rendersReader, showingReader {
             if readerTextScale != textScale, let article {
@@ -282,6 +308,12 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         loadingReader = false
+        if historyNavigation {
+            historyNavigation = false
+            linkOutOfReader = false
+            adoptRestoredPage(on: webView)
+            return
+        }
         if linkOutOfReader {
             // The link's page is on screen but not loaded: `didFinish`
             // adopts its URL and reconciles. It stays the publisher's page
@@ -299,10 +331,11 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         pageLoaded = true
         onFailure(nil)
+        // A restored page's state comes from reading it, not from here.
+        if readingRestoredPage { return }
         // A new top-level page (the user followed a link) invalidates the
         // extraction cached for the previous one.
-        if !showingReader, webView.url != pageURL, let current = webView.url,
-           current.scheme?.hasPrefix("http") == true {
+        if !showingReader, webView.url != pageURL, let current = webView.url, isWebPage(current) {
             pageURL = current
             article = nil
         }
@@ -312,6 +345,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         loadingReader = false
         linkOutOfReader = false
+        historyNavigation = false
         report(error)
     }
 
@@ -339,16 +373,58 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
         // scripts. The load's request carries the page's https URL, not
         // about:blank, so the scheme can't tell the two apart.
         let inMainFrame = navigationAction.targetFrame?.isMainFrame == true
+        if inMainFrame, navigationAction.navigationType == .backForward {
+            historyNavigation = true
+        }
         // swiftlint:disable:next content_javascript_enabled
         preferences.allowsContentJavaScript = ArticleNavigationPolicy.allowsJavaScript(
             type: navigationAction.navigationType, inMainFrame: inMainFrame, loadingReader: loadingReader)
         if ArticleNavigationPolicy.leavesReader(
             type: navigationAction.navigationType, url: navigationAction.request.url,
-            inMainFrame: inMainFrame, showingReader: showingReader) {
+            inMainFrame: inMainFrame, showingReader: showingReader, webSchemes: webSchemes) {
             linkOutOfReader = true
         }
         return (.allow, preferences)
     }
+
+    /// Reads the page back or forward put on screen and takes the state
+    /// from it: its URL, whether it is the reader rendering (by the marker
+    /// `ArticleReaderDocument` writes), and whether it is already complete,
+    /// as a page from the back-forward cache is. Until this ran, back from a
+    /// link out of the reader left the reader rendering on screen under a
+    /// toggle reading "original", and the coordinator still holding the
+    /// linked page's URL: the next toggle did nothing visible, or loaded the
+    /// linked page in place of the article.
+    private func adoptRestoredPage(on webView: WKWebView) {
+        readingRestoredPage = true
+        webView.evaluateJavaScript(
+            Self.readerMarkerCheck, in: nil, in: .defaultClient
+        ) { [weak self, weak webView] result in
+            Task { @MainActor in
+                guard let self, let webView else { return }
+                self.readingRestoredPage = false
+                let showsReader = (try? result.get()) as? Bool ?? false
+                if let current = webView.url, current != self.pageURL, self.isWebPage(current) {
+                    self.pageURL = current
+                    self.article = nil
+                }
+                self.showingReader = showsReader
+                self.wantsReader = showsReader
+                self.leftReaderThroughLink = false
+                self.readerTextScale = showsReader ? self.textScale : nil
+                if !webView.isLoading { self.pageLoaded = true }
+                self.onRestoredPage(showsReader)
+            }
+        }
+    }
+
+    private func isWebPage(_ url: URL) -> Bool {
+        webSchemes.contains(url.scheme?.lowercased() ?? "")
+    }
+
+    /// True in the reader rendering, false in any page the publisher served.
+    static let readerMarkerCheck =
+        "document.querySelector('meta[name=\"\(ArticleReaderDocument.markerName)\"]') !== null"
 
     /// Runs Readability over a clone of the document and returns JSON. The
     /// video pattern matches nothing, so Readability drops every iframe,
@@ -386,8 +462,13 @@ enum ArticleReaderDocument {
         \(article.content)
         </article>
         """
-        return contentPolicy + rewrite(html: body, inlineImages: [:], readerMode: true, textScale: textScale)
+        return contentPolicy + "<meta name=\"\(markerName)\">"
+            + rewrite(html: body, inlineImages: [:], readerMode: true, textScale: textScale)
     }
+
+    /// Names the reader rendering, so a page back or forward restores can be
+    /// told from the publisher's (`ArticleWebCoordinator.readerMarkerCheck`).
+    static let markerName = "cabal-article-reader"
 
     /// Refuses script, plugins and frames in the reader document, whatever
     /// the article carries (Readability keeps inline event handlers). It
