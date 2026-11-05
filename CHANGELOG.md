@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.43.0] - 2026-11-05
+
+### Added
+- Apple: **Swipe back and forward in Mac feed articles.** A two-finger
+  trackpad swipe now goes back and forward between pages in the feed
+  article view, as an edge swipe already did on iPhone and iPad. Swiping
+  back from a link followed out of reader mode returns to the reader.
+- Apple: **Pinch to zoom in the Mac readers.** A trackpad pinch now zooms an
+  HTML message body and a feed article, on the publisher's page and in
+  reader mode alike, as it already did on iPhone and iPad. Each new message
+  opens at its normal size.
+
+### Changed
+- Apple: **Addresses as one list with a Favorites pill.** The address list
+  drops its separate Favorites and All addresses sections, which listed each
+  favorite twice, for a single list under the same filter-pill row the
+  folder and feed sidebars use, drawn over the tab's brand wash as theirs
+  are. The Favorites pill is sticky per device and shared by every address
+  list; when it hides everything the filter would otherwise show, the list
+  offers a one-tap way back to all addresses.
+- Apple: **Mail tab opens on the folder list when there's nothing to
+  resume.** On iPhone and in narrow iPad windows, where the Mail tab shows
+  one column at a time, a launch with no saved folder, window route or deep
+  link to follow now leaves you on the folder list instead of opening
+  INBOX's messages. The wide split, which shows both, still lands on INBOX.
+- Apple: **Sidebar color wash on every compact tab.** On iPhone, each tab's
+  root screen headed by the Cabalmail mark — Feeds, Addresses, Settings and
+  Search, not only Mail's folder list — now sits over the same swatch-color
+  wash as the sidebar, so the mark and the wash always travel together.
+
+### Fixed
+- Apple: **Reader toggle after going back in a feed article.** Going back
+  from a page opened by a link in the article's reader view brought the
+  reader view back, but the toggle read "original" and the next tap changed
+  nothing; going back from a link in the publisher's layout could make a
+  later toggle load the linked page in place of the article. The article
+  view now reads the page back or forward puts on screen, and the toggle
+  follows it.
+- Apple: **Easier-to-hit formatting buttons.** The composer's formatting
+  toolbar took taps only on each button's glyph (about 8 x 10 pt for Bold).
+  Each button now answers across the gap around it, a 28 x 32 pt target,
+  with nothing on the bar moved or resized.
+- Apple: **Easier-to-hit small buttons.** A toast's close button (10 x 10 pt)
+  and its action, the unsubscribed-folder banner's refresh button and a
+  recipient field's Contacts button took taps only on their glyph. Each now
+  answers in the padding around it, a target two to three times wider and
+  taller, with every banner and row staying the size it was.
+
 ## [1.42.2] - 2026-11-04
 
 ### Changed
