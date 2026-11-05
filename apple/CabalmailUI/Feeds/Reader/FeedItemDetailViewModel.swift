@@ -141,6 +141,14 @@ final class FeedItemDetailViewModel {
         pageReaderOverride = false
     }
 
+    /// Back or forward has put a page on screen in the styling it was left
+    /// in, which the toggle now reports: an override where it differs from
+    /// the feed's, none where it agrees. The feed's saved styling is left
+    /// alone, as for a link-out.
+    func restoredPage(showingReader reader: Bool) {
+        pageReaderOverride = reader == readerMode ? nil : reader
+    }
+
     func toggleRemoteContent() {
         remoteContentAllowed.toggle()
         persistDefault(.remoteContent(allowed: remoteContentAllowed))

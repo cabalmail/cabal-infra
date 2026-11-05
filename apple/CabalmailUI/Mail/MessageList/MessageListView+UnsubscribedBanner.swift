@@ -86,7 +86,9 @@ struct UnsubscribedBannerRow: View {
                 // limit allows instead of truncating to one at a narrow column.
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
-            Button(action: refresh) {
+            // Takes taps into the row's padding and part of the spacer
+            // (`HitPaddedButton`); the glyph alone was 12 x 14 pt.
+            HitPaddedButton(hitPadding: EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 12), action: refresh) {
                 if isRefreshing {
                     ProgressView()
                         .controlSize(.small)

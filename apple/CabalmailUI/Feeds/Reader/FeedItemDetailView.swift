@@ -143,7 +143,8 @@ struct FeedItemDetailView: View {
             ArticleWebView(url: url, dataStoreID: model.dataStoreID,
                            readerMode: model.effectiveReaderMode, isOffline: isOffline,
                            pageRequest: model.pageRequest,
-                           onLeftReader: { model.leftReaderThroughLink() })
+                           onLeftReader: { model.leftReaderThroughLink() },
+                           onRestoredPage: { model.restoredPage(showingReader: $0) })
                 .id(url)
         } else {
             VStack(alignment: .leading, spacing: 0) {
