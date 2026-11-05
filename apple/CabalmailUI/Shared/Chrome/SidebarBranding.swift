@@ -12,11 +12,13 @@ import CabalmailKit
 
 /// The four accent tokens the web app's address swatches use, as soft
 /// radial blobs behind the
-/// sidebar material, at a fixed 20% opacity. Scope differs per platform
-/// (`MailSidebarColumn` applies it): the whole folder screen on iPhone,
-/// the sidebar column only on iPad and macOS. The native list above it
-/// hides its scroll background (`.scrollContentBackground(.hidden)`) so
-/// the wash reads as color seen through the system material.
+/// sidebar material, at a fixed 20% opacity. It goes wherever the Cabalmail
+/// mark does: `MailSidebarColumn` applies it to the mail sidebar (the whole
+/// folder screen on iPhone, the sidebar column only on iPad and macOS), and
+/// `compactBrandMarkTitle` to every other compact tab's root screen. The
+/// native list above it hides its scroll background
+/// (`.scrollContentBackground(.hidden)`) so the wash reads as color seen
+/// through the system material. Apply it with `sidebarWash()`.
 struct SidebarWash: View {
     /// One wash blob: an accent token (the catalog resolves its light and
     /// dark values) plus its center and extent as fractions of the wash
@@ -89,6 +91,17 @@ struct SidebarWash: View {
             x: blob.center.x * size.width,
             y: blob.center.y * size.height
         )
+    }
+}
+
+extension View {
+    /// Paints `SidebarWash` behind this screen, and hides the scroll
+    /// background of the lists inside it (the modifier is inherited) so the
+    /// wash shows through the native material instead of being painted over
+    /// by the system background.
+    func sidebarWash() -> some View {
+        scrollContentBackground(.hidden)
+            .background { SidebarWash().ignoresSafeArea() }
     }
 }
 
@@ -194,14 +207,17 @@ extension EnvironmentValues {
 }
 
 /// `brandMarkTitle` gated on `showsCompactBrandMark`, for the tab roots
-/// that also render outside the compact tab bar.
+/// that also render outside the compact tab bar. A screen headed by the mark
+/// also carries the sidebar wash, as the Mail tab's folder list does.
 private struct CompactBrandMarkTitle: ViewModifier {
     let accessibilityTitle: String
     @Environment(\.showsCompactBrandMark) private var showsCompactBrandMark
 
     func body(content: Content) -> some View {
         if showsCompactBrandMark {
-            content.brandMarkTitle(size: compactBrandMarkSize, accessibilityTitle: accessibilityTitle)
+            content
+                .sidebarWash()
+                .brandMarkTitle(size: compactBrandMarkSize, accessibilityTitle: accessibilityTitle)
         } else {
             content
         }
@@ -217,7 +233,8 @@ extension View {
     }
 
     /// Replaces this screen's visible navigation title with the Cabalmail
-    /// mark when hosted in the compact iPhone tab bar; a no-op elsewhere.
+    /// mark, over the sidebar wash, when hosted in the compact iPhone tab
+    /// bar; a no-op elsewhere.
     func compactBrandMarkTitle(accessibilityTitle: String) -> some View {
         modifier(CompactBrandMarkTitle(accessibilityTitle: accessibilityTitle))
     }

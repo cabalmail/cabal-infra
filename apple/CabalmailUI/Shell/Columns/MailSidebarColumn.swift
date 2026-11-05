@@ -47,10 +47,7 @@ struct MailSidebarColumn<Header: View>: View {
         // Sidebar branding (see `SidebarBranding.swift`): the wash paints this
         // column only — the entire folder screen on compact iPhone, where
         // this column IS the screen; the floating sidebar on iPad; the sidebar
-        // material on macOS. Hiding the list's scroll background (inherited by
-        // the folder `List` below) lets the wash show through the native
-        // material instead of being painted over by the system background.
-        .scrollContentBackground(.hidden)
-        .background { SidebarWash().ignoresSafeArea() }
+        // material on macOS.
+        .sidebarWash()
     }
 }
