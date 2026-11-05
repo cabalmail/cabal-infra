@@ -3,15 +3,20 @@ import CabalmailKit
 
 /// Address sidebar (Phase 5 of the folder/address polish plan).
 ///
-/// Mirrors `FolderListView`'s shape: two sections (Favorites on top when
-/// non-empty, then All addresses inclusive), per-row swipe + context-menu
-/// affordances to toggle the favorite flag. Tapping an address copies it
+/// Mirrors the folder and feed sidebars' shape: one list under a filter
+/// pill row (`AddressListFilter`, a Favorites toggle), per-row swipe +
+/// context-menu affordances to toggle the favorite flag. Tapping an address copies it
 /// to the pasteboard, and a row drags as plain text — the list is a
 /// management/grab surface, not a message-list filter.
 struct AddressListView: View {
     @Environment(AppState.self) private var appState
     @State private var model: AddressesViewModel?
     @State private var filterQuery: String = ""
+    /// The Favorites pill (`AddressListFilter`): sticky per device, never
+    /// synced. Every address list (the compact tab, the wide inspector, the
+    /// laptop panel) reads the same key, so they agree.
+    @AppStorage("cabalmail.addresses.filter")
+    private var listFilterRaw = AddressListFilter.defaultForAddresses.rawValue
     @State private var isRefreshing = false
     // Drives the "Request new address" sheet from the toolbar `+` button.
     @State private var showNewAddressSheet = false
@@ -49,6 +54,7 @@ struct AddressListView: View {
                     refreshAction: { Task { await manualRefresh() } }
                 )
             }
+            pillRow
             addressList
         }
     }
@@ -63,24 +69,10 @@ struct AddressListView: View {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
-                let favorites = filteredAddresses(model.favorites)
-                let all = filteredAddresses(model.addresses)
-                if !model.favorites.isEmpty {
-                    Section("Favorites") {
-                        ForEach(favorites, id: \.address) { address in
-                            addressRow(address, model: model)
-                        }
-                    }
-                    Section("All addresses") {
-                        ForEach(all, id: \.address) { address in
-                            addressRow(address, model: model)
-                        }
-                    }
-                } else {
-                    ForEach(all, id: \.address) { address in
-                        addressRow(address, model: model)
-                    }
+                ForEach(listFilter.apply(to: model.addresses, needle: activeFilterText), id: \.address) { address in
+                    addressRow(address, model: model)
                 }
+                filterHintRow(model.addresses)
             }
         }
         .navigationTitle("Addresses")
@@ -176,12 +168,41 @@ struct AddressListView: View {
         await model.refresh(force: true)
     }
 
-    private func filteredAddresses(_ addresses: [Address]) -> [Address] {
-        let needle = activeFilterText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !needle.isEmpty else { return addresses }
-        return addresses.filter { address in
-            address.address.lowercased().contains(needle)
-                || (address.comment?.lowercased().contains(needle) ?? false)
+    private var listFilter: AddressListFilter {
+        AddressListFilter(rawValue: listFilterRaw) ?? AddressListFilter.defaultForAddresses
+    }
+
+    /// The Favorites toggle, in the row the folder and feed sidebars draw.
+    /// No Expand all / Collapse all: the list is flat.
+    private var pillRow: some View {
+        SidebarFilterPillRow(
+            pills: [
+                SidebarFilterPill(id: AddressListFilter.favorites.rawValue, label: AddressListFilter.pillLabel,
+                                  isOn: listFilter.favoritesOnly) {
+                    listFilterRaw = listFilter.toggled.rawValue
+                },
+            ],
+            identifierPrefix: "address.filter",
+            expansion: nil
+        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    /// The list's last row when the pill hides everything the text filter
+    /// (or no filter) would show: a button that turns the pill off.
+    @ViewBuilder
+    private func filterHintRow(_ addresses: [Address]) -> some View {
+        if let hint = listFilter.hint(for: addresses, needle: activeFilterText) {
+            Button {
+                listFilterRaw = AddressListFilter.all.rawValue
+            } label: {
+                Label(hint, systemImage: "line.3.horizontal.decrease.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("address.filter.hint")
         }
     }
 }
