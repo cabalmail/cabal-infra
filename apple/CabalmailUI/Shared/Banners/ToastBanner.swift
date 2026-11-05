@@ -25,6 +25,16 @@ struct BannerView: View {
     /// still true.
     var onDismiss: (() -> Void)?
 
+    /// How far the trailing action and the close button take taps beyond
+    /// what they draw (`HitPaddedButton`): into the capsule's 8 pt vertical
+    /// padding, the close button into its 12 pt trailing padding, and each
+    /// part of the way across the gap between them (10 pt of spacing plus
+    /// the close button's 16 pt lead), leaving 10 pt that belongs to
+    /// neither. Without it the close button took taps on its 10 pt glyph
+    /// alone.
+    static let actionHitPadding = EdgeInsets(top: 8, leading: 6, bottom: 8, trailing: 8)
+    static let closeHitPadding = EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 12)
+
     init(
         icon: String,
         text: String,
@@ -52,7 +62,7 @@ struct BannerView: View {
                 .foregroundStyle(.primary)
             Spacer(minLength: 0)
             if let onAction {
-                Button(action: onAction) {
+                HitPaddedButton(hitPadding: Self.actionHitPadding, action: onAction) {
                     Label(actionTitle, systemImage: actionIcon)
                         .font(.footnote.weight(.semibold))
                         .labelStyle(.titleAndIcon)
@@ -61,7 +71,7 @@ struct BannerView: View {
                 .tint(tint)
             }
             if let onDismiss {
-                Button(action: onDismiss) {
+                HitPaddedButton(hitPadding: Self.closeHitPadding, action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.footnote)
                         .foregroundStyle(.secondary)

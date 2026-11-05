@@ -23,12 +23,16 @@ enum ArticleNavigationPolicy {
         wantsReader && !leftThroughLink
     }
 
+    /// The schemes of a page a publisher serves.
+    static let webSchemes: Set<String> = ["http", "https"]
+
     /// Whether a navigation is a link tapped in the reader rendering that
     /// opens a web page in this view. A link that opens a new window has no
     /// main frame here, so it does not count.
-    static func leavesReader(type: WKNavigationType, url: URL?, inMainFrame: Bool, showingReader: Bool) -> Bool {
+    static func leavesReader(type: WKNavigationType, url: URL?, inMainFrame: Bool, showingReader: Bool,
+                             webSchemes: Set<String> = webSchemes) -> Bool {
         guard showingReader, inMainFrame, type == .linkActivated,
               let scheme = url?.scheme?.lowercased() else { return false }
-        return scheme == "http" || scheme == "https"
+        return webSchemes.contains(scheme)
     }
 }
