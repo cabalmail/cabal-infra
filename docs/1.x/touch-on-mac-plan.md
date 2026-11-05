@@ -84,7 +84,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started |
 | 6 | Composer web view under touch | Not started |
-| 7 | Article view back/forward swipe on Mac | Draft, PR #2325; one check left (below) |
+| 7 | Article view back/forward swipe on Mac | In review, PR #2325 (after the iOS fix, #2326) |
 | 8 | Things that should just work (spot checks) | Not started |
 | 9 | Device pass on the MacBook Pro | Not started (device expected ~2026-11-06) |
 
@@ -191,16 +191,19 @@ The sanitizer and drop-handling invariants listed in `CLAUDE.md` ("Page JavaScri
 
 ## Item 7 — Article view back/forward swipe on Mac
 
-**Status:** Draft (PR #2325, 2026-11-04), waiting on one check on iOS, below.
+**Status:** In review (PR #2325, 2026-11-04), after the iOS fix it needed (#2326, merged to `stage` 2026-11-04).
 
 `ArticleWebCoordinator.makeWebView` set `allowsBackForwardNavigationGestures` on iOS and visionOS only, so on a Mac a two-finger trackpad swipe didn't go back on the publisher's page. The worry was the back/forward list: the reader rendering is a separate `loadHTMLString` in the same web view, so a swipe might land on a page the coordinator's state didn't expect.
 
-One check settled most of it, and one is still open:
+- **The reader toggle adds no history.** A probe served the article from a custom URL scheme, since WebKit refuses a handler for `https` and tests here open no sockets, so the web view kept a real back/forward list. Both the reader rendering (`loadHTMLString` with the page as its base URL) and the toggle's return to the live page load the page's own URL, and WebKit replaces the current entry rather than adding one. After reader, toggle off and toggle on, the back list was still empty. A swipe only walks pages the user reached through links.
+- **A swipe back after a link out of the reader was broken on iOS.** This is #2060's path, in the in-app article page (the toolbar's **Open article**). It is not the feed item's own content, which renders in `HTMLBodyView`, whose links open the link menu and never navigate; a first check made there didn't count. A check on an iPhone 16 Pro Max (2026-11-04), reproduced on macOS against a live macrumors.com article, found two problems:
+  - Going back restored the reader rendering from WebKit's back-forward cache under a toggle reading "original", and the next toggle changed nothing.
+  - The coordinator could also keep the linked page's URL, so a later toggle loaded the linked page in place of the article.
 
-- **The reader toggle adds no history.** A probe served the article from a custom URL scheme, since WebKit refuses a handler for `https` and tests here open no sockets, so the web view kept a real back/forward list. Both the reader rendering (`loadHTMLString` with the page as its base URL) and the toggle's return to the live page load the page's own URL, and WebKit replaces the current entry rather than adding one. After reader, toggle off and toggle on, the back list was still empty. A swipe only walks pages the user reached through links, so it can't put the toggle and the page out of step.
-- **Open: a swipe back after a link out of the article view's reader (#2060's path).** The in-process tests can't drive it, because only an `http`/`https` link counts as leaving the reader. iOS has had the swipe all along, so it can be checked there. Note which view: the feed item's own content renders in `HTMLBodyView`, whose links open the link menu and never navigate, so a check there exercises nothing here. The path is the in-app article page (the toolbar's article button) with its reader mode on. Tap a link in the extracted article, which loads the linked page in place; then swipe back. Two things to note: what comes back (the reader rendering, or the publisher's page), and whether the toolbar's reader toggle matches it. Reading the coordinator, after a link out it clears its reader state (`leftReaderThroughLink`, `article = nil`) and does nothing on the way back. So a page that WebKit restores from its back-forward cache as the reader rendering would sit under a toggle that reads off. A first check (2026-11-04) was made in the feed item's own content, so it does not count.
+  The coordinator had never handled back or forward. #2326 fixed it on every platform: a main-frame `.backForward` navigation is read at its commit for its URL, whether it is the reader rendering (a marker the reader document carries) and whether it is complete, and the toggle is told what is on screen. `ArticleHistoryRestoreTests` drives a real link tap in the reader and fails with the fix off.
+- **Still unexplained:** on the iPhone, a link out of the reader opened the linked page and then switched it to reader view, where #2060 keeps it as served. A scripted tap on macOS keeps it as served. Look at it on the device.
 
-PR #2325 sets the swipe on the Mac too. `ArticleWebViewGestureTests` pins the setting (it fails on the old code). If the open check shows the mismatch, it is an existing iOS bug: fix it in the coordinator first (say, by recording which back-forward item holds the reader rendering and reading it back in `didFinish`), then bring the swipe to the Mac.
+With #2326 in, the Mac takes the swipe too. `ArticleWebViewGestureTests` pins the setting (it fails on the old code).
 
 **Left for the device pass:** whether a one-finger touch swipe on the touch display navigates too. AppKit doesn't turn touch swipes into navigation for apps that track swipes themselves, and it is not documented whether WebKit's own gesture takes direct touch. It should honour the system's "Swipe between pages" setting (`NSEvent.isTouchSwipeNavigationEnabled` for touch); confirm both on the device.
 
