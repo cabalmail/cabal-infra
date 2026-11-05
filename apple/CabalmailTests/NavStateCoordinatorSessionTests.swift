@@ -40,7 +40,7 @@ final class NavStateCoordinatorSessionTests: XCTestCase {
         XCTAssertEqual(coordinator.launchSection, .mail)
         XCTAssertEqual(
             coordinator.mailLaunchTarget(),
-            NavStateCoordinator.MailLaunchTarget(folderPath: "INBOX", messageRestore: nil)
+            NavStateCoordinator.MailLaunchTarget(folderPath: "INBOX", messageRestore: nil, isFallback: true)
         )
     }
 
