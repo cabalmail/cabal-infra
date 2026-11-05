@@ -17,13 +17,18 @@ struct TreeGate: Equatable {
     /// hierarchy while they are torn down, and they still see the window's
     /// parked restores.
     private(set) var superseded: UUID?
+    /// Whether the tree that appeared last is a collapsed stack whose root
+    /// is the folder list, which a landing with nothing to resume leaves on
+    /// screen rather than opening INBOX (`CompactMailStack`).
+    private(set) var startsOnFolderList = false
 
     /// `tree` appeared. Returns whether it replaces another tree, which is a
     /// layout swap's rebuild rather than a first appearance or a tab switch
     /// bringing the same tree back.
-    mutating func appear(_ tree: UUID) -> Bool {
+    mutating func appear(_ tree: UUID, startsOnFolderList: Bool = false) -> Bool {
         if appearing != tree { superseded = appearing }
         appearing = tree
+        self.startsOnFolderList = startsOnFolderList
         return mounted != nil && mounted != tree
     }
 

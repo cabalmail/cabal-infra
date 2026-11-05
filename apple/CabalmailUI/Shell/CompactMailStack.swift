@@ -97,9 +97,10 @@ struct CompactMailStack: View {
             false
         }
         // The window's launch landing — or, for a tree a layout swap has
-        // just built, the window's route (`SceneNavigator`).
+        // just built, the window's route (`SceneNavigator`). With nothing
+        // to resume, the stack stays on its folder list.
         .task {
-            await navigator.mailTreeAppeared(tree, isWide: false)
+            await navigator.mailTreeAppeared(tree, isWide: false, startsOnFolderList: true)
         }
     }
 }

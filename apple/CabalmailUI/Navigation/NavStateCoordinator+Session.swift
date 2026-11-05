@@ -13,10 +13,14 @@ extension NavStateCoordinator {
     /// when the list arrives and falls back to INBOX if it no longer exists.
     /// `listAnchor` is where the folder's list was scrolled when the app
     /// last went away, for the window to park beside the message.
+    /// `isFallback` marks the INBOX a landing takes when neither the window
+    /// nor the session names a folder: nothing to resume, so a collapsed
+    /// stack opens on its folder list instead (`SceneNavigator`).
     struct MailLaunchTarget: Equatable {
         let folderPath: String
         let messageRestore: NavState?
         var listAnchor: ListAnchor?
+        var isFallback = false
     }
 
     /// Where the feed reader should land: a scope, and the item that was open
@@ -58,7 +62,7 @@ extension NavStateCoordinator {
             return MailLaunchTarget(folderPath: folder, messageRestore: stored.message.map(restoreCursor(for:)))
         }
         guard let saved = restoreSource, let folder = saved.folder, !folder.isEmpty else {
-            return MailLaunchTarget(folderPath: "INBOX", messageRestore: nil)
+            return MailLaunchTarget(folderPath: "INBOX", messageRestore: nil, isFallback: true)
         }
         var restore: NavState?
         if saved.hasMessage {
@@ -68,6 +72,16 @@ extension NavStateCoordinator {
             folderPath: folder, messageRestore: restore,
             listAnchor: launchAnchor?.folderPath == folder ? launchAnchor : nil
         )
+    }
+
+    /// `mailLaunchTarget(stored:)` for the tree `trees` has appearing, or nil
+    /// when it is only the INBOX fallback and that tree starts on its folder
+    /// list, which it then leaves on screen: with nothing to resume, a Mail
+    /// tab that shows one column at a time opens on the folder list rather
+    /// than INBOX's messages.
+    func mailLaunchTarget(stored: AppRoute.Mail, for trees: TreeGate) -> MailLaunchTarget? {
+        let target = mailLaunchTarget(stored: stored)
+        return target.isFallback && trees.startsOnFolderList ? nil : target
     }
 
     /// A landing or a navigation has taken the launch's place: a window
