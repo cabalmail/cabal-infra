@@ -11,7 +11,8 @@ import CabalmailKit
 ///    ("no preselection") visually coherent: if the user hasn't picked an
 ///    address yet, creating one is the nearest thing to click.
 /// 2. Existing addresses: **Favorites** section on top (when non-empty),
-///    then **All addresses** inclusive — mirrors the sidebar address list.
+///    then **All addresses** inclusive. (The sidebar address list is one
+///    list under a Favorites pill instead; a picker wants both at once.)
 ///
 /// Send remains disabled (`ComposeViewModel.canSend`) until the user has
 /// either picked an existing address or completed the inline creation flow.
