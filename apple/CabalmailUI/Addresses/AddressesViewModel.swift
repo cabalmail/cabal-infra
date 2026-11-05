@@ -91,11 +91,6 @@ final class AddressesViewModel {
         await refresh(force: true)
     }
 
-    /// Addresses the caller has favorited. Same ordering as `addresses`.
-    var favorites: [Address] {
-        addresses.filter { $0.favorite }
-    }
-
     /// Optimistically flip the favorite flag on `address`, fire the API call,
     /// and revert on failure. Mirrors the React rail's behavior.
     ///

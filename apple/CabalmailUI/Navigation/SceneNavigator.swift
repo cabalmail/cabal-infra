@@ -204,8 +204,14 @@ final class SceneNavigator {
     /// a tree built after it by a layout swap takes over the window's route;
     /// the same tree appearing again (a tab switch) changes nothing once the
     /// window has landed. A wide tree hosts the feed reader too.
-    func mailTreeAppeared(_ tree: UUID, isWide: Bool) async {
-        let isRebuild = mailTrees.appear(tree)
+    ///
+    /// - Parameter startsOnFolderList: the tree is a collapsed stack whose
+    ///   root is the folder list (the iPhone and narrow-window Mail tab), so
+    ///   a landing with nothing to resume leaves it there rather than opening
+    ///   INBOX. visionOS's tab view has no folder list in its Mail tab, so it
+    ///   lands on INBOX as the wide split does.
+    func mailTreeAppeared(_ tree: UUID, isWide: Bool, startsOnFolderList: Bool = false) async {
+        let isRebuild = mailTrees.appear(tree, startsOnFolderList: startsOnFolderList && !isWide)
         layoutIsWide = isWide
         if isWide {
             hasShownMail = true
@@ -341,9 +347,11 @@ final class SceneNavigator {
     /// The provisional mail landing: the window's stored folder (`stored`)
     /// or the session's (the launch snapshot for a window's first landing,
     /// the live session after it), its open message scheduled for the list,
-    /// and the folder list's first load to reconcile it.
+    /// and the folder list's first load to reconcile it. With nothing to
+    /// resume, a tree that starts on its folder list stays there: no folder,
+    /// so nothing to reconcile and nothing recorded until the user picks one.
     private func landOnSessionFolder(_ coordinator: NavStateCoordinator, stored: AppRoute.Mail = AppRoute.Mail()) {
-        let target = coordinator.mailLaunchTarget(stored: stored)
+        guard let target = coordinator.mailLaunchTarget(stored: stored, for: mailTrees) else { return }
         awaitingLaunchReconcile = true
         recorder.recording?.armProvisionalLanding()
         restores.park(target, priming: recorder.recording)
@@ -393,16 +401,16 @@ final class SceneNavigator {
                 restores.clearPendingRestore()
                 setFolder(inbox, records: hasShownMail)
             }
-        } else if let coordinator {
+        } else if let target = coordinator?.mailLaunchTarget(stored: route.mail, for: mailTrees) {
             // The client wasn't wired when the tree appeared, so there was no
             // provisional landing: land now. A folder that is gone falls back
-            // to INBOX without its message.
-            let target = coordinator.mailLaunchTarget(stored: route.mail)
+            // to INBOX without its message. With nothing to resume, a tree
+            // that starts on its folder list has no target and stays there.
             recorder.recording?.armProvisionalLanding()
             let landing = folders.first { $0.path == target.folderPath }
             if landing != nil { restores.park(target, priming: recorder.recording) }
             setFolder(landing ?? inbox)
-        } else {
+        } else if coordinator == nil {
             setFolder(inbox)
         }
         coordinator?.materializeLanding()
