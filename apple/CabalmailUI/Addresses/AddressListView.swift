@@ -57,24 +57,10 @@ struct AddressListView: View {
             pillRow
             addressList
         }
-    }
-
-    private var addressList: some View {
-        List {
-            if let model {
-                if model.isLoading && model.addresses.isEmpty {
-                    ProgressView("Loading addresses…")
-                }
-                if let errorMessage = model.errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(ColorTokens.dangerFg)
-                }
-                ForEach(listFilter.apply(to: model.addresses, needle: activeFilterText), id: \.address) { address in
-                    addressRow(address, model: model)
-                }
-                filterHintRow(model.addresses)
-            }
-        }
+        // Screen-level chrome on the whole stack, not the list, so the
+        // compact tab's brand wash (`compactBrandMarkTitle` applies
+        // `sidebarWash()`) runs behind the pill row too, as on Mail and
+        // Feeds.
         .navigationTitle("Addresses")
         #if !os(macOS)
         // In the compact Addresses tab the Cabalmail mark stands in for the
@@ -107,6 +93,24 @@ struct AddressListView: View {
                     .disabled(isRefreshing || model == nil)
                     .accessibilityIdentifier("address.refresh")
                 }
+            }
+        }
+    }
+
+    private var addressList: some View {
+        List {
+            if let model {
+                if model.isLoading && model.addresses.isEmpty {
+                    ProgressView("Loading addresses…")
+                }
+                if let errorMessage = model.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(ColorTokens.dangerFg)
+                }
+                ForEach(listFilter.apply(to: model.addresses, needle: activeFilterText), id: \.address) { address in
+                    addressRow(address, model: model)
+                }
+                filterHintRow(model.addresses)
             }
         }
         .refreshable {
