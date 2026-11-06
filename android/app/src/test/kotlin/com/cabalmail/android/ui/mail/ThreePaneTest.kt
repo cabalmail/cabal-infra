@@ -24,4 +24,30 @@ class ThreePaneTest {
         assertEquals(270.dp, threePaneListWidth(740.dp))
         assertEquals((THREE_PANE_MIN_WIDTH - FOLDER_PANE_WIDTH) / 2, threePaneListWidth(THREE_PANE_MIN_WIDTH))
     }
+
+    @Test
+    fun `message panes split what a resized folder pane leaves`() {
+        assertEquals(220.dp, threePaneListWidth(740.dp, 300.dp))
+    }
+
+    @Test
+    fun `folder pane drags between its floor and room for both message panes`() {
+        assertEquals(250.dp, clampSidePaneWidth(250.dp, 1000.dp))
+        assertEquals(SIDE_PANE_MIN_WIDTH, clampSidePaneWidth(40.dp, 1000.dp))
+        assertEquals(1000.dp - MESSAGE_PANE_MIN_WIDTH * 2, clampSidePaneWidth(900.dp, 1000.dp))
+        // The narrowest three-pane window only has room for the default.
+        assertEquals(FOLDER_PANE_WIDTH, clampSidePaneWidth(400.dp, THREE_PANE_MIN_WIDTH))
+        // A stored width wider than the window allows is clamped, not lost:
+        // the same request fits again in a wider window.
+        assertEquals(400.dp, clampSidePaneWidth(400.dp, 1200.dp))
+    }
+
+    @Test
+    fun `list pane leaves the reader at least the message-pane floor`() {
+        assertEquals(300.dp, clampListPaneWidth(300.dp, 800.dp, 24.dp))
+        assertEquals(MESSAGE_PANE_MIN_WIDTH, clampListPaneWidth(0.dp, 800.dp, 24.dp))
+        assertEquals(800.dp - 24.dp - MESSAGE_PANE_MIN_WIDTH, clampListPaneWidth(800.dp, 800.dp, 24.dp))
+        // Too narrow for both floors: the list keeps its own.
+        assertEquals(MESSAGE_PANE_MIN_WIDTH, clampListPaneWidth(300.dp, 400.dp, 24.dp))
+    }
 }
