@@ -1,9 +1,9 @@
 import SwiftUI
 import CabalmailKit
 
-/// The three tabs the React webmail shows
-/// (`react/admin/src/Email/Messages/index.jsx`), translated to a SwiftUI
-/// segmented control. The enum itself lives in the kit (`MessageFilter`),
+/// The list's filter: All, Unread, or Flagged. The bar draws only the
+/// Unread and Flagged pills, as toggles (`MessageFilter.toggling`); All is
+/// both of them off. The enum itself lives in the kit (`MessageFilter`),
 /// where `Preferences` stores each folder's sticky pill; the labels and the
 /// client-side envelope predicate are the view's.
 extension MessageFilter {
@@ -28,7 +28,7 @@ extension MessageFilter {
 // UI helpers for the filter tabs. Lives in a sibling extension so the
 // primary MessageListView body stays under SwiftLint's
 // `type_body_length` cap. The bar mirrors React's pill row above the
-// message list: three tabs with counts.
+// message list: the Unread and Flagged toggles with counts.
 extension MessageListView {
     // Right-side controls live with the filter tabs so list-shaping
     // actions sit one row above the list rather than at the far edge of
@@ -41,14 +41,14 @@ extension MessageListView {
     func filterTabsBar(model: MessageListViewModel, searchActive: Bool) -> some View {
         HStack(spacing: 6) {
             FilterPillStrip {
-                ForEach(MessageFilter.allCases) { filter in
+                ForEach(MessageFilter.pills) { filter in
                     FilterPill(
                         label: filter.label,
                         isOn: filter == model.filterTab,
                         count: pillCount(filter, model: model),
                         identifier: "filter.pill.\(filter.rawValue)"
                     ) {
-                        Task { await model.selectFilter(filter) }
+                        Task { await model.selectFilter(model.filterTab.toggling(filter)) }
                     }
                 }
             }
@@ -73,7 +73,7 @@ extension MessageListView {
         // A genuine text search (filterTab == .all while searching) counts its
         // loaded results. Folder mode and a pill-driven filter keep the
         // server-sourced folder totals, so e.g. tapping Flagged doesn't make
-        // the All pill collapse to the flagged-result count.
+        // the Unread pill collapse to the flagged-result count.
         if model.isSearchActive, model.filterTab == .all {
             return model.envelopes.filter { filter.includes($0) }.count
         }
@@ -85,7 +85,7 @@ extension MessageListView {
     }
 
     /// The list's top inset. Folder scope shows the
-    /// All / Unread / Flagged pills bar; the global search surface shows the
+    /// Unread / Flagged pills bar; the global search surface shows the
     /// search-result metadata banner and a controls row (refine filters, sort,
     /// select). Lives here alongside the filter UI it mostly renders.
     @ViewBuilder
@@ -112,7 +112,7 @@ extension MessageListView {
 
     /// Right-side controls for the global search surface: the structured-filter
     /// button (always available here — refining the query is the surface's job),
-    /// the sort menu, and the multi-select toggle. No All / Unread / Flagged
+    /// the sort menu, and the multi-select toggle. No Unread / Flagged
     /// pills: those are a folder concept, and the search filter sheet already
     /// carries Unread / Flagged toggles.
     @ViewBuilder

@@ -57,6 +57,16 @@ public enum RssItemFilter: String, Codable, Sendable, CaseIterable, Identifiable
 
     /// The pill a feed or folder list opens on until the user picks another.
     public static let defaultForFeeds: RssItemFilter = .unread
+
+    /// The pills the item list's bar draws. All has none: it is what the list
+    /// shows with neither Unread nor Flagged lit.
+    public static let pills: [RssItemFilter] = [.unread, .favorite]
+
+    /// The filter a tap on `pill` leaves. The pills are toggles: a lit pill
+    /// turns off (back to All), an unlit one turns on in place of the other.
+    public func toggling(_ pill: RssItemFilter) -> RssItemFilter {
+        self == pill ? .all : pill
+    }
 }
 
 /// `order=` on `/rss_list_items`.

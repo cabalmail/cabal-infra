@@ -181,10 +181,10 @@ fun FeedItemListScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                RssItemFilter.entries.forEach { filter ->
+                RssItemFilter.PILLS.forEach { filter ->
                     FilterChip(
                         selected = state.filter == filter,
-                        onClick = { viewModel.setFilter(filter) },
+                        onClick = { viewModel.setFilter(state.filter.toggling(filter)) },
                         label = { Text(filter.label()) },
                         modifier = Modifier.padding(horizontal = 4.dp),
                     )
