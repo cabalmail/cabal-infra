@@ -41,6 +41,9 @@ enum class MessageSortField(
  * Sticky per folder: the list opens on the pill the user last chose for
  * this folder (the synced [AppPreferences.mailFolderFilters]), All until
  * then, and a tap writes the choice back.
+ *
+ * Only Unread and Flagged have a pill ([PILLS]), and they are toggles
+ * ([toggling]): All is both of them off.
  */
 enum class MessageFilter(
     /** The synced-preference form of this pill. */
@@ -54,7 +57,13 @@ enum class MessageFilter(
     companion object {
         /** The pill [stored] names; All for a folder never set. */
         fun from(stored: MailFolderFilter?): MessageFilter = entries.firstOrNull { it.stored == stored } ?: ALL
+
+        /** The pills the row draws; All is neither lit. */
+        val PILLS = listOf(UNREAD, FLAGGED)
     }
+
+    /** The filter a tap on [pill] leaves: a lit pill turns off (back to All), an unlit one replaces the other. */
+    fun toggling(pill: MessageFilter): MessageFilter = if (this == pill) ALL else pill
 }
 
 data class FolderCounts(

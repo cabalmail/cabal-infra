@@ -76,7 +76,10 @@ enum class RssRemoteContentMode(
     HIDE("hide"),
 }
 
-/** The item list's filter pill; feeds and feed folders open on [UNREAD] until the user picks another. */
+/**
+ * The item list's filter; feeds and feed folders open on [UNREAD] until the user picks another.
+ * Only Unread and Favorite have a pill ([PILLS]), and they are toggles ([toggling]): All is both off.
+ */
 @Serializable
 enum class RssItemFilter(
     override val wire: String,
@@ -94,7 +97,13 @@ enum class RssItemFilter(
 
     companion object {
         val DEFAULT_FOR_FEEDS = UNREAD
+
+        /** The pills the item list draws; All is neither lit. */
+        val PILLS = listOf(UNREAD, FAVORITE)
     }
+
+    /** The filter a tap on [pill] leaves: a lit pill turns off (back to All), an unlit one replaces the other. */
+    fun toggling(pill: RssItemFilter): RssItemFilter = if (this == pill) ALL else pill
 }
 
 /** The server-side sort of a merged listing (request only). */

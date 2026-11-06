@@ -1,7 +1,7 @@
 import SwiftUI
 import CabalmailKit
 
-// The bar above the feed item list: the All / Unread / Flagged pills, the
+// The bar above the feed item list: the Unread / Flagged toggles, the
 // ordering menu, the search field for a single feed, and the status lines. A
 // sibling extension so the primary FeedItemListView body stays under
 // SwiftLint's `type_body_length` cap, like `+Footer`.
@@ -12,16 +12,17 @@ extension FeedItemListView {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
                 // The message list's pills, counting the scope's items as
-                // mail's count the folder's.
+                // mail's count the folder's. Toggles, like mail's: All is
+                // neither lit (`RssItemFilter.toggling`).
                 FilterPillStrip {
-                    ForEach(RssItemFilter.allCases) { filter in
+                    ForEach(RssItemFilter.pills) { filter in
                         FilterPill(
                             label: filterLabel(filter),
                             isOn: model.filter == filter,
                             count: model.filterCounts?.count(for: filter),
                             identifier: "feed.filter.\(filter.rawValue)"
                         ) {
-                            model.selectFilter(filter)
+                            model.selectFilter(model.filter.toggling(filter))
                         }
                     }
                 }

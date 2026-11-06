@@ -178,6 +178,8 @@
     <string name="nav_folders">Folders</string>
     <string name="offline_banner">Offline — showing cached mail</string>
     <string name="detail_placeholder">Select a message to read it</string>
+    <string name="pane_resize_widen">Widen pane</string>
+    <string name="pane_resize_narrow">Narrow pane</string>
 
     <!-- Notifications -->
     <string name="notification_channel_new_mail">New mail</string>

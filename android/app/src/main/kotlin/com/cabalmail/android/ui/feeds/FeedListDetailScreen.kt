@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -28,12 +29,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.R
-import com.cabalmail.android.ui.mail.FOLDER_PANE_WIDTH
+import com.cabalmail.android.ui.mail.ListDetailDragHandle
+import com.cabalmail.android.ui.mail.PaneLayoutScreen
+import com.cabalmail.android.ui.mail.SidePaneResizeHandle
 import com.cabalmail.android.ui.mail.fitsThreePanes
+import com.cabalmail.android.ui.mail.rememberListPaneExpansion
+import com.cabalmail.android.ui.mail.rememberSidePaneWidth
 import com.cabalmail.android.ui.mail.threePaneListWidth
 import com.cabalmail.kit.models.RssItemScope
 import com.cabalmail.kit.models.RssSubscription
@@ -69,6 +75,7 @@ fun FeedListDetailScreen(
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val threePane = feedPane != null && fitsThreePanes(maxWidth)
+        val side = rememberSidePaneWidth(container.paneWidths, PaneLayoutScreen.FEEDS, maxWidth)
         val baseDirective = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo())
         val directive =
             if (threePane) {
@@ -77,12 +84,19 @@ fun FeedListDetailScreen(
                     horizontalPartitionSpacerSize = baseDirective.horizontalPartitionSpacerSize,
                     maxVerticalPartitions = baseDirective.maxVerticalPartitions,
                     verticalPartitionSpacerSize = baseDirective.verticalPartitionSpacerSize,
-                    defaultPanePreferredWidth = threePaneListWidth(maxWidth),
+                    defaultPanePreferredWidth = threePaneListWidth(maxWidth, side.width),
                     excludedBounds = baseDirective.excludedBounds,
                 )
             } else {
                 baseDirective
             }
+        val listExpansion =
+            rememberListPaneExpansion(
+                store = container.paneWidths,
+                screen = PaneLayoutScreen.FEEDS,
+                scaffold = if (threePane) maxWidth - side.width - DividerDefaults.Thickness else maxWidth,
+                spacer = directive.horizontalPartitionSpacerSize,
+            )
         val navigator = rememberListDetailPaneScaffoldNavigator<String>(scaffoldDirective = directive)
         val openId = navigator.currentDestination?.contentKey
         LaunchedEffect(initialItemId) {
@@ -93,14 +107,16 @@ fun FeedListDetailScreen(
 
         Row(modifier = Modifier.fillMaxSize()) {
             if (threePane && feedPane != null) {
-                Box(modifier = Modifier.width(FOLDER_PANE_WIDTH).fillMaxHeight()) { feedPane() }
+                Box(modifier = Modifier.width(side.width).fillMaxHeight()) { feedPane() }
                 VerticalDivider()
             }
             NavigableListDetailPaneScaffold(
                 navigator = navigator,
                 modifier = Modifier.weight(1f),
+                paneExpansionState = listExpansion.state,
+                paneExpansionDragHandle = { state -> ListDetailDragHandle(state, listExpansion.interactionSource) },
                 listPane = {
-                    AnimatedPane {
+                    AnimatedPane(modifier = Modifier.onSizeChanged { listExpansion.listWidthPx = it.width }) {
                         FeedItemListScreen(
                             title = title,
                             state = listState,
@@ -153,6 +169,7 @@ fun FeedListDetailScreen(
                 },
             )
         }
+        if (threePane) SidePaneResizeHandle(side)
         SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
     if (management != null) {

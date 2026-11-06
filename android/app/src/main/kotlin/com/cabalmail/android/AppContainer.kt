@@ -9,6 +9,7 @@ import com.cabalmail.android.ui.compose.OpenIntake
 import com.cabalmail.android.ui.compose.SendQueue
 import com.cabalmail.android.ui.compose.ShareIntake
 import com.cabalmail.android.ui.feeds.FeedEventBus
+import com.cabalmail.android.ui.mail.PaneWidths
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.auth.AuthService
 import com.cabalmail.kit.auth.CognitoAuthService
@@ -143,6 +144,11 @@ class AppContainer(
      */
     val resumeSession: ResumeSessionStore by lazy {
         ResumeSessionStore(File(appContext.filesDir, "resume-session.json"), appScope)
+    }
+
+    /** The pane widths the user dragged the wide layouts to; per install. */
+    val paneWidths: PaneWidths by lazy {
+        PaneWidths(appContext.getSharedPreferences("pane-widths", Context.MODE_PRIVATE))
     }
 
     /** Connectivity for the offline banner and the send queue. */

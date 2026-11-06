@@ -87,4 +87,13 @@ class RssModelsTest {
         assertEquals("x", states.nextSince)
         assertTrue(states.states.single().isReadExplicit)
     }
+
+    @Test
+    fun `the item filter pills are toggles with no All pill`() {
+        assertEquals(listOf(RssItemFilter.UNREAD, RssItemFilter.FAVORITE), RssItemFilter.PILLS)
+        assertEquals(RssItemFilter.UNREAD, RssItemFilter.ALL.toggling(RssItemFilter.UNREAD))
+        assertEquals(RssItemFilter.ALL, RssItemFilter.UNREAD.toggling(RssItemFilter.UNREAD))
+        assertEquals(RssItemFilter.ALL, RssItemFilter.FAVORITE.toggling(RssItemFilter.FAVORITE))
+        assertEquals(RssItemFilter.FAVORITE, RssItemFilter.UNREAD.toggling(RssItemFilter.FAVORITE))
+    }
 }
