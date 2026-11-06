@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
@@ -25,6 +26,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -33,20 +35,24 @@ import com.cabalmail.android.AppContainer
 import com.cabalmail.android.R
 import kotlinx.coroutines.launch
 
-/** Width of the folder pane in the three-pane layout. */
+/** Default width of the folder pane in the three-pane layout. */
 internal val FOLDER_PANE_WIDTH = 200.dp
 
 /**
- * Narrowest window the three-pane layout fits: the folder pane plus two
- * message panes of at least 220dp each.
+ * Narrowest window the three-pane layout fits: the folder pane at its
+ * default width plus two message panes of at least
+ * [MESSAGE_PANE_MIN_WIDTH] each.
  */
-internal val THREE_PANE_MIN_WIDTH = 640.dp
+internal val THREE_PANE_MIN_WIDTH = FOLDER_PANE_WIDTH + MESSAGE_PANE_MIN_WIDTH * 2
 
 /** Whether the mail view's width fits the folder pane plus two message panes. */
 internal fun fitsThreePanes(width: Dp): Boolean = width >= THREE_PANE_MIN_WIDTH
 
-/** List-pane preferred width beside the folder pane: half of what is left. */
-internal fun threePaneListWidth(width: Dp): Dp = (width - FOLDER_PANE_WIDTH) / 2
+/** List-pane preferred width beside a [side]-wide folder pane: half of what is left. */
+internal fun threePaneListWidth(
+    width: Dp,
+    side: Dp = FOLDER_PANE_WIDTH,
+): Dp = (width - side) / 2
 
 /**
  * Tablet / foldable / landscape-phone mail flow (plan §7.2): the message
@@ -59,6 +65,10 @@ internal fun threePaneListWidth(width: Dp): Dp = (width - FOLDER_PANE_WIDTH) / 2
  * in landscape — to one pane at a time) and splits the width left of the
  * folder pane evenly between them. Opening a row selects the detail pane
  * instead of pushing a route; system back clears it.
+ *
+ * Both dividers drag: the folder pane's edge and the one between list and
+ * reader. Each width is remembered per install ([PaneWidths]) and clamped
+ * to whatever window it lands in.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -87,6 +97,7 @@ fun MailListDetailScreen(
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val threePane = folderPane != null && fitsThreePanes(maxWidth)
+        val side = rememberSidePaneWidth(container.paneWidths, PaneLayoutScreen.MAIL, maxWidth)
         val baseDirective = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo())
         val directive =
             if (threePane) {
@@ -95,12 +106,19 @@ fun MailListDetailScreen(
                     horizontalPartitionSpacerSize = baseDirective.horizontalPartitionSpacerSize,
                     maxVerticalPartitions = baseDirective.maxVerticalPartitions,
                     verticalPartitionSpacerSize = baseDirective.verticalPartitionSpacerSize,
-                    defaultPanePreferredWidth = threePaneListWidth(maxWidth),
+                    defaultPanePreferredWidth = threePaneListWidth(maxWidth, side.width),
                     excludedBounds = baseDirective.excludedBounds,
                 )
             } else {
                 baseDirective
             }
+        val listExpansion =
+            rememberListPaneExpansion(
+                store = container.paneWidths,
+                screen = PaneLayoutScreen.MAIL,
+                scaffold = if (threePane) maxWidth - side.width - DividerDefaults.Thickness else maxWidth,
+                spacer = directive.horizontalPartitionSpacerSize,
+            )
         val navigator = rememberListDetailPaneScaffoldNavigator<Long>(scaffoldDirective = directive)
         val openUid = navigator.currentDestination?.contentKey
         LaunchedEffect(initialUid) {
@@ -111,7 +129,7 @@ fun MailListDetailScreen(
 
         Row(modifier = Modifier.fillMaxSize()) {
             if (threePane && folderPane != null) {
-                Box(modifier = Modifier.width(FOLDER_PANE_WIDTH).fillMaxHeight()) {
+                Box(modifier = Modifier.width(side.width).fillMaxHeight()) {
                     folderPane()
                 }
                 VerticalDivider()
@@ -119,8 +137,10 @@ fun MailListDetailScreen(
             NavigableListDetailPaneScaffold(
                 navigator = navigator,
                 modifier = Modifier.weight(1f),
+                paneExpansionState = listExpansion.state,
+                paneExpansionDragHandle = { state -> ListDetailDragHandle(state, listExpansion.interactionSource) },
                 listPane = {
-                    AnimatedPane {
+                    AnimatedPane(modifier = Modifier.onSizeChanged { listExpansion.listWidthPx = it.width }) {
                         MessageListScreen(
                             folder = folder,
                             state = listState,
@@ -188,5 +208,6 @@ fun MailListDetailScreen(
                 },
             )
         }
+        if (threePane) SidePaneResizeHandle(side)
     }
 }
