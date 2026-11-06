@@ -246,6 +246,9 @@ struct FolderListView: View {
         // Folders management tab shows it as a regular title.
         .navigationTitle("Folders")
         .sidebarFilterSearchable(text: $filterQuery, enabled: externalFilter == nil, prompt: "Filter folders")
+        // A pull reveals that filter; a push must be able to tuck it away
+        // again even when the folders don't fill the screen.
+        .searchDrawerScrollRoom(enabled: externalFilter == nil)
         .toolbar {
             // Compact keeps New / Reload in the toolbar; the wide sidebar moves
             // them into SidebarListHeaderRow beside the filter (externalFilter is
