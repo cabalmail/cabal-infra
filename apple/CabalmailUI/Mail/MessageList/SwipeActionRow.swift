@@ -44,8 +44,10 @@ import SwiftUI
 // `FullSwipeRowReplacementTests` drives it on macOS).
 //
 // On iPadOS the container's reveal answers touches only, so a trackpad's
-// two-finger swipe revealed nothing there; on iOS the 27 path adds a trackpad
-// half of its own (`TrackpadSwipe.swift`).
+// two-finger swipe revealed nothing there; on macOS it answers the trackpad
+// only, so a finger on the touchscreen MacBook Pro revealed nothing. On both
+// the 27 path adds a drawn half for the missing input (`TrackpadSwipe.swift`,
+// `HostPlatform.drawsRowSwipeReveal`).
 //
 // Below 27 there is no container API, so each loaded row embeds a single-row
 // `List` purely to borrow its native `.swipeActions`. Hand-rolling the gesture
@@ -128,10 +130,9 @@ struct SwipeActionRow<Content: View>: View {
     let onSelect: () -> Void
     @ViewBuilder let content: () -> Content
 
-    #if os(iOS)
-    /// Present on 27 and later, inside `coordinatedSwipeActionsContainer()`.
+    /// Present on 27 and later, inside `coordinatedSwipeActionsContainer()`,
+    /// where the row draws a reveal of its own (`drawsRowSwipeReveal`).
     @Environment(TrackpadSwipeCoordinator.self) private var trackpadSwipes: TrackpadSwipeCoordinator?
-    #endif
 
     var body: some View {
         if #available(iOS 27.0, macOS 27.0, visionOS 27.0, *) {
@@ -187,16 +188,18 @@ struct SwipeActionRow<Content: View>: View {
         }
     }
 
-    /// iPadOS: the trackpad half of the 27 path's swipe, inside the clip so its
-    /// reveal stays within the row. The container's own reveal answers touches
-    /// only (see `TrackpadSwipe.swift`). Everywhere else the row passes through.
+    /// The drawn half of the 27 path's swipe, inside the clip so its reveal
+    /// stays within the row, for the input the container's own reveal misses:
+    /// a trackpad on iPadOS, a finger on a Mac's touch display (see
+    /// `TrackpadSwipe.swift`). visionOS passes the row through.
+    @available(iOS 27.0, macOS 27.0, visionOS 27.0, *)
     @ViewBuilder
     private func withTrackpadSwipes(_ row: some View) -> some View {
-        #if os(iOS)
-        row.trackpadSwipeReveal(contentID: contentID, leading: leading, trailing: trailing, height: height)
-        #else
-        row
-        #endif
+        if HostPlatform.current.drawsRowSwipeReveal {
+            row.trackpadSwipeReveal(contentID: contentID, leading: leading, trailing: trailing, height: height)
+        } else {
+            row
+        }
     }
 
     /// Below 27: the borrowed single-row `List`. #901 (several rows revealed at
@@ -254,12 +257,10 @@ struct SwipeActionRow<Content: View>: View {
     /// which has always been a `Button`. Shared by both paths.
     private var rowButton: some View {
         Button {
-            #if os(iOS)
-            // A click on another row retracts an open trackpad reveal, as a tap
+            // A click on another row retracts an open drawn reveal, as a tap
             // does the container's own. (The revealed row's click never gets
-            // here: its reveal takes it.)
+            // here: its reveal takes it.) No coordinator, nothing to retract.
             trackpadSwipes?.closeAll()
-            #endif
             onSelect()
         } label: {
             content()
@@ -326,18 +327,19 @@ extension View {
     /// its embedded `List` needs a container above it, and
     /// `SwipeActionContainerSourceScanTests` pins the pairing.
     ///
-    /// On iOS it also installs the coordinator for the rows' trackpad reveal
+    /// Where rows draw a reveal of their own (`drawsRowSwipeReveal`: iOS for
+    /// a trackpad, macOS for a finger), it also installs their coordinator
     /// (`TrackpadSwipe.swift`), which the native container knows nothing
     /// about.
     @ViewBuilder
     func coordinatedSwipeActionsContainer() -> some View {
         if #available(iOS 27.0, macOS 27.0, visionOS 27.0, *) {
-            #if os(iOS)
-            swipeActionsContainer()
-                .trackpadSwipeCoordination()
-            #else
-            swipeActionsContainer()
-            #endif
+            if HostPlatform.current.drawsRowSwipeReveal {
+                swipeActionsContainer()
+                    .trackpadSwipeCoordination()
+            } else {
+                swipeActionsContainer()
+            }
         } else {
             self
         }

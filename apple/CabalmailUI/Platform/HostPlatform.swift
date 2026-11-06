@@ -61,6 +61,14 @@ public enum HostPlatform {
         self == .macOS || self == .visionOS
     }
 
+    /// Whether a message row draws a swipe reveal of its own beside the 27
+    /// swipe-actions container's, for the input that container misses: a
+    /// trackpad's two-finger swipe on iPadOS, a finger on a Mac's touch
+    /// display (`TrackpadSwipe.swift`). visionOS has no such input.
+    var drawsRowSwipeReveal: Bool {
+        self == .iOS || self == .macOS
+    }
+
     /// Whether a list reorders by dragging in edit mode, behind the bar's
     /// Edit button (`editButtonToolbar()`): iOS and visionOS. The Mac has no
     /// edit mode, and the grouped form its Settings panes are drawn in
