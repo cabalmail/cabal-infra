@@ -77,20 +77,20 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 | # | Item | Status |
 |---|---|---|
-| 0 | Pinch-to-zoom in the Mac readers | Merged to `stage`, PR #2321 |
+| 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321) |
 | 1 | Message-list swipe actions under touch | Not started |
 | 2 | Long press on rows: context menu vs drag | Not started |
-| 3 | Tap targets under 36 pt | Composer toolbar (#2323) and toast, banner and picker buttons (#2324) merged; system controls wait for Sidecar |
+| 3 | Tap targets under 36 pt | Our glyph buttons released in 1.43.0 (#2323, #2324); the two system controls wait for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
-| 5 | Pull-to-refresh vs toolbar Reload | Not started |
+| 5 | Pull-to-refresh vs toolbar Reload | Not started; a trackpad check on any macOS 27 Mac answers the first question |
 | 6 | Composer web view under touch | Not started |
-| 7 | Article view back/forward swipe on Mac | In review, PR #2325 (after the iOS fix, #2326) |
+| 7 | Article view back/forward swipe on Mac | Released in 1.43.0 (#2325), with the iOS history fix it needed (#2326) |
 | 8 | Things that should just work (spot checks) | Not started |
 | 9 | Device pass on the MacBook Pro | Not started (device expected ~2026-11-06) |
 
 ## Item 0 — Pinch-to-zoom in the Mac readers
 
-**Status:** Merged to `stage` (PR #2321, 2026-11-04); not yet released.
+**Status:** Released in 1.43.0 (PR #2321).
 
 `WKWebView.allowsMagnification` defaults to false on macOS, so a trackpad pinch did nothing in the mail reader or the feed article view, while iOS zooms both. PR #2321 turns it on in `makeReaderWebView` and in `ArticleWebCoordinator.makeWebView`. It helps every Mac with a trackpad today. On the touch Mac, a pinch is emulated as a trackpad magnify, so the same switch should cover it; item 9 confirms that.
 
@@ -133,7 +133,7 @@ Fix only what fails. A likely fix, if the menu fires before a drag can start, is
 
 ## Item 3 — Tap targets under 36 pt
 
-**Status:** Composer toolbar merged to `stage` (PR #2323, 2026-11-04). The toast, unsubscribed-banner and Contacts-picker buttons are merged to `stage` (PR #2324, 2026-11-04). The two system controls wait for Sidecar.
+**Status:** The composer toolbar (PR #2323) and the toast, unsubscribed-banner and Contacts-picker buttons (PR #2324) released in 1.43.0. The two system controls wait for Sidecar.
 
 **The composer toolbar, done first.** Measured through the accessibility API, its buttons took taps on their glyph alone, not the 24 × 24 pt face their frame draws: Bold was 8 × 10 pt and Heading 1 was 16 × 15, because the label had no `contentShape`. The bar is shared, so this was as small on iPhone and iPad as on a Mac. The fix gives each button the gap around its face as hit area (`RichTextToolbar.hitPadding`): the stack's 4 pt spacing and the bar's 4 pt vertical padding. Each target is now 28 × 32 pt, with the faces, their spacing and the bar's height unchanged. That is short of 36 pt (and of iOS's 44), which only spreading the bar out could reach; that would be a visible change, and it waits for a look on the device. `RichTextToolbarHitTargetTests` pins the target size (it fails on the old toolbar), that neighbours don't overlap, and that the spacing and height are unchanged.
 
@@ -170,7 +170,7 @@ The reader's link status pill (`HTMLBodyView.swift`, `hoveredHref`) is hover-onl
 
 macOS 27 adds pull-to-refresh to `NSScrollView` (`NSRefreshController`), and Apple's Mail, Safari and Calendar use it. We attach `.refreshable` to the message list (`MessageListView.swift:292`), the folder list, the feed sidebar and feed items, the address list, Settings and Users. On macOS before 27 that modifier did nothing visible, and the toolbar Reload button is the Mac's refresh.
 
-**Steps:** on 27, over Sidecar, pull down on each list.
+**Steps:** pull down on each list. Pull-to-refresh is an `NSScrollView` feature, not a touch one, so a trackpad overscroll on any Mac running macOS 27 may already show whether `.refreshable` drives it; Sidecar or the device shows the touch side.
 - **If `.refreshable` now drives the system's pull-to-refresh:** check it runs the same refresh as Reload, the spinner and `RefreshActivityIcon` don't both show, and a pull during a running refresh doesn't start a second one (`MessageListViewModel+Refresh.swift:37-39` explains why the pull's task is kept apart from the request).
 - **If it does nothing:** decide whether pull-to-refresh is wanted on the Mac at all. The toolbar Reload already exists, so the default is to do nothing.
 
@@ -191,7 +191,7 @@ The sanitizer and drop-handling invariants listed in `CLAUDE.md` ("Page JavaScri
 
 ## Item 7 — Article view back/forward swipe on Mac
 
-**Status:** In review (PR #2325, 2026-11-04), after the iOS fix it needed (#2326, merged to `stage` 2026-11-04).
+**Status:** Released in 1.43.0 (PR #2325), with the iOS fix it needed (PR #2326). One iOS behaviour is still unexplained, below.
 
 `ArticleWebCoordinator.makeWebView` set `allowsBackForwardNavigationGestures` on iOS and visionOS only, so on a Mac a two-finger trackpad swipe didn't go back on the publisher's page. The worry was the back/forward list: the reader rendering is a separate `loadHTMLString` in the same web view, so a swipe might land on a page the coordinator's state didn't expect.
 
@@ -227,7 +227,12 @@ File anything that fails as its own issue and add a row to the progress table he
 
 **Status:** Not started (device expected around 2026-11-06).
 
-Re-run items 0–8 on the hardware, then add what Sidecar can't show:
+Re-run items 0–8 on the hardware, including what the shipped items left for the device:
+- **Item 0:** a two-finger pinch on the display zooms the mail reader and the article view (AppKit emulates it as a trackpad magnify); a smart-zoom double-tap works too.
+- **Item 3:** the composer toolbar's 28 × 32 pt targets, and the toast, banner and picker buttons, under a real finger. The toolbar stops short of 36 pt because reaching it would spread the bar out; decide here whether it should.
+- **Item 7:** whether a one-finger swipe on the display goes back in the article view, and that the toggle matches the page after it (#2326).
+
+Then add what Sidecar can't show:
 - a palm resting on the trackpad while tapping;
 - tapping near the keyboard and near the screen edges, where the system's edge swipes (Dock, menu bar, Notification Center) win;
 - the screen wobbling under a tap;
@@ -240,4 +245,4 @@ Record what you find here, in each item's **Status:** line.
 
 ## Session brief
 
-> Read `docs/1.x/touch-on-mac-plan.md` and `docs/1.x/post-wave-3/00-working-agreements.md`. Confirm item 0 (PR #2321) merged. With an iPad on iPadOS 27 connected over Sidecar to a Mac on macOS 27, run items 1–8 in order and record each result in its **Status:** line in this file. Each item that needs code gets its own PR to `stage`, one Apple PR in CI at a time, each with an `Apple:` changelog fragment and a behavioural test where the behaviour can be driven in-process. Item 1 is the one most likely to need code; start there. Add no `#if os(...)` outside `Shell/` and `Platform/`; branch on input (`GestureInputKinds`, `allowedTouchTypes`), never on "is a touch Mac".
+> Read `docs/1.x/touch-on-mac-plan.md` and `docs/1.x/post-wave-3/00-working-agreements.md`. Items 0, 3 (our glyph buttons), 4 and 7 are done and released in 1.43.0; what is left needs touch: items 1, 2, 6 and 8, item 3's two system controls, and item 5, whose first question a trackpad on macOS 27 can answer. With an iPad on iPadOS 27 connected over Sidecar to a Mac on macOS 27, or the MacBook Pro itself, run them in order, then item 9, and record each result in its **Status:** line in this file. Item 1 is the one most likely to need code; start there. Each item that needs code gets its own PR to `stage`, one Apple PR in CI at a time, each with an `Apple:` changelog fragment and a behavioural test where the behaviour can be driven in-process. The test tools this plan's work added: `HitTargetOracle` (a button's hit area from its accessibility frame, and real in-process clicks), `HitPaddedButton` (a glyph button's hit area grown without moving its row), and `ArticleHistoryRestoreTests`' URL scheme handler (a web view with real history and no network). Add no `#if os(...)` outside `Shell/` and `Platform/`; branch on input (`GestureInputKinds`, `allowedTouchTypes`), never on "is a touch Mac". On the iPhone, item 7's open question (a link out of the reader switching the linked page to reader view) wants a look too.
