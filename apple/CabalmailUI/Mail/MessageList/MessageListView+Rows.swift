@@ -184,6 +184,8 @@ extension MessageListView {
         envelope: Envelope,
         model: MessageListViewModel
     ) -> MessageDragPayload {
+        // Runs when the drag lifts (`.draggable` takes the payload lazily).
+        CabalmailLog.info("DragMove", "Lifted \(items.count) message(s) from list \(dragListTag(dragSourceID))")
         guard items.count == 1, let item = items.first else {
             return MessageDragPayload(items: items, sourceList: dragSourceID)
         }
