@@ -646,7 +646,7 @@ private fun FilterPills(
     onFilter: (MessageFilter) -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        MessageFilter.entries.forEach { filter ->
+        MessageFilter.PILLS.forEach { filter ->
             val count =
                 when (filter) {
                     MessageFilter.ALL -> state.counts?.all
@@ -656,7 +656,7 @@ private fun FilterPills(
             val label = stringResource(filter.labelRes())
             FilterChip(
                 selected = state.filter == filter,
-                onClick = { onFilter(filter) },
+                onClick = { onFilter(state.filter.toggling(filter)) },
                 label = { Text(if (count != null) "$label $count" else label) },
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
