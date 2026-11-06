@@ -80,4 +80,13 @@ public enum HostPlatform {
     var formActionsInDialogRow: Bool {
         self == .macOS
     }
+
+    /// Whether a `.searchable` on a navigation stack's list is a drawer
+    /// under the bar that the list's own scrolling reveals and tucks away:
+    /// iOS and iPadOS. UIKit tucks it away only when the list can scroll by
+    /// the drawer's height, so a short list needs the room made for it
+    /// (`searchDrawerScrollRoom`).
+    var searchDrawerFollowsScroll: Bool {
+        self == .iOS
+    }
 }

@@ -189,6 +189,9 @@ struct FeedSidebarList: View {
             }
         }
         .refreshable { await model?.refresh() }
+        // The "Filter feeds" drawer: a push tucks it away again even when
+        // the feeds don't fill the screen.
+        .searchDrawerScrollRoom()
     }
 
     private var collapsible: Set<String> {

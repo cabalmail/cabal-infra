@@ -53,4 +53,13 @@ class MessageListFilterTest {
             )
         assertEquals(listOf(3L), state.filteredRows.map { it.id })
     }
+
+    @Test
+    fun `the filter pills are toggles with no All pill`() {
+        assertEquals(listOf(MessageFilter.UNREAD, MessageFilter.FLAGGED), MessageFilter.PILLS)
+        assertEquals(MessageFilter.UNREAD, MessageFilter.ALL.toggling(MessageFilter.UNREAD))
+        assertEquals(MessageFilter.ALL, MessageFilter.UNREAD.toggling(MessageFilter.UNREAD))
+        assertEquals(MessageFilter.ALL, MessageFilter.FLAGGED.toggling(MessageFilter.FLAGGED))
+        assertEquals(MessageFilter.FLAGGED, MessageFilter.UNREAD.toggling(MessageFilter.FLAGGED))
+    }
 }

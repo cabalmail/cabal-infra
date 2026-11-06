@@ -14,4 +14,14 @@ public enum MessageFilter: String, Codable, CaseIterable, Identifiable, Sendable
 
     /// The pill a mail folder's list opens on until the user picks another.
     public static let defaultForFolders: MessageFilter = .all
+
+    /// The pills the bar draws. All has none: it is what the list shows with
+    /// neither Unread nor Flagged lit.
+    public static let pills: [MessageFilter] = [.unread, .flagged]
+
+    /// The filter a tap on `pill` leaves. The pills are toggles: a lit pill
+    /// turns off (back to All), an unlit one turns on in place of the other.
+    public func toggling(_ pill: MessageFilter) -> MessageFilter {
+        self == pill ? .all : pill
+    }
 }

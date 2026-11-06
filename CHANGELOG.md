@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.44.0] - 2026-11-06
+
+### Added
+- Android: **Resizable mail and feed columns.** On a tablet, foldable or
+  landscape phone, drag the handle on the folder (or feed) pane's edge or
+  the one between the list and the reader to resize the columns. Each
+  width is remembered per install and per screen, and is clamped to the
+  window it lands in rather than lost: the folder pane stays at least
+  160dp and the list and reader at least 220dp, and a narrower window
+  (portrait, a smaller fold) shrinks the panes without overwriting the
+  width the user chose. Both handles take a mouse or trackpad with a
+  resize cursor, and the folder handle offers TalkBack widen / narrow
+  actions.
+
+### Changed
+- Android: **Unread and Flagged pills as toggles.** The message list and
+  the feed item list drop their All pill. Unread and Flagged now toggle:
+  tap the lit pill to turn it off and show everything, or tap the other to
+  switch to it.
+- Apple: **Unread and Flagged pills as toggles.** The message list and the
+  feed item list drop their All pill. Unread and Flagged now toggle: tap
+  the lit pill to turn it off and show everything, or tap the other to
+  switch to it. The pill each folder or feed opens on is unchanged.
+
+### Fixed
+- Apple: **Pushing up tucks the filter field away again.** On iPhone, the
+  Folders and Feeds lists' filter field, once pulled into view, stayed
+  until you changed tabs whenever the list was too short to fill the
+  screen; a push back up now hides it, as it does on a long list.
+
 ## [1.43.0] - 2026-11-05
 
 ### Added
