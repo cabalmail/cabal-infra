@@ -132,7 +132,7 @@ No source documents how SwiftUI `.swipeActions` behaves under touch on macOS. Tw
 
 ## Item 2 — Long press on rows: context menu vs drag
 
-**Status:** Drag onto a folder found broken on every input (2026-11-06); cause found with #2338's logging (2026-11-07); fix in review (PR pending).
+**Status:** Drag onto a folder found broken on every input (2026-11-06); cause found with #2338's logging (2026-11-07); fix in review (PR #2342).
 
 **Found on the device, not touch-specific.** Dragging one message onto a sidebar folder was accepted (the folder highlighted, the drop didn't bounce back) but nothing moved, with a finger or a trackpad; every other move route worked. #2338's `DragMove` lines showed the drop handler getting no payload at all ("Dropped 0 message(s) … from 0 payload(s)"), so no move was ever requested. A drag of several messages moved. The difference: since 21dec3832 (2026-10-29, released in 1.41.0) a single-message drag offers its `.eml` ahead of the move reference, so it can land as a file on the compose body or in Finder, and a folder's drop on macOS then decodes nothing from it. A several-message drag offers only the move reference. The exact pasteboard mechanism (the leading guess is the `.eml`'s suggested file name making it a file promise) wasn't pinned down: a real drag can't be driven in-process.
 
