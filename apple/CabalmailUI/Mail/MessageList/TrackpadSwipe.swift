@@ -1,4 +1,5 @@
 import SwiftUI
+import CabalmailKit
 
 // A swipe reveal the message list draws itself, on 27 and later, for the one
 // input the native container misses on each platform that draws one
@@ -286,6 +287,19 @@ final class TrackpadSwipeTracker {
         spec?.perform()
     }
 
+    /// The input gave up on a swipe in progress: retract it. After a swipe
+    /// that ended cleanly there is nothing in progress, and an open reveal
+    /// stays open. On macOS a SwiftUI drag that SwiftUI cancels reports no
+    /// end at all, and left the row tracking -- deaf to its next swipe
+    /// (`began` is ignored while tracking) and to retraction by another row
+    /// -- until it showed another message; the Mac's input reports the
+    /// cancel through its gesture state (`rowSwipeInput`).
+    func cancel(coordinator: TrackpadSwipeCoordinator?) {
+        guard trackingFrom != nil else { return }
+        CabalmailLog.info("RowSwipe", "A swipe in progress was cancelled; retracting the row")
+        close(coordinator: coordinator)
+    }
+
     func close(coordinator: TrackpadSwipeCoordinator?) {
         trackingFrom = nil
         if offset != 0 {
@@ -372,7 +386,7 @@ private struct TrackpadSwipeReveal: ViewModifier {
                             coordinator: coordinator
                         )
                     },
-                    onCancelled: { tracker.close(coordinator: coordinator) }
+                    onCancelled: { tracker.cancel(coordinator: coordinator) }
                 )
             )
             // Index-addressed rows re-point when the list shifts.

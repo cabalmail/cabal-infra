@@ -133,10 +133,14 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
         let reveal = try Self.slice(bridge, from: "private struct TrackpadSwipeReveal: ViewModifier {")
         XCTAssertTrue(reveal.contains(".rowSwipeInput("), "the reveal attaches its input some other way")
         let platform = Self.code(in: try Self.source(Self.recognizerSource))
-        let mac = try Self.slice(platform, from: "func rowSwipeInput(")
+        let mac = try Self.slice(platform, from: "private struct TouchSwipeAttachment: ViewModifier {")
         XCTAssertTrue(
-            mac.contains("simultaneousGesture(input)"),
+            mac.contains(".simultaneousGesture("),
             "the Mac's touch drag is attached ahead of the list's scrolling again"
+        )
+        XCTAssertTrue(
+            mac.contains("input.onCancelled()"),
+            "a cancelled touch drag no longer reaches the tracker, and leaves the row tracking"
         )
     }
 

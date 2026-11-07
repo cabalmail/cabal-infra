@@ -171,7 +171,7 @@ extension View {
     #if os(macOS)
     @available(macOS 27.0, *)
     func rowSwipeInput(_ input: TrackpadSwipeRecognizer) -> some View {
-        simultaneousGesture(input)
+        modifier(TouchSwipeAttachment(input: input))
     }
     #else
     func rowSwipeInput(_ input: TrackpadSwipeRecognizer) -> some View {
@@ -179,3 +179,25 @@ extension View {
     }
     #endif
 }
+
+#if os(macOS)
+/// The Mac's touch drag, beside the list's scrolling (see `rowSwipeInput`),
+/// and the cancel SwiftUI reports no other way. A cancelled drag never calls
+/// `onEnded`; its `@GestureState` resets either way, so a reset is passed on
+/// as `onCancelled` -- one turn later, so a clean end has already settled the
+/// swipe and the tracker ignores it (`TrackpadSwipeTracker.cancel`).
+@available(macOS 27.0, *)
+private struct TouchSwipeAttachment: ViewModifier {
+    let input: TrackpadSwipeRecognizer
+    @GestureState private var touching = false
+
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(input.updating($touching) { _, touching, _ in touching = true })
+            .onChange(of: touching) { _, touching in
+                guard !touching else { return }
+                Task { @MainActor in input.onCancelled() }
+            }
+    }
+}
+#endif

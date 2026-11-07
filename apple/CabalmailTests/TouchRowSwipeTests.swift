@@ -60,6 +60,34 @@ final class TouchRowSwipeTests: XCTestCase {
         XCTAssertEqual(tracker.offset, -row.trailingReveal, "an ended no began opened moved the open reveal")
     }
 
+    /// A drag SwiftUI cancels mid-swipe reports no end; its cancel retracts
+    /// the row, so the next swipe on it starts. On the device a cancelled
+    /// drag left the row tracking, deaf to its next swipe.
+    func testACancelMidSwipeRetractsTheRowAndFreesIt() {
+        let row = row()
+        let tracker = TrackpadSwipeTracker()
+        tracker.began(coordinator: nil)
+        tracker.changed(translation: -50, row: row)
+        tracker.cancel(coordinator: nil)
+        XCTAssertEqual(tracker.offset, 0)
+        XCTAssertNil(tracker.trackingFrom, "the cancelled swipe left the row tracking")
+
+        tracker.began(coordinator: nil)
+        tracker.changed(translation: -30, row: row)
+        XCTAssertEqual(tracker.offset, -30, "the next swipe didn't start")
+    }
+
+    /// The Mac's input reports a cancel after every drag, clean ends too; a
+    /// reveal a clean end left open stays open.
+    func testACancelAfterACleanEndLeavesTheRevealOpen() {
+        let row = row()
+        let tracker = TrackpadSwipeTracker()
+        tracker.began(coordinator: nil)
+        tracker.ended(translation: -70, velocity: 0, row: row, coordinator: nil)
+        tracker.cancel(coordinator: nil)
+        XCTAssertEqual(tracker.offset, -row.trailingReveal, "a clean end's reveal was retracted")
+    }
+
     // MARK: - Where the reveal is drawn
 
     /// iPadOS draws it for the trackpad and macOS for a finger; visionOS has
