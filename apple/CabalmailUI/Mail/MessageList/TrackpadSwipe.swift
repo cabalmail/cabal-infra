@@ -174,7 +174,7 @@ extension View {
     /// The drawn half of a row's swipe actions (see the file comment).
     /// `contentID` names what the row shows; a reveal belongs to it and is
     /// dropped when the row is re-pointed at another message.
-    @available(macOS 26.0, *)
+    @available(macOS 27.0, *)
     func trackpadSwipeReveal(
         contentID: AnyHashable,
         leading: SwipeActionSpec?,
@@ -236,7 +236,13 @@ final class TrackpadSwipeTracker {
     @ObservationIgnored private let settle = Animation.snappy(duration: 0.25)
 
     /// Translations and velocities below are in the row's layout direction.
+    ///
+    /// A second `began` before the swipe ends is ignored, and so is an
+    /// `ended` that no `began` opened: the Mac's input is a SwiftUI drag that
+    /// keeps no state of its own and reports a swipe as it becomes one
+    /// (`TrackpadSwipeRecognizer`).
     func began(coordinator: TrackpadSwipeCoordinator?) {
+        guard trackingFrom == nil else { return }
         trackingFrom = offset
         coordinator?.claim(token)
     }
@@ -253,6 +259,7 @@ final class TrackpadSwipeTracker {
     }
 
     func ended(translation: CGFloat, velocity: CGFloat, row: Row, coordinator: TrackpadSwipeCoordinator?) {
+        guard trackingFrom != nil else { return }
         changed(translation: translation, row: row)
         trackingFrom = nil
         let edge: HorizontalEdge = offset >= 0 ? .leading : .trailing
@@ -311,7 +318,7 @@ final class TrackpadSwipeTracker {
     }
 }
 
-@available(macOS 26.0, *)
+@available(macOS 27.0, *)
 private struct TrackpadSwipeReveal: ViewModifier {
     let contentID: AnyHashable
     let leading: SwipeActionSpec?

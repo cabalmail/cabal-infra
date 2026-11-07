@@ -1,5 +1,4 @@
 #if os(macOS)
-import AppKit
 import SwiftUI
 import XCTest
 @testable import CabalmailUI
@@ -9,48 +8,56 @@ import XCTest
 ///
 /// The 27 path draws each row's swipe with SwiftUI's own `.swipeActions`
 /// inside `.swipeActionsContainer()` (#901), and on macOS that reveal answers
-/// the trackpad's scroll events and nothing else. AppKit hands a direct touch
-/// only to gesture recognizers, and nothing on the row had one. The rows now
-/// draw a reveal of their own on macOS as they already did on iPadOS for the
-/// trackpad (`TrackpadSwipe.swift`), driven by a pan that takes a finger and
-/// nothing else.
+/// the trackpad's scroll events and nothing else, and nothing on the row
+/// took a finger. The rows now draw a reveal of their own on macOS
+/// as they already did on iPadOS for the trackpad (`TrackpadSwipe.swift`),
+/// driven by a SwiftUI drag that takes a finger and nothing else.
 ///
-/// A direct touch cannot be made in-process, and SwiftUI attaches an
-/// `NSGestureRecognizerRepresentable`'s recognizer only once an event
-/// arrives, so the pan cannot be found and driven here. What is pinned: the
-/// recognizer takes a finger and leaves the pointer alone, the scroll view
-/// waits for it, the Mac draws the reveal at all, and the tracker the reveal
-/// runs on settles a swipe on macOS as it does on iPadOS.
+/// A direct touch cannot be made in-process, so the drag cannot be driven
+/// here. What is pinned: the drag takes a finger only, the Mac draws the
+/// reveal at all, the tracker settles a swipe on macOS as on iPadOS, and the
+/// tracker tolerates a drag that keeps no state (a repeated `began`, an
+/// `ended` that none opened).
 /// `SwipeActionContainerSourceScanTests` pins the row's wiring.
 @MainActor
 final class TouchRowSwipeTests: XCTestCase {
 
-    // MARK: - The recognizer
+    // MARK: - The input
 
-    /// A finger in; mouse and trackpad clicks out, so a click on the row, a
-    /// drag onto a folder, and the container's trackpad swipe are untouched.
-    /// A pan left at the default button mask would start on a mouse drag and
-    /// swallow the row's drag; one that took indirect touches would fight the
-    /// container for the trackpad.
-    func testRecognizerTakesAFingerAndLeavesThePointerAlone() throws {
-        guard #available(macOS 26.0, *) else { throw XCTSkip("the recognizer bridge is macOS 26 and later") }
-        let pan = TrackpadSwipeRecognizer.configuredRecognizer()
-        XCTAssertEqual(pan.allowedTouchTypes, .direct)
-        XCTAssertEqual(pan.buttonMask, 0)
+    /// A finger and nothing else: a mouse, a trackpad click-drag, the row's
+    /// drag onto a folder and the container's trackpad swipe stay out of it.
+    func testTheDragTakesAFingerAndNothingElse() throws {
+        guard #available(macOS 27.0, *) else { throw XCTSkip("input kinds are macOS 27 and later") }
+        XCTAssertEqual(TrackpadSwipeRecognizer.inputKinds, .directTouch)
     }
 
-    /// The list's scroll view waits for the swipe to decide; nothing else does.
-    func testOnlyTheScrollViewWaitsForTheSwipe() throws {
-        guard #available(macOS 26.0, *) else { throw XCTSkip("the recognizer bridge is macOS 26 and later") }
-        let pan = TrackpadSwipeRecognizer.configuredRecognizer()
-        let delegate = TrackpadSwipeRecognizer.Delegate()
-        let scrolling = NSPanGestureRecognizer()
-        NSScrollView().addGestureRecognizer(scrolling)
-        let other = NSPanGestureRecognizer()
-        NSView().addGestureRecognizer(other)
+    // MARK: - A drag that keeps no state
 
-        XCTAssertTrue(delegate.gestureRecognizer(pan, shouldBeRequiredToFailBy: scrolling))
-        XCTAssertFalse(delegate.gestureRecognizer(pan, shouldBeRequiredToFailBy: other))
+    /// The Mac's drag reports `began` with every change that reads as a
+    /// swipe; only the first starts it, so the swipe tracks from where the
+    /// row was, not from wherever it had got to.
+    func testARepeatedBeganKeepsTheSwipesStart() {
+        let row = row()
+        let tracker = TrackpadSwipeTracker()
+        tracker.began(coordinator: nil)
+        tracker.changed(translation: -40, row: row)
+        tracker.began(coordinator: nil)
+        tracker.changed(translation: -60, row: row)
+        XCTAssertEqual(tracker.offset, -60, "a second began restarted the swipe from where it had got to")
+    }
+
+    /// A drag that ends without ever reading as a swipe (a vertical scroll
+    /// over an open row) leaves the row alone.
+    func testAnEndWithoutABeganLeavesTheRowAlone() {
+        let row = row()
+        let tracker = TrackpadSwipeTracker()
+        tracker.began(coordinator: nil)
+        tracker.ended(translation: -70, velocity: 0, row: row, coordinator: nil)
+        XCTAssertEqual(tracker.offset, -row.trailingReveal)
+
+        // A flick back that would close it, were the end taken as a swipe's.
+        tracker.ended(translation: 0, velocity: 900, row: row, coordinator: nil)
+        XCTAssertEqual(tracker.offset, -row.trailingReveal, "an ended no began opened moved the open reveal")
     }
 
     // MARK: - Where the reveal is drawn

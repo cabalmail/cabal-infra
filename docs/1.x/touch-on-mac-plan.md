@@ -78,7 +78,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | # | Item | Status |
 |---|---|---|
 | 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321) |
-| 1 | Message-list swipe actions under touch | Failed on the device; fix in review, PR #2339 |
+| 1 | Message-list swipe actions under touch | Failed on the device; #2339 didn't fix it; second fix in review, PR #2341 |
 | 2 | Long press on rows: context menu vs drag | Drag onto a folder fails on every input; diagnostics in #2338 |
 | 3 | Tap targets under 36 pt | Our glyph buttons released in 1.43.0 (#2323, #2324); the two system controls wait for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
@@ -100,17 +100,17 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 ## Item 1 — Message-list swipe actions under touch
 
-**Status:** Failed on the device (2026-11-06); fix in review (PR #2339).
+**Status:** Failed on the device (2026-11-06). The first fix (#2339, an AppKit recognizer) didn't change it on the device (2026-11-07); a second fix, a SwiftUI drag, is in review (PR #2341).
 
 **What the device showed.** On the MacBook Pro, a finger's swipe on a message row revealed nothing, leading or trailing, while feed rows (plain `List` rows) swiped under a finger and a two-finger trackpad swipe on a message row worked as on any Mac. So the macOS container's reveal answers the trackpad's scroll events and nothing else, the second of the two outcomes below.
 
 **The fix.** It reuses the iPad's drawn half (`TrackpadSwipe.swift`), which already covered the opposite gap: there the container answers touches but not a trackpad. The tracker, coordinator and drawn reveal were iOS-only; they now compile on macOS too. Each platform's input sits behind one type in `Platform/TrackpadSwipeRecognizer.swift`:
 - iPadOS keeps its scroll-only pan.
-- macOS gets an `NSPanGestureRecognizer` with `allowedTouchTypes = .direct` and `buttonMask = 0`, so a finger starts it and a mouse or trackpad never does, and the list's scroll view waits for it.
+- macOS first got an `NSPanGestureRecognizer` with `allowedTouchTypes = .direct` and `buttonMask = 0`, bridged through `NSGestureRecognizerRepresentable` (#2339). On the device a finger still revealed nothing, and vertical scrolling was unaffected. A likely cause: its delegate's `beginsSwipe` check, asked at touch-down with no movement yet, refused every touch. It is now a SwiftUI `DragGesture(minimumDistance: 10, inputKinds: .directTouch)` (macOS 27), with no delegate. It reports a swipe once the movement reads as one, and the tracker ignores a repeated `began` and an `ended` that none opened. Each finger drag that ends writes one `RowSwipe` line to Settings → Debug Log, so if this fails too, the log shows whether a finger reaches the row at all.
 - visionOS gets an inert stand-in, since it draws no reveal.
 
 `HostPlatform.drawsRowSwipeReveal` (iOS and macOS) replaces the six `#if os(iOS)` blocks that gated the reveal, so `SwipeActionRow.swift` and `TrackpadSwipe.swift` leave the platform-conditionals allowlist. Tests:
-- `TouchRowSwipeTests` pins the recognizer's configuration, the capability and the tracker on macOS.
+- `TouchRowSwipeTests` pins the drag's input kind, the capability, the tracker on macOS, and the tracker's tolerance of a stateless drag (both tolerance tests fail with the tracker's two new guards removed).
 - `SwipeActionContainerSourceScanTests` now pins the capability gate in place of the iOS-only one.
 - The in-process trackpad-swipe suites still pass with the recognizer on every row.
 
