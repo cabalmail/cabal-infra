@@ -155,3 +155,27 @@ struct TrackpadSwipeRecognizer: Gesture {
     }
 }
 #endif
+
+extension View {
+    /// Attaches a row's swipe input (`TrackpadSwipeReveal`).
+    ///
+    /// On macOS beside the list's own scrolling, not ahead of it. A finger on
+    /// the touch display both scrolls the list and swipes a row, and a drag
+    /// attached with `.gesture` claimed every finger that moved on a row,
+    /// vertical ones included, so the mail list stopped scrolling under a
+    /// finger and a swipe only took after a hold (on the device, 2026-11-07).
+    /// Alongside, a vertical drag scrolls and the swipe ignores it
+    /// (`TrackpadSwipePolicy.beginsSwipe`), and a horizontal one reveals.
+    /// iPadOS keeps `.gesture`: its input is the trackpad, which the scroll
+    /// view waits on (`Delegate`).
+    #if os(macOS)
+    @available(macOS 27.0, *)
+    func rowSwipeInput(_ input: TrackpadSwipeRecognizer) -> some View {
+        simultaneousGesture(input)
+    }
+    #else
+    func rowSwipeInput(_ input: TrackpadSwipeRecognizer) -> some View {
+        gesture(input)
+    }
+    #endif
+}

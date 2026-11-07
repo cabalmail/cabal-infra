@@ -360,7 +360,7 @@ private struct TrackpadSwipeReveal: ViewModifier {
             .background(alignment: .trailing) { capsule(for: .trailing) }
             .background { measurements }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
-            .gesture(
+            .rowSwipeInput(
                 TrackpadSwipeRecognizer(
                     onBegan: { tracker.began(coordinator: coordinator) },
                     onChanged: { tracker.changed(translation: logical($0), row: row) },
