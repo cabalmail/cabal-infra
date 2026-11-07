@@ -78,7 +78,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | # | Item | Status |
 |---|---|---|
 | 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321) |
-| 1 | Message-list swipe actions under touch | #2341 swiped but stopped scrolling; third fix in review (PR pending) |
+| 1 | Message-list swipe actions under touch | #2341 swiped but stopped scrolling; third fix in review, PR #2345 |
 | 2 | Long press on rows: context menu vs drag | Drag to folder works by trackpad (#2342); touch drag and touch menu out of scope, by decision |
 | 3 | Tap targets under 36 pt | Our glyph buttons released in 1.43.0 (#2323, #2324); the two system controls wait for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
@@ -100,7 +100,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 ## Item 1 — Message-list swipe actions under touch
 
-**Status:** Failed on the device (2026-11-06). The first fix (#2339, an AppKit recognizer) didn't change it on the device (2026-11-07); a second fix, a SwiftUI drag (PR #2341), swiped on the device but only after a hold, and the mail list stopped scrolling under a finger (2026-11-07); a third fix attaches the drag beside the list's scrolling (PR pending).
+**Status:** Failed on the device (2026-11-06). The first fix (#2339, an AppKit recognizer) didn't change it on the device (2026-11-07); a second fix, a SwiftUI drag (PR #2341), swiped on the device but only after a hold, and the mail list stopped scrolling under a finger (2026-11-07); a third fix attaches the drag beside the list's scrolling (PR #2345).
 
 **What the device showed.** On the MacBook Pro, a finger's swipe on a message row revealed nothing, leading or trailing, while feed rows (plain `List` rows) swiped under a finger and a two-finger trackpad swipe on a message row worked as on any Mac. So the macOS container's reveal answers the trackpad's scroll events and nothing else, the second of the two outcomes below.
 
