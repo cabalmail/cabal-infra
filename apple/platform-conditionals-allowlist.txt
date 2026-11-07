@@ -37,8 +37,6 @@ Mail/MessageList/MessageListView+ModifierClick.swift 1
 Mail/MessageList/MessageListView+Rows.swift 2
 Mail/MessageList/MessageListView+Selection.swift 2
 Mail/MessageList/MessageListView.swift 1
-Mail/MessageList/SwipeActionRow.swift 4
-Mail/MessageList/TrackpadSwipe.swift 2
 Mail/MoveToFolderSheet.swift 1
 Mail/Reader/EmptyDetailToolbar.swift 1
 Mail/Reader/MessageDetailView+AddressMenu.swift 2
