@@ -230,8 +230,11 @@ extension FolderListView {
     /// flatten the items and route them.
     func handleMessageDrop(_ payloads: [MessageDragPayload], into folder: Folder) -> Bool {
         let items = payloads.flatMap { $0.items }
+        let source = payloads.lazy.compactMap(\.sourceList).first
+        CabalmailLog.info("DragMove", "Dropped \(items.count) message(s) on \(folder.path) "
+            + "from \(payloads.count) payload(s), list \(dragListTag(source))")
         guard !items.isEmpty else { return false }
-        appState.requestMove(items: items, to: folder.path, from: payloads.lazy.compactMap(\.sourceList).first)
+        appState.requestMove(items: items, to: folder.path, from: source)
         return true
     }
 

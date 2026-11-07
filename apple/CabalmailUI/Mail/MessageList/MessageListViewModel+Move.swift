@@ -74,6 +74,9 @@ extension MessageListViewModel {
     /// selecting" signal).
     func applyMoveRequest(_ request: MessageMoveRequest) async {
         let refs = request.items.map(\.ref)
+        let loaded = refs.filter { index(of: $0) != nil }.count
+        CabalmailLog.info("DragMove", "Moving \(refs.count) message(s) to \(request.destination); "
+            + "\(loaded) loaded here, from \(Set(refs.map(\.folder)).sorted())")
         await performMove(uidsBySource: refs.uidsByFolder(), to: request.destination, markSeenFirst: false)
         selectedRefs.subtract(refs)
     }

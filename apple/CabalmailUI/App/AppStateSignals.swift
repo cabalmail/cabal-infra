@@ -143,6 +143,13 @@ struct MessageMoveRequest: Equatable, Sendable {
     }
 }
 
+/// The `DragMove` log lines' short name for a message list's drag identity
+/// (`MessageListView.dragSourceID`): enough to tell lists apart in Settings →
+/// Debug Log.
+func dragListTag(_ id: UUID?) -> String {
+    id.map { String($0.uuidString.prefix(8)) } ?? "any"
+}
+
 // MARK: - The main window last in front
 //
 // Which main window a request from outside any of them is for: a mailto:

@@ -598,7 +598,12 @@ extension MessageListView {
         // bulk and menu-driven moves. Every mounted list in every window sees
         // the request, so only the list the drag lifted from performs it.
         .onChange(of: appState.pendingMoveRequest) { _, request in
-            guard let request, let model, request.isPerformed(by: dragSourceID) else { return }
+            guard let request else { return }
+            let performs = request.isPerformed(by: dragSourceID)
+            CabalmailLog.info("DragMove", "List \(dragListTag(dragSourceID)) saw move #\(request.tick) "
+                + "to \(request.destination) from list \(dragListTag(request.sourceList)): "
+                + (performs ? (model == nil ? "has no model yet" : "performing") : "not its drag"))
+            guard performs, let model else { return }
             Task { await model.applyMoveRequest(request) }
         }
         // A cross-client restore / jump was scheduled. For an already-mounted
