@@ -78,8 +78,8 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | # | Item | Status |
 |---|---|---|
 | 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321) |
-| 1 | Message-list swipe actions under touch | Failed on the device; #2339 didn't fix it; second fix in review, PR #2341 |
-| 2 | Long press on rows: context menu vs drag | Drag onto a folder fails on every input; diagnostics in #2338 |
+| 1 | Message-list swipe actions under touch | Second fix merged to `stage` (#2341); waiting on the device check |
+| 2 | Long press on rows: context menu vs drag | Drag-to-folder fix merged to `stage` (#2342); waiting on the device check; menu vs drag not yet checked |
 | 3 | Tap targets under 36 pt | Our glyph buttons released in 1.43.0 (#2323, #2324); the two system controls wait for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started; a trackpad check on any macOS 27 Mac answers the first question |
@@ -100,7 +100,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 ## Item 1 — Message-list swipe actions under touch
 
-**Status:** Failed on the device (2026-11-06). The first fix (#2339, an AppKit recognizer) didn't change it on the device (2026-11-07); a second fix, a SwiftUI drag, is in review (PR #2341).
+**Status:** Failed on the device (2026-11-06). The first fix (#2339, an AppKit recognizer) didn't change it on the device (2026-11-07); a second fix, a SwiftUI drag, is merged to `stage` (PR #2341, 2026-11-07) and waits on a check on the device.
 
 **What the device showed.** On the MacBook Pro, a finger's swipe on a message row revealed nothing, leading or trailing, while feed rows (plain `List` rows) swiped under a finger and a two-finger trackpad swipe on a message row worked as on any Mac. So the macOS container's reveal answers the trackpad's scroll events and nothing else, the second of the two outcomes below.
 
@@ -132,7 +132,7 @@ No source documents how SwiftUI `.swipeActions` behaves under touch on macOS. Tw
 
 ## Item 2 — Long press on rows: context menu vs drag
 
-**Status:** Drag onto a folder found broken on every input (2026-11-06); cause found with #2338's logging (2026-11-07); fix in review (PR #2342).
+**Status:** Drag onto a folder found broken on every input (2026-11-06); cause found with #2338's logging (2026-11-07); fix merged to `stage` (PR #2342, 2026-11-07), waiting on a check on the device. The item's own question, a long press opening the menu versus lifting a drag, is still unchecked.
 
 **Found on the device, not touch-specific.** Dragging one message onto a sidebar folder was accepted (the folder highlighted, the drop didn't bounce back) but nothing moved, with a finger or a trackpad; every other move route worked. #2338's `DragMove` lines showed the drop handler getting no payload at all ("Dropped 0 message(s) … from 0 payload(s)"), so no move was ever requested. A drag of several messages moved. The difference: since 21dec3832 (2026-10-29, released in 1.41.0) a single-message drag offers its `.eml` ahead of the move reference, so it can land as a file on the compose body or in Finder, and a folder's drop on macOS then decodes nothing from it. A several-message drag offers only the move reference. The exact pasteboard mechanism (the leading guess is the `.eml`'s suggested file name making it a file promise) wasn't pinned down: a real drag can't be driven in-process.
 
