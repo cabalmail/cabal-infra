@@ -151,9 +151,11 @@ struct FolderListView: View {
             if let externalFilter {
                 wideSidebarHeader(filter: externalFilter)
             }
-            // The filter pills sit above the tree on every layout, where the
-            // message list keeps its own row of pills.
-            mailFilterPillRow
+            // Compact: the filter pills sit above the tree, where the message
+            // list keeps its own row of pills. Wide: they are the Mail
+            // section's first row instead (see `folderList`), as the Feeds
+            // section's are its own.
+            mailFilterPillRow(shown: feedSelection == nil)
             feedManagementHost(folderList)
         }
     }
@@ -211,6 +213,10 @@ struct FolderListView: View {
                     // when the section's content count changes (#1070). A
                     // `Section` header is list chrome instead.
                     Section {
+                        // A row of the list, like the Feeds section's pills:
+                        // drawn above the list, the two rows took different
+                        // insets, symbol sizes and tints on macOS.
+                        mailFilterPillListRow(shown: mailExpanded)
                         ForEach(FolderSectionDisclosure.visibleRows(rows, isExpanded: mailExpanded)) { row in
                             folderRow(row, model: model, collapsed: collapsedSet)
                         }
