@@ -315,7 +315,7 @@ final class TrackpadSwipeTracker {
     /// cancel through its gesture state (`rowSwipeInput`).
     func cancel(coordinator: TrackpadSwipeCoordinator?) {
         guard trackingFrom != nil else { return }
-        CabalmailLog.info("RowSwipe", "A swipe in progress was cancelled; retracting the row")
+        CabalmailLog.debug("RowSwipe", "A swipe in progress was cancelled; retracting the row")
         close(coordinator: coordinator)
     }
 

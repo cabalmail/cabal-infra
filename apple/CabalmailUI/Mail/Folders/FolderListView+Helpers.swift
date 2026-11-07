@@ -232,8 +232,9 @@ extension FolderListView {
         let items = payloads.flatMap { $0.items }
         let source = payloads.lazy.compactMap(\.sourceList).first
         let outcome = appState.moveDropped(items, from: source, to: folder.path)
-        CabalmailLog.info("DragMove", "Dropped \(items.count) message(s) on \(folder.path) "
-            + "from \(payloads.count) payload(s), list \(dragListTag(source)): "
+        // The one trace of which path moved a drop: the single-message drag
+        // decodes no payload on macOS, and the drag the app lifted moves it.
+        CabalmailLog.debug("DragMove", "Dropped \(items.count) message(s) on \(folder.path): "
             + Self.describe(outcome))
         return outcome != .nothing
     }

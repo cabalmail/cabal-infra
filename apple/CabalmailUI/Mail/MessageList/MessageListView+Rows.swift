@@ -184,10 +184,9 @@ extension MessageListView {
         envelope: Envelope,
         model: MessageListViewModel
     ) -> MessageDragPayload {
-        // Runs when the drag lifts (`.draggable` takes the payload lazily).
-        // Noted on AppState too, for a folder drop that decodes no payload
-        // (`AppState.moveDropped`).
-        CabalmailLog.info("DragMove", "Lifted \(items.count) message(s) from list \(dragListTag(dragSourceID))")
+        // Runs when the drag lifts (`.draggable` takes the payload lazily),
+        // which is when AppState notes the drag, for a folder drop that
+        // decodes no payload (`AppState.moveDropped`).
         appState.noteLiftedDrag(items: items, from: dragSourceID)
         guard items.count == 1, let item = items.first else {
             return MessageDragPayload(items: items, sourceList: dragSourceID)
