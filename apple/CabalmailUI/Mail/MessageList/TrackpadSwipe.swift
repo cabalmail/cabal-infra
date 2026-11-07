@@ -81,6 +81,25 @@ enum TrackpadSwipePolicy {
         return abs(velocity.width) > abs(velocity.height)
     }
 
+    /// A finger on a Mac's touch display both scrolls the list and swipes a
+    /// row, so its axis is read off the movement itself: nothing until it
+    /// has travelled `axisDecisionDistance`, then a swipe if mostly sideways,
+    /// and a scroll otherwise, for the rest of that touch.
+    enum TouchAxis: Equatable {
+        case swipe
+        case scroll
+    }
+
+    /// How far a finger travels before its axis is decided.
+    static let axisDecisionDistance: CGFloat = 8
+
+    /// The axis of a finger that has moved by `translation`, or nil while it
+    /// is too short to tell.
+    static func touchAxis(translation: CGSize) -> TouchAxis? {
+        guard max(abs(translation.width), abs(translation.height)) >= axisDecisionDistance else { return nil }
+        return abs(translation.width) > abs(translation.height) ? .swipe : .scroll
+    }
+
     /// How far a swipe travels before lifting runs the action instead of
     /// revealing it. The 27 container's own threshold measured about 300pt on
     /// iPad and iPhone rows alike (#901's probe); capped at three quarters of

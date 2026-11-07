@@ -1,4 +1,5 @@
 #if os(macOS)
+import AppKit
 import SwiftUI
 import XCTest
 @testable import CabalmailUI
@@ -11,27 +12,66 @@ import XCTest
 /// the trackpad's scroll events and nothing else, and nothing on the row
 /// took a finger. The rows now draw a reveal of their own on macOS
 /// as they already did on iPadOS for the trackpad (`TrackpadSwipe.swift`),
-/// driven by a SwiftUI drag that takes a finger and nothing else.
+/// driven by a pan recognizer that takes a finger and nothing else, beside
+/// the list's touch scrolling, and reads each touch's axis off its movement.
 ///
-/// A direct touch cannot be made in-process, so the drag cannot be driven
-/// here. What is pinned: the drag takes a finger only, the Mac draws the
-/// reveal at all, the tracker settles a swipe on macOS as on iPadOS, and the
-/// tracker tolerates a drag that keeps no state (a repeated `began`, an
-/// `ended` that none opened).
+/// A direct touch cannot be made in-process, so the recognizer cannot be
+/// driven here. What is pinned: it takes a finger only, runs beside every
+/// other gesture, and vetoes no touch before it moves; the axis rule; the Mac
+/// draws the reveal at all; the tracker settles a swipe on macOS as on
+/// iPadOS, retracts a cancelled one, and tolerates a repeated `began` and an
+/// `ended` that none opened (left from an earlier, stateless input, and
+/// harmless).
 /// `SwipeActionContainerSourceScanTests` pins the row's wiring.
 @MainActor
 final class TouchRowSwipeTests: XCTestCase {
 
     // MARK: - The input
 
-    /// A finger and nothing else: a mouse, a trackpad click-drag, the row's
-    /// drag onto a folder and the container's trackpad swipe stay out of it.
-    func testTheDragTakesAFingerAndNothingElse() throws {
-        guard #available(macOS 27.0, *) else { throw XCTSkip("input kinds are macOS 27 and later") }
-        XCTAssertEqual(TrackpadSwipeRecognizer.inputKinds, .directTouch)
+    /// A finger in; mouse and trackpad clicks out, so a click on the row, a
+    /// drag onto a folder, and the container's trackpad swipe are untouched.
+    func testTheRecognizerTakesAFingerAndLeavesThePointerAlone() throws {
+        guard #available(macOS 27.0, *) else { throw XCTSkip("the touch recognizer is macOS 27 and later") }
+        let pan = TrackpadSwipeRecognizer.configuredRecognizer()
+        XCTAssertEqual(pan.allowedTouchTypes, .direct)
+        XCTAssertEqual(pan.buttonMask, 0)
     }
 
-    // MARK: - A drag that keeps no state
+    /// Beside the list's touch scrolling, never in its way: a SwiftUI drag on
+    /// the rows kept a finger from scrolling the mail list on the device,
+    /// even attached beside it.
+    func testTheRecognizerRunsBesideEveryOtherGesture() throws {
+        guard #available(macOS 27.0, *) else { throw XCTSkip("the touch recognizer is macOS 27 and later") }
+        let pan = TrackpadSwipeRecognizer.configuredRecognizer()
+        let touch = TrackpadSwipeRecognizer.Touch()
+        let scrolling = NSPanGestureRecognizer()
+        NSScrollView().addGestureRecognizer(scrolling)
+        XCTAssertTrue(touch.gestureRecognizer(pan, shouldRecognizeSimultaneouslyWith: scrolling))
+    }
+
+    /// The recognizer begins on any movement, so nothing may veto a touch at
+    /// touch-down: the first version's delegate did, before the finger had
+    /// moved, and a finger never revealed anything.
+    func testNothingRefusesATouchBeforeItMoves() throws {
+        guard #available(macOS 27.0, *) else { throw XCTSkip("the touch recognizer is macOS 27 and later") }
+        let touch = TrackpadSwipeRecognizer.Touch()
+        XCTAssertFalse(touch.responds(to: #selector(NSGestureRecognizerDelegate.gestureRecognizerShouldBegin(_:))),
+                       "a shouldBegin veto is back; asked at touch-down it refuses every touch")
+    }
+
+    // MARK: - A touch's axis
+
+    /// Undecided while short, then sideways is a swipe and anything else a
+    /// scroll, for the rest of the touch.
+    func testATouchsAxisIsReadOffItsMovement() {
+        XCTAssertNil(TrackpadSwipePolicy.touchAxis(translation: CGSize(width: 5, height: -4)))
+        XCTAssertEqual(TrackpadSwipePolicy.touchAxis(translation: CGSize(width: -30, height: 9)), .swipe)
+        XCTAssertEqual(TrackpadSwipePolicy.touchAxis(translation: CGSize(width: 18, height: -197)), .scroll)
+        XCTAssertEqual(TrackpadSwipePolicy.touchAxis(translation: CGSize(width: 10, height: 10)), .scroll,
+                       "a diagonal is the list's: only a clearly sideways touch swipes")
+    }
+
+    // MARK: - The tracker's tolerance
 
     /// The Mac's drag reports `began` with every change that reads as a
     /// swipe; only the first starts it, so the swipe tracks from where the

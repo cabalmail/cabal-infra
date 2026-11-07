@@ -32,8 +32,6 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
     private static let listViewSource = "CabalmailUI/Mail/MessageList/MessageListView.swift"
     /// The 27 path's drawn half: a trackpad on iPadOS, a finger on macOS.
     private static let trackpadSource = "CabalmailUI/Mail/MessageList/TrackpadSwipe.swift"
-    /// Each platform's input behind it, and how it is attached.
-    private static let recognizerSource = "CabalmailUI/Platform/TrackpadSwipeRecognizer.swift"
 
     /// The 27 path exists and is availability-gated, so the pre-27 floor keeps
     /// compiling. Both edges are wired on it: a path that revealed only one
@@ -121,27 +119,14 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
         }
     }
 
-    /// On macOS a finger both scrolls the list and swipes a row, so the row's
-    /// touch drag sits beside the list's scrolling. Attached ahead of it
-    /// (`.gesture`), it claimed every finger that moved on a row: the mail
-    /// list stopped scrolling under a finger, and a swipe only took after a
-    /// hold (on the device, 2026-11-07). A direct touch can't be made
-    /// in-process, so the attachment is pinned here; iPadOS keeps `.gesture`
-    /// for its trackpad input.
-    func testTheMacTouchDragSitsBesideTheListsScrolling() throws {
+    /// The reveal attaches its input through `rowSwipeInput`, the one place
+    /// that decides how each platform's input meets the list. On macOS that
+    /// input runs beside the list's touch scrolling, which
+    /// `TouchRowSwipeTests` pins on the recognizer itself.
+    func testTheRevealAttachesItsInputThroughRowSwipeInput() throws {
         let bridge = Self.code(in: try Self.source(Self.trackpadSource))
         let reveal = try Self.slice(bridge, from: "private struct TrackpadSwipeReveal: ViewModifier {")
         XCTAssertTrue(reveal.contains(".rowSwipeInput("), "the reveal attaches its input some other way")
-        let platform = Self.code(in: try Self.source(Self.recognizerSource))
-        let mac = try Self.slice(platform, from: "private struct TouchSwipeAttachment: ViewModifier {")
-        XCTAssertTrue(
-            mac.contains(".simultaneousGesture("),
-            "the Mac's touch drag is attached ahead of the list's scrolling again"
-        )
-        XCTAssertTrue(
-            mac.contains("input.onCancelled()"),
-            "a cancelled touch drag no longer reaches the tracker, and leaves the row tracking"
-        )
     }
 
     /// The pre-27 path survives, both edges included: the floor is iOS 18 /
