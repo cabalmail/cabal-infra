@@ -1,5 +1,5 @@
-- **Drag-to-folder move logging.** The Apple clients log each step of a
-  message dragged onto a sidebar folder (the lift, the drop, which list
-  takes the move request and why, and the move) under `DragMove` in
-  Settings → Debug Log, to find why such a drop is accepted but moves
-  nothing.
+- **Debug-log lines for folder drops and cancelled touch swipes.** The Apple
+  clients write one debug-level line to Settings → Debug Log per message
+  dropped on a sidebar folder, saying whether the drop's own payload or the
+  drag the app lifted moved it, and one when a touch swipe on a message row
+  is cancelled mid-way.

@@ -1,5 +1,4 @@
 import SwiftUI
-import CabalmailKit
 #if os(iOS)
 import UIKit
 #elseif os(macOS)
@@ -131,10 +130,6 @@ struct TrackpadSwipeRecognizer: UIGestureRecognizerRepresentable {
 ///   vertical ones, so a SwiftUI drag on a row keeps a finger from the list's
 ///   scrolling either way. This recognizer, in the first version's build,
 ///   didn't.
-///
-/// Each touch writes `RowSwipe` lines to Settings → Debug Log: when a finger
-/// reaches a row, and when the touch ends with its axis. If a finger still
-/// doesn't swipe, they show whether it reached the row at all.
 @available(macOS 27.0, *)
 struct TrackpadSwipeRecognizer: NSGestureRecognizerRepresentable {
     let onBegan: () -> Void
@@ -169,11 +164,9 @@ struct TrackpadSwipeRecognizer: NSGestureRecognizerRepresentable {
             }
             if touch.axis == .swipe { onChanged(translation.width) }
         case .ended:
-            touch.log(ended: translation)
             if touch.axis == .swipe { onEnded(translation.width, recognizer.velocity(in: recognizer.view).x) }
             touch.axis = nil
         case .cancelled, .failed:
-            touch.log(ended: translation, cancelled: true)
             if touch.axis == .swipe { onCancelled() }
             touch.axis = nil
         default:
@@ -197,21 +190,6 @@ struct TrackpadSwipeRecognizer: NSGestureRecognizerRepresentable {
             shouldRecognizeSimultaneouslyWith other: NSGestureRecognizer
         ) -> Bool {
             true
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: NSGestureRecognizer, shouldReceive touch: NSTouch) -> Bool {
-            CabalmailLog.info("RowSwipe", "A finger reached a row")
-            return true
-        }
-
-        func log(ended translation: CGSize, cancelled: Bool = false) {
-            let what = switch axis {
-            case .swipe: "a swipe"
-            case .scroll: "a scroll, left to the list"
-            case nil: "too short to tell"
-            }
-            CabalmailLog.info("RowSwipe", "Finger on a row \(cancelled ? "cancelled" : "ended") at "
-                + "(\(Int(translation.width)), \(Int(translation.height))): \(what)")
         }
     }
 }
