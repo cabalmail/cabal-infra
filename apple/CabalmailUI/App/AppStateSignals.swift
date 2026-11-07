@@ -143,6 +143,29 @@ struct MessageMoveRequest: Equatable, Sendable {
     }
 }
 
+/// A message drag as it lifted from a list: what a folder drop moves when
+/// SwiftUI hands it no payload (`AppState.moveDropped`).
+struct LiftedMessageDrag: Equatable, Sendable {
+    let items: [MessageDragItem]
+    let sourceList: UUID
+    let liftedAt: Date
+
+    /// How long after it lifted a drag can still be dropped on a folder.
+    /// Long enough for a drag that hovers before it lands; short enough that
+    /// an abandoned one is gone by the next.
+    static let lifetime: TimeInterval = 120
+}
+
+/// What a folder drop moved (`AppState.moveDropped`).
+enum MessageDropOutcome: Equatable {
+    /// The decoded payload's messages.
+    case decoded
+    /// The drag this app lifted, the payload having decoded to nothing.
+    case lifted
+    /// Nothing: no payload, and no fresh drag of this app's.
+    case nothing
+}
+
 // MARK: - The main window last in front
 //
 // Which main window a request from outside any of them is for: a mailto:

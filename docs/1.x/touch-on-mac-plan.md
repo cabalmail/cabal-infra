@@ -78,8 +78,8 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | # | Item | Status |
 |---|---|---|
 | 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321) |
-| 1 | Message-list swipe actions under touch | Not started |
-| 2 | Long press on rows: context menu vs drag | Not started |
+| 1 | Message-list swipe actions under touch | Works on the device (#2346, 2026-11-07): one finger scrolls and swipes mail as feeds |
+| 2 | Long press on rows: context menu vs drag | Drag to folder works by trackpad (#2342); touch drag and touch menu out of scope, by decision |
 | 3 | Tap targets under 36 pt | Our glyph buttons released in 1.43.0 (#2323, #2324); the two system controls wait for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
 | 5 | Pull-to-refresh vs toolbar Reload | Not started; a trackpad check on any macOS 27 Mac answers the first question |
@@ -100,7 +100,23 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 ## Item 1 — Message-list swipe actions under touch
 
-**Status:** Not started.
+**Status:** Works on the device (2026-11-07). A finger's swipe on a message row revealed nothing at first (2026-11-06); after three fixes that each failed in a different way on the device (#2339, #2341, #2345, below), #2346 left one finger scrolling the mail list and swiping a row at once, both edges, with the trackpad, drag-and-drop and the secondary-click menu unchanged.
+
+**What the device showed.** On the MacBook Pro, a finger's swipe on a message row revealed nothing, leading or trailing, while feed rows (plain `List` rows) swiped under a finger and a two-finger trackpad swipe on a message row worked as on any Mac. So the macOS container's reveal answers the trackpad's scroll events and nothing else, the second of the two outcomes below.
+
+**The fix.** It reuses the iPad's drawn half (`TrackpadSwipe.swift`), which already covered the opposite gap: there the container answers touches but not a trackpad. The tracker, coordinator and drawn reveal were iOS-only; they now compile on macOS too. Each platform's input sits behind one type in `Platform/TrackpadSwipeRecognizer.swift`:
+- iPadOS keeps its scroll-only pan.
+- macOS first got an `NSPanGestureRecognizer` with `allowedTouchTypes = .direct` and `buttonMask = 0`, bridged through `NSGestureRecognizerRepresentable` (#2339). On the device a finger still revealed nothing, and vertical scrolling was unaffected. A likely cause: its delegate's `beginsSwipe` check, asked at touch-down with no movement yet, refused every touch. It is now a SwiftUI `DragGesture(minimumDistance: 10, inputKinds: .directTouch)` (macOS 27), with no delegate. It reports a swipe once the movement reads as one, and the tracker ignores a repeated `began` and an `ended` that none opened. Each finger drag that ends writes one `RowSwipe` line to Settings → Debug Log, so if this fails too, the log shows whether a finger reaches the row at all. On the device the drag swiped, but attached with `.gesture` it claimed every finger that moved on a row, vertical ones included: the mail list stopped scrolling under a finger, and a swipe took only after a hold. On macOS it is now attached with `.simultaneousGesture` (`rowSwipeInput`, in `Platform/`), beside the list's scrolling, so a vertical drag scrolls and a horizontal one reveals; iPadOS keeps `.gesture` for its trackpad input. `SwipeActionContainerSourceScanTests` pins the attachment, since a finger can't be made in-process. The device's `RowSwipe` log backed the cause and showed one more problem. Nearly every finger drag on a row ended vertical, "not a swipe": scroll attempts the drag had swallowed. And no horizontal swipe logged an end at all: SwiftUI cancelled those drags, and a SwiftUI gesture reports no cancel. That left the row tracking, deaf to its next swipe (`began` is ignored while tracking) and to retraction. The Mac's drag now carries a `@GestureState` flag, which SwiftUI resets on a cancel as on an end, and a reset reaches the tracker as a cancel one turn later (`TrackpadSwipeTracker.cancel`). A clean end has settled the swipe by then, so the cancel is ignored; one that interrupted a swipe retracts the row and logs a `RowSwipe` line.
+
+**#2345 on the device (2026-11-07):** a finger swipes at once, both edges, and the trackpad, drag-and-drop and the secondary-click menu all work, but one finger still doesn't scroll the mail list. Its `RowSwipe` lines show the drag seeing each vertical drag and leaving it alone ("not a swipe"), and the list not scrolling all the same: a SwiftUI drag that takes direct touch on a row keeps the finger from the list's scrolling, attached ahead of it or beside it. In #2339's build, one finger scrolled the list with an AppKit recognizer on every row. So the macOS input is that recognizer again, without what kept it from firing: no `gestureRecognizerShouldBegin` veto (asked at touch-down, before any movement, it refused every touch). It recognizes alongside every gesture, the scroll view's touch scrolling included, and reads each touch's axis off its movement (`TrackpadSwipePolicy.touchAxis`: undecided until 8 pt, then sideways is a swipe and anything else is left to the list). Its coordinator keeps the touch's axis across calls and reports a cancel mid-swipe, so the tracker's cancel handling still applies. `TouchRowSwipeTests` pins the configuration, that it runs alongside other gestures, that no delegate method vetoes a touch, and the axis rule. Each touch logged `RowSwipe` lines while this was checked on the device. Before promotion they were removed, being written on every touch, leaving only a debug-level line when a swipe in progress is cancelled (`TrackpadSwipeTracker.cancel`), the sign of the stuck row coming back.
+- visionOS gets an inert stand-in, since it draws no reveal.
+
+`HostPlatform.drawsRowSwipeReveal` (iOS and macOS) replaces the six `#if os(iOS)` blocks that gated the reveal, so `SwipeActionRow.swift` and `TrackpadSwipe.swift` leave the platform-conditionals allowlist. Tests:
+- `TouchRowSwipeTests` pins the drag's input kind, the capability, the tracker on macOS, and the tracker's tolerance of a stateless drag (both tolerance tests fail with the tracker's two new guards removed).
+- `SwipeActionContainerSourceScanTests` now pins the capability gate in place of the iOS-only one.
+- The in-process trackpad-swipe suites still pass with the recognizer on every row.
+
+**Left for the device:** a direct touch can't be made in-process, so whether a finger now reveals, and whether the list still scrolls vertically under a finger, needs the stage build on the MacBook Pro.
 
 This is the highest-risk item. On macOS 27 the message list's swipe-to-dispose and toggle-read come from SwiftUI's `.swipeActions` outside a `List`, coordinated by `.swipeActionsContainer()` (`apple/CabalmailUI/Mail/MessageList/SwipeActionRow.swift`). On macOS that container reads the trackpad's two-finger horizontal scroll natively (`TrackpadSwipe.swift:16-17`). Below 27, each row borrows a single-row `List` for the same thing. The same `.swipeActions` question applies to the folder list (`FolderListView.swift:366`), the address list (`AddressListView.swift:317,327`) and the feed item list (`FeedItemListView.swift:296,299`), which use plain `List` rows.
 
@@ -118,7 +134,13 @@ No source documents how SwiftUI `.swipeActions` behaves under touch on macOS. Tw
 
 ## Item 2 — Long press on rows: context menu vs drag
 
-**Status:** Not started.
+**Status:** Drag to a folder works on the device, one message and several, by trackpad (#2342, 2026-11-07). Touch drag and touch hold-for-menu are out of scope, by decision (below). #2338's `DragMove` logging, which found the cause, was trimmed before promotion to one debug-level line per drop that says whether the fallback moved it.
+
+**Touch drag and touch hold-for-menu: out of scope, by decision (2026-11-07).** On the device a finger neither lifts a message for a drag nor opens a row's context menu by a hold, in mail or (for the menu) in feeds. The decision: under a finger, mail should behave as feeds do, swipe and scroll only. Drag and the context menu stay with the trackpad and mouse (secondary click), where both work. Nothing is to be built for them under touch.
+
+**Found on the device, not touch-specific.** Dragging one message onto a sidebar folder was accepted (the folder highlighted, the drop didn't bounce back) but nothing moved, with a finger or a trackpad; every other move route worked. #2338's `DragMove` lines showed the drop handler getting no payload at all ("Dropped 0 message(s) … from 0 payload(s)"), so no move was ever requested. A drag of several messages moved. The difference: since 21dec3832 (2026-10-29, released in 1.41.0) a single-message drag offers its `.eml` ahead of the move reference, so it can land as a file on the compose body or in Finder, and a folder's drop on macOS then decodes nothing from it. A several-message drag offers only the move reference. The exact pasteboard mechanism (the leading guess is the `.eml`'s suggested file name making it a file promise) wasn't pinned down: a real drag can't be driven in-process.
+
+**The fix keeps the `.eml` first.** The list records the drag it lifts (`AppState.noteLiftedDrag`), and a folder drop that decodes no payload moves that drag instead, once, while it is fresh (two minutes; `AppState.moveDropped`). Folder drops no longer depend on the pasteboard, and the compose body and Finder still get the file. `AppStateMoveDropTests` covers it, and fails with the fallback off. Reverting the order instead would have fixed folders by breaking the compose body's single-message attach.
 
 Message rows carry both `.draggable` (`MessageListView+Rows.swift:169`, the drag onto a folder) and a context menu (`rowContextMenu`, and the list-level `contextMenu(forSelectionType:)` on wide layouts). Under touch, "touch and hold" opens a context menu and "touch and hold, then drag" lifts an item. The two have to share the gesture.
 

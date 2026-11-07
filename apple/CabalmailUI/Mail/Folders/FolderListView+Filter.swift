@@ -19,11 +19,31 @@ extension FolderListView {
         filterUnread = next.unread
     }
 
-    /// The pill row above the mail tree: the Subscribed and Unread toggles
-    /// (both off draws every folder), and the Expand all / Collapse all
-    /// buttons on the trailing edge. Same chrome as the message list's row
-    /// of pills.
-    var mailFilterPillRow: some View {
+    /// The pill row above the compact mail tree: the Subscribed and Unread
+    /// toggles (both off draws every folder), and the Expand all / Collapse
+    /// all buttons on the trailing edge. Same chrome as the message list's
+    /// row of pills.
+    @ViewBuilder
+    func mailFilterPillRow(shown: Bool) -> some View {
+        if shown {
+            mailFilterPills
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+        }
+    }
+
+    /// The same pills as the wide sidebar's Mail section's first row, so they
+    /// match the Feeds section's row (`feedFilterPillRow`) in inset, size
+    /// and tint. Nothing while the section is collapsed.
+    @ViewBuilder
+    func mailFilterPillListRow(shown: Bool) -> some View {
+        if shown {
+            mailFilterPills
+                .listRowSeparator(.hidden)
+        }
+    }
+
+    private var mailFilterPills: some View {
         SidebarFilterPillRow(
             pills: FolderListFilter.Pill.allCases.map { pill in
                 SidebarFilterPill(id: pill.rawValue, label: pill.label, isOn: folderFilter.isOn(pill)) {
@@ -37,8 +57,6 @@ extension FolderListView {
                 collapseAll: { setAllFoldersCollapsed(true) }
             )
         )
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
     }
 
     /// The text filter and the pills, both applied. `selection` is exempt

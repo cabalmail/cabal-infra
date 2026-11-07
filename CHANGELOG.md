@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.44.1] - 2026-11-07
+
+### Added
+- **`make apple-sim`: one-command simulator run.** `scripts/run-sim.sh`
+  finds or creates a simulator of the requested device type (default
+  iPhone Duo; `DEVICE=` picks another) on the newest iOS runtime that
+  supports it, boots it, opens the simulator window (Simulator.app, or
+  Xcode 27's DeviceHub), builds and installs a sign-in-capable app with
+  `apple/scripts/build-sim.sh`, and launches it. The simulator is reused
+  between runs, so its keychain and sign-in persist.
+
+### Fixed
+- Apple: **Dragging one message onto a folder moves it again.** Since
+  1.41.0 a single message dragged onto a sidebar folder on the Mac was
+  accepted, the folder highlighted, and nothing moved; dragging several
+  worked. A folder now moves the dragged message even when the drop hands
+  it only the message's `.eml` file.
+- Apple: **Swipe actions on messages under a finger on the Mac.** On the
+  touchscreen MacBook Pro a finger's swipe on a message row revealed
+  nothing, while feed rows and a trackpad's two-finger swipe worked.
+  Message rows now answer a finger with the same reveal the iPad draws for
+  a trackpad: the edge's action slides out at once, runs on a tap, and a
+  long swipe runs it outright, while one finger still scrolls the list.
+- Apple: **Matching Expand/Collapse All buttons in the sidebar.** On the Mac
+  and iPad sidebars the Mail section's filter pills and Expand all /
+  Collapse all buttons are now the section's first row, as the Feeds
+  section's are, so the two sets share one size, color and inset instead of
+  the mail set sitting above the list in smaller, dimmer chrome.
+
 ## [1.44.0] - 2026-11-06
 
 ### Added

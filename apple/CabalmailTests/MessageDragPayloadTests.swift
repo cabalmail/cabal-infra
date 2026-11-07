@@ -68,6 +68,9 @@ final class MessageDragPayloadTests: XCTestCase {
         XCTAssertEqual(provider.registeredTypeIdentifiers, [UTType.cabalmailMessageMove.identifier])
     }
 
+    /// Through an item provider in-process. A real single-message drag on
+    /// macOS decodes no payload at a folder (found on the device, 2026-11-07),
+    /// which `AppStateMoveDropTests` covers through the drag the app lifted.
     func testAFolderStillReadsTheMoveReferenceBehindTheEml() async throws {
         let provider = NSItemProvider()
         provider.register(MessageDragPayload(items: [Self.item], subject: "Hello", rawSource: Self.fetch))

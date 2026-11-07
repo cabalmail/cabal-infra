@@ -30,7 +30,7 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
     private static let listSource = "CabalmailUI/Mail/MessageList/MessageListView+Selection.swift"
     /// Hosts the Delete Forever confirmation.
     private static let listViewSource = "CabalmailUI/Mail/MessageList/MessageListView.swift"
-    /// The 27 path's trackpad half on iPadOS.
+    /// The 27 path's drawn half: a trackpad on iPadOS, a finger on macOS.
     private static let trackpadSource = "CabalmailUI/Mail/MessageList/TrackpadSwipe.swift"
 
     /// The 27 path exists and is availability-gated, so the pre-27 floor keeps
@@ -83,23 +83,31 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
     }
 
     /// On iPadOS the container's reveal answers touches only, so a trackpad's
-    /// two-finger swipe revealed nothing on the 27 path. The row carries a
-    /// trackpad half of its own and the container installs the coordinator
+    /// two-finger swipe revealed nothing on the 27 path; on macOS it answers
+    /// the trackpad only, so a finger on a touch display revealed nothing.
+    /// The row carries a drawn half of its own for the missing input, gated
+    /// on `HostPlatform.drawsRowSwipeReveal` (iOS and macOS; behaviour in
+    /// `TouchRowSwipeTests`), and the container installs the coordinator
     /// that keeps it to one row at a time; dropping either wiring brings the
     /// regression back. What the half does once wired is
-    /// `TrackpadSwipeTrackerTests` (iOS bundle), which cannot see the wiring:
-    /// SwiftUI attaches the recognizer only once an event arrives.
-    func testContainerPathCarriesTheTrackpadHalfOnIOS() throws {
+    /// `TrackpadSwipeTrackerTests` (iOS bundle) and `TouchRowSwipeTests`,
+    /// which cannot see the wiring: SwiftUI attaches the recognizer only once
+    /// an event arrives.
+    func testContainerPathCarriesTheDrawnHalf() throws {
         let code = Self.code(in: try Self.source(Self.rowSource))
         let container = try Self.slice(code, from: "private var containerRow: some View {")
         XCTAssertTrue(container.contains("withTrackpadSwipes("), "the 27 row drops its trackpad half")
         let wrapper = try Self.slice(code, from: "private func withTrackpadSwipes(")
         XCTAssertTrue(
-            wrapper.contains("#if os(iOS)"),
-            "the trackpad half is iOS-only; macOS reads the trackpad natively"
+            wrapper.contains("HostPlatform.current.drawsRowSwipeReveal"),
+            "the drawn half is no longer gated on the platforms that draw it (iOS for a trackpad, macOS for a finger)"
         )
         XCTAssertTrue(wrapper.contains(".trackpadSwipeReveal("), "the wrapper no longer installs the trackpad half")
         let coordinated = try Self.slice(code, from: "func coordinatedSwipeActionsContainer() -> some View {")
+        XCTAssertTrue(
+            coordinated.contains("HostPlatform.current.drawsRowSwipeReveal"),
+            "the coordinator is no longer installed where rows draw their own reveal"
+        )
         XCTAssertTrue(
             coordinated.contains(".trackpadSwipeCoordination()"),
             "the container no longer installs the trackpad coordinator"
@@ -109,6 +117,16 @@ final class SwipeActionContainerSourceScanTests: XCTestCase {
         for hook in ["TrackpadSwipeRecognizer(", "tracker.began(", "tracker.changed(", "tracker.ended("] {
             XCTAssertTrue(reveal.contains(hook), "the reveal no longer feeds \(hook) from the recognizer")
         }
+    }
+
+    /// The reveal attaches its input through `rowSwipeInput`, the one place
+    /// that decides how each platform's input meets the list. On macOS that
+    /// input runs beside the list's touch scrolling, which
+    /// `TouchRowSwipeTests` pins on the recognizer itself.
+    func testTheRevealAttachesItsInputThroughRowSwipeInput() throws {
+        let bridge = Self.code(in: try Self.source(Self.trackpadSource))
+        let reveal = try Self.slice(bridge, from: "private struct TrackpadSwipeReveal: ViewModifier {")
+        XCTAssertTrue(reveal.contains(".rowSwipeInput("), "the reveal attaches its input some other way")
     }
 
     /// The pre-27 path survives, both edges included: the floor is iOS 18 /

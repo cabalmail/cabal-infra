@@ -171,6 +171,14 @@ app that *builds* but cannot sign in:
   builds.
 - `ONLY_ACTIVE_ARCH=YES` keeps it quick.
 
+From the repo root, `make apple-sim` does the whole cold start: it finds or
+creates a simulator (default iPhone Duo, or `DEVICE="<device type>"`) on the
+newest iOS runtime that supports it, boots it, opens the simulator window, runs
+`build-sim.sh` against it, and launches the app. The simulator is named after
+its device type and reused on later runs, so its keychain (and your sign-in)
+persists. The wrapper is `scripts/run-sim.sh`; with no iOS runtime installed it
+stops and names the install command (`xcodebuild -downloadPlatform iOS`).
+
 ### Driving the installed app: `Tools/SimDrive`
 
 A small XCUITest command REPL. The host writes command files into an

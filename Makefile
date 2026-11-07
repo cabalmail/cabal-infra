@@ -95,7 +95,9 @@ promote:
 #   make apple-lint       # swiftlint --strict + the platform-conditionals check
 #   make apple-kit-test   # xcodebuild test for CabalmailKit
 #   make apple-test       # Kit + both app-layer test suites
-.PHONY: apple apple-lint apple-macos apple-ios apple-visionos apple-watchos apple-kit-test apple-app-test apple-ios-app-test apple-test
+#   make apple-sim        # build + launch on an iPhone Duo simulator
+#   make apple-sim DEVICE="iPhone 17 Pro"   # ... or any other device type
+.PHONY: apple-sim apple apple-lint apple-macos apple-ios apple-visionos apple-watchos apple-kit-test apple-app-test apple-ios-app-test apple-test
 
 apple:          ; ./scripts/build-apple.sh all
 apple-lint:     ; ./scripts/build-apple.sh lint
@@ -107,6 +109,11 @@ apple-kit-test: ; ./scripts/build-apple.sh kit-test
 apple-app-test: ; ./scripts/build-apple.sh app-test
 apple-ios-app-test: ; ./scripts/build-apple.sh ios-app-test
 apple-test:     ; ./scripts/build-apple.sh test
+
+# Not a build-apple.sh mode: it signs (build-sim.sh) where those builds strip
+# signing, and it boots and drives a simulator. See scripts/run-sim.sh.
+DEVICE ?= iPhone Duo
+apple-sim:      ; ./scripts/run-sim.sh "$(DEVICE)"
 
 # --- Brand logo assets -----------------------------------------------------
 # Regenerate every logo derivative (Apple icons, Android Play Store icon, React
