@@ -80,10 +80,10 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321) |
 | 1 | Message-list swipe actions under touch | Works on the device (#2346, 2026-11-07): one finger scrolls and swipes mail as feeds |
 | 2 | Long press on rows: context menu vs drag | Drag to folder works by trackpad (#2342); touch drag and touch menu out of scope, by decision |
-| 3 | Tap targets under 36 pt | Our glyph buttons released in 1.43.0 (#2323, #2324); the two system controls wait for Sidecar |
+| 3 | Tap targets under 36 pt | Done: our glyph buttons released in 1.43.0 (#2323, #2324); the mini switch takes a finger easily on the device |
 | 4 | Meaning carried only by a tooltip | No change needed |
-| 5 | Pull-to-refresh vs toolbar Reload | Not started; a trackpad check on any macOS 27 Mac answers the first question |
-| 6 | Composer web view under touch | Not started |
+| 5 | Pull-to-refresh vs toolbar Reload | Works on the device (2026-11-07); no change needed |
+| 6 | Composer web view under touch | Works on the device (2026-11-07), except fine-grained touch selection |
 | 7 | Article view back/forward swipe on Mac | Released in 1.43.0 (#2325), with the iOS history fix it needed (#2326) |
 | 8 | Things that should just work (spot checks) | Not started |
 | 9 | Device pass on the MacBook Pro | Not started (device expected ~2026-11-06) |
@@ -155,7 +155,7 @@ Fix only what fails. A likely fix, if the menu fires before a drag can start, is
 
 ## Item 3 — Tap targets under 36 pt
 
-**Status:** The composer toolbar (PR #2323) and the toast, unsubscribed-banner and Contacts-picker buttons (PR #2324) released in 1.43.0. The two system controls wait for Sidecar.
+**Status:** Done. The composer toolbar (PR #2323) and the toast, unsubscribed-banner and Contacts-picker buttons (PR #2324) released in 1.43.0. On the MacBook Pro (2026-11-07, 1.44.0), the Rules mini switch registers a finger's tap easily, so it stays as it is. No rule showed a "Retry" button to try; it is a standard `.bordered` button like the switch, and is left alone unless a finger is seen to miss it.
 
 **The composer toolbar, done first.** Measured through the accessibility API, its buttons took taps on their glyph alone, not the 24 × 24 pt face their frame draws: Bold was 8 × 10 pt and Heading 1 was 16 × 15, because the label had no `contentShape`. The bar is shared, so this was as small on iPhone and iPad as on a Mac. The fix gives each button the gap around its face as hit area (`RichTextToolbar.hitPadding`): the stack's 4 pt spacing and the bar's 4 pt vertical padding. Each target is now 28 × 32 pt, with the faces, their spacing and the bar's height unchanged. That is short of 36 pt (and of iOS's 44), which only spreading the bar out could reach; that would be a visible change, and it waits for a look on the device. `RichTextToolbarHitTargetTests` pins the target size (it fails on the old toolbar), that neighbours don't overlap, and that the spacing and height are unchanged.
 
@@ -188,7 +188,10 @@ The reader's link status pill (`HTMLBodyView.swift`, `hoveredHref`) is hover-onl
 
 ## Item 5 — Pull-to-refresh vs toolbar Reload
 
-**Status:** Not started.
+**Status:** Works on the device; no change needed (2026-11-07, 1.44.0 on the MacBook Pro). On macOS 27, `.refreshable` drives the system's pull-to-refresh, by a two-finger trackpad overscroll and by a finger:
+- In mail and feeds, a pull refreshes the list. The pull's spinner above the list and the toolbar's `RefreshActivityIcon` both show while it runs. That is intended: the toolbar spinner reports that a refresh is running, whatever started it, and the pull's spinner is the system's answer to the pull.
+- A second pull while a refresh runs starts no second one, by trackpad or finger, judging by the UI.
+- The folder list and the address list behave the same. The feed sidebar can't be pulled on its own on macOS, where it shares the sidebar list with the mail folders; that list's pull is the folder list's.
 
 macOS 27 adds pull-to-refresh to `NSScrollView` (`NSRefreshController`), and Apple's Mail, Safari and Calendar use it. We attach `.refreshable` to the message list (`MessageListView.swift:292`), the folder list, the feed sidebar and feed items, the address list, Settings and Users. On macOS before 27 that modifier did nothing visible, and the toolbar Reload button is the Mac's refresh.
 
@@ -198,7 +201,10 @@ macOS 27 adds pull-to-refresh to `NSScrollView` (`NSRefreshController`), and App
 
 ## Item 6 — Composer web view under touch
 
-**Status:** Not started.
+**Status:** Works on the device, except fine-grained selection (2026-11-07, 1.44.0 on the MacBook Pro):
+- **Selection, partly.** A double-tap selects a word and a triple-tap a paragraph, but a finger can't set a selection's start and end precisely: there are no handles to drag. Once text is selected, touch and hold opens the editing menu. Our page registers no mouse, pointer or touch listeners, so selection is WebKit's own; whether a `contenteditable` page in Safari on the same Mac offers handles would show whether this is ours to fix at all. Until then, nothing is planned.
+- **The toolbar.** Tapping Bold with text selected bolds it, and the selection stays.
+- **Drops.** Dragging an image within the body places it inline, and a file dropped onto the body becomes an attachment, by trackpad and by finger.
 
 The composer is a `WKWebView` running our own editor page (`RichTextEditorController`, `editor-bridge.js`) with JavaScript on. `editor-bridge.js` registers paste and drag/drop listeners (`dragstart`, `dragend`, `dragover`, `drop`) but no mouse, pointer or touch listeners, so caret placement and selection come from WebKit's default handling. Whether a touch on macOS WebKit fires touch events, pointer events or emulated mouse events to page script is not documented anywhere I could find.
 
@@ -267,4 +273,4 @@ Record what you find here, in each item's **Status:** line.
 
 ## Session brief
 
-> Read `docs/1.x/touch-on-mac-plan.md` and `docs/1.x/post-wave-3/00-working-agreements.md`. Items 0, 3 (our glyph buttons), 4 and 7 are done and released in 1.43.0; what is left needs touch: items 1, 2, 6 and 8, item 3's two system controls, and item 5, whose first question a trackpad on macOS 27 can answer. With an iPad on iPadOS 27 connected over Sidecar to a Mac on macOS 27, or the MacBook Pro itself, run them in order, then item 9, and record each result in its **Status:** line in this file. Item 1 is the one most likely to need code; start there. Each item that needs code gets its own PR to `stage`, one Apple PR in CI at a time, each with an `Apple:` changelog fragment and a behavioural test where the behaviour can be driven in-process. The test tools this plan's work added: `HitTargetOracle` (a button's hit area from its accessibility frame, and real in-process clicks), `HitPaddedButton` (a glyph button's hit area grown without moving its row), and `ArticleHistoryRestoreTests`' URL scheme handler (a web view with real history and no network). Add no `#if os(...)` outside `Shell/` and `Platform/`; branch on input (`GestureInputKinds`, `allowedTouchTypes`), never on "is a touch Mac". On the iPhone, item 7's open question (a link out of the reader switching the linked page to reader view) wants a look too.
+> Read `docs/1.x/touch-on-mac-plan.md` and `docs/1.x/post-wave-3/00-working-agreements.md`. Items 0 to 7 are done or checked on the MacBook Pro (see each **Status:** line); what is left is item 8's spot checks and item 9's device-only checks, both by finger. With an iPad on iPadOS 27 connected over Sidecar to a Mac on macOS 27, or the MacBook Pro itself, run them in order, then item 9, and record each result in its **Status:** line in this file. Item 1 is the one most likely to need code; start there. Each item that needs code gets its own PR to `stage`, one Apple PR in CI at a time, each with an `Apple:` changelog fragment and a behavioural test where the behaviour can be driven in-process. The test tools this plan's work added: `HitTargetOracle` (a button's hit area from its accessibility frame, and real in-process clicks), `HitPaddedButton` (a glyph button's hit area grown without moving its row), and `ArticleHistoryRestoreTests`' URL scheme handler (a web view with real history and no network). Add no `#if os(...)` outside `Shell/` and `Platform/`; branch on input (`GestureInputKinds`, `allowedTouchTypes`), never on "is a touch Mac". On the iPhone, item 7's open question (a link out of the reader switching the linked page to reader view) wants a look too.
