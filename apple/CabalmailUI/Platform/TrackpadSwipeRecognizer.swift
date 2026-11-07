@@ -1,9 +1,7 @@
 import SwiftUI
-#if os(visionOS)
-#elseif canImport(UIKit)
+import CabalmailKit
+#if os(iOS)
 import UIKit
-#elseif canImport(AppKit)
-import AppKit
 #endif
 
 // The input behind a message row's drawn swipe reveal (`TrackpadSwipe.swift`):
@@ -14,7 +12,7 @@ import AppKit
 //   by touches, and UIKit delivers a trackpad swipe as scroll input.
 // - macOS: a finger on a touch display (the MacBook Pro with PROLED XDR
 //   Display). The container's reveal is driven by the trackpad's scroll
-//   events, and AppKit hands a direct touch only to gesture recognizers.
+//   events and never answers a finger.
 //
 // So the name says trackpad, and on the Mac it is a finger: one type on both
 // platforms keeps the reveal platform-neutral. visionOS draws no reveal, and
@@ -110,79 +108,50 @@ struct TrackpadSwipeRecognizer: UIGestureRecognizerRepresentable {
     }
 }
 #elseif canImport(AppKit)
-/// A pan that sees a finger on the display and nothing else.
+/// A drag that sees a finger on the display and nothing else.
 ///
-/// `allowedTouchTypes` is `.direct` and `buttonMask` is 0, so a mouse drag or
-/// a trackpad click-drag never starts it -- the row's click, its drag onto a
-/// folder, and the container's own trackpad swipe keep the pointer to
-/// themselves. A trackpad's two-finger swipe is scroll input, which a pan
-/// never sees. This is the pattern Apple's Tech Talk "Bring Touch to your Mac
-/// app" gives for a touch-only recognizer.
-@available(macOS 26.0, *)
-struct TrackpadSwipeRecognizer: NSGestureRecognizerRepresentable {
+/// A SwiftUI `DragGesture` limited to `.directTouch` (macOS 27): a mouse,
+/// a trackpad click-drag, the row's drag onto a folder and the container's
+/// trackpad swipe never start it. The first version was an AppKit
+/// `NSPanGestureRecognizer` bridged in through `NSGestureRecognizerRepresentable`
+/// (`allowedTouchTypes = .direct`, `buttonMask = 0`), and on the device a
+/// finger revealed nothing with it. One likely reason is that its delegate's
+/// horizontal check (`TrackpadSwipePolicy.beginsSwipe`) was asked at
+/// touch-down, with no movement yet, and refused every touch. SwiftUI's own
+/// gestures take touch as AppKit's controls do, and need no delegate.
+///
+/// The drag keeps no state, because the reveal builds it again on every
+/// render: each change that reads as a swipe (`beginsSwipe`, on the movement
+/// so far) reports `onBegan` and the translation, and the tracker ignores
+/// every `began` after the first and an `ended` that none opened. So a drag
+/// that stays vertical scrolls the list and never touches the row. Each drag
+/// that ends writes one `RowSwipe` line to Settings → Debug Log, which shows
+/// whether a finger reaches the row at all.
+@available(macOS 27.0, *)
+struct TrackpadSwipeRecognizer: Gesture {
     let onBegan: () -> Void
     let onChanged: (CGFloat) -> Void
     let onEnded: (_ translation: CGFloat, _ velocity: CGFloat) -> Void
     let onCancelled: () -> Void
 
-    /// The recognizer as installed, minus its delegate. Separate so tests can
-    /// read the configuration that decides which input it sees.
-    static func configuredRecognizer() -> NSPanGestureRecognizer {
-        let pan = NSPanGestureRecognizer()
-        pan.allowedTouchTypes = .direct
-        pan.buttonMask = 0
-        return pan
-    }
+    /// The gesture's input: a finger, and nothing else.
+    static let inputKinds: GestureInputKinds = .directTouch
 
-    func makeNSGestureRecognizer(context: Context) -> NSPanGestureRecognizer {
-        let pan = Self.configuredRecognizer()
-        pan.delegate = context.coordinator
-        return pan
-    }
-
-    func handleNSGestureRecognizerAction(_ recognizer: NSPanGestureRecognizer, context: Context) {
-        let translation = recognizer.translation(in: recognizer.view).x
-        switch recognizer.state {
-        case .began:
-            onBegan()
-            onChanged(translation)
-        case .changed:
-            onChanged(translation)
-        case .ended:
-            onEnded(translation, recognizer.velocity(in: recognizer.view).x)
-        case .cancelled, .failed:
-            onCancelled()
-        default:
-            break
-        }
-    }
-
-    func makeCoordinator(converter: CoordinateSpaceConverter) -> Delegate {
-        Delegate()
-    }
-
-    final class Delegate: NSObject, NSGestureRecognizerDelegate {
-        /// Horizontal-dominant only, as on iPadOS: a finger scrolling the list
-        /// that strays sideways stays with the list.
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: NSGestureRecognizer) -> Bool {
-            guard let pan = gestureRecognizer as? NSPanGestureRecognizer else { return false }
-            let translation = pan.translation(in: pan.view)
-            let velocity = pan.velocity(in: pan.view)
-            return TrackpadSwipePolicy.beginsSwipe(
-                translation: CGSize(width: translation.x, height: translation.y),
-                velocity: CGSize(width: velocity.x, height: velocity.y)
-            )
-        }
-
-        /// The list's scroll view scrolls under a finger too, and would start
-        /// on a swipe's slight vertical wobble. It waits for this pan to
-        /// decide, which it does on the first movement.
-        func gestureRecognizer(
-            _ gestureRecognizer: NSGestureRecognizer,
-            shouldBeRequiredToFailBy other: NSGestureRecognizer
-        ) -> Bool {
-            other.view is NSScrollView
-        }
+    var body: some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .local, inputKinds: Self.inputKinds)
+            .onChanged { value in
+                guard TrackpadSwipePolicy.beginsSwipe(translation: value.translation, velocity: value.velocity)
+                else { return }
+                onBegan()
+                onChanged(value.translation.width)
+            }
+            .onEnded { value in
+                let swipe = TrackpadSwipePolicy.beginsSwipe(translation: value.translation, velocity: value.velocity)
+                CabalmailLog.info("RowSwipe", "Finger drag on a row ended at "
+                    + "(\(Int(value.translation.width)), \(Int(value.translation.height))): "
+                    + (swipe ? "a swipe" : "not a swipe"))
+                onEnded(value.translation.width, value.velocity.width)
+            }
     }
 }
 #endif
