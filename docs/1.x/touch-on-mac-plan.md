@@ -78,7 +78,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 | # | Item | Status |
 |---|---|---|
 | 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321) |
-| 1 | Message-list swipe actions under touch | #2345 swipes but a finger still doesn't scroll mail; fourth fix in review (PR pending) |
+| 1 | Message-list swipe actions under touch | #2345 swipes but a finger still doesn't scroll mail; fourth fix in review, PR #2346 |
 | 2 | Long press on rows: context menu vs drag | Drag to folder works by trackpad (#2342); touch drag and touch menu out of scope, by decision |
 | 3 | Tap targets under 36 pt | Our glyph buttons released in 1.43.0 (#2323, #2324); the two system controls wait for Sidecar |
 | 4 | Meaning carried only by a tooltip | No change needed |
@@ -100,7 +100,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 ## Item 1 — Message-list swipe actions under touch
 
-**Status:** Failed on the device (2026-11-06). Three fixes since: #2339 (an AppKit recognizer that never fired), #2341 (a SwiftUI drag: swiped after a hold, stopped the mail list scrolling) and #2345 (the drag beside the scrolling, with cancels handled: swipes at once, but a finger still doesn't scroll mail; 2026-11-07). A fourth, the AppKit recognizer again with its veto removed, is in review (PR pending).
+**Status:** Failed on the device (2026-11-06). Three fixes since: #2339 (an AppKit recognizer that never fired), #2341 (a SwiftUI drag: swiped after a hold, stopped the mail list scrolling) and #2345 (the drag beside the scrolling, with cancels handled: swipes at once, but a finger still doesn't scroll mail; 2026-11-07). A fourth, the AppKit recognizer again with its veto removed, is in review (PR #2346).
 
 **What the device showed.** On the MacBook Pro, a finger's swipe on a message row revealed nothing, leading or trailing, while feed rows (plain `List` rows) swiped under a finger and a two-finger trackpad swipe on a message row worked as on any Mac. So the macOS container's reveal answers the trackpad's scroll events and nothing else, the second of the two outcomes below.
 
