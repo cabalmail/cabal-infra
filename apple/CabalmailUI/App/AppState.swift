@@ -96,6 +96,9 @@ public final class AppState {
     var pendingMoveRequest: MessageMoveRequest?
     // Internal so `requestMove` in the drag-and-drop extension below can bump it.
     var moveRequestTick = 0
+    /// The message drag this app lifted last, for a folder drop that gets no
+    /// payload (`moveDropped`). Nothing draws from it, so it is not observed.
+    @ObservationIgnored var liftedMessageDrag: LiftedMessageDrag?
 
     /// The mail state the folder list, message list, reader and composer
     /// share (`MailSessionStore`): the folder counts, the shields that keep
@@ -283,6 +286,41 @@ extension AppState {
             sourceList: sourceList,
             tick: moveRequestTick
         )
+    }
+
+    /// A message list lifted a drag of `items` (`MessageListView.dragPayload`).
+    func noteLiftedDrag(items: [MessageDragItem], from sourceList: UUID, at time: Date = .now) {
+        liftedMessageDrag = LiftedMessageDrag(items: items, sourceList: sourceList, liftedAt: time)
+    }
+
+    /// A folder took a drop of messages: post the move, from the payload
+    /// SwiftUI decoded, or else from the drag this app lifted moments before.
+    ///
+    /// The fallback is the single-message drag on macOS. That drag offers the
+    /// message's `.eml` ahead of the move reference (`MessageDragPayload`), so
+    /// it can land as a file on the compose body or in Finder, and a folder's
+    /// drop then decodes no payload from it: the folder highlights, the drop
+    /// is accepted, and nothing moves. A several-message drag offers only the
+    /// move reference and decodes. The lifted drag is used once, and only
+    /// while it is fresh, so a drag that was dropped elsewhere or abandoned
+    /// can't move messages later.
+    func moveDropped(
+        _ items: [MessageDragItem],
+        from sourceList: UUID?,
+        to destination: String,
+        at time: Date = .now
+    ) -> MessageDropOutcome {
+        let lifted = liftedMessageDrag
+        liftedMessageDrag = nil
+        if !items.isEmpty {
+            requestMove(items: items, to: destination, from: sourceList)
+            return .decoded
+        }
+        guard let lifted, time.timeIntervalSince(lifted.liftedAt) < LiftedMessageDrag.lifetime else {
+            return .nothing
+        }
+        requestMove(items: lifted.items, to: destination, from: lifted.sourceList)
+        return .lifted
     }
 }
 
