@@ -115,8 +115,10 @@ struct MessageDragPayload: Codable, Transferable {
         // that takes any data as a file takes the first data type it finds.
         // While the `.eml` came second as the abstract `.emailMessage`, the
         // compose editor's page (WebKit) took the move reference instead.
-        // The sidebar's folder drop decodes the move reference wherever it
-        // sits.
+        // On macOS a sidebar folder's drop then decodes no payload from a
+        // single-message drag (the multi-message one, with no `.eml`,
+        // decodes), so the folder moves the drag this app lifted instead
+        // (`AppState.moveDropped`).
         DataRepresentation(exportedContentType: .emlFile) { payload in
             guard let rawSource = payload.rawSource else {
                 throw CocoaError(.fileNoSuchFile)
