@@ -155,3 +155,49 @@ struct TrackpadSwipeRecognizer: Gesture {
     }
 }
 #endif
+
+extension View {
+    /// Attaches a row's swipe input (`TrackpadSwipeReveal`).
+    ///
+    /// On macOS beside the list's own scrolling, not ahead of it. A finger on
+    /// the touch display both scrolls the list and swipes a row, and a drag
+    /// attached with `.gesture` claimed every finger that moved on a row,
+    /// vertical ones included, so the mail list stopped scrolling under a
+    /// finger and a swipe only took after a hold (on the device, 2026-11-07).
+    /// Alongside, a vertical drag scrolls and the swipe ignores it
+    /// (`TrackpadSwipePolicy.beginsSwipe`), and a horizontal one reveals.
+    /// iPadOS keeps `.gesture`: its input is the trackpad, which the scroll
+    /// view waits on (`Delegate`).
+    #if os(macOS)
+    @available(macOS 27.0, *)
+    func rowSwipeInput(_ input: TrackpadSwipeRecognizer) -> some View {
+        modifier(TouchSwipeAttachment(input: input))
+    }
+    #else
+    func rowSwipeInput(_ input: TrackpadSwipeRecognizer) -> some View {
+        gesture(input)
+    }
+    #endif
+}
+
+#if os(macOS)
+/// The Mac's touch drag, beside the list's scrolling (see `rowSwipeInput`),
+/// and the cancel SwiftUI reports no other way. A cancelled drag never calls
+/// `onEnded`; its `@GestureState` resets either way, so a reset is passed on
+/// as `onCancelled` -- one turn later, so a clean end has already settled the
+/// swipe and the tracker ignores it (`TrackpadSwipeTracker.cancel`).
+@available(macOS 27.0, *)
+private struct TouchSwipeAttachment: ViewModifier {
+    let input: TrackpadSwipeRecognizer
+    @GestureState private var touching = false
+
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(input.updating($touching) { _, touching, _ in touching = true })
+            .onChange(of: touching) { _, touching in
+                guard !touching else { return }
+                Task { @MainActor in input.onCancelled() }
+            }
+    }
+}
+#endif

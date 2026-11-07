@@ -2,5 +2,5 @@
   touchscreen MacBook Pro a finger's swipe on a message row revealed
   nothing, while feed rows and a trackpad's two-finger swipe worked.
   Message rows now answer a finger with the same reveal the iPad draws for
-  a trackpad: the edge's action slides out, runs on a tap, and a long swipe
-  runs it outright. A vertical drag still scrolls the list.
+  a trackpad: the edge's action slides out at once, runs on a tap, and a
+  long swipe runs it outright, while a vertical drag scrolls the list.
