@@ -4,21 +4,21 @@ import XCTest
 @testable import CabalmailUI
 
 /// The Mac's message-text size (`AppTextSize`): the ramp, the steps the
-/// View menu's ⌘+ / ⌘− walk, and the path from the stored value through a
-/// scene root (`appTextSize()`) to the scale the readers and composer draw
-/// at (`contentTextScale`) and the plain-text body's font.
+/// View menu's ⌘+ / ⌘− walk, the store that keeps the size, and the path
+/// from the store through a scene root (`appTextSize()`) to the scale the
+/// readers and composer draw at (`contentTextScale`) and the plain-text
+/// body's font.
 @MainActor
 final class AppTextSizeTests: XCTestCase {
-    private let key = AppTextSize.contentDefaultsKey
-    private var savedValue: Any?
+    private var savedSize: AppTextSize = .medium
 
     override func setUp() async throws {
         try await super.setUp()
-        savedValue = UserDefaults.standard.object(forKey: key)
+        savedSize = AppTextSizeStore.shared.content
     }
 
     override func tearDown() async throws {
-        UserDefaults.standard.set(savedValue, forKey: key)
+        AppTextSizeStore.shared.content = savedSize
         try await super.tearDown()
     }
 
@@ -38,6 +38,24 @@ final class AppTextSizeTests: XCTestCase {
         XCTAssertEqual(AppTextSize.allCases.map(\.rawValue),
                        ["x_small", "small", "medium", "large", "x_large"])
         XCTAssertEqual(AppTextSize.contentDefaultsKey, "cabalmail.display.content_text_size")
+    }
+
+    /// The store reads what an earlier launch saved, saves a change, and
+    /// falls back to `.medium` for a missing or unknown value.
+    func testStoreSavesAndReadsBack() throws {
+        let suite = "AppTextSizeTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let key = AppTextSize.contentDefaultsKey
+
+        XCTAssertEqual(AppTextSizeStore(defaults: defaults).content, .medium)
+        let store = AppTextSizeStore(defaults: defaults)
+        store.content = .xLarge
+        XCTAssertEqual(defaults.string(forKey: key), "x_large")
+        XCTAssertEqual(AppTextSizeStore(defaults: defaults).content, .xLarge)
+
+        defaults.set("enormous", forKey: key)
+        XCTAssertEqual(AppTextSizeStore(defaults: defaults).content, .medium)
     }
 
     /// ⌘+ and ⌘− step one place along the ramp and stop at its ends.
@@ -82,11 +100,11 @@ final class AppTextSizeTests: XCTestCase {
     }
 
     /// A scene root hands its views the stored size, and a change to the
-    /// stored value (what the View menu and Settings write) reaches them
-    /// without the scene being rebuilt. Without `appTextSize()` the probe
-    /// reads the `.medium` default, which the negative control pins.
+    /// store (what the View menu and Settings write) reaches them without
+    /// the scene being rebuilt. Without `appTextSize()` the probe reads the
+    /// `.medium` default, which the negative control pins.
     func testSceneRootDeliversTheStoredSize() async throws {
-        UserDefaults.standard.set(AppTextSize.large.rawValue, forKey: key)
+        AppTextSizeStore.shared.content = .large
         let rooted = SizeBox()
         let bare = SizeBox()
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
@@ -100,7 +118,7 @@ final class AppTextSizeTests: XCTestCase {
         try await waitFor { rooted.size == .large }
         XCTAssertEqual(bare.size, .medium, "without the root modifier the default applies")
 
-        UserDefaults.standard.set(AppTextSize.xSmall.rawValue, forKey: key)
+        AppTextSizeStore.shared.content = .xSmall
         try await waitFor { rooted.size == .xSmall }
         XCTAssertEqual(bare.size, .medium)
     }

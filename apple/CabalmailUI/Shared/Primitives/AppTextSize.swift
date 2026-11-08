@@ -1,3 +1,4 @@
+import Observation
 import SwiftUI
 
 /// One step of the app's own text-size ramp, for the platform that has no
@@ -60,8 +61,40 @@ public enum AppTextSize: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// The stored text sizes, shared by the scene roots, the Settings row and
+/// the View menu's commands.
+///
+/// An observable store rather than `@AppStorage` in each of them: an
+/// `@AppStorage` property in a `Commands` body sent SwiftUI into an endless
+/// update loop when the app hosted the test bundle (the runner then "hung
+/// before establishing connection"). Here a view or command re-evaluates
+/// only when a size it read actually changes, and `UserDefaults` is
+/// written only then.
+@Observable
+@MainActor
+public final class AppTextSizeStore {
+    /// The app's store, over `UserDefaults.standard`.
+    public static let shared = AppTextSizeStore()
+
+    @ObservationIgnored private let defaults: UserDefaults
+
+    /// The message-text size (`AppTextSize.contentDefaultsKey`).
+    public var content: AppTextSize {
+        didSet {
+            guard content != oldValue else { return }
+            defaults.set(content.rawValue, forKey: AppTextSize.contentDefaultsKey)
+        }
+    }
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        content = defaults.string(forKey: AppTextSize.contentDefaultsKey)
+            .flatMap(AppTextSize.init(rawValue:)) ?? .medium
+    }
+}
+
 extension EnvironmentValues {
-    /// The message-text size the scene root read from `UserDefaults`
+    /// The message-text size the scene root read from the store
     /// (`appTextSize()`). `.medium` wherever no root sets it.
     @Entry var contentTextSize: AppTextSize = .medium
 
@@ -75,7 +108,7 @@ extension EnvironmentValues {
 }
 
 public extension View {
-    /// Hands this scene the text sizes stored in `UserDefaults`. A scene is
+    /// Hands this scene the stored text sizes (`AppTextSizeStore`). A scene is
     /// its own environment root, so every scene root applies it, as it does
     /// `themedAppearance(_:)`.
     func appTextSize() -> some View {
@@ -84,9 +117,7 @@ public extension View {
 }
 
 private struct AppTextSizeRoot: ViewModifier {
-    @AppStorage(AppTextSize.contentDefaultsKey) private var contentSize: AppTextSize = .medium
-
     func body(content: Content) -> some View {
-        content.environment(\.contentTextSize, contentSize)
+        content.environment(\.contentTextSize, AppTextSizeStore.shared.content)
     }
 }

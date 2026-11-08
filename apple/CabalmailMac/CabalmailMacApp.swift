@@ -80,7 +80,7 @@ struct CabalmailMacApp: App {
         .handlesExternalEvents(matching: [])
         .commands {
             CabalmailCommands(appState: appState)
-            ContentTextSizeCommands()
+            ContentTextSizeCommands(store: .shared)
         }
         // The app's own phase, once for the app however many windows are
         // open: flush on the way out, reconcile and refresh on the way back.

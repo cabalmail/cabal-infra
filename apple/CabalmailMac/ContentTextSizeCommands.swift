@@ -7,30 +7,31 @@ import CabalmailUI
 /// Safari use for their content; the rest of the app's text has no chords.
 ///
 /// Menu-bar commands rather than view shortcuts, so they work whichever
-/// window or pane has focus. They write the stored size, which every
+/// window or pane has focus. They write the shared store, which every
 /// scene root reads (`appTextSize()`), so every open reader and composer
-/// follows at once.
+/// follows at once. The store is passed in rather than read through
+/// `@AppStorage` here; see `AppTextSizeStore` for why.
 struct ContentTextSizeCommands: Commands {
-    @AppStorage(AppTextSize.contentDefaultsKey) private var size: AppTextSize = .medium
+    let store: AppTextSizeStore
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
             Divider()
             Button("Larger Message Text") {
-                if let larger = size.larger { size = larger }
+                if let larger = store.content.larger { store.content = larger }
             }
             .keyboardShortcut("+", modifiers: .command)
-            .disabled(size.larger == nil)
+            .disabled(store.content.larger == nil)
             Button("Smaller Message Text") {
-                if let smaller = size.smaller { size = smaller }
+                if let smaller = store.content.smaller { store.content = smaller }
             }
             .keyboardShortcut("-", modifiers: .command)
-            .disabled(size.smaller == nil)
+            .disabled(store.content.smaller == nil)
             Button("Default Message Text Size") {
-                size = .medium
+                store.content = .medium
             }
             .keyboardShortcut("0", modifiers: .command)
-            .disabled(size == .medium)
+            .disabled(store.content == .medium)
         }
     }
 }

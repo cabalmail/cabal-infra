@@ -280,11 +280,11 @@ private struct ReadingSettingsView: View {
 
 private struct AppearanceSettingsView: View {
     @Environment(Preferences.self) private var preferences
-    /// Device-wide, not a synced preference (`AppTextSize`).
-    @AppStorage(AppTextSize.contentDefaultsKey) private var contentTextSize: AppTextSize = .medium
 
     var body: some View {
         @Bindable var preferences = preferences
+        // Device-wide, not a synced preference (`AppTextSize`).
+        @Bindable var textSizes = AppTextSizeStore.shared
         SettingsForm(title: "Appearance") {
             Section {
                 // The row label is the only thing naming this control on iOS
@@ -305,7 +305,7 @@ private struct AppearanceSettingsView: View {
             }
             if HostPlatform.current.offersAppTextSize {
                 Section {
-                    Picker("Message text", selection: $contentTextSize) {
+                    Picker("Message text", selection: $textSizes.content) {
                         ForEach(AppTextSize.allCases) { size in
                             Text(size.title).tag(size)
                         }

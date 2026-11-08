@@ -1992,13 +1992,16 @@ text), feed articles in reader styling, and the composer. The publisher's
 own page in the article view is left at the publisher's sizes. Native
 chrome (menus, toolbars, alerts) is out of reach and out of scope.
 
-- **Storage.** Device-wide `UserDefaults`
-  (`AppTextSize.contentDefaultsKey`), not `Preferences`: the right size
-  depends on the display, not the account, so it is neither
-  account-scoped nor synced.
+- **Storage.** `AppTextSizeStore.shared`, an `@Observable` store over
+  device-wide `UserDefaults` (`AppTextSize.contentDefaultsKey`), not
+  `Preferences`: the right size depends on the display, not the account,
+  so it is neither account-scoped nor synced. Views and commands read the
+  store, never `@AppStorage`: an `@AppStorage` property in the View
+  menu's `Commands` looped SwiftUI's update cycle forever when the app
+  hosted the test bundle.
 - **Delivery.** Every scene root applies `.appTextSize()` beside
   `.themedAppearance(_:)` (a scene is its own environment root), which
-  reads the stored value into `\.contentTextSize`.
+  reads the store into `\.contentTextSize`.
   `\.contentTextScale` is the Dynamic Type body ratio times that step's
   scale, and is what the HTML reader, the article reader and the
   composer hand to `ReaderTextScale` / `setTextScale`. The plain-text
