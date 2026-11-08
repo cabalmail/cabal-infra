@@ -130,8 +130,10 @@ private struct RulesListView: View {
                 }
                 .disabled(model.rules.count >= RulesValidator.maxRules)
             } footer: {
-                Text(RulesView.listFooter(on: .current))
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text(RulesView.listFooter(on: .current))
+                        .sectionFooter()
+                }
             }
         }
         .groupedFormStyleOnMac()

@@ -37,10 +37,14 @@ struct AcknowledgementsView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 } header: {
-                    Text(component.name)
+                    FormSectionHeader {
+                        Text(component.name)
+                    }
                 } footer: {
-                    Text(component.summary)
-                        .sectionFooter()
+                    FormSectionFooter {
+                        Text(component.summary)
+                            .sectionFooter()
+                    }
                 }
             }
         }

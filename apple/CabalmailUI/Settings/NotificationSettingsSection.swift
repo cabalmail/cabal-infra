@@ -96,18 +96,20 @@ struct NotificationSettingsSection: View {
             Toggle("Show in menu bar", isOn: $showInMenuBar)
             #endif
         } footer: {
-            // Always present (content swaps, structure doesn't) so the
-            // sections below never reflow when the permission state changes.
-            #if os(macOS)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(footerText)
-                Text(residencyFooterText)
-            }
-            .sectionFooter()
-            #else
-            Text(footerText)
+            FormSectionFooter {
+                // Always present (content swaps, structure doesn't) so the
+                // sections below never reflow when the permission state changes.
+                #if os(macOS)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(footerText)
+                    Text(residencyFooterText)
+                }
                 .sectionFooter()
-            #endif
+                #else
+                Text(footerText)
+                    .sectionFooter()
+                #endif
+            }
         }
     }
 

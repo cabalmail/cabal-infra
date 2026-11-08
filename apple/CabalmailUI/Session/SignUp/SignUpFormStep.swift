@@ -26,9 +26,13 @@ struct SignUpFormStep: View {
                     .submitLabel(.next)
                     .onSubmit { focusedField = model.smsEnabled ? .phone : .email }
             } header: {
-                Text("New account on \(model.controlDomain)")
+                FormSectionHeader {
+                    Text("New account on \(model.controlDomain)")
+                }
             } footer: {
-                Text("3 to 32 lowercase letters, numbers and hyphens, with at least one letter.")
+                FormSectionFooter {
+                    Text("3 to 32 lowercase letters, numbers and hyphens, with at least one letter.")
+                }
             }
             contactSection
             if model.invitationRequired {
@@ -41,7 +45,9 @@ struct SignUpFormStep: View {
                         .submitLabel(.next)
                         .onSubmit { focusedField = .password }
                 } footer: {
-                    Text("Sign-up is by invitation. Enter the code you were given.")
+                    FormSectionFooter {
+                        Text("Sign-up is by invitation. Enter the code you were given.")
+                    }
                 }
             }
             passwordSection
@@ -66,12 +72,14 @@ struct SignUpFormStep: View {
                     secondary: [.backToSignIn(model, onFinish)]
                 )
             } footer: {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let missing = model.missingRequirement {
-                        Text(missing)
-                            .accessibilityIdentifier("signup.missing")
+                FormSectionFooter {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let missing = model.missingRequirement {
+                            Text(missing)
+                                .accessibilityIdentifier("signup.missing")
+                        }
+                        Text(termsText)
                     }
-                    Text(termsText)
                 }
             }
         }
@@ -99,13 +107,17 @@ struct SignUpFormStep: View {
                 .submitLabel(.next)
                 .onSubmit { focusedField = model.invitationRequired ? .invitation : .password }
         } header: {
-            Text("Verification and recovery")
+            FormSectionHeader {
+                Text("Verification and recovery")
+            }
         } footer: {
-            Text(model.smsEnabled
-                ? "We text a code to your phone to verify the account; include the country code, "
-                    + "starting with +. A recovery email outside Cabalmail is optional, and gets you "
-                    + "back in if you lose your phone."
-                : "Use an address outside Cabalmail. It's how you get back in if you forget your password.")
+            FormSectionFooter {
+                Text(model.smsEnabled
+                    ? "We text a code to your phone to verify the account; include the country code, "
+                        + "starting with +. A recovery email outside Cabalmail is optional, and gets you "
+                        + "back in if you lose your phone."
+                    : "Use an address outside Cabalmail. It's how you get back in if you forget your password.")
+            }
         }
     }
 
@@ -124,8 +136,10 @@ struct SignUpFormStep: View {
                 .submitLabel(.go)
                 .onSubmit(submit)
         } footer: {
-            Text("At least \(SignUpModel.minimumPasswordLength) characters, mixing upper- and lowercase "
-                + "letters, numbers and symbols.")
+            FormSectionFooter {
+                Text("At least \(SignUpModel.minimumPasswordLength) characters, mixing upper- and lowercase "
+                    + "letters, numbers and symbols.")
+            }
         }
     }
 

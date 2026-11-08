@@ -26,9 +26,13 @@ struct SignUpCodeStep: View {
                     .submitLabel(.go)
                     .onSubmit { Task { await model.confirm() } }
             } header: {
-                Text("Verify your account")
+                FormSectionHeader {
+                    Text("Verify your account")
+                }
             } footer: {
-                Text("If you leave now, an administrator can still confirm the account.")
+                FormSectionFooter {
+                    Text("If you leave now, an administrator can still confirm the account.")
+                }
             }
             if let notice = model.notice {
                 Section {

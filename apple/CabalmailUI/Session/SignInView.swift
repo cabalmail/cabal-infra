@@ -69,7 +69,7 @@ struct SignInView: View {
 
     private var credentialForm: some View {
         Form {
-                Section("Server") {
+                Section(formHeader: "Server") {
                     // On macOS, the grouped form shows the title as the row's
                     // leading label, so the example moves into the prompt;
                     // on iOS only the placeholder is visible, so it keeps
@@ -93,7 +93,7 @@ struct SignInView: View {
                         .submitLabel(.next)
                         .onSubmit { focusedField = .username }
                 }
-                Section("Account") {
+                Section(formHeader: "Account") {
                     TextField("Username", text: $username)
                         .textContentType(.username)
                         .autocorrectionDisabled()

@@ -95,6 +95,24 @@ custom_rules:
     message: "Use appFont(_:) so the text follows the Mac's interface text size"
     severity: warning
 
+  # A form's section header scales with the interface text size only if it
+  # is drawn by `FormSectionHeader`; `Section("Title")` builds a header that
+  # can't be, so the scene root's default font sets it in plain body text
+  # at any size but Medium. `Section(formHeader: "Title")` is the same
+  # section with a scaled header. A menu's sections are the system's and
+  # take a reasoned disable.
+  string_titled_section:
+    name: "String-titled Section"
+    regex: '\bSection\(\s*"'
+    included:
+      - "CabalmailUI/"
+      - "CabalmailMac/"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "Use Section(formHeader:) so the header follows the interface text size"
+    severity: warning
+
   # Page JavaScript stays off in a web view that shows HTML somebody else
   # wrote (the mail reader, the feed article in reader mode). Turning it on
   # anywhere in shipped code takes a reasoned

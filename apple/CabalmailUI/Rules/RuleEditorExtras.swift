@@ -27,14 +27,18 @@ struct RuleExtrasSection: View {
             }
             .disabled(rule.action == .delete)
         } header: {
-            Text("Also")
+            FormSectionHeader {
+                Text("Also")
+            }
         } footer: {
-            if rule.action == .delete {
-                Text("These don't apply when the rule deletes the message.")
-                    .sectionFooter()
-            } else if rule.reply {
-                Text("Replies come from the address the message was sent to, at most once a week per sender.")
-                    .sectionFooter()
+            FormSectionFooter {
+                if rule.action == .delete {
+                    Text("These don't apply when the rule deletes the message.")
+                        .sectionFooter()
+                } else if rule.reply {
+                    Text("Replies come from the address the message was sent to, at most once a week per sender.")
+                        .sectionFooter()
+                }
             }
         }
     }

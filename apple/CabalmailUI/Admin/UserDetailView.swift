@@ -86,9 +86,11 @@ struct UserDetailView: View {
             }
             .disabled(isBusy || isSelf)
         } footer: {
-            if isSelf {
-                Text("This is your own account, so it can't be disabled or deleted here.")
-                    .sectionFooter()
+            FormSectionFooter {
+                if isSelf {
+                    Text("This is your own account, so it can't be disabled or deleted here.")
+                        .sectionFooter()
+                }
             }
         }
     }
@@ -104,10 +106,14 @@ struct UserDetailView: View {
                 ))
             }
         } header: {
-            Text("Domain access")
+            FormSectionHeader {
+                Text("Domain access")
+            }
         } footer: {
-            Text("\(user.username) can create addresses only on the domains turned on here.")
-                .sectionFooter()
+            FormSectionFooter {
+                Text("\(user.username) can create addresses only on the domains turned on here.")
+                    .sectionFooter()
+            }
         }
     }
 
