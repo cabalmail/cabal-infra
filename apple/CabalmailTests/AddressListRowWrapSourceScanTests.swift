@@ -61,8 +61,8 @@ final class AddressListRowWrapSourceScanTests: XCTestCase {
             "the copy action must hand over the raw address, not the wrappable one (#1587)"
         )
         XCTAssertTrue(
-            code.contains(#"accessibilityLabel("Copy \(address.address)")"#),
-            "the row button's accessibility label must read the raw address (#1587)"
+            code.contains(#"rowTapAction("Copy \(address.address)")"#),
+            "the row's accessibility label (its `rowTapAction` label) must read the raw address (#1587)"
         )
         XCTAssertTrue(
             code.contains(".accessibilityLabel(address.address)"),

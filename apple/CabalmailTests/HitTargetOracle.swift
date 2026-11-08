@@ -80,6 +80,39 @@ final class HitTargetOracle {
         try await Task.sleep(for: .milliseconds(200))
     }
 
+    /// Performs `AXPress`, VoiceOver's activate, on the button whose AX
+    /// description or identifier is `key`; false when none was found or the
+    /// press was refused. Off the main queue for the reason
+    /// `buttonFrames` gives; the action itself runs on the main runloop.
+    func press(_ key: String, in testCase: XCTestCase) -> Bool {
+        let pressed = OSAllocatedUnfairLock(initialState: false)
+        let done = testCase.expectation(description: "accessibility press")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
+            if let button = Self.find(AXUIElementCreateApplication(getpid()), key: key, depth: 0) {
+                let result = AXUIElementPerformAction(button, kAXPressAction as CFString)
+                pressed.withLock { $0 = result == .success }
+            }
+            done.fulfill()
+        }
+        testCase.wait(for: [done], timeout: 20)
+        return pressed.withLock { $0 }
+    }
+
+    nonisolated private static func find(_ element: AXUIElement, key: String, depth: Int) -> AXUIElement? {
+        guard depth < 30 else { return nil }
+        if string(element, kAXRoleAttribute as String) == kAXButtonRole as String,
+           [string(element, kAXDescriptionAttribute as String), string(element, "AXIdentifier")].contains(key) {
+            return element
+        }
+        var children: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &children) == .success,
+              let list = children as? [AXUIElement] else { return nil }
+        for child in list {
+            if let hit = find(child, key: key, depth: depth + 1) { return hit }
+        }
+        return nil
+    }
+
     nonisolated private static func walk(
         _ element: AXUIElement, depth: Int, keys: Set<String>, into found: inout [String: CGRect]
     ) {

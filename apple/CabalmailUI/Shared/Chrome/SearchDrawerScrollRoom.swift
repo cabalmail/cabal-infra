@@ -24,6 +24,11 @@ enum SearchDrawerScrollRoom {
     static func bottomMargin(tallestViewport: CGFloat, rowsHeight: CGFloat, insets: CGFloat) -> CGFloat {
         max(0, (tallestViewport - insets - rowsHeight).rounded())
     }
+
+    /// How long the list's scroll geometry must hold still before the margin
+    /// is recomputed (see `SearchDrawerScrollRoomModifier`). The margin is
+    /// empty space below the rows, so applying it this late shows nothing.
+    static let settleDelay: Duration = .milliseconds(150)
 }
 
 /// What the margin is computed from, read off the list's scroll geometry.
@@ -34,10 +39,18 @@ private struct SearchDrawerGeometry: Equatable {
     var insets: CGFloat
 }
 
-private struct SearchDrawerScrollRoomModifier: ViewModifier {
+/// Internal rather than private so a test can apply it with `onMarginChange`
+/// and count what it does; everything else reaches it through
+/// `searchDrawerScrollRoom(enabled:)`.
+struct SearchDrawerScrollRoomModifier: ViewModifier {
+    /// Called with each margin this applies. Nil outside tests.
+    var onMarginChange: ((CGFloat) -> Void)?
+
     @State private var margin: CGFloat = 0
     @State private var tallest: CGFloat = 0
     @State private var tallestWidth: CGFloat = 0
+    /// The latest geometry, waiting for the list to stop re-laying out.
+    @State private var pending: SearchDrawerGeometry?
 
     func body(content: Content) -> some View {
         content
@@ -57,13 +70,33 @@ private struct SearchDrawerScrollRoomModifier: ViewModifier {
                     tallest = 0
                 }
                 tallest = max(tallest, new.viewport)
-                // `contentSize` includes the margin this applied, so take it
-                // back out; the 1 pt dead band keeps a rounding wobble from
-                // re-laying the list out forever.
+                pending = new
+            }
+            // The margin is worked out from settled geometry only. A report
+            // can carry a content height laid out with the margin before the
+            // last one, and taking the current margin back out of that
+            // overshoots: after a back navigation to a short folder list the
+            // margin chased its own lag round a six-step cycle forever,
+            // pinning the main thread until the watchdog killed the app
+            // (`0x8BADF00D`). Once reports stop for `settleDelay` the
+            // content includes the margin now applied, so the rows' height
+            // comes out exact and one step lands. Each new report restarts
+            // the wait (`task(id:)` cancels the sleeping one).
+            .task(id: pending) {
+                guard let settled = pending else { return }
+                do {
+                    try await Task.sleep(for: SearchDrawerScrollRoom.settleDelay)
+                } catch {
+                    return
+                }
                 let wanted = SearchDrawerScrollRoom.bottomMargin(
-                    tallestViewport: tallest, rowsHeight: new.content - margin, insets: new.insets
+                    tallestViewport: tallest, rowsHeight: settled.content - margin, insets: settled.insets
                 )
-                if abs(wanted - margin) > 1 { margin = wanted }
+                // The 1 pt dead band keeps a rounding wobble from re-laying
+                // the list out again.
+                guard abs(wanted - margin) > 1 else { return }
+                margin = wanted
+                onMarginChange?(wanted)
             }
     }
 }
@@ -76,7 +109,7 @@ extension View {
     @ViewBuilder
     func searchDrawerScrollRoom(enabled: Bool = true) -> some View {
         if enabled && HostPlatform.current.searchDrawerFollowsScroll {
-            modifier(SearchDrawerScrollRoomModifier())
+            modifier(SearchDrawerScrollRoomModifier(onMarginChange: nil))
         } else {
             self
         }

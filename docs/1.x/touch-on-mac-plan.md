@@ -77,20 +77,20 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 | # | Item | Status |
 |---|---|---|
-| 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321) |
-| 1 | Message-list swipe actions under touch | Works on the device (#2346, 2026-11-07): one finger scrolls and swipes mail as feeds |
+| 0 | Pinch-to-zoom in the Mac readers | Released in 1.43.0 (#2321); pinch and double-tap work on the device |
+| 1 | Message-list swipe actions under touch | Done: mail (#2346) and address rows (#2350) swipe under a finger on the device (2026-11-07) |
 | 2 | Long press on rows: context menu vs drag | Drag to folder works by trackpad (#2342); touch drag and touch menu out of scope, by decision |
-| 3 | Tap targets under 36 pt | Our glyph buttons released in 1.43.0 (#2323, #2324); the two system controls wait for Sidecar |
+| 3 | Tap targets under 36 pt | Done: our glyph buttons released in 1.43.0 (#2323, #2324); the mini switch takes a finger easily on the device |
 | 4 | Meaning carried only by a tooltip | No change needed |
-| 5 | Pull-to-refresh vs toolbar Reload | Not started; a trackpad check on any macOS 27 Mac answers the first question |
-| 6 | Composer web view under touch | Not started |
-| 7 | Article view back/forward swipe on Mac | Released in 1.43.0 (#2325), with the iOS history fix it needed (#2326) |
-| 8 | Things that should just work (spot checks) | Not started |
-| 9 | Device pass on the MacBook Pro | Not started (device expected ~2026-11-06) |
+| 5 | Pull-to-refresh vs toolbar Reload | Works on the device (2026-11-07); no change needed |
+| 6 | Composer web view under touch | Works on the device (2026-11-07), except fine-grained touch selection |
+| 7 | Article view back/forward swipe on Mac | Released in 1.43.0 (#2325, #2326); trackpad only, a finger doesn't navigate, by decision |
+| 8 | Things that should just work (spot checks) | All pass on the device (2026-11-07) |
+| 9 | Device pass on the MacBook Pro | Done as far as wanted (2026-11-07); the hardware-only checks skipped, by decision |
 
 ## Item 0 — Pinch-to-zoom in the Mac readers
 
-**Status:** Released in 1.43.0 (PR #2321).
+**Status:** Released in 1.43.0 (PR #2321). On the MacBook Pro (2026-11-07), a pinch on the display zooms both readers, and a double-tap zooms too.
 
 `WKWebView.allowsMagnification` defaults to false on macOS, so a trackpad pinch did nothing in the mail reader or the feed article view, while iOS zooms both. PR #2321 turns it on in `makeReaderWebView` and in `ArticleWebCoordinator.makeWebView`. It helps every Mac with a trackpad today. On the touch Mac, a pinch is emulated as a trackpad magnify, so the same switch should cover it; item 9 confirms that.
 
@@ -100,7 +100,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 
 ## Item 1 — Message-list swipe actions under touch
 
-**Status:** Works on the device (2026-11-07). A finger's swipe on a message row revealed nothing at first (2026-11-06); after three fixes that each failed in a different way on the device (#2339, #2341, #2345, below), #2346 left one finger scrolling the mail list and swiping a row at once, both edges, with the trackpad, drag-and-drop and the secondary-click menu unchanged.
+**Status:** Done (2026-11-07). Mail rows (#2346) and address rows (#2350) swipe under a finger on the MacBook Pro's stage build. Rows in the address list swipe by two-finger trackpad but not by a finger, though one finger scrolls that list (2026-11-07, found during item 8). Feed rows, also plain `List` rows, swipe under a finger; address rows differ in being a `Button` (tap to copy) and `.draggable`. A local build with a switch between four variants settled it on the device: rows swiped by finger with the `Button` replaced by a tap gesture, with the drag source kept or not, and not with the `Button`. #2350 copies on a tap through `rowTapAction` (`Shared/Chrome/RowTapAction.swift`), which keeps the row one accessibility button whose activate copies; `RowTapActionTests` drives a click and an `AXPress` through such a row in a `List`. On the stage build, address rows swipe under a finger (2026-11-07). A finger's swipe on a message row revealed nothing at first (2026-11-06); after three fixes that each failed in a different way on the device (#2339, #2341, #2345, below), #2346 left one finger scrolling the mail list and swiping a row at once, both edges, with the trackpad, drag-and-drop and the secondary-click menu unchanged.
 
 **What the device showed.** On the MacBook Pro, a finger's swipe on a message row revealed nothing, leading or trailing, while feed rows (plain `List` rows) swiped under a finger and a two-finger trackpad swipe on a message row worked as on any Mac. So the macOS container's reveal answers the trackpad's scroll events and nothing else, the second of the two outcomes below.
 
@@ -116,7 +116,7 @@ So the work is verification plus a few targeted fixes, not an input-layer rewrit
 - `SwipeActionContainerSourceScanTests` now pins the capability gate in place of the iOS-only one.
 - The in-process trackpad-swipe suites still pass with the recognizer on every row.
 
-**Left for the device:** a direct touch can't be made in-process, so whether a finger now reveals, and whether the list still scrolls vertically under a finger, needs the stage build on the MacBook Pro.
+**Left for the device:** nothing. Both mail and address rows were checked under a finger on the stage build (2026-11-07).
 
 This is the highest-risk item. On macOS 27 the message list's swipe-to-dispose and toggle-read come from SwiftUI's `.swipeActions` outside a `List`, coordinated by `.swipeActionsContainer()` (`apple/CabalmailUI/Mail/MessageList/SwipeActionRow.swift`). On macOS that container reads the trackpad's two-finger horizontal scroll natively (`TrackpadSwipe.swift:16-17`). Below 27, each row borrows a single-row `List` for the same thing. The same `.swipeActions` question applies to the folder list (`FolderListView.swift:366`), the address list (`AddressListView.swift:317,327`) and the feed item list (`FeedItemListView.swift:296,299`), which use plain `List` rows.
 
@@ -155,7 +155,7 @@ Fix only what fails. A likely fix, if the menu fires before a drag can start, is
 
 ## Item 3 — Tap targets under 36 pt
 
-**Status:** The composer toolbar (PR #2323) and the toast, unsubscribed-banner and Contacts-picker buttons (PR #2324) released in 1.43.0. The two system controls wait for Sidecar.
+**Status:** Done. The composer toolbar (PR #2323) and the toast, unsubscribed-banner and Contacts-picker buttons (PR #2324) released in 1.43.0. On the MacBook Pro (2026-11-07, 1.44.0), the Rules mini switch registers a finger's tap easily, so it stays as it is. No rule showed a "Retry" button to try; it is a standard `.bordered` button like the switch, and is left alone unless a finger is seen to miss it.
 
 **The composer toolbar, done first.** Measured through the accessibility API, its buttons took taps on their glyph alone, not the 24 × 24 pt face their frame draws: Bold was 8 × 10 pt and Heading 1 was 16 × 15, because the label had no `contentShape`. The bar is shared, so this was as small on iPhone and iPad as on a Mac. The fix gives each button the gap around its face as hit area (`RichTextToolbar.hitPadding`): the stack's 4 pt spacing and the bar's 4 pt vertical padding. Each target is now 28 × 32 pt, with the faces, their spacing and the bar's height unchanged. That is short of 36 pt (and of iOS's 44), which only spreading the bar out could reach; that would be a visible change, and it waits for a look on the device. `RichTextToolbarHitTargetTests` pins the target size (it fails on the old toolbar), that neighbours don't overlap, and that the spacing and height are unchanged.
 
@@ -188,7 +188,10 @@ The reader's link status pill (`HTMLBodyView.swift`, `hoveredHref`) is hover-onl
 
 ## Item 5 — Pull-to-refresh vs toolbar Reload
 
-**Status:** Not started.
+**Status:** Works on the device; no change needed (2026-11-07, 1.44.0 on the MacBook Pro). On macOS 27, `.refreshable` drives the system's pull-to-refresh, by a two-finger trackpad overscroll and by a finger:
+- In mail and feeds, a pull refreshes the list. The pull's spinner above the list and the toolbar's `RefreshActivityIcon` both show while it runs. That is intended: the toolbar spinner reports that a refresh is running, whatever started it, and the pull's spinner is the system's answer to the pull.
+- A second pull while a refresh runs starts no second one, by trackpad or finger, judging by the UI.
+- The folder list and the address list behave the same. The feed sidebar can't be pulled on its own on macOS, where it shares the sidebar list with the mail folders; that list's pull is the folder list's.
 
 macOS 27 adds pull-to-refresh to `NSScrollView` (`NSRefreshController`), and Apple's Mail, Safari and Calendar use it. We attach `.refreshable` to the message list (`MessageListView.swift:292`), the folder list, the feed sidebar and feed items, the address list, Settings and Users. On macOS before 27 that modifier did nothing visible, and the toolbar Reload button is the Mac's refresh.
 
@@ -198,7 +201,10 @@ macOS 27 adds pull-to-refresh to `NSScrollView` (`NSRefreshController`), and App
 
 ## Item 6 — Composer web view under touch
 
-**Status:** Not started.
+**Status:** Works on the device, except fine-grained selection (2026-11-07, 1.44.0 on the MacBook Pro):
+- **Selection, partly.** A double-tap selects a word and a triple-tap a paragraph, but a finger can't set a selection's start and end precisely: there are no handles to drag. Once text is selected, touch and hold opens the editing menu. Our page registers no mouse, pointer or touch listeners, so selection is WebKit's own; whether a `contenteditable` page in Safari on the same Mac offers handles would show whether this is ours to fix at all. Until then, nothing is planned.
+- **The toolbar.** Tapping Bold with text selected bolds it, and the selection stays.
+- **Drops.** Dragging an image within the body places it inline, and a file dropped onto the body becomes an attachment, by trackpad and by finger.
 
 The composer is a `WKWebView` running our own editor page (`RichTextEditorController`, `editor-bridge.js`) with JavaScript on. `editor-bridge.js` registers paste and drag/drop listeners (`dragstart`, `dragend`, `dragover`, `drop`) but no mouse, pointer or touch listeners, so caret placement and selection come from WebKit's default handling. Whether a touch on macOS WebKit fires touch events, pointer events or emulated mouse events to page script is not documented anywhere I could find.
 
@@ -213,7 +219,7 @@ The sanitizer and drop-handling invariants listed in `CLAUDE.md` ("Page JavaScri
 
 ## Item 7 — Article view back/forward swipe on Mac
 
-**Status:** Released in 1.43.0 (PR #2325), with the iOS fix it needed (PR #2326). One iOS behaviour is still unexplained, below.
+**Status:** Released in 1.43.0 (PR #2325), with the iOS fix it needed (PR #2326). On the MacBook Pro (2026-11-07), a two-finger trackpad swipe goes back; a one-finger swipe on the display doesn't. That is accepted, by decision: nothing is planned for it. One iOS behaviour is still unexplained, below.
 
 `ArticleWebCoordinator.makeWebView` set `allowsBackForwardNavigationGestures` on iOS and visionOS only, so on a Mac a two-finger trackpad swipe didn't go back on the publisher's page. The worry was the back/forward list: the reader rendering is a separate `loadHTMLString` in the same web view, so a swipe might land on a page the coordinator's state didn't expect.
 
@@ -231,7 +237,7 @@ With #2326 in, the Mac takes the swipe too. `ArticleWebViewGestureTests` pins th
 
 ## Item 8 — Things that should just work (spot checks)
 
-**Status:** Not started.
+**Status:** All pass on the MacBook Pro (2026-11-07, 1.44.0): column resizing, the toolbar's split buttons and menus, the menu-bar extra, Settings, the address inspector and new-address sheet, swiping a toast away, a fast flick through a long folder, and arrow-key navigation after a tap. Address rows not swiping under a finger turned up along the way; it is recorded under item 1.
 
 Over Sidecar, each of these should pass with no change:
 - **Column resizing:** native `NSSplitView` on macOS (`Shell/Columns/ColumnResizeHandle.swift:64-67`).
@@ -247,7 +253,7 @@ File anything that fails as its own issue and add a row to the progress table he
 
 ## Item 9 — Device pass on the MacBook Pro
 
-**Status:** Not started (device expected around 2026-11-06).
+**Status:** Done as far as wanted (2026-11-07, 1.44.0). Item 0's pinch and double-tap work; item 3's targets work and are comfortable under a finger, so the composer toolbar is not spread out; item 7's one-finger swipe doesn't navigate, which is accepted. The checks below that only the hardware can make (palm, edges, wobble, reading distance, the Dynamic Island) were skipped, by decision.
 
 Re-run items 0–8 on the hardware, including what the shipped items left for the device:
 - **Item 0:** a two-finger pinch on the display zooms the mail reader and the article view (AppKit emulates it as a trackpad magnify); a smart-zoom double-tap works too.
@@ -267,4 +273,4 @@ Record what you find here, in each item's **Status:** line.
 
 ## Session brief
 
-> Read `docs/1.x/touch-on-mac-plan.md` and `docs/1.x/post-wave-3/00-working-agreements.md`. Items 0, 3 (our glyph buttons), 4 and 7 are done and released in 1.43.0; what is left needs touch: items 1, 2, 6 and 8, item 3's two system controls, and item 5, whose first question a trackpad on macOS 27 can answer. With an iPad on iPadOS 27 connected over Sidecar to a Mac on macOS 27, or the MacBook Pro itself, run them in order, then item 9, and record each result in its **Status:** line in this file. Item 1 is the one most likely to need code; start there. Each item that needs code gets its own PR to `stage`, one Apple PR in CI at a time, each with an `Apple:` changelog fragment and a behavioural test where the behaviour can be driven in-process. The test tools this plan's work added: `HitTargetOracle` (a button's hit area from its accessibility frame, and real in-process clicks), `HitPaddedButton` (a glyph button's hit area grown without moving its row), and `ArticleHistoryRestoreTests`' URL scheme handler (a web view with real history and no network). Add no `#if os(...)` outside `Shell/` and `Platform/`; branch on input (`GestureInputKinds`, `allowedTouchTypes`), never on "is a touch Mac". On the iPhone, item 7's open question (a link out of the reader switching the linked page to reader view) wants a look too.
+> Read `docs/1.x/touch-on-mac-plan.md` and `docs/1.x/post-wave-3/00-working-agreements.md`. Every item is done or checked on the MacBook Pro (see each **Status:** line); nothing is left, and the plan is complete. Should a touch problem turn up later, fix it the same way: its own PR to `stage`, one Apple PR in CI at a time, an `Apple:` changelog fragment, and a behavioural test where the behaviour can be driven in-process. A finger can't be made in-process, so when the cause is unclear, settle it with a local signed build that switches between variants on the device before writing the fix (item 1's address rows). The test tools this plan's work added: `HitTargetOracle` (a button's hit area from its accessibility frame, real in-process clicks, and `press(_:in:)` for an `AXPress`), `HitPaddedButton` (a glyph button's hit area grown without moving its row), `rowTapAction` (a whole-row tap that leaves a finger's swipe to the row's swipe actions), and `ArticleHistoryRestoreTests`' URL scheme handler (a web view with real history and no network). Add no `#if os(...)` outside `Shell/` and `Platform/`; branch on input (`GestureInputKinds`, `allowedTouchTypes`), never on "is a touch Mac". On the iPhone, item 7's open question (a link out of the reader switching the linked page to reader view) still wants a look.
