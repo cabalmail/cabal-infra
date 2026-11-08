@@ -65,15 +65,15 @@ struct FeedSubscriptionSettingsSheet: View {
         }
         #else
         Form {
-            Section("Title") { titleField }
-            Section("Folder") { folderPicker }
-            Section("Reading") {
+            Section(formHeader: "Title") { titleField }
+            Section(formHeader: "Folder") { folderPicker }
+            Section(formHeader: "Reading") {
                 orderingPicker
                 openModePicker
                 stylingPicker
                 remoteContentPicker
             }
-            Section("Feed") { healthRows }
+            Section(formHeader: "Feed") { healthRows }
             errorLabel
             Section { unsubscribeButton }
         }

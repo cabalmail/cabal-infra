@@ -44,7 +44,13 @@ public struct SettingsView: View {
 
     private var sidebar: some View {
         List(SettingsCategory.listed(isAdmin: appState.isAdmin), selection: $selection) { category in
-            Label(category.title, systemImage: category.systemImage)
+            // The title takes its font directly: the sidebar list ignores
+            // one set on the row (`appFontWhenScaled`).
+            Label {
+                Text(category.title).appFontWhenScaled(.body)
+            } icon: {
+                Image(systemName: category.systemImage).appFontWhenScaled(.body)
+            }
         }
         .navigationTitle("Settings")
         #if os(macOS)
@@ -248,10 +254,12 @@ private struct ReadingSettingsView: View {
                     Text("Unread / total").tag(FolderCountDisplay.both)
                 }
             } footer: {
-                Text("Badges on mail folders and feeds alike.")
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text("Badges on mail folders and feeds alike.")
+                        .sectionFooter()
+                }
             }
-            Section("Email messages") {
+            Section(formHeader: "Email messages") {
                 Picker("Mark as read", selection: $preferences.markAsRead) {
                     Text("Manual").tag(MarkAsReadBehavior.manual)
                     Text("On open").tag(MarkAsReadBehavior.onOpen)
@@ -266,7 +274,7 @@ private struct ReadingSettingsView: View {
                     Text("Reader").tag(BodyRenderMode.reader)
                 }
             }
-            Section("Feed items") {
+            Section(formHeader: "Feed items") {
                 Picker("Mark as read", selection: $preferences.rssMarkAsRead) {
                     Text("Manual").tag(MarkAsReadBehavior.manual)
                     Text("On open").tag(MarkAsReadBehavior.onOpen)
@@ -311,8 +319,10 @@ private struct AppearanceSettingsView: View {
                         }
                     }
                 } footer: {
-                    Text("Message bodies, feed articles and the composer. "
-                        + "The View menu's Larger and Smaller Message Text (⌘+ and ⌘−) change it too.")
+                    FormSectionFooter {
+                        Text("Message bodies, feed articles and the composer. "
+                            + "The View menu's Larger and Smaller Message Text (⌘+ and ⌘−) change it too.")
+                    }
                 }
                 Section {
                     Picker("Interface text", selection: $textSizes.interface) {
@@ -321,8 +331,10 @@ private struct AppearanceSettingsView: View {
                         }
                     }
                 } footer: {
-                    Text("Everything else the app draws: lists, the sidebar, headers and settings. "
-                        + "Each keeps its size relative to the others. Menus and the toolbar follow the system.")
+                    FormSectionFooter {
+                        Text("Everything else the app draws: lists, the sidebar, headers and settings. "
+                            + "Each keeps its size relative to the others. Menus and the toolbar follow the system.")
+                    }
                 }
             }
         }

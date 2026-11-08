@@ -61,8 +61,10 @@ struct ComposingSettingsView: View {
                 .autocorrectionDisabled()
                 .textEntry(.sentences)
             } footer: {
-                Text("Name appears as the display name on mail you send, e.g. \"Chris Carr <address>\".")
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text("Name appears as the display name on mail you send, e.g. \"Chris Carr <address>\".")
+                        .sectionFooter()
+                }
             }
         }
         .task {
@@ -179,11 +181,15 @@ struct ActionsSettingsView: View {
                     mailSwipeOptions
                 }
             } header: {
-                Text("Email messages")
+                FormSectionHeader {
+                    Text("Email messages")
+                }
             } footer: {
-                Text("The advance settings choose which message the reading pane opens after you "
-                     + "archive, delete, or mark read from it.")
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text("The advance settings choose which message the reading pane opens after you "
+                         + "archive, delete, or mark read from it.")
+                        .sectionFooter()
+                }
             }
             Section {
                 Picker("Leading swipe", selection: $preferences.rssSwipeLeading) {
@@ -193,10 +199,14 @@ struct ActionsSettingsView: View {
                     feedSwipeOptions
                 }
             } header: {
-                Text("Feed items")
+                FormSectionHeader {
+                    Text("Feed items")
+                }
             } footer: {
-                Text(Self.swipeFooter)
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text(Self.swipeFooter)
+                        .sectionFooter()
+                }
             }
         }
     }

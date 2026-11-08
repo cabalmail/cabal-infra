@@ -81,10 +81,10 @@ struct NewFolderSheet: View {
     #else
     private var formContent: some View {
         Form {
-            Section("Name") {
+            Section(formHeader: "Name") {
                 nameField
             }
-            Section("Parent") {
+            Section(formHeader: "Parent") {
                 parentPicker
             }
             errorLabel

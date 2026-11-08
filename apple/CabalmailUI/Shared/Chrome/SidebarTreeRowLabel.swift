@@ -28,11 +28,18 @@ struct SidebarTreeRowLabel<Trailing: View>: View {
     /// one line.
     var titleLineLimit: Int?
     @ViewBuilder let trailing: () -> Trailing
+    /// The interface text size. A sidebar draws its rows in its own font
+    /// and ignores one set on the list or the row, so the title and icon
+    /// take theirs directly (`appFontWhenScaled`), and the indentation and
+    /// chevron slot grow with them.
+    @Environment(\.interfaceTextSize) private var interfaceTextSize
+
+    private var step: CGFloat { 14 * interfaceTextSize.scale }
 
     var body: some View {
         HStack {
             if depth > 0 {
-                Spacer().frame(width: CGFloat(depth) * 14)
+                Spacer().frame(width: CGFloat(depth) * step)
             }
             // Always reserve the chevron slot so the icon column stays
             // aligned across leaf and parent rows at the same depth. Without
@@ -45,13 +52,15 @@ struct SidebarTreeRowLabel<Trailing: View>: View {
                     Color.clear
                 }
             }
-            .frame(width: 14, height: 14)
+            .frame(width: step, height: step)
             Image(systemName: systemImage)
+                .appFontWhenScaled(.body)
                 // Accent while unselected, and the row's own foreground once
                 // it is: the selection fill is the platform's to choose and no
                 // pinned color survives all of the ones it draws (#1318).
                 .foregroundStyle(Self.iconStyle(isSelected: isSelected))
             Text(title)
+                .appFontWhenScaled(.body)
                 .lineLimit(titleLineLimit)
                 .foregroundStyle(Self.titleStyle(hasUnread: hasUnread, isSelected: isSelected))
             Spacer()
@@ -71,6 +80,7 @@ struct SidebarTreeRowLabel<Trailing: View>: View {
     private func chevron(_ disclosure: SidebarTreeDisclosure) -> some View {
         let button = Button(action: disclosure.toggle) {
             Image(systemName: "chevron.right")
+                .appFontWhenScaled(.body)
                 .rotationEffect(.degrees(disclosure.isCollapsed ? 0 : 90))
                 .foregroundStyle(.secondary)
         }

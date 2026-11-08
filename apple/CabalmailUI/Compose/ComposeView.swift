@@ -546,14 +546,16 @@ extension ComposeView {
                 )
                 .takesDroppedAttachments(into: model)
             } header: {
-                // Where the fields start, which laptop pose keeps below
-                // the fold.
-                Text("From").composeLaptopFieldsStart(laptop)
+                FormSectionHeader {
+                    // Where the fields start, which laptop pose keeps below
+                    // the fold.
+                    Text("From").composeLaptopFieldsStart(laptop)
+                }
             }
         case .recipients:
             recipientsSection
         case .subject:
-            Section("Subject") {
+            Section(formHeader: "Subject") {
                 TextField("Subject", text: $model.subject)
                     .focused($focusedField, equals: .subject)
                     .accessibilityIdentifier("compose.subject")
@@ -561,7 +563,7 @@ extension ComposeView {
             }
         case .attachments:
             if !model.attachments.isEmpty || model.attachmentTotalExceedsWarning {
-                Section("Attachments") {
+                Section(formHeader: "Attachments") {
                     ForEach(model.attachments) { attachment in
                         attachmentRow(attachment)
                             .takesDroppedAttachments(into: model)
@@ -572,7 +574,7 @@ extension ComposeView {
                 }
             }
         case .message:
-            Section("Message") {
+            Section(formHeader: "Message") {
                 ComposerBody(model: model)
                     // What `scrollBodyClearOfKeyboard` scrolls to.
                     .id(ComposeBodyScrollPolicy.bodyScrollTarget)
@@ -582,7 +584,7 @@ extension ComposeView {
 
     private var recipientsSection: some View {
         @Bindable var model = model
-        return Section("Recipients") {
+        return Section(formHeader: "Recipients") {
             RecipientFieldWithSuggestions(
                 label: "To",
                 text: $model.toText,

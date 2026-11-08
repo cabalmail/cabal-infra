@@ -51,6 +51,19 @@ public enum AppTextSize: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The control size native buttons, toggles and pickers take at this
+    /// interface step, or nil to leave the platform's own. Buttons ignore
+    /// a font set on them and size their text from the control size, which
+    /// on the Mac steps through about 11pt (small), 13pt (regular and
+    /// large) and 15pt (extra large): the nearest to this step's body size.
+    public var controlSize: ControlSize? {
+        switch self {
+        case .xSmall: .small
+        case .small, .medium: nil
+        case .large, .xLarge: .extraLarge
+        }
+    }
+
     /// The next step up, or nil at the top of the ramp.
     public var larger: AppTextSize? {
         Self.allCases.firstIndex(of: self).flatMap { index in
@@ -146,6 +159,11 @@ private struct AppTextSizeRoot: ViewModifier {
             // the interface size from here. At `.medium` there is no
             // default, as before the setting.
             .font(store.interface == .medium ? nil : .app(.body, store.interface))
+            // Native controls take the nearest control size; at the steps
+            // that have none the inherited one stands.
+            .transformEnvironment(\.controlSize) { controlSize in
+                if let scaled = store.interface.controlSize { controlSize = scaled }
+            }
             .environment(\.interfaceTextSize, store.interface)
             .environment(\.contentTextSize, store.content)
     }

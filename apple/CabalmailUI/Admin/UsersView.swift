@@ -76,11 +76,15 @@ private struct UsersListView: View {
                         UserLink(model: model, user: user)
                     }
                 } header: {
-                    Text("Awaiting confirmation")
+                    FormSectionHeader {
+                        Text("Awaiting confirmation")
+                    }
                 } footer: {
-                    Text("An account is confirmed when its owner enters the code from sign-up. "
-                        + "Confirm one here if they can't.")
-                        .sectionFooter()
+                    FormSectionFooter {
+                        Text("An account is confirmed when its owner enters the code from sign-up. "
+                            + "Confirm one here if they can't.")
+                            .sectionFooter()
+                    }
                 }
             }
             Section {
@@ -93,10 +97,14 @@ private struct UsersListView: View {
                     Label("Reload", systemImage: "arrow.clockwise")
                 }
             } header: {
-                Text("Users")
+                FormSectionHeader {
+                    Text("Users")
+                }
             } footer: {
-                Text("A new account can create addresses only on the domains an administrator turns on for it.")
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text("A new account can create addresses only on the domains an administrator turns on for it.")
+                        .sectionFooter()
+                }
             }
         }
         .groupedFormStyleOnMac()

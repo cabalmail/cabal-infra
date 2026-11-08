@@ -14,7 +14,9 @@ struct CreateAccountSection: View {
                 .disabled(!canStart)
                 .accessibilityIdentifier("signin.createAccount")
         } footer: {
-            Text("New here? Create an account on the server above.")
+            FormSectionFooter {
+                Text("New here? Create an account on the server above.")
+            }
         }
     }
 

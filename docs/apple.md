@@ -2024,6 +2024,26 @@ scope for both.
   interface size on the Mac too: the message list's row height
   (`MessageListView.rowHeight(base:at:)`) and the reader header's
   trailing-column threshold.
+- **Text a container styles itself: `appFontWhenScaled(_:)`.** It leaves
+  the container's font alone at Medium and sets the named style at the
+  interface size otherwise. Three places need it. A form's section
+  headers and footers would otherwise take the root's default font and
+  lose their look (bold header, small footer): every header and footer
+  closure is wrapped in `FormSectionHeader` / `FormSectionFooter`
+  (headline and subheadline), `Section("Title")` is
+  `Section(formHeader: "Title")`, the `string_titled_section` SwiftLint
+  rule bans the string form outside menus, and
+  `FormSectionTextSourceScanTests` fails a bare closure. A sidebar
+  ignores a font set on the list or the row, so `SidebarTreeRowLabel`
+  (mail folders and feeds), the Settings categories and the sidebar's
+  "Mail" / "Feeds" headers put it on their own text, and the row
+  indentation grows with it.
+- **Native controls: `controlSize`.** Buttons ignore a font set on them
+  and size their text from the control size, so the root maps the
+  interface size onto it (`AppTextSize.controlSize`): Extra Small is
+  `.small` (11pt), Large and Extra Large `.extraLarge` (15pt), and the
+  other steps leave the platform's own. Toggles and pickers follow too.
+  An explicit `.controlSize` lower down still wins.
 - **Shortcuts.** View > Larger Message Text (⌘+), Smaller Message Text
   (⌘−) and Default Message Text Size (⌘0), in `ContentTextSizeCommands`
   (menu-bar commands, so they work whatever has focus). They change

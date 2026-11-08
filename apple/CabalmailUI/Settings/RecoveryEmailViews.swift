@@ -69,7 +69,9 @@ struct RecoveryEmailSections: View {
                 .submitLabel(.go)
                 .onSubmit { Task { await model.save() } }
         } footer: {
-            Text(model.editingHelp)
+            FormSectionFooter {
+                Text(model.editingHelp)
+            }
         }
         Section {
             AuthFormActions(

@@ -46,8 +46,10 @@ struct FlagPaletteSettingsView: View {
                 }
                 .disabled(FlagPalette.firstFreeSlot(in: preferences.flagPalette) == nil)
             } footer: {
-                Text(Self.footerText(paletteIsEmpty: preferences.flagPalette.isEmpty, on: .current))
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text(Self.footerText(paletteIsEmpty: preferences.flagPalette.isEmpty, on: .current))
+                        .sectionFooter()
+                }
             }
         }
         .editButtonToolbar()
@@ -154,10 +156,12 @@ private struct FlagPaletteEntryEditor: View {
                     .autocorrectionDisabled()
                 Toggle("Enabled", isOn: bindings.value(\.enabled, or: false))
             } footer: {
-                Text("A disabled flag keeps its tags but is offered nowhere.")
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text("A disabled flag keeps its tags but is offered nowhere.")
+                        .sectionFooter()
+                }
             }
-            Section("Color") {
+            Section(formHeader: "Color") {
                 colorGrid(selected: entry.color)
             }
             Section {
