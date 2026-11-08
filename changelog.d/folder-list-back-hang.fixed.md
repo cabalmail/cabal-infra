@@ -4,4 +4,5 @@
   the list keeps below its rows so a push can tuck the filter field away was
   recomputed from scroll measurements one step out of date, and under the
   back navigation it chased itself forever; it is now worked out once the
-  list's layout has settled.
+  list's layout has settled. The Feeds list, which keeps the same room,
+  gets the same fix.
