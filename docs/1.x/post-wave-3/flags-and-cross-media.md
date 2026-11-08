@@ -25,7 +25,7 @@ This table and the **Status:** line under each work item are updated in the same
 
 > **Duo spec (2026-10-13):** This plan was written before the maintainer's Oct 7 Duo spec (the Claude Doc linked in duo-support.md) had been read. duo-support.md now follows it; where this plan's text disagrees with the points below, the points win. In the spec, "fold" means book or laptop pose, which changes no size class and swaps no shell; what this plan calls folding or unfolding the Duo is closing or opening it.
 >
-> - B5.1's single iOS sidebar list across both media waits on duo-support.md Decision 9: under one tree, Feeds is a tab of its own on iPad and the Duo. Limit B5.1's one list to the Mac (and visionOS) until then, and ask where Flagged lives on iOS as a Phase 5 decision.
+> - duo-support.md Decision 9 was answered on 2026-10-27: the one-tree merge, as its Session 3, after the device pass. Every iOS window becomes a tab tree, as visionOS's already is, with Feeds a tab of its own, so B5.1's one sidebar list is the Mac's alone and wide iOS windows keep their row buttons until the merge. Where the Flagged view lives on the tab layouts and on Android is a Phase 5 decision, listed under "Open decisions" in `cross-media-ux-plan.md`.
 > - Stage A's and Phase 2's Duo passes add open portrait and laptop, where Flag sits in a bottom toolbar below the fold, and book pose. Build the Flag menu on a value both a top bar and a bottom toolbar can mount.
 
 ## Decisions for the maintainer
