@@ -76,11 +76,14 @@ struct PlainTextBodyView: View {
     /// not bounce back into the menu.
     @Environment(\.openURL) private var openURL
     @Environment(AppState.self) private var appState
+    /// The app's message-text size (`AppTextSize`); `.medium` leaves the
+    /// font on `.body` and so on Dynamic Type.
+    @Environment(\.contentTextSize) private var contentTextSize
 
     var body: some View {
         let scanned = links ?? PlainTextLinks.empty
         Text(links == nil ? AttributedString(plain) : scanned.attributed)
-            .font(.body)
+            .font(.contentBody(contentTextSize))
             .foregroundStyle(.primary)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -66,6 +66,9 @@ public struct ComposeWindowScene: Scene {
                 // (#1460). Every scene pins it for itself; see
                 // AppearancePolicy.
                 .themedAppearance(preferences.theme)
+                // The composer's text follows the message-text size, which
+                // the main window's root doesn't reach either.
+                .appTextSize()
                 // A mailto: click can cold-launch the app straight into
                 // this scene, in which case the main window's `.task` —
                 // the usual `restoreIfPossible` call site — may not have
