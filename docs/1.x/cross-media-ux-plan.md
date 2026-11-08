@@ -9,11 +9,11 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Not started (2026-10-20); follows the unified flags plan |
-| 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-10-20) |
-| 4 -- Feed rules | Not started (2026-10-20) |
-| 5 -- Cross-media views: flagged and search | Not started (2026-10-20) |
-| 6 -- Ambient surfaces: Spotlight | Not started (2026-10-20) |
+| 2 -- Custom flags on feed items | Not started (2026-11-08); follows the unified flags plan |
+| 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
+| 4 -- Feed rules | Not started (2026-11-08) |
+| 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
+| 6 -- Ambient surfaces: Spotlight | Not started (2026-11-08) |
 
 This document is the design: what each phase builds and why. The
 sequencing, the gates against other plans, the verification lanes, and
@@ -31,7 +31,7 @@ after the 2026-10 Apple-client rearchitecture:
 
 Where this document assumes the default answer to an open decision, it
 says so; "Open decisions" at the end lists them. The code facts below
-were re-checked against `stage` at d6d36148 (2026-10-20).
+were re-checked against `stage` at 53da1a0e6 (2026-11-08).
 
 ## Context
 
@@ -104,6 +104,16 @@ moved most of the code this plan names. The facts a phase depends on:
   `MailSidebarColumn`). Feeds are drawn inside it as row buttons
   (`FeedSidebarContent`'s `.rowButtons` mode), because one `List`
   carries one selection type.
+- Only the Mac (`DesktopShell`) and a wide iOS window (`SplitShell`)
+  have that shared sidebar. The tab layouts give mail and feeds a tab
+  each, beside Addresses, Settings and Search, on an iPhone or a narrow
+  iPad window (`TabShell`), with Folders added on visionOS
+  (`OrnamentShell`). Search is a tab that opens over whichever tab is in
+  front. The Duo plan's Decision 9
+  ([`post-wave-3/duo-support.md`](./post-wave-3/duo-support.md),
+  answered 2026-10-27) takes iOS to one tab tree at every width. That is
+  its Session 3, which waits for the device pass in December 2026.
+  After it, the shared sidebar is the Mac's alone.
 - Menu commands are window-scoped (`WindowCommand` through
   `FocusedValue`), and the Message, Mailbox and Feeds menus act on the
   window in front.
@@ -132,7 +142,19 @@ These are the model to copy, not work items:
   live page uses its own `ArticleWebView`.
 - **List and sidebar chrome.** One `FilterPill`, `CountBadge`,
   `SidebarTreeRowLabel` and `TitleSwitchMenu` serve both media, and one
-  `ReaderToolbarPolicy` lays out both readers' toolbars.
+  `ReaderToolbarPolicy` lays out both readers' toolbars. Since 1.44.0
+  both lists filter with the same two toggle pills on both clients,
+  Unread and Flagged, with neither lit meaning all. On wide layouts the
+  mail and feed sections of the sidebar carry their pills and Expand all
+  / Collapse all in the same first row. Android's mail and feed columns
+  resize the same way.
+- **Reading and stepping.** Message bodies and feed articles in reader
+  styling follow Dynamic Type on iOS and the Mac's message-text size
+  (⌘+, ⌘−), and both Mac readers pinch-zoom. In a tall window either
+  reader's menu steps to the previous or next item (`WindowCommand.step`,
+  answered by `MessageListStepping` for mail and by the feed list). On a
+  touch Mac a finger now swipes and scrolls mail rows as it already did
+  feed rows.
 - **Phase 1's vocabulary**: the Flag word and glyph, the Folder counts
   setting, the Mark All as Read chord, and the title switcher.
 
@@ -140,8 +162,9 @@ These are the model to copy, not work items:
 
 - A user-defined flag applies to a mail message and to a feed item, by
   the same name, colour, and gesture, from the same menu.
-- Both lists can be filtered by a custom flag. Neither can today: mail's
-  filter is All, Unread, or Flagged (`MessageFilter`).
+- Both lists can be filtered by a custom flag. Neither can today: both
+  filter only by the Unread and Flagged toggles (`MessageFilter`,
+  `RssItemFilter`), and Flagged means the system flag.
 - Bulk selection works on feed items as it does on mail, with the
   actions that apply to a feed item.
 - Rules exist for both media, edited in one place, with the conditions
@@ -158,9 +181,10 @@ These are the model to copy, not work items:
   missing Dispose stays missing.
 - **Snooze and threading.** Neither medium has them; snooze was ruled
   out (Decision 15) and a threaded view was never planned.
-- **Converging the reader defaults.** The Android-strips-author-CSS
-  versus Apple-overrides reader-mode experiment (since 2026-08-20) is
-  the maintainer's to call and is not settled by this plan.
+- **Reader styling.** The reader-mode experiment (Android stripping the
+  author's CSS, Apple overriding it) ended on 2026-10-22 in favour of
+  Apple's approach. Moving Android to it is separate work, not part of
+  this plan.
 - **Server-side cross-feed full-text search.** Decision 14 (revised)
   deferred it indefinitely on cost. Phase 5's cross-media search is
   client-side over the local cache.
@@ -320,8 +344,11 @@ The feed list adopts the mail list's selection as it is: a
 `SelectionModel` for the window, held above the layout switch so a
 selection survives a shell change, keyed by the feed item's id. The
 bulk action bar now drawn in `MessageListView+Bulk` becomes one shared
-view both lists mount, and modifier-click on macOS follows
-`MessageListView+ModifierClick`. On iPad the feed list's Select button
+view both lists mount. It is kept as a list of actions, separate from
+how they are drawn, so that on the Duo's vertical bars Select mode can
+draw them as system toolbar items (`duo-support.md` decision 11).
+Modifier-click on macOS follows `MessageListView+ModifierClick`. On
+iPad the feed list's Select button
 and modifier-clicks go through a `Platform/` adapter (FU-9 in
 [`platform-conditionals-followups.md`](./platform-conditionals-followups.md)),
 not a new `#if`. Android: the `SelectionTopBar` that `MessageListScreen`
@@ -354,10 +381,17 @@ list (Phase 2).
 
 Rows in a mixed list need one identity for either medium: a two-case
 `ItemRef` in the Kit (`.mail(MessageRef)` and a feed case keyed by feed
-and sort key). The sidebar needs one selection (a mail folder, a feed
-scope, or a smart view) in place of the row-button workaround, so one
-`List` selects both media and can host the Flagged entry. The Flagged
-view interleaves rows by date, each with its medium's glyph. Search
+and sort key). Where a window has the shared sidebar, it needs one
+selection (a mail folder, a feed scope, or a smart view) in place of
+the row-button workaround, so one `List` selects both media and can
+host the Flagged entry. After the Duo plan's one-tree merge that is the
+Mac alone. The tab layouts (every iOS window after the merge, visionOS
+already) have no list that spans both media, so the Flagged view needs
+a home there that belongs to neither medium's tab. The Search tab is
+the natural candidate: it belongs to neither medium and already opens
+over whichever tab is in front. A Flagged tab is the alternative.
+"Open decisions" lists this question. The Flagged view interleaves
+rows by date, each with its medium's glyph. Search
 results are sectioned by medium rather than merged, because the two
 searches have different scopes (the whole mailbox versus the cached
 window of each feed) and a merged list would imply a completeness the
@@ -371,7 +405,9 @@ before release. Every item has been in use since, and later releases
 fixed defects found in them (Mark All as Read acting only on the window
 in front, one title menu for mailboxes and feeds, offline mark-all-read
 on feeds), so the acceptance line below is a regression check, not an
-owed step.
+owed step. One defect is still open: on iPadOS, UIKit reports the
+shared ⌘T and ⌘⇧8 chords as duplicates across the Message and Feeds
+menus (#2024, owned by `post-wave-3/ipad-layout-and-keyboard.md` PR C).
 
 What shipped:
 
@@ -414,7 +450,7 @@ The motivating feature. It follows the unified flags plan, which puts
 and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
-**Status:** Not started (2026-10-20). The unified flags plan has not
+**Status:** Not started (2026-11-08). The unified flags plan has not
 started either.
 
 ### 2a. Server
@@ -464,11 +500,16 @@ started either.
 1. **Rows.** Feed rows draw the keyword dots through the shared flag
    mark, the same size and order as mail rows (`MessageListView+Rows`,
    `EnvelopeRow`).
-1. **Filter.** Both lists gain a per-flag filter. By default it is one
-   flag picker inside the Flagged pill rather than a pill per flag (the
-   pill row already wraps at narrow widths, #2014), and the pick resets
-   when the list is left. Mail filters through `keyword`; feeds query
-   the local cache.
+1. **Filter.** Both lists gain a per-flag filter. The pick lasts for
+   the visit and resets when the list is left. Mail filters through
+   `keyword`; feeds query the local cache. By default the choice hangs
+   on the Flagged pill rather than adding a pill per flag, since the
+   pill row already wraps at narrow widths (#2014). That default was
+   written when the pills were three exclusive choices. Since 1.44.0
+   they are toggles, so a tap on Flagged toggles it, and the flag
+   choice needs a second gesture on the same pill: for example a menu
+   whose primary action is the toggle. Settle its shape in this
+   phase's scope doc.
 1. **Swipe.** `FeedSwipeAction` gains no new case. The flag toggle
    follows the default flag (Decision 1), and custom flags stay a menu
    action on both media.
@@ -487,7 +528,7 @@ fragment for the server PRs. The Android headline shares the
 
 ## Phase 3 -- Acting on feed items in bulk, and out of the reader
 
-**Status:** Not started (2026-10-20). `feed-bulk-actions.md` runs it in
+**Status:** Not started (2026-11-08). `feed-bulk-actions.md` runs it in
 two sessions: first the feed Kit writes and list tidy-ups, including a
 one-request Mark All as Read for a feed folder or All Feeds, then
 multi-selection and Forward. The bug fix it opened with, #1914 (a
@@ -515,7 +556,18 @@ an article and the received mail carries the link and the summary.
 
 ## Phase 4 -- Feed rules
 
-**Status:** Not started (2026-10-20).
+**Status:** Not started (2026-11-08). `flags-and-cross-media.md` gates
+the client work on fixes owned by other plans, and those have all
+merged:
+
+- #1903: an unreadable 200 from `/set_rules` is no longer read as a
+  failed save.
+- #2031: Add Rule no longer saves an enabled, empty rule. Fixed on both
+  clients.
+- #2040: VoiceOver reads each rule's switch as a switch.
+
+What is left is this plan's own order: Phase 2 shipped, then the
+Terraform and server work in prod, plus the storage decision.
 
 ### 4a. Server and infrastructure
 
@@ -565,33 +617,37 @@ that predates Phase 4 leaves the feed rule in place.
 
 ## Phase 5 -- Cross-media views: flagged and search
 
-**Status:** Not started (2026-10-20).
+**Status:** Not started (2026-11-08).
 
-1. **Structure first** (Decision 8). `ItemRef` in the Kit and one
-   sidebar selection, shipped alone in its release because it changes
-   root navigation: `AppRoute` gains the smart view and still decodes
-   routes stored by older builds, and the restore suites guard it. On
-   iPhone and iPad, where the Flagged entry lives depends on
-   `post-wave-3/duo-support.md` Decision 9 (one view tree or two
-   shells), so the single sidebar list lands on the Mac and visionOS
-   first.
-1. **Flagged smart view.** A "Flagged" entry in the sidebar above the
-   mail folders (Apple: the folder `List` in `FolderListView`, which
-   the wide shells host through `MailSidebarColumn` and which the feeds
-   join from `FolderListView+Helpers.swift`; Android: the top of
-   `FolderListScreen`) lists flagged mail and
-   flagged feed items interleaved by date, each row carrying its
-   medium's glyph and opening in its medium's reader. A flag picker
-   within the view selects a custom flag. Counts follow the Reading
-   preference.
-1. **Search scope.** The global search field (`SearchView`) drops the
-   "Search all mail" prompt for "Search", gains a scope segment (All,
-   Mail, Feeds), and shows results sectioned by medium. The feed
-   section widens `RssStore`'s FTS query (`search(feedId:query:)`)
-   from one subscription to all cached items, with Android's Room store
-   gaining the equivalent query; the mail section is the existing
-   server search. The feed section's footer states that it searches
-   downloaded items only.
+1. **Structure first** (Decision 8). `ItemRef` in the Kit and, on the
+   Mac, one sidebar selection, shipped alone in its release because it
+   changes root navigation: `AppRoute` gains the smart view and still
+   decodes routes stored by older builds, and the restore suites guard
+   it. The selection work is built for the Mac only. Wide iOS windows
+   keep today's row buttons until the Duo plan's one-tree merge, which
+   replaces `SplitShell` with split views inside the tabs and so removes
+   their shared sidebar.
+1. **Flagged smart view.** Flagged mail and flagged feed items,
+   interleaved by date, each row carrying its medium's glyph and opening
+   in its medium's reader. A flag picker within the view selects a
+   custom flag. Counts follow the Reading preference. On the Mac it is
+   an entry above the mail folders in the shared sidebar (the folder
+   `List` in `FolderListView`, which `MailSidebarColumn` hosts and the
+   feeds join from `FolderListView+Helpers.swift`). On the Apple tab
+   layouts, and on Android, where Mail and Feeds are separate top-level
+   destinations as well, where it lives is an open decision (Decision 8
+   and "Open decisions").
+1. **Search scope.** Global search (`SearchView` in the Search tab on
+   the tab layouts, `GlobalSearchField` in the toolbar of the wide
+   layouts) drops the "Search all mail" prompt for "Search", gains a
+   scope segment (All, Mail, Feeds), and shows results sectioned by
+   medium. On the tab layouts Search is already a tab of its own that
+   opens over Mail or Feeds alike, which suits a search covering both.
+   The feed section widens `RssStore`'s FTS query
+   (`search(feedId:query:)`) from one subscription to all cached items,
+   with Android's Room store gaining the equivalent query; the mail
+   section is the existing server search. The feed section's footer
+   states that it searches downloaded items only.
 1. **Resume from results.** A row opened from either section writes the
    same resume record its medium's reader writes today.
 
@@ -601,7 +657,7 @@ the article flagged on the phone in Phase 2 beside a flagged message.
 
 ## Phase 6 -- Ambient surfaces: Spotlight
 
-**Status:** Not started (2026-10-20).
+**Status:** Not started (2026-11-08).
 
 1. **Spotlight for feed items** (Apple). `SpotlightIndexer` indexes
    envelopes and message bodies today. It gains a feed-item path fed by
@@ -653,8 +709,8 @@ app; signing out removes the feed entries from Spotlight.
   imports its pending rows when a newer build returns; by default
   schema 7 ships after that. Room must not move past version 1 without
   a real migration.
-- The tester pipeline's sweep prompts cover feeds already; each phase's
-  acceptance line above is written to be a sweep item.
+- Each phase's acceptance line above is written to be a tester sweep
+  item.
 
 ## Open decisions
 
@@ -673,6 +729,7 @@ answering otherwise changes the phase named.
 | What does the forwarded mail contain? | 3 | The summary as plain text | feed-bulk-actions 5 |
 | Where are feed rules stored? | 4 | `feedRules` beside `rules` | flags-and-cross-media 6 |
 | Is the Flagged view built now or on the SQLite store's query? | 5 | On the SQLite store's query | flags-and-cross-media 7 |
+| Where does the Flagged view live where Mail and Feeds are separate tabs or destinations (iOS after the one-tree merge, visionOS, Android)? | 5 | None set; on Apple the Search tab is the natural candidate (Decision 8) | Not yet numbered; flags-and-cross-media's Duo note asks it as a Phase 5 decision |
 | Keep or drop the All / Mail / Feeds search scope? | 5 | Keep | flags-and-cross-media 8 |
 | Feed notification settings before feeds can notify? | 6 | Wait for RSS Phase 8 | flags-and-cross-media 9 |
 
