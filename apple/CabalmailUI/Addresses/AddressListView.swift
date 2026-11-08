@@ -320,14 +320,12 @@ extension AddressListView {
 
     @ViewBuilder
     private func addressRow(_ address: Address, model: AddressesViewModel) -> some View {
-        Button {
-            copyAddress(address)
-        } label: {
-            row(for: address)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        // A tap copies. Not a `Button`: on a touch Mac a row-filling button
+        // keeps a finger's swipe from the swipe actions below (see
+        // `RowTapAction`).
+        row(for: address)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .rowTapAction("Copy \(address.address)") { copyAddress(address) }
         // The address as plain text, for a drop into another app: on an open
         // iPhone Duo (and an iPad) Safari can sit beside this list, so a
         // freshly minted address goes straight into a signup form without
@@ -335,7 +333,6 @@ extension AddressListView {
         // the row's tap (see `MessageDrag.swift`); the swipe actions are
         // horizontal pans, a drag starts from a press-and-hold.
         .draggable(address.address)
-        .accessibilityLabel("Copy \(address.address)")
             // Two edges so neither side outgrows a narrow sidebar pane, and
             // the full-swipe default is the reversible action (suspend /
             // reinstate), not revoke. First button listed = full-swipe action.
