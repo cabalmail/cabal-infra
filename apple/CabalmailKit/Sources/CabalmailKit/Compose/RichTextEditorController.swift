@@ -312,10 +312,10 @@ public final class RichTextEditorController: NSObject {
         await call("focusRestoringCaret")
     }
 
-    /// Scales the editor's text by `scale`, the system text size as a
-    /// ratio of the default (`DynamicTypeSize.bodyTextScale` in the app
-    /// layer), so the composer follows Dynamic Type the way the SwiftUI
-    /// fields around it do. Display only: the ratio sits on the page's root
+    /// Scales the editor's text by `scale`, the text size as a ratio of the
+    /// default (`EnvironmentValues.contentTextScale` in the app layer: the
+    /// Dynamic Type ratio times the Mac's own message-text size), so the
+    /// composer follows the text size the way the readers do. Display only: the ratio sits on the page's root
     /// element, outside the editor, so `getHTML()` (what `/send` and
     /// `/save_draft` receive) is the same at every size.
     public func setTextScale(_ scale: Double) async {

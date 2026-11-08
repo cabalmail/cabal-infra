@@ -3,12 +3,13 @@ import Foundation
 
 /// Dynamic Type for HTML reading content: the mail reader (both stylings)
 /// and the feed reader's article rendering. The plain-text body gets it from
-/// its `.body` font; an HTML body's sizes are the author's CSS (or, in reader
-/// mode, the reader stylesheet's 17px), which the system text size never
-/// reaches on its own.
+/// its font (`Font.contentBody`); an HTML body's sizes are the author's CSS
+/// (or, in reader mode, the reader stylesheet's 17px), which the system text
+/// size never reaches on its own.
 ///
-/// `rewrite` marks a document with the scale (`DynamicTypeSize.
-/// bodyTextScale`) in a meta tag, and a user script installed on the reader's
+/// `rewrite` marks a document with the scale (`EnvironmentValues.
+/// contentTextScale`: Dynamic Type's body ratio times the Mac's own
+/// message-text size, `AppTextSize`) in a meta tag, and a user script installed on the reader's
 /// web view multiplies every element's computed font size, and every fixed
 /// line height, by it before the page first paints. Like the link and scroll
 /// bridges, the script runs in `WKContentWorld.defaultClient`, so it works

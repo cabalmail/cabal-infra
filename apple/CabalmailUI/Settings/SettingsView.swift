@@ -280,6 +280,8 @@ private struct ReadingSettingsView: View {
 
 private struct AppearanceSettingsView: View {
     @Environment(Preferences.self) private var preferences
+    /// Device-wide, not a synced preference (`AppTextSize`).
+    @AppStorage(AppTextSize.contentDefaultsKey) private var contentTextSize: AppTextSize = .medium
 
     var body: some View {
         @Bindable var preferences = preferences
@@ -299,6 +301,18 @@ private struct AppearanceSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+                }
+            }
+            if HostPlatform.current.offersAppTextSize {
+                Section {
+                    Picker("Message text", selection: $contentTextSize) {
+                        ForEach(AppTextSize.allCases) { size in
+                            Text(size.title).tag(size)
+                        }
+                    }
+                } footer: {
+                    Text("Message bodies, feed articles and the composer. "
+                        + "The View menu's Larger and Smaller Message Text (⌘+ and ⌘−) change it too.")
                 }
             }
         }

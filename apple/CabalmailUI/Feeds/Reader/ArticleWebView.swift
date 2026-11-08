@@ -33,11 +33,12 @@ struct ArticleWebView: View {
     @State private var failure: String?
     /// Bumped by Retry to rebuild the web view and load again.
     @State private var attempt = 0
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The system text size times the app's message-text size.
+    @Environment(\.contentTextScale) private var contentTextScale
 
     var body: some View {
         ArticleWebViewRepresentable(url: url, dataStoreID: dataStoreID, readerMode: readerMode,
-                                    textScale: dynamicTypeSize.bodyTextScale, pageRequest: pageRequest,
+                                    textScale: contentTextScale, pageRequest: pageRequest,
                                     onFailure: { failure = $0 }, onLeftReader: onLeftReader,
                                     onRestoredPage: onRestoredPage)
             .id(attempt)
@@ -147,7 +148,7 @@ final class ArticleWebCoordinator: NSObject, WKNavigationDelegate {
     /// The live page's article, extracted once; the reader document is built
     /// from it at the text size of the moment.
     private var article: ExtractedArticle?
-    /// The system text size, as `DynamicTypeSize.bodyTextScale`.
+    /// The text size, as `EnvironmentValues.contentTextScale`.
     private var textScale: Double = 1
     /// The text size the reader on screen was rendered at.
     private var readerTextScale: Double?

@@ -53,6 +53,7 @@ struct CabalmailMacApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
+                .appTextSize()
                 .appRootLifecycle(
                     appState: appState,
                     preferences: preferences,
@@ -79,6 +80,7 @@ struct CabalmailMacApp: App {
         .handlesExternalEvents(matching: [])
         .commands {
             CabalmailCommands(appState: appState)
+            ContentTextSizeCommands()
         }
         // The app's own phase, once for the app however many windows are
         // open: flush on the way out, reconcile and refresh on the way back.
@@ -94,6 +96,7 @@ struct CabalmailMacApp: App {
                 .environment(appState)
                 .environment(preferences)
                 .themedAppearance(preferences.theme)
+                .appTextSize()
                 // Wide enough for the category sidebar plus a detail form
                 // (the rules list needs ~560pt of detail width).
                 .frame(minWidth: 760, minHeight: 640)

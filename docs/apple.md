@@ -1978,6 +1978,36 @@ and the SwiftUI 18 `@Observable` macro makes sharing a `Preferences`
 instance across the environment cheaper than keeping a property wrapper
 in each view.
 
+### Text size on the Mac: `AppTextSize`
+
+macOS has no Dynamic Type, so the Mac offers its own text size in
+Settings > Appearance (`HostPlatform.offersAppTextSize`; no other
+platform shows it). It is a five-step ramp of ratios (`AppTextSize`,
+Extra Small to Extra Large), with Medium meaning exactly the size each
+surface drew at before the setting, so a step scales whatever size a
+view already uses rather than pinning one.
+
+The setting covers message content only: message bodies (HTML and plain
+text), feed articles in reader styling, and the composer. The publisher's
+own page in the article view is left at the publisher's sizes. Native
+chrome (menus, toolbars, alerts) is out of reach and out of scope.
+
+- **Storage.** Device-wide `UserDefaults`
+  (`AppTextSize.contentDefaultsKey`), not `Preferences`: the right size
+  depends on the display, not the account, so it is neither
+  account-scoped nor synced.
+- **Delivery.** Every scene root applies `.appTextSize()` beside
+  `.themedAppearance(_:)` (a scene is its own environment root), which
+  reads the stored value into `\.contentTextSize`.
+  `\.contentTextScale` is the Dynamic Type body ratio times that step's
+  scale, and is what the HTML reader, the article reader and the
+  composer hand to `ReaderTextScale` / `setTextScale`. The plain-text
+  body uses `Font.contentBody(_:)`, which stays on `.body` at Medium.
+- **Shortcuts.** View > Larger Message Text (⌘+), Smaller Message Text
+  (⌘−) and Default Message Text Size (⌘0), in `ContentTextSizeCommands`
+  (menu-bar commands, so they work whatever has focus). They change
+  message text only; the rest of the app's text has no chords.
+
 ### Signed-in navigation: `TabView(.sidebarAdaptable)`
 
 `SignedInRootView` uses SwiftUI 18's `TabView(selection:)` + the

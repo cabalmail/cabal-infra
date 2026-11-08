@@ -11,17 +11,18 @@ import CabalmailKit
 /// recreating one per `body` re-evaluation would blow the editor's contents
 /// away and re-bootstrap the JS bridge.
 ///
-/// It does pass the system text size down: the editor page draws at a fixed
-/// 14px, so the view hands it `bodyTextScale` (the ratio the readers use)
-/// on mount and on every Dynamic Type change.
+/// It does pass the text size down: the editor page draws at a fixed 14px,
+/// so the view hands it `contentTextScale` (the ratio the readers use: the
+/// system text size times the app's message-text size) on mount and on
+/// every change to either.
 struct RichTextEditorView: View {
     let controller: RichTextEditorController
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.contentTextScale) private var contentTextScale
 
     var body: some View {
         webView
-            .task(id: dynamicTypeSize) {
-                await controller.setTextScale(dynamicTypeSize.bodyTextScale)
+            .task(id: contentTextScale) {
+                await controller.setTextScale(contentTextScale)
             }
     }
 

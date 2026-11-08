@@ -1,6 +1,8 @@
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
+#elseif canImport(AppKit)
+import AppKit
 #endif
 
 extension DynamicTypeSize {
@@ -13,7 +15,9 @@ extension DynamicTypeSize {
     /// platform that has one: at `.accessibility3` that is 40pt, not the
     /// 37pt `UIFontMetrics` gives for a custom 17pt font.
     ///
-    /// macOS has no Dynamic Type: the reader keeps its own 17px there.
+    /// macOS has no Dynamic Type: the reader keeps its own 17px there, and
+    /// the app's message-text size (`AppTextSize`) does the scaling instead
+    /// (`EnvironmentValues.contentTextScale`).
     var bodyTextScale: Double {
         #if canImport(UIKit)
         let size = UIFont.preferredFont(
@@ -28,5 +32,21 @@ extension DynamicTypeSize {
         #else
         return 1
         #endif
+    }
+}
+
+extension Font {
+    /// The plain-text message body's font at a message-text size: `.body`
+    /// itself at `.medium`, so Dynamic Type still drives it where the
+    /// platform has it, and the platform's body point size times the step's
+    /// scale otherwise.
+    static func contentBody(_ size: AppTextSize) -> Font {
+        guard size != .medium else { return .body }
+        #if canImport(UIKit)
+        let base = UIFont.preferredFont(forTextStyle: .body).pointSize
+        #else
+        let base = NSFont.preferredFont(forTextStyle: .body).pointSize
+        #endif
+        return .system(size: base * size.scale)
     }
 }
