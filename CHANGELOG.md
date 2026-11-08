@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.44.2] - 2026-11-08
+
+### Fixed
+- Apple: **Going back to the folder list no longer freezes the app.** On
+  iPhone, tapping back from a folder's messages to a Folders list too short
+  to fill the screen could hang the app until iOS killed it. The extra room
+  the list keeps below its rows so a push can tuck the filter field away was
+  recomputed from scroll measurements one step out of date, and under the
+  back navigation it chased itself forever; it is now worked out once the
+  list's layout has settled. The Feeds list, which keeps the same room,
+  gets the same fix.
+- Apple: **Address rows swipe under a finger on a touch Mac.** A finger's
+  swipe on an address row revealed nothing, though the trackpad's
+  two-finger swipe did: the row's tap-to-copy was a `Button` filling the
+  row, which kept the finger's swipe from the swipe actions. A tap gesture
+  now copies (`rowTapAction`), and the row still reads to VoiceOver as one
+  button whose activate copies. `RowTapActionTests` drives a click and an
+  accessibility press through such a row in a `List`.
+
 ## [1.44.1] - 2026-11-07
 
 ### Added
