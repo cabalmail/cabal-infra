@@ -15,7 +15,7 @@ struct SignUpCodeStep: View {
         Form {
             Section {
                 Text("Enter the code we sent to \(SignUpModel.describe(delivery)).")
-                    .font(.callout)
+                    .appFont(.callout)
                     .foregroundStyle(.secondary)
                 TextField("Verification code", text: $model.code)
                     .textContentType(.oneTimeCode)

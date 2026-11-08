@@ -39,7 +39,7 @@ struct FeedSidebarContent<Leading: View>: View {
     var body: some View {
         if let error = model.errorMessage {
             Label(error, systemImage: "exclamationmark.triangle")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(ColorTokens.dangerFg)
         }
         if model.hasLoaded, !model.hasSubscriptions {
@@ -57,7 +57,7 @@ struct FeedSidebarContent<Leading: View>: View {
         case .rowButtons:
             Button("Subscribe to a feed…") { actions.subscribe() }
                 .buttonStyle(.plain)
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(ColorTokens.accentForestFg)
                 .disabled(management == nil)
                 .accessibilityIdentifier("feeds.subscribe.empty")

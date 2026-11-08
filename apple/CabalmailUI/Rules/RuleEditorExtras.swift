@@ -93,16 +93,16 @@ struct RuleExtrasSection: View {
             VStack(alignment: .leading, spacing: 4) {
                 TextEditor(text: $rule.replyBody)
                     .frame(minHeight: 120)
-                    .font(.body)
+                    .appFont(.body)
                 Text("\(rule.replyBody.unicodeScalars.count) / \(RulesValidator.maxReplyBodyLength)")
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(
                         rule.replyBody.unicodeScalars.count > RulesValidator.maxReplyBodyLength
                             ? ColorTokens.dangerFg : .secondary
                     )
                 if rule.replyBody.isEmpty {
                     Text("A reply needs some text.")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
             }

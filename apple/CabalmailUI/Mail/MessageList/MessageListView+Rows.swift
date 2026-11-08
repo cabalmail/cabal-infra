@@ -438,7 +438,7 @@ private struct MessageRow: View {
                     // `.middle` truncation keeps both the sender start and the
                     // destination-address end legible when the line overflows.
                     routeText
-                        .font(.subheadline)
+                        .appFont(.subheadline)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -450,7 +450,7 @@ private struct MessageRow: View {
                     // legitimately breaks these checks.
                     if envelope.authVerification == .warning {
                         Image(systemName: "exclamationmark.shield.fill")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(ColorTokens.warningFg)
                             .accessibilityLabel(AuthResultsLine.warningCopy)
                     }
@@ -458,24 +458,24 @@ private struct MessageRow: View {
                     // "I already replied to this" reads at a glance.
                     if envelope.flags.contains(.answered) {
                         Image(systemName: "arrowshape.turn.up.left.fill")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Replied")
                     }
                     if envelope.hasAttachments {
                         Image(systemName: "paperclip")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                     }
                     if envelope.isImportant {
                         Image(systemName: "exclamationmark.circle.fill")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(ColorTokens.dangerFg)
                             .accessibilityLabel("High importance")
                     }
                     if envelope.flags.contains(.flagged) {
                         Image(systemName: "flag.fill")
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(ColorTokens.flaggedFg)
                     }
                     // Custom-flag dots (Phase 4): one color dot per tagged
@@ -491,11 +491,11 @@ private struct MessageRow: View {
                                 paletteEntry(for: slot)?.label ?? slot)
                     }
                     Text(dateLabel)
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Text(envelope.subject ?? "(no subject)")
-                    .font(.subheadline)
+                    .appFont(.subheadline)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)

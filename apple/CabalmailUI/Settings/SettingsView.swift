@@ -314,6 +314,16 @@ private struct AppearanceSettingsView: View {
                     Text("Message bodies, feed articles and the composer. "
                         + "The View menu's Larger and Smaller Message Text (⌘+ and ⌘−) change it too.")
                 }
+                Section {
+                    Picker("Interface text", selection: $textSizes.interface) {
+                        ForEach(AppTextSize.allCases) { size in
+                            Text(size.title).tag(size)
+                        }
+                    }
+                } footer: {
+                    Text("Everything else the app draws: lists, the sidebar, headers and settings. "
+                        + "Each keeps its size relative to the others. Menus and the toolbar follow the system.")
+                }
             }
         }
     }

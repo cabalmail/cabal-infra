@@ -1987,10 +1987,12 @@ Extra Small to Extra Large), with Medium meaning exactly the size each
 surface drew at before the setting, so a step scales whatever size a
 view already uses rather than pinning one.
 
-The setting covers message content only: message bodies (HTML and plain
-text), feed articles in reader styling, and the composer. The publisher's
-own page in the article view is left at the publisher's sizes. Native
-chrome (menus, toolbars, alerts) is out of reach and out of scope.
+There are two sizes. **Message text** covers message content: message
+bodies (HTML and plain text), feed articles in reader styling, and the
+composer. The publisher's own page in the article view is left at the
+publisher's sizes. **Interface text** covers the app's own text everywhere
+else. Native chrome (menus, toolbars, alerts) is out of reach and out of
+scope for both.
 
 - **Storage.** `AppTextSizeStore.shared`, an `@Observable` store over
   device-wide `UserDefaults` (`AppTextSize.contentDefaultsKey`), not
@@ -2001,11 +2003,27 @@ chrome (menus, toolbars, alerts) is out of reach and out of scope.
   hosted the test bundle.
 - **Delivery.** Every scene root applies `.appTextSize()` beside
   `.themedAppearance(_:)` (a scene is its own environment root), which
-  reads the store into `\.contentTextSize`.
+  reads the store into `\.contentTextSize` and `\.interfaceTextSize`.
   `\.contentTextScale` is the Dynamic Type body ratio times that step's
   scale, and is what the HTML reader, the article reader and the
   composer hand to `ReaderTextScale` / `setTextScale`. The plain-text
   body uses `Font.contentBody(_:)`, which stays on `.body` at Medium.
+- **Interface text: `appFont(_:)`.** SwiftUI's text styles are fixed
+  sizes on macOS (`dynamicTypeSize` changes nothing there), so every
+  `.font(.caption)` in `CabalmailUI` and `CabalmailMac` is
+  `.appFont(.caption)` instead (with `weight:`, `monospaced:` and
+  `monospacedDigit:` for the variants). At Medium it is exactly the text
+  style, so the default look and iOS Dynamic Type are unchanged; at
+  another step it is the platform's size for the style times the step's
+  scale, in the style's own weight, never below 9pt. The scene root also
+  sets the body at that size as the default font, for text that names
+  none. The `raw_text_style_font` SwiftLint rule fails a raw text style
+  in those two folders; fixed `.system(size:)` fonts stay allowed for
+  text tied to fixed geometry (avatar initials, a glyph in a fixed
+  circle). Geometry that `@ScaledMetric` scales on iOS scales with the
+  interface size on the Mac too: the message list's row height
+  (`MessageListView.rowHeight(base:at:)`) and the reader header's
+  trailing-column threshold.
 - **Shortcuts.** View > Larger Message Text (⌘+), Smaller Message Text
   (⌘−) and Default Message Text Size (⌘0), in `ContentTextSizeCommands`
   (menu-bar commands, so they work whatever has focus). They change

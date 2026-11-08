@@ -79,7 +79,7 @@ struct UnsubscribedBannerRow: View {
             Image(systemName: "bell.slash")
                 .foregroundStyle(.secondary)
             Text("This unsubscribed folder is not kept up-to-date automatically.")
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(lineLimit)
                 // Kept: this is what lets the sentence wrap to the lines the

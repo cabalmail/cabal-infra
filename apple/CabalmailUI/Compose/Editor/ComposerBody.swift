@@ -139,7 +139,7 @@ struct ComposerBody: View {
             .collapsed(formattingHidden)
 
             TextEditor(text: $model.markdownBody)
-                .font(.body.monospaced())
+                .appFont(.body, monospaced: true)
                 .frame(minHeight: editorFloor)
                 .focused($markdownFocused)
                 .takesDroppedAttachments(into: model)

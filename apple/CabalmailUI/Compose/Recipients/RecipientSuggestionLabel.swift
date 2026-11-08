@@ -19,14 +19,14 @@ struct RecipientSuggestionLabel: View {
         VStack(alignment: .leading, spacing: 2) {
             if let name = suggestion.name, !name.isEmpty {
                 Text(name)
-                    .font(.subheadline)
+                    .appFont(.subheadline)
                     .foregroundStyle(.primary)
                 Text(suggestion.email)
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             } else {
                 Text(suggestion.email)
-                    .font(.subheadline)
+                    .appFont(.subheadline)
                     .foregroundStyle(.primary)
             }
         }

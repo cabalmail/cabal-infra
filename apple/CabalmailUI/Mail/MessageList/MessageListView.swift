@@ -119,9 +119,26 @@ struct MessageListView: View {
     /// The base 58 clears the row's two `.subheadline` lines (sender route +
     /// one-line subject) at the default size with a little slack; scaling
     /// preserves that slack proportionally. Instance (not `static`) because
-    /// `@ScaledMetric` reads the environment; module-internal so the
-    /// `+Selection` extension can pin rows and placeholders to it.
-    @ScaledMetric(relativeTo: .subheadline) var rowHeight: CGFloat = 58
+    /// `@ScaledMetric` reads the environment.
+    ///
+    /// macOS has no Dynamic Type, so there `@ScaledMetric` never moves; the
+    /// Mac's interface text size (`AppTextSize`) scales the row instead,
+    /// through `rowHeight` below, by the same ratio it scales the row's text.
+    @ScaledMetric(relativeTo: .subheadline) var baseRowHeight: CGFloat = 58
+    /// The interface text size, which scales `rowHeight` on the Mac.
+    @Environment(\.interfaceTextSize) var interfaceTextSize
+    /// The one row height every row and placeholder is pinned to:
+    /// `baseRowHeight` itself at the default size, and scaled to whole
+    /// points at any other. Module-internal so the `+Selection` extension
+    /// can pin rows and placeholders to it.
+    var rowHeight: CGFloat {
+        Self.rowHeight(base: baseRowHeight, at: interfaceTextSize)
+    }
+
+    static func rowHeight(base: CGFloat, at size: AppTextSize) -> CGFloat {
+        guard size != .medium else { return base }
+        return (base * size.scale).rounded()
+    }
     /// Diameter of the per-row sender avatar. Fixed (not `@ScaledMetric`) so
     /// it can't grow past `rowHeight`; 32 sits comfortably within the 58pt
     /// row beside the two text lines. Shared by `MessageRow` and the

@@ -201,7 +201,7 @@ private struct RuleDestinationSection: View {
                     + "rule without filing, flagging, marking read, "
                     + "forwarding, or replying."
                 )
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(ColorTokens.dangerFg)
             }
         } header: {
@@ -270,14 +270,14 @@ private struct RuleDestinationSection: View {
         case .archive where !model.hasArchiveFolder:
             VStack(alignment: .leading, spacing: 6) {
                 Text("You don't have an Archive folder yet, so this rule would be skipped.")
-                    .font(.callout)
+                    .appFont(.callout)
                 Button("Create Archive Folder") {
                     archiveCreateFailed = false
                     Task { archiveCreateFailed = !(await model.createArchiveFolder()) }
                 }
                 if archiveCreateFailed {
                     Text("Couldn't create the folder. Try again.")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
             }

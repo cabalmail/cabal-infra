@@ -195,7 +195,7 @@ struct NewAddressSheet: View {
     @ViewBuilder
     private func addressPreview(_ preview: String) -> some View {
         Text(AddressDisplay.wrappable(preview))
-            .font(.caption)
+            .appFont(.caption)
             .foregroundStyle(.secondary)
             #if os(macOS)
             .fixedSize(horizontal: false, vertical: true)

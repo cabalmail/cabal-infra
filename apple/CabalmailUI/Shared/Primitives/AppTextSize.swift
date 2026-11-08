@@ -23,6 +23,11 @@ public enum AppTextSize: String, CaseIterable, Identifiable, Sendable {
     /// migration.
     public static let contentDefaultsKey = "cabalmail.display.content_text_size"
 
+    /// `UserDefaults` key for the interface-text size: the app's own text
+    /// everywhere else (`appFont(_:)`). Load-bearing; don't rename without a
+    /// migration.
+    public static let interfaceDefaultsKey = "cabalmail.display.interface_text_size"
+
     public var id: String { rawValue }
 
     /// How much larger than `.medium` this step draws text.
@@ -86,10 +91,22 @@ public final class AppTextSizeStore {
         }
     }
 
+    /// The interface-text size (`AppTextSize.interfaceDefaultsKey`).
+    public var interface: AppTextSize {
+        didSet {
+            guard interface != oldValue else { return }
+            defaults.set(interface.rawValue, forKey: AppTextSize.interfaceDefaultsKey)
+        }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        content = defaults.string(forKey: AppTextSize.contentDefaultsKey)
-            .flatMap(AppTextSize.init(rawValue:)) ?? .medium
+        content = Self.read(AppTextSize.contentDefaultsKey, from: defaults)
+        interface = Self.read(AppTextSize.interfaceDefaultsKey, from: defaults)
+    }
+
+    private static func read(_ key: String, from defaults: UserDefaults) -> AppTextSize {
+        defaults.string(forKey: key).flatMap(AppTextSize.init(rawValue:)) ?? .medium
     }
 }
 
@@ -97,6 +114,11 @@ extension EnvironmentValues {
     /// The message-text size the scene root read from the store
     /// (`appTextSize()`). `.medium` wherever no root sets it.
     @Entry var contentTextSize: AppTextSize = .medium
+
+    /// The interface-text size the scene root read from the store
+    /// (`appTextSize()`), which `appFont(_:)` draws at. `.medium` wherever
+    /// no root sets it.
+    @Entry var interfaceTextSize: AppTextSize = .medium
 
     /// The scale message content draws at: the system text size (Dynamic
     /// Type, where the platform has it) times the app's own message-text
@@ -118,6 +140,13 @@ public extension View {
 
 private struct AppTextSizeRoot: ViewModifier {
     func body(content: Content) -> some View {
-        content.environment(\.contentTextSize, AppTextSizeStore.shared.content)
+        let store = AppTextSizeStore.shared
+        content
+            // Text that names no font (form rows, labels, buttons) takes
+            // the interface size from here. At `.medium` there is no
+            // default, as before the setting.
+            .font(store.interface == .medium ? nil : .app(.body, store.interface))
+            .environment(\.interfaceTextSize, store.interface)
+            .environment(\.contentTextSize, store.content)
     }
 }

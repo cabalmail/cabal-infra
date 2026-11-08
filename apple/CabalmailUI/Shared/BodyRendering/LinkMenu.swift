@@ -99,7 +99,7 @@ struct LinkActionMenuView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(target.url.absoluteString)
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(.secondary)
                 .lineLimit(4)
                 .truncationMode(.middle)

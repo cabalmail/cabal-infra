@@ -477,7 +477,7 @@ private struct TrackpadSwipeCapsuleLabel: View {
         Label(spec.title, systemImage: spec.systemImage)
             .labelStyle(.titleAndIcon)
             .symbolVariant(.fill)
-            .font(.footnote.weight(.medium))
+            .appFont(.footnote, weight: .medium)
             .foregroundStyle(.white)
             .lineLimit(1)
             .padding(.horizontal, 12)

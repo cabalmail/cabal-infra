@@ -57,10 +57,10 @@ struct TitleSwitchHeaderMenu<Items: View>: View {
         } label: {
             HStack(spacing: 4) {
                 Text(title)
-                    .font(.headline)
+                    .appFont(.headline)
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
-                    .font(.caption2)
+                    .appFont(.caption2)
                     .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())

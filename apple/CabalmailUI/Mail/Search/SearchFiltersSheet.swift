@@ -157,7 +157,7 @@ struct SearchFiltersSheet: View {
                 MacSheetSection(caption: "Scope") {
                     folderScopeToggle
                     Text(folderScopeFooter)
-                        .font(.footnote)
+                        .appFont(.footnote)
                         .foregroundStyle(.secondary)
                         .sectionFooter()
                 }

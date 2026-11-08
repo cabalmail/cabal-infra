@@ -58,13 +58,13 @@ struct BannerView: View {
             Image(systemName: icon)
                 .foregroundStyle(tint)
             Text(text)
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(.primary)
             Spacer(minLength: 0)
             if let onAction {
                 HitPaddedButton(hitPadding: Self.actionHitPadding, action: onAction) {
                     Label(actionTitle, systemImage: actionIcon)
-                        .font(.footnote.weight(.semibold))
+                        .appFont(.footnote, weight: .semibold)
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(.borderless)
@@ -73,7 +73,7 @@ struct BannerView: View {
             if let onDismiss {
                 HitPaddedButton(hitPadding: Self.closeHitPadding, action: onDismiss) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.footnote)
+                        .appFont(.footnote)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.borderless)

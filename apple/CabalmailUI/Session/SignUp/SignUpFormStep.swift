@@ -49,7 +49,7 @@ struct SignUpFormStep: View {
                 Section {
                     Toggle(isOn: $model.smsConsent) {
                         Text(model.smsConsentText)
-                            .font(.footnote)
+                            .appFont(.footnote)
                     }
                     .accessibilityIdentifier("signup.smsConsent")
                 }

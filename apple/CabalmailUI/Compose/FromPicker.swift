@@ -47,7 +47,7 @@ struct FromPicker: View {
                 Spacer()
                 if FromPickerChevronPolicy.labelDrawsChevron(on: .current) {
                     Image(systemName: "chevron.down")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
