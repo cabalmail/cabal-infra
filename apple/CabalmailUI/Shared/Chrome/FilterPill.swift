@@ -19,10 +19,10 @@ struct FilterPill: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Text(label)
-                    .font(.subheadline.weight(isOn ? .semibold : .regular))
+                    .appFont(.subheadline, weight: isOn ? .semibold : .regular)
                 if let count {
                     Text("\(count)")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(FilterPillCountStyle.countEmphasis().shapeStyle)
                 }
             }

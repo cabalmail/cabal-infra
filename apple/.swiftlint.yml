@@ -78,6 +78,23 @@ custom_rules:
     message: "Log through CabalmailLog, which writes the unified log and the Debug Log"
     severity: warning
 
+  # The Mac's interface text size (`AppTextSize`) reaches the app's text
+  # only through `appFont(_:)`: macOS has no Dynamic Type, so a raw
+  # `.font(.caption)` would draw at the same size whatever the setting.
+  # `Platform/AppFont.swift` is the one place a text style is turned into
+  # a font. Fixed `.font(.system(size:))` sizes stay allowed: they belong
+  # to fixed geometry (an avatar's initials, a glyph in a fixed circle).
+  raw_text_style_font:
+    name: "Raw text-style font"
+    regex: '\.font\(\s*(\.system\(\s*)?\.(largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2)\b'
+    included:
+      - "CabalmailUI/"
+      - "CabalmailMac/"
+    excluded:
+      - "CabalmailUI/Platform/AppFont\\.swift$"
+    message: "Use appFont(_:) so the text follows the Mac's interface text size"
+    severity: warning
+
   # Page JavaScript stays off in a web view that shows HTML somebody else
   # wrote (the mail reader, the feed article in reader mode). Turning it on
   # anywhere in shipped code takes a reasoned

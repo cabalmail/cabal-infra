@@ -21,7 +21,7 @@ struct AcknowledgementsView: View {
                     + "rich-text composer. Each component's copyright and license notice is "
                     + "reproduced in full to satisfy the license's attribution requirements."
                 )
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
             }
             ForEach(components) { component in
@@ -32,7 +32,7 @@ struct AcknowledgementsView: View {
                     }
                     DisclosureGroup("License text") {
                         Text(licenseText(for: component))
-                            .font(.system(.footnote, design: .monospaced))
+                            .appFont(.footnote, monospaced: true)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }

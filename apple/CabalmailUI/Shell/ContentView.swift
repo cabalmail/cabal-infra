@@ -90,7 +90,7 @@ private struct RestoringSplash: View {
                 .foregroundStyle(ColorTokens.brandForest)
                 .accessibilityHidden(true)
             Text("Cabalmail")
-                .font(.title)
+                .appFont(.title)
             ProgressView()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

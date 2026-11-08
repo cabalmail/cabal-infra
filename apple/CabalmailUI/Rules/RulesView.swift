@@ -230,13 +230,13 @@ private struct RuleRow: View {
                     .foregroundStyle(rule.enabled ? .primary : .secondary)
                 if !rule.isEditable {
                     Image(systemName: "lock")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .accessibilityLabel("Read-only")
                 }
             }
             Text(RuleSummary.describe(rule))
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
@@ -309,7 +309,7 @@ private struct RulesSaveStatusBar: View {
 
     private func statusText(_ text: String) -> some View {
         Text(text)
-            .font(.footnote)
+            .appFont(.footnote)
             .foregroundStyle(.secondary)
             .lineLimit(2)
     }
@@ -331,12 +331,12 @@ private struct RulesEmptyState: View {
                     .font(.system(size: 40))
                     .foregroundStyle(.secondary)
                 Text("No rules yet")
-                    .font(.title3.weight(.semibold))
+                    .appFont(.title3, weight: .semibold)
                 Text(
                     "Rules file, flag, forward, or answer incoming mail for you. "
                     + "Start from a template or a blank rule."
                 )
-                    .font(.callout)
+                    .appFont(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                 VStack(spacing: 10) {
@@ -372,8 +372,8 @@ private struct RulesEmptyState: View {
             addedRuleID = model.add(template)
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.body.weight(.medium))
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                Text(title).appFont(.body, weight: .medium)
+                Text(subtitle).appFont(.caption).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())

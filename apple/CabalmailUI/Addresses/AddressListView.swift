@@ -202,7 +202,7 @@ struct AddressListView: View {
                 listFilterRaw = AddressListFilter.all.rawValue
             } label: {
                 Label(hint, systemImage: "line.3.horizontal.decrease.circle")
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
@@ -428,12 +428,12 @@ extension AddressListView {
                     .accessibilityLabel(address.address)
                 if address.suspended {
                     Text("Suspended")
-                        .font(.caption2)
+                        .appFont(.caption2)
                         .foregroundStyle(ColorTokens.warningFg)
                 }
                 if let comment = address.comment, !comment.isEmpty {
                     Text(comment)
-                        .font(.caption2)
+                        .appFont(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }

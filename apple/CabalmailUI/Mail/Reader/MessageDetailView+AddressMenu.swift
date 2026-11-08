@@ -15,7 +15,7 @@ extension MessageDetailView {
     func recipientFlow(label: String, addresses: [EmailAddress]) -> some View {
         FlowLayout(horizontalSpacing: 4, verticalSpacing: 2) {
             Text(label)
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
             ForEach(addresses.indices, id: \.self) { index in
                 let address = addresses[index]
@@ -23,7 +23,7 @@ extension MessageDetailView {
                 // like the old comma-joined list; it's part of the tappable
                 // element so the whole token shares one menu.
                 Text(index < addresses.count - 1 ? "\(address.formatted)," : address.formatted)
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .contextMenu { addressMenu(for: address) }
             }

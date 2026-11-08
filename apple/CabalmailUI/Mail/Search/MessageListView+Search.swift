@@ -81,10 +81,10 @@ extension MessageListView {
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 1) {
                 Text(searchScope(model).bannerLabel)
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                 Text(searchMatchLabel(model))
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.primary)
             }
             Spacer()

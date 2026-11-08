@@ -192,7 +192,7 @@ struct FeedItemDetailView: View {
     private func header(_ model: FeedItemDetailViewModel) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(model.item.title.isEmpty ? "Untitled" : model.item.title)
-                .font(.title3.weight(.semibold))
+                .appFont(.title3, weight: .semibold)
                 .textSelection(.enabled)
             if let url = model.articleURL {
                 // The published article, in the browser, one tap from the
@@ -200,7 +200,7 @@ struct FeedItemDetailView: View {
                 // view is a separate thing and can be off screen on iPhone.
                 Link(destination: url) {
                     Label("Open on \(url.host() ?? "the web")", systemImage: "arrow.up.right.square")
-                        .font(.caption)
+                        .appFont(.caption)
                 }
                 .accessibilityIdentifier("feed.reader.openInBrowser")
             }
@@ -217,7 +217,7 @@ struct FeedItemDetailView: View {
                     Text(host)
                 }
             }
-            .font(.caption)
+            .appFont(.caption)
             .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)

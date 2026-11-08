@@ -45,7 +45,7 @@ struct MacSheetSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Self.captionSpacing) {
             Text(caption)
-                .font(.headline)
+                .appFont(.headline)
             content
         }
     }

@@ -84,7 +84,7 @@ extension MessageListView {
         HStack(spacing: 14) {
             if layout.showsCount {
                 Text("\(count) selected")
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -220,7 +220,7 @@ extension MessageListView {
                 Image(systemName: systemImage)
                 if showsCaption {
                     Text(label)
-                        .font(.caption2)
+                        .appFont(.caption2)
                         // Keep the caption on one line; ViewThatFits reads
                         // its natural width to tell whether this rung fits,
                         // and a caption free to wrap always "fits".

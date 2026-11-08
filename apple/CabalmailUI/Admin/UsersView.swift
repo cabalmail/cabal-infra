@@ -115,7 +115,7 @@ private struct UserLink: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.username)
                 Text(UserDetailView.summary(of: user, isCurrentUser: model.isCurrentUser(user.username)))
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -126,10 +126,10 @@ private struct UsersAccessDeniedView: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: "lock")
-                .font(.largeTitle)
+                .appFont(.largeTitle)
                 .foregroundStyle(.secondary)
             Text("Administrators only")
-                .font(.headline)
+                .appFont(.headline)
             Text("The server says this account isn't an administrator.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

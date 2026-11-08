@@ -83,10 +83,10 @@ extension MessageListView {
             } label: {
                 HStack(spacing: 4) {
                     Text(folder.name)
-                        .font(.headline)
+                        .appFont(.headline)
                         .lineLimit(1)
                     Image(systemName: "chevron.down")
-                        .font(.caption2)
+                        .appFont(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 .contentShape(Rectangle())
@@ -112,7 +112,7 @@ extension MessageListView {
                 folderSwitchMenuItems
             } label: {
                 Text(folder.name)
-                    .font(.headline)
+                    .appFont(.headline)
                     .lineLimit(1)
             }
             // Borderless, or macOS 27 drops the label: the toolbar's default

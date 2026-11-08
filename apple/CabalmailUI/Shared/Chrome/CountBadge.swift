@@ -18,7 +18,7 @@ struct CountBadge: View {
     var body: some View {
         if let text = FolderCountBadge.text(display: display, unread: unread, total: total) {
             Text(text)
-                .font(.caption.monospacedDigit())
+                .appFont(.caption, monospacedDigit: true)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .background(Color.secondary.opacity(0.15), in: Capsule())

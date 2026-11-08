@@ -76,7 +76,7 @@ struct FeedFolderSheet: View {
     private var errorLabel: some View {
         if let errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(ColorTokens.dangerFg)
         }
     }

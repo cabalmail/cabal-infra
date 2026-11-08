@@ -151,7 +151,7 @@ struct HTMLBodyView: View {
     private var hoverStatusPill: some View {
         if let hoveredHref {
             Text(hoveredHref)
-                .font(.caption)
+                .appFont(.caption)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: 440, alignment: .leading)

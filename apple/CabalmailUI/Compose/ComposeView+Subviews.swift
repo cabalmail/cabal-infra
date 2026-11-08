@@ -18,12 +18,12 @@ extension ComposeView {
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading) {
                 Text(attachment.filename)
-                    .font(.subheadline)
+                    .appFont(.subheadline)
                 Text(ByteCountFormatter.string(
                     fromByteCount: Int64(attachment.data.count),
                     countStyle: .file
                 ))
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -54,7 +54,7 @@ extension ComposeView {
         let warning = "Attachments and images total \(total). Many mail servers reject "
             + "messages over 25 MB; delivery may fail."
         Label(warning, systemImage: "exclamationmark.triangle")
-            .font(.caption)
+            .appFont(.caption)
             .foregroundStyle(ColorTokens.warningFg)
     }
 

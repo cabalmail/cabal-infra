@@ -73,7 +73,7 @@ struct SignUpView: View {
         Form {
             Section {
                 Label("Account created", systemImage: "checkmark.circle")
-                    .font(.headline)
+                    .appFont(.headline)
                     .accessibilityIdentifier("signup.created")
                 Text(createdText(created))
             }

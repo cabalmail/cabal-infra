@@ -219,7 +219,7 @@ private struct MacSignInChrome<FormContent: View>: View {
                 .foregroundStyle(ColorTokens.brandForest)
                 .accessibilityHidden(true)
             Text("Cabalmail")
-                .font(.title2.weight(.semibold))
+                .appFont(.title2, weight: .semibold)
             form
                 .formStyle(.grouped)
                 // The grouped scroll background is a slightly different

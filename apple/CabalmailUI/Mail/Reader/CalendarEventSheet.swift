@@ -58,10 +58,10 @@ struct CalendarEventSheet: View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
                 Text(indexed.event.summary ?? "(no title)")
-                    .font(.headline)
+                    .appFont(.headline)
                 if isCancelled(indexed.event) {
                     Label("This event was cancelled", systemImage: "xmark.circle")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
                 detailRows(indexed.event)
@@ -80,26 +80,26 @@ struct CalendarEventSheet: View {
     private func detailRows(_ event: ICalendarEvent) -> some View {
         if let dateLine = Self.dateLine(for: event) {
             Text(dateLine)
-                .font(.subheadline)
+                .appFont(.subheadline)
         }
         if let repeats = Self.recurrenceLine(for: event) {
             Label(repeats, systemImage: "repeat")
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
         }
         if let location = event.location, !location.isEmpty {
             Label(location, systemImage: "mappin.and.ellipse")
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
         }
         if let organizer = event.organizer {
             Label(organizer, systemImage: "person.crop.circle")
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
         }
         if let description = event.description, !description.isEmpty {
             Text(description)
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(6)
         }

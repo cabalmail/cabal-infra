@@ -369,13 +369,13 @@ struct FeedItemRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.body.weight(item.isRead ? .regular : .semibold))
+                    .appFont(.body, weight: item.isRead ? .regular : .semibold)
                     .lineLimit(2)
                 if !snippet.isEmpty {
                     // One line, cut with an ellipsis where it outruns the
                     // column; an item with no prose keeps the two-line row.
                     Text(snippet)
-                        .font(.subheadline)
+                        .appFont(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -391,7 +391,7 @@ struct FeedItemRow: View {
                             .accessibilityLabel("Change queued")
                     }
                 }
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)

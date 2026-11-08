@@ -520,7 +520,7 @@ extension ComposeView {
     private var composeErrorBanner: some View {
         if let errorMessage = model.errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(ColorTokens.dangerFg)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
