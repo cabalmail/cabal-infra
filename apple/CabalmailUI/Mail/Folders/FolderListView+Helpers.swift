@@ -71,7 +71,11 @@ extension FolderListView {
                     )
                     .foregroundStyle(.secondary)
                     .frame(width: 14, height: 14)
+                // The sidebar draws its section headers in its own bold
+                // 11pt and ignores a font set above the text; this scales
+                // that look with the interface text size.
                 Text(title)
+                    .appFontWhenScaled(.subheadline, weight: .bold)
                 Spacer()
             }
             // The header spans the sidebar but its glyph and word occupy the

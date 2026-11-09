@@ -22,11 +22,11 @@ struct MfaChallengeForm: View {
 
     var body: some View {
         Form {
-            Section("Two-factor code") {
+            Section(formHeader: "Two-factor code") {
                 Text(method == .totp
                     ? "Enter the 6-digit code from your authenticator app."
                     : "Enter the code we just sent to your phone.")
-                    .font(.callout)
+                    .appFont(.callout)
                     .foregroundStyle(.secondary)
                 // Same label/prompt split as the control-domain field: the
                 // grouped macOS form would otherwise show "123456" as the

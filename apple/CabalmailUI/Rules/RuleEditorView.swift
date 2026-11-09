@@ -42,10 +42,13 @@ struct RuleEditorView: View {
                 Toggle("Continue to the next rule", isOn: continueBinding)
                     .disabled(isDelete)
             } footer: {
-                Text(isDelete
-                    ? "A deleted message can't continue to later rules."
-                    : "Off: the first matching rule is the last one that runs. On: later rules still see this message.")
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text(isDelete
+                        ? "A deleted message can't continue to later rules."
+                        : "Off: the first matching rule is the last one that runs. "
+                            + "On: later rules still see this message.")
+                        .sectionFooter()
+                }
             }
             RuleConditionsSection(rule: rule)
             RuleDestinationSection(model: model, rule: rule, conversionNote: $conversionNote)
@@ -130,12 +133,16 @@ private struct RuleConditionsSection: View {
             }
             .disabled(rule.conditions.count >= RulesValidator.maxConditions)
         } header: {
-            Text("Conditions")
+            FormSectionHeader {
+                Text("Conditions")
+            }
         } footer: {
-            Text(rule.conditions.isEmpty
-                ? "No conditions: this rule matches every message."
-                : "All conditions must match (case-insensitive contains).")
-                .sectionFooter()
+            FormSectionFooter {
+                Text(rule.conditions.isEmpty
+                    ? "No conditions: this rule matches every message."
+                    : "All conditions must match (case-insensitive contains).")
+                    .sectionFooter()
+            }
         }
     }
 
@@ -201,14 +208,18 @@ private struct RuleDestinationSection: View {
                     + "rule without filing, flagging, marking read, "
                     + "forwarding, or replying."
                 )
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(ColorTokens.dangerFg)
             }
         } header: {
-            Text("Destination")
+            FormSectionHeader {
+                Text("Destination")
+            }
         } footer: {
-            footerText
-                .sectionFooter()
+            FormSectionFooter {
+                footerText
+                    .sectionFooter()
+            }
         }
     }
 
@@ -270,14 +281,14 @@ private struct RuleDestinationSection: View {
         case .archive where !model.hasArchiveFolder:
             VStack(alignment: .leading, spacing: 6) {
                 Text("You don't have an Archive folder yet, so this rule would be skipped.")
-                    .font(.callout)
+                    .appFont(.callout)
                 Button("Create Archive Folder") {
                     archiveCreateFailed = false
                     Task { archiveCreateFailed = !(await model.createArchiveFolder()) }
                 }
                 if archiveCreateFailed {
                     Text("Couldn't create the folder. Try again.")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
             }

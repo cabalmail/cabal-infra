@@ -74,14 +74,14 @@ extension FeedItemListView {
     func statusLines(_ model: FeedItemListViewModel) -> some View {
         if let errorMessage = model.errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(ColorTokens.dangerFg)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         if let subscription = model.subscription, let headline = FeedHealth.headline(for: subscription.feed) {
             let stopped = FeedHealth.level(for: subscription.feed) == .stopped
             Label(headline, systemImage: stopped ? "xmark.octagon.fill" : "exclamationmark.triangle.fill")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("feed.health.headline")

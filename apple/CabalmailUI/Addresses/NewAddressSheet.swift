@@ -142,13 +142,13 @@ struct NewAddressSheet: View {
     #else
     private var formContent: some View {
         Form {
-            Section("New address") {
+            Section(formHeader: "New address") {
                 addressRow
                 if let preview = composedAddress {
                     addressPreview(preview)
                 }
             }
-            Section("Comment") {
+            Section(formHeader: "Comment") {
                 TextField("optional reminder", text: $comment)
                     .autocorrectionDisabled()
             }
@@ -195,7 +195,7 @@ struct NewAddressSheet: View {
     @ViewBuilder
     private func addressPreview(_ preview: String) -> some View {
         Text(AddressDisplay.wrappable(preview))
-            .font(.caption)
+            .appFont(.caption)
             .foregroundStyle(.secondary)
             #if os(macOS)
             .fixedSize(horizontal: false, vertical: true)

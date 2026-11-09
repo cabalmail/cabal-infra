@@ -20,6 +20,14 @@ struct RichTextToolbar: View {
     /// Compose's laptop pose, which counts the link prompt's keyboard as
     /// editing; nil outside the iOS compose form.
     @Environment(\.composeLaptop) private var laptop
+    /// The interface text size: the buttons' fixed glyph sizes and minimum
+    /// frames grow and shrink with it (`scaled(_:)`), so the B / I / U
+    /// letters keep pace with the text around them.
+    @Environment(\.interfaceTextSize) private var interfaceTextSize
+
+    private func scaled(_ length: CGFloat) -> CGFloat {
+        (length * interfaceTextSize.scale).rounded()
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -149,7 +157,7 @@ struct RichTextToolbar: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .frame(minWidth: 24, minHeight: 24)
+                .frame(minWidth: scaled(24), minHeight: scaled(24))
                 .padding(Self.hitPadding)
                 .contentShape(Rectangle())
         }
@@ -168,7 +176,7 @@ struct RichTextToolbar: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .frame(minWidth: 24, minHeight: 24)
+                .frame(minWidth: scaled(24), minHeight: scaled(24))
                 .background(isOn ? ColorTokens.accentForestWash : .clear)
                 .cornerRadius(4)
                 .padding(Self.hitPadding)
@@ -188,8 +196,8 @@ struct RichTextToolbar: View {
     ) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(minWidth: 26, minHeight: 24)
+                .font(.system(size: scaled(12), weight: .semibold))
+                .frame(minWidth: scaled(26), minHeight: scaled(24))
                 .background(isOn ? ColorTokens.accentForestWash : .clear)
                 .cornerRadius(4)
                 .padding(Self.hitPadding)

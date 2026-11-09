@@ -27,10 +27,10 @@ struct FolderPickerRow<Accessory: View>: View {
                 .frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
                 Text(folder.name)
-                    .font(.body)
+                    .appFont(.body)
                 if depth > 0 {
                     Text(folder.path)
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

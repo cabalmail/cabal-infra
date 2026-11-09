@@ -81,10 +81,10 @@ struct NewFolderSheet: View {
     #else
     private var formContent: some View {
         Form {
-            Section("Name") {
+            Section(formHeader: "Name") {
                 nameField
             }
-            Section("Parent") {
+            Section(formHeader: "Parent") {
                 parentPicker
             }
             errorLabel
@@ -97,7 +97,7 @@ struct NewFolderSheet: View {
     private var errorLabel: some View {
         if let errorMessage = form.errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(ColorTokens.dangerFg)
         }
     }

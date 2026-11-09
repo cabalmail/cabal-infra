@@ -69,7 +69,9 @@ struct RecoveryEmailSections: View {
                 .submitLabel(.go)
                 .onSubmit { Task { await model.save() } }
         } footer: {
-            Text(model.editingHelp)
+            FormSectionFooter {
+                Text(model.editingHelp)
+            }
         }
         Section {
             AuthFormActions(
@@ -89,7 +91,7 @@ struct RecoveryEmailSections: View {
     @ViewBuilder private var verifyingSections: some View {
         Section {
             Text("Enter the code we sent to \(model.address ?? "your email").")
-                .font(.callout)
+                .appFont(.callout)
                 .foregroundStyle(.secondary)
             TextField("Verification code", text: $model.code)
                 .textContentType(.oneTimeCode)

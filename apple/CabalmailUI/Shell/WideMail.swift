@@ -320,54 +320,13 @@ struct WideMail {
         )
     }
 
-    /// The `@` toggle for the content column's bar.
+    /// The `@` toggle for the iPad split's content column bar. The Mac draws
+    /// it at the window toolbar's trailing edge instead, from each reader
+    /// (`TrailingAddressInspectorItem`).
     var addressInspectorToolbarItem: AddressInspectorToolbarItem {
         AddressInspectorToolbarItem(
             addressInspectorPresented: addressInspectorPresented, toggle: toggleAddressInspector
         )
-    }
-}
-
-/// The addresses inspector's `@` toggle, ranked for the bar it sits in.
-///
-/// While the inspector is open this is the one item the bar must keep: on an
-/// iPhone Duo the column beside it is narrow enough that Compose and `@` both
-/// fold into the system overflow, which is inert on the 27.1 beta, and the
-/// inspector then cannot be closed (#1670).
-///
-/// Closed, it still ranks with Compose rather than below it: this button is
-/// the *only* entry point to addresses on the wide shells (`SettingsSheet`'s
-/// own doc records the move out of the sheet), so folding it away takes the
-/// feature with it (#1626). What the overflow may take is the More menu,
-/// whose Mark All as Read is also on the folder list's context menu and on
-/// ⌥⌘T.
-struct AddressInspectorToolbarItem: ToolbarContent {
-    let addressInspectorPresented: Bool
-    let toggle: () -> Void
-    /// At the bar's leading end in book pose (`\.listBarItemsLead`).
-    @Environment(\.listBarItemsLead) private var itemsLead
-
-    var body: some ToolbarContent {
-        if addressInspectorPresented {
-            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) { addressInspectorToggle }
-                .keepsInBarFirst()
-        } else {
-            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) { addressInspectorToggle }
-                .keepsInBar()
-        }
-    }
-
-    private var addressInspectorToggle: some View {
-        Button(action: toggle) {
-            // Titled, so the button survives folding: the system overflow
-            // draws a menu row, and a row with only an image and an
-            // `accessibilityLabel` has nothing to draw (#1787). The bar
-            // itself still shows the icon alone.
-            Label("Addresses", systemImage: "at")
-        }
-        // Kept as `at`, the identifier the icon-only button derived from its
-        // SF Symbol; a titled button derives none.
-        .accessibilityIdentifier("at")
     }
 }
 

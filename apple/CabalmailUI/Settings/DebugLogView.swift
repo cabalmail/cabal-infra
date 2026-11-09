@@ -69,7 +69,7 @@ struct DebugLogView: View {
             if enabled { selectedLevels.remove(level) } else { selectedLevels.insert(level) }
         } label: {
             Text(level.rawValue.uppercased())
-                .font(.caption)
+                .appFont(.caption)
                 .fontWeight(.semibold)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -153,20 +153,20 @@ private struct LogRow: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
                 Text(levelLabel)
-                    .font(.caption2)
+                    .appFont(.caption2)
                     .fontWeight(.bold)
                     .foregroundStyle(tint)
                 Text(entry.category)
-                    .font(.caption2)
+                    .appFont(.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text(timestamp)
-                    .font(.caption2)
+                    .appFont(.caption2)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
             Text(entry.message)
-                .font(.caption.monospaced())
+                .appFont(.caption, monospaced: true)
                 .textSelection(.enabled)
         }
     }

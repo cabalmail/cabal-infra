@@ -66,9 +66,10 @@ struct HTMLBodyView: View {
     @State private var hoveredHref: String?
     @Environment(\.openURL) private var openURL
     @Environment(AppState.self) private var appState
-    /// The system text size; the body's text is scaled to it
-    /// (`ReaderTextScale`), as the plain-text body's `.body` font is.
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// The system text size times the app's message-text size; the body's
+    /// text is scaled to it (`ReaderTextScale`), as the plain-text body's
+    /// font is (`Font.contentBody`).
+    @Environment(\.contentTextScale) private var contentTextScale
 
     init(
         html: String,
@@ -118,7 +119,7 @@ struct HTMLBodyView: View {
             inlineImages: inlineImages,
             allowRemote: allowRemote,
             readerMode: readerMode,
-            textScale: dynamicTypeSize.bodyTextScale,
+            textScale: contentTextScale,
             printRequestTick: printRequestTick,
             pageRequest: pageRequest,
             restoreAnchor: restoreAnchor,
@@ -132,7 +133,7 @@ struct HTMLBodyView: View {
             inlineImages: inlineImages,
             allowRemote: allowRemote,
             readerMode: readerMode,
-            textScale: dynamicTypeSize.bodyTextScale,
+            textScale: contentTextScale,
             printRequestTick: printRequestTick,
             pageRequest: pageRequest,
             restoreAnchor: restoreAnchor,
@@ -150,7 +151,7 @@ struct HTMLBodyView: View {
     private var hoverStatusPill: some View {
         if let hoveredHref {
             Text(hoveredHref)
-                .font(.caption)
+                .appFont(.caption)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .frame(maxWidth: 440, alignment: .leading)

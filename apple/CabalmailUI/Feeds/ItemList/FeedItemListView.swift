@@ -80,13 +80,12 @@ struct FeedItemListView: View {
         .toolbar {
             // New Message stays in the toolbar in feed scope, in the same
             // slot the mail list gives it, so switching between mail and
-            // feeds never moves the primary action (macOS groups it with
-            // Refresh for the same reason the mail list does).
+            // feeds never moves the primary action. On macOS it is the
+            // section's only button, as in the mail list; Feeds ▸ Refresh
+            // Feeds is the force-refresh there.
             #if os(macOS)
-            ToolbarItemGroup(placement: .primaryAction) {
-                composeButton
-                if let model { refreshButton(model) }
-            }
+            ToolbarItem(placement: .primaryAction) { composeButton }
+                .keepsInBar()
             #else
             // Ranked to stay, as the message list's Compose is: on a narrow
             // column the bar folds its trailing items first (#1626).
@@ -369,13 +368,13 @@ struct FeedItemRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.body.weight(item.isRead ? .regular : .semibold))
+                    .appFont(.body, weight: item.isRead ? .regular : .semibold)
                     .lineLimit(2)
                 if !snippet.isEmpty {
                     // One line, cut with an ellipsis where it outruns the
                     // column; an item with no prose keeps the two-line row.
                     Text(snippet)
-                        .font(.subheadline)
+                        .appFont(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -391,7 +390,7 @@ struct FeedItemRow: View {
                             .accessibilityLabel("Change queued")
                     }
                 }
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)

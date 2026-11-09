@@ -157,7 +157,7 @@ struct SearchFiltersSheet: View {
                 MacSheetSection(caption: "Scope") {
                     folderScopeToggle
                     Text(folderScopeFooter)
-                        .font(.footnote)
+                        .appFont(.footnote)
                         .foregroundStyle(.secondary)
                         .sectionFooter()
                 }
@@ -167,14 +167,14 @@ struct SearchFiltersSheet: View {
     #else
     private var formContent: some View {
         Form {
-            Section("Recipients") {
+            Section(formHeader: "Recipients") {
                 fromField
                 toField
             }
-            Section("Subject") {
+            Section(formHeader: "Subject") {
                 subjectField
             }
-            Section("Date range") {
+            Section(formHeader: "Date range") {
                 Toggle("Since", isOn: $sinceEnabled)
                 if sinceEnabled {
                     sincePicker
@@ -184,15 +184,17 @@ struct SearchFiltersSheet: View {
                     beforePicker
                 }
             }
-            Section("Flags") {
+            Section(formHeader: "Flags") {
                 flagToggles
             }
             if allowFolderScope {
                 Section {
                     folderScopeToggle
                 } footer: {
-                    Text(folderScopeFooter)
-                        .sectionFooter()
+                    FormSectionFooter {
+                        Text(folderScopeFooter)
+                            .sectionFooter()
+                    }
                 }
             }
         }

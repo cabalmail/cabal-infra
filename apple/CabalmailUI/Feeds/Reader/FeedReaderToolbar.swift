@@ -45,6 +45,7 @@ struct FeedReaderToolbar: ToolbarContent {
         ForEach(actions, id: \.self) { action in
             ToolbarItem { item(action) }
         }
+        TrailingAddressInspectorItem()
         #endif
     }
 

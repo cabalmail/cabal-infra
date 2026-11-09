@@ -18,8 +18,9 @@ import SwiftUI
 /// prevents that.
 ///
 /// The field shares its column's toolbar area with fixed sibling buttons
-/// (macOS: Compose, Reload, Addresses; iPad adds the folder-panel toggle and
-/// Settings gear on the leading edge), so their footprint is reserved off the
+/// (macOS: Compose alone, since Reload went to the Mailbox menu and the
+/// Addresses toggle to the window toolbar's trailing end; iPad: Compose,
+/// Addresses and the folder-panel toggle), so their footprint is reserved off the
 /// column before the field takes its share — otherwise a full-width field
 /// plus the siblings would overflow the section and re-crowd the window
 /// toolbar the #1047 rework just decongested.
@@ -48,7 +49,7 @@ enum ToolbarSearchFieldWidth {
     #if os(iOS)
     static let siblingReserve: CGFloat = 180
     #else
-    static let siblingReserve: CGFloat = 140
+    static let siblingReserve: CGFloat = 50
     #endif
     /// How far the addresses inspector can reach into the list column's
     /// toolbar area on iPad, where it *overlays* the split rather than tiling

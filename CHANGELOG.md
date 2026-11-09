@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.45.0] - 2026-11-09
+
+### Added
+- Apple: **Text sizes on the Mac.** macOS has no Dynamic Type, so
+  Settings > Appearance now has two sizes, each from Extra Small to Extra
+  Large with Medium the size from before. Message text scales message
+  bodies (HTML and plain text), feed articles in reader styling, and the
+  composer; View > Larger Message Text (⌘+), Smaller Message Text (⌘−)
+  and Default Message Text Size (⌘0) change it from any window. Interface
+  text scales the app's own text everywhere else, each style keeping its
+  size relative to the others: lists, the sidebar's folders and feeds,
+  form headers and footers in their own styles, buttons and other
+  controls (through the control size), with the message list's rows
+  growing to fit; menus and the toolbar stay the system's. Both are kept
+  on the device rather than synced with the account (`AppTextSize`,
+  `appFont`, `appFontWhenScaled`; the `raw_text_style_font` and
+  `string_titled_section` SwiftLint rules keep the unscaled forms out).
+
+### Changed
+- Apple: **More room for search above the Mac message list.** The
+  Addresses (`@`) button moved to the trailing edge of the window toolbar,
+  past a flexible space after the reader's buttons and beside the panel it
+  opens; each reader, and both empty-reader placeholders, draws it as its
+  last item. The mail and feed lists lose their Reload button (Mailbox >
+  Refresh and Feeds > Refresh Feeds remain), so the search field keeps a
+  usable width in a narrower list column. iPad is unchanged.
+
 ## [1.44.2] - 2026-11-08
 
 ### Fixed

@@ -88,7 +88,7 @@ extension FolderListView {
                 filterUnread = FolderListFilter.unfiltered.unread
             } label: {
                 Label(hint.label, systemImage: "line.3.horizontal.decrease.circle")
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)

@@ -85,7 +85,7 @@ struct MessageSourceSheet: View {
             content: {
                 ScrollView([.vertical, .horizontal]) {
                     Text(currentText)
-                        .font(.system(.footnote, design: .monospaced))
+                        .appFont(.footnote, monospaced: true)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()

@@ -27,14 +27,18 @@ struct RuleExtrasSection: View {
             }
             .disabled(rule.action == .delete)
         } header: {
-            Text("Also")
+            FormSectionHeader {
+                Text("Also")
+            }
         } footer: {
-            if rule.action == .delete {
-                Text("These don't apply when the rule deletes the message.")
-                    .sectionFooter()
-            } else if rule.reply {
-                Text("Replies come from the address the message was sent to, at most once a week per sender.")
-                    .sectionFooter()
+            FormSectionFooter {
+                if rule.action == .delete {
+                    Text("These don't apply when the rule deletes the message.")
+                        .sectionFooter()
+                } else if rule.reply {
+                    Text("Replies come from the address the message was sent to, at most once a week per sender.")
+                        .sectionFooter()
+                }
             }
         }
     }
@@ -93,16 +97,16 @@ struct RuleExtrasSection: View {
             VStack(alignment: .leading, spacing: 4) {
                 TextEditor(text: $rule.replyBody)
                     .frame(minHeight: 120)
-                    .font(.body)
+                    .appFont(.body)
                 Text("\(rule.replyBody.unicodeScalars.count) / \(RulesValidator.maxReplyBodyLength)")
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(
                         rule.replyBody.unicodeScalars.count > RulesValidator.maxReplyBodyLength
                             ? ColorTokens.dangerFg : .secondary
                     )
                 if rule.replyBody.isEmpty {
                     Text("A reply needs some text.")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(ColorTokens.dangerFg)
                 }
             }

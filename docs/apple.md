@@ -1978,6 +1978,77 @@ and the SwiftUI 18 `@Observable` macro makes sharing a `Preferences`
 instance across the environment cheaper than keeping a property wrapper
 in each view.
 
+### Text size on the Mac: `AppTextSize`
+
+macOS has no Dynamic Type, so the Mac offers its own text size in
+Settings > Appearance (`HostPlatform.offersAppTextSize`; no other
+platform shows it). It is a five-step ramp of ratios (`AppTextSize`,
+Extra Small to Extra Large), with Medium meaning exactly the size each
+surface drew at before the setting, so a step scales whatever size a
+view already uses rather than pinning one.
+
+There are two sizes. **Message text** covers message content: message
+bodies (HTML and plain text), feed articles in reader styling, and the
+composer. The publisher's own page in the article view is left at the
+publisher's sizes. **Interface text** covers the app's own text everywhere
+else. Native chrome (menus, toolbars, alerts) is out of reach and out of
+scope for both.
+
+- **Storage.** `AppTextSizeStore.shared`, an `@Observable` store over
+  device-wide `UserDefaults` (`AppTextSize.contentDefaultsKey`), not
+  `Preferences`: the right size depends on the display, not the account,
+  so it is neither account-scoped nor synced. Views and commands read the
+  store, never `@AppStorage`: an `@AppStorage` property in the View
+  menu's `Commands` looped SwiftUI's update cycle forever when the app
+  hosted the test bundle.
+- **Delivery.** Every scene root applies `.appTextSize()` beside
+  `.themedAppearance(_:)` (a scene is its own environment root), which
+  reads the store into `\.contentTextSize` and `\.interfaceTextSize`.
+  `\.contentTextScale` is the Dynamic Type body ratio times that step's
+  scale, and is what the HTML reader, the article reader and the
+  composer hand to `ReaderTextScale` / `setTextScale`. The plain-text
+  body uses `Font.contentBody(_:)`, which stays on `.body` at Medium.
+- **Interface text: `appFont(_:)`.** SwiftUI's text styles are fixed
+  sizes on macOS (`dynamicTypeSize` changes nothing there), so every
+  `.font(.caption)` in `CabalmailUI` and `CabalmailMac` is
+  `.appFont(.caption)` instead (with `weight:`, `monospaced:` and
+  `monospacedDigit:` for the variants). At Medium it is exactly the text
+  style, so the default look and iOS Dynamic Type are unchanged; at
+  another step it is the platform's size for the style times the step's
+  scale, in the style's own weight, never below 9pt. The scene root also
+  sets the body at that size as the default font, for text that names
+  none. The `raw_text_style_font` SwiftLint rule fails a raw text style
+  in those two folders; fixed `.system(size:)` fonts stay allowed for
+  text tied to fixed geometry (avatar initials, a glyph in a fixed
+  circle). Geometry that `@ScaledMetric` scales on iOS scales with the
+  interface size on the Mac too: the message list's row height
+  (`MessageListView.rowHeight(base:at:)`) and the reader header's
+  trailing-column threshold.
+- **Text a container styles itself: `appFontWhenScaled(_:)`.** It leaves
+  the container's font alone at Medium and sets the named style at the
+  interface size otherwise. Three places need it. A form's section
+  headers and footers would otherwise take the root's default font and
+  lose their look (bold header, small footer): every header and footer
+  closure is wrapped in `FormSectionHeader` / `FormSectionFooter`
+  (headline and subheadline), `Section("Title")` is
+  `Section(formHeader: "Title")`, the `string_titled_section` SwiftLint
+  rule bans the string form outside menus, and
+  `FormSectionTextSourceScanTests` fails a bare closure. A sidebar
+  ignores a font set on the list or the row, so `SidebarTreeRowLabel`
+  (mail folders and feeds), the Settings categories and the sidebar's
+  "Mail" / "Feeds" headers put it on their own text, and the row
+  indentation grows with it.
+- **Native controls: `controlSize`.** Buttons ignore a font set on them
+  and size their text from the control size, so the root maps the
+  interface size onto it (`AppTextSize.controlSize`): Extra Small is
+  `.small` (11pt), Large and Extra Large `.extraLarge` (15pt), and the
+  other steps leave the platform's own. Toggles and pickers follow too.
+  An explicit `.controlSize` lower down still wins.
+- **Shortcuts.** View > Larger Message Text (⌘+), Smaller Message Text
+  (⌘−) and Default Message Text Size (⌘0), in `ContentTextSizeCommands`
+  (menu-bar commands, so they work whatever has focus). They change
+  message text only; the rest of the app's text has no chords.
+
 ### Signed-in navigation: `TabView(.sidebarAdaptable)`
 
 `SignedInRootView` uses SwiftUI 18's `TabView(selection:)` + the

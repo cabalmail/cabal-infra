@@ -44,7 +44,13 @@ public struct SettingsView: View {
 
     private var sidebar: some View {
         List(SettingsCategory.listed(isAdmin: appState.isAdmin), selection: $selection) { category in
-            Label(category.title, systemImage: category.systemImage)
+            // The title takes its font directly: the sidebar list ignores
+            // one set on the row (`appFontWhenScaled`).
+            Label {
+                Text(category.title).appFontWhenScaled(.body)
+            } icon: {
+                Image(systemName: category.systemImage).appFontWhenScaled(.body)
+            }
         }
         .navigationTitle("Settings")
         #if os(macOS)
@@ -248,10 +254,12 @@ private struct ReadingSettingsView: View {
                     Text("Unread / total").tag(FolderCountDisplay.both)
                 }
             } footer: {
-                Text("Badges on mail folders and feeds alike.")
-                    .sectionFooter()
+                FormSectionFooter {
+                    Text("Badges on mail folders and feeds alike.")
+                        .sectionFooter()
+                }
             }
-            Section("Email messages") {
+            Section(formHeader: "Email messages") {
                 Picker("Mark as read", selection: $preferences.markAsRead) {
                     Text("Manual").tag(MarkAsReadBehavior.manual)
                     Text("On open").tag(MarkAsReadBehavior.onOpen)
@@ -266,7 +274,7 @@ private struct ReadingSettingsView: View {
                     Text("Reader").tag(BodyRenderMode.reader)
                 }
             }
-            Section("Feed items") {
+            Section(formHeader: "Feed items") {
                 Picker("Mark as read", selection: $preferences.rssMarkAsRead) {
                     Text("Manual").tag(MarkAsReadBehavior.manual)
                     Text("On open").tag(MarkAsReadBehavior.onOpen)
@@ -283,6 +291,8 @@ private struct AppearanceSettingsView: View {
 
     var body: some View {
         @Bindable var preferences = preferences
+        // Device-wide, not a synced preference (`AppTextSize`).
+        @Bindable var textSizes = AppTextSizeStore.shared
         SettingsForm(title: "Appearance") {
             Section {
                 // The row label is the only thing naming this control on iOS
@@ -299,6 +309,32 @@ private struct AppearanceSettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+                }
+            }
+            if HostPlatform.current.offersAppTextSize {
+                Section {
+                    Picker("Message text", selection: $textSizes.content) {
+                        ForEach(AppTextSize.allCases) { size in
+                            Text(size.title).tag(size)
+                        }
+                    }
+                } footer: {
+                    FormSectionFooter {
+                        Text("Message bodies, feed articles and the composer. "
+                            + "The View menu's Larger and Smaller Message Text (⌘+ and ⌘−) change it too.")
+                    }
+                }
+                Section {
+                    Picker("Interface text", selection: $textSizes.interface) {
+                        ForEach(AppTextSize.allCases) { size in
+                            Text(size.title).tag(size)
+                        }
+                    }
+                } footer: {
+                    FormSectionFooter {
+                        Text("Everything else the app draws: lists, the sidebar, headers and settings. "
+                            + "Each keeps its size relative to the others. Menus and the toolbar follow the system.")
+                    }
                 }
             }
         }

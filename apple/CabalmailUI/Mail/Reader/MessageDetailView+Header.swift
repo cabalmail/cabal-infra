@@ -23,7 +23,7 @@ extension MessageDetailView {
             // the surrounding ScrollView in `body` lets the header wrap
             // freely and scroll when needed.
             Text(envelope.subject ?? "(no subject)")
-                .font(.title3)
+                .appFont(.title3)
                 .fontWeight(.semibold)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -71,7 +71,7 @@ extension MessageDetailView {
     private var senderLines: some View {
         if let from = envelope.from.first {
             Text(headerFromLabel(for: from))
-                .font(.headline)
+                .appFont(.headline)
                 .task(id: "\(from.mailbox.lowercased())@\(from.host.lowercased())") {
                     await hydrateSenderContactName(for: from)
                 }
@@ -91,7 +91,7 @@ extension MessageDetailView {
     private func metadataLines(showsAuthWarning: Bool, maxWidth: CGFloat) -> some View {
         if let date = envelope.date ?? envelope.internalDate {
             Text(date.formatted(date: .abbreviated, time: .shortened))
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize()
         }
@@ -121,7 +121,7 @@ extension MessageDetailView {
                         .fill(FlagPaletteColor.color(for: entry?.color ?? ""))
                         .frame(width: 8, height: 8)
                     Text(entry?.label ?? slot)
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 6)

@@ -166,7 +166,7 @@ struct MessageDragPreview: View {
             Text(label)
                 .lineLimit(1)
         }
-        .font(.subheadline)
+        .appFont(.subheadline)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxWidth: 260)

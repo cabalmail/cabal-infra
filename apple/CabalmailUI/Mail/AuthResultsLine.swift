@@ -30,7 +30,7 @@ struct AuthResultsLine: View {
             }
         } else {
             Text("Not verified")
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .accessibilityLabel("Sender authentication: not verified")
         }
@@ -50,7 +50,7 @@ struct AuthResultsLine: View {
                 .fontWeight(.semibold)
             Text(token ?? "—")
         }
-        .font(.caption2)
+        .appFont(.caption2)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .foregroundStyle(color(for: token))
@@ -106,7 +106,7 @@ struct AuthWarningLabel: View {
             // UIKit reproduces this through a hosting controller: the defect
             // only appears in the real header's layout.
             Label(AuthResultsLine.warningCopy, systemImage: "exclamationmark.shield.fill")
-                .font(.caption)
+                .appFont(.caption)
                 .foregroundStyle(ColorTokens.warningFg)
                 .fixedSize(horizontal: false, vertical: true)
         }

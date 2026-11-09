@@ -71,7 +71,13 @@ struct MessageDetailView: View {
     // with Dynamic Type so larger text needs a proportionally wider pane.
     // See `ReaderHeaderColumnPolicy` and `MessageDetailView+Header.swift`.
     @ScaledMetric(relativeTo: .caption2)
-    var headerTrailingColumnMinWidth = ReaderHeaderColumnPolicy.baseMinPaneWidth
+    var baseHeaderTrailingColumnMinWidth = ReaderHeaderColumnPolicy.baseMinPaneWidth
+    /// The interface text size: the Mac's stand-in for Dynamic Type, which
+    /// scales the header's text and so its trailing-column threshold too.
+    @Environment(\.interfaceTextSize) var interfaceTextSize
+    var headerTrailingColumnMinWidth: CGFloat {
+        baseHeaderTrailingColumnMinWidth * interfaceTextSize.scale
+    }
     /// Aims this reader's compose requests at its own window.
     @Environment(\.commandWindowID) var commandWindowID
     /// The window's navigator, whose parked reading position this reader
@@ -383,6 +389,7 @@ struct MessageDetailView: View {
         // Both halves live in `MessageDetailView+MacToolbar.swift`.
         macToolbarLeading
         macToolbarTrailing
+        TrailingAddressInspectorItem()
         #endif
     }
 

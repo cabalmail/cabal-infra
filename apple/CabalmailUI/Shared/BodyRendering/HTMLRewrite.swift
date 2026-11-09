@@ -6,8 +6,9 @@ import CabalmailKit
 /// we never need to run a JS context. In `readerMode`, prepends a reset +
 /// typography stylesheet that overrides author CSS for a Safari Reader-
 /// style presentation. Both modes get a default viewport meta and a default
-/// (author-overridable) brand link color. A `textScale` other than 1 (the
-/// Dynamic Type body ratio, `DynamicTypeSize.bodyTextScale`) marks the
+/// (author-overridable) brand link color. A `textScale` other than 1
+/// (`EnvironmentValues.contentTextScale`: the Dynamic Type body ratio times
+/// the Mac's message-text size) marks the
 /// document for the reader's text-scaling script (`ReaderTextScale`).
 func rewrite(
     html: String,

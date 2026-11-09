@@ -74,7 +74,7 @@ extension FeedItemListView {
             scopeSwitchMenuItems
         } label: {
             Text(title)
-                .font(.headline)
+                .appFont(.headline)
                 .lineLimit(1)
         }
         // Both halves, or macOS 27 draws a 36x36 chevron and no name (#1601).

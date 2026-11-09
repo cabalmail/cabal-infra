@@ -65,15 +65,15 @@ struct FeedSubscriptionSettingsSheet: View {
         }
         #else
         Form {
-            Section("Title") { titleField }
-            Section("Folder") { folderPicker }
-            Section("Reading") {
+            Section(formHeader: "Title") { titleField }
+            Section(formHeader: "Folder") { folderPicker }
+            Section(formHeader: "Reading") {
                 orderingPicker
                 openModePicker
                 stylingPicker
                 remoteContentPicker
             }
-            Section("Feed") { healthRows }
+            Section(formHeader: "Feed") { healthRows }
             errorLabel
             Section { unsubscribeButton }
         }
@@ -137,7 +137,7 @@ struct FeedSubscriptionSettingsSheet: View {
             LabeledContent("Status", value: FeedHealthText.status(feed))
             if !feed.lastError.isEmpty, feed.consecutiveFailureCount > 0 {
                 Text(feed.lastError)
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
             }
             LabeledContent("Last fetched", value: FeedHealthText.lastFetched(feed))
@@ -152,7 +152,7 @@ struct FeedSubscriptionSettingsSheet: View {
     private var errorLabel: some View {
         if let errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(ColorTokens.dangerFg)
         }
     }

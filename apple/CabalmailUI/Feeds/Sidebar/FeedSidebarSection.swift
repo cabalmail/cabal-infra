@@ -58,7 +58,7 @@ struct FeedSidebarRowLabel: View {
             let level = FeedHealth.level(for: sub.feed)
             if let symbol = level.symbol, let summary = level.summary {
                 Image(systemName: symbol)
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(level == .stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
                     .help(summary)
                     .accessibilityLabel(summary)

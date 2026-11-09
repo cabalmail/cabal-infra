@@ -86,8 +86,6 @@ struct MessageListView: View {
     /// This window's identity, for aiming its own compose requests and mail
     /// events at itself (`MainWindowCommandScope`).
     @Environment(\.commandWindowID) var commandWindowID
-    /// This window's commands, which the toolbar's Refresh sends to.
-    @Environment(\.windowCommands) var windowCommands
     /// The bar's trailing items lead in book pose (`\.listBarItemsLead`).
     @Environment(\.listBarItemsLead) var listBarItemsLead
     /// This list's identity, carried on the drags it starts so that only
@@ -119,9 +117,26 @@ struct MessageListView: View {
     /// The base 58 clears the row's two `.subheadline` lines (sender route +
     /// one-line subject) at the default size with a little slack; scaling
     /// preserves that slack proportionally. Instance (not `static`) because
-    /// `@ScaledMetric` reads the environment; module-internal so the
-    /// `+Selection` extension can pin rows and placeholders to it.
-    @ScaledMetric(relativeTo: .subheadline) var rowHeight: CGFloat = 58
+    /// `@ScaledMetric` reads the environment.
+    ///
+    /// macOS has no Dynamic Type, so there `@ScaledMetric` never moves; the
+    /// Mac's interface text size (`AppTextSize`) scales the row instead,
+    /// through `rowHeight` below, by the same ratio it scales the row's text.
+    @ScaledMetric(relativeTo: .subheadline) var baseRowHeight: CGFloat = 58
+    /// The interface text size, which scales `rowHeight` on the Mac.
+    @Environment(\.interfaceTextSize) var interfaceTextSize
+    /// The one row height every row and placeholder is pinned to:
+    /// `baseRowHeight` itself at the default size, and scaled to whole
+    /// points at any other. Module-internal so the `+Selection` extension
+    /// can pin rows and placeholders to it.
+    var rowHeight: CGFloat {
+        Self.rowHeight(base: baseRowHeight, at: interfaceTextSize)
+    }
+
+    static func rowHeight(base: CGFloat, at size: AppTextSize) -> CGFloat {
+        guard size != .medium else { return base }
+        return (base * size.scale).rounded()
+    }
     /// Diameter of the per-row sender avatar. Fixed (not `@ScaledMetric`) so
     /// it can't grow past `rowHeight`; 32 sits comfortably within the 58pt
     /// row beside the two text lines. Shared by `MessageRow` and the
@@ -352,15 +367,12 @@ extension MessageListView {
             // visually farther from the list they affect than the
             // filter tabs that sat one row higher.
             //
-            // macOS: Compose + Reload share a `.primaryAction` group so
-            // SwiftUI doesn't sink Reload into the trailing `>>` overflow
-            // chevron when the unified window toolbar (this column +
-            // MessageDetailView's eleven buttons) gets crowded — the
-            // reader's buttons are deliberately NOT grouped, so that they
-            // evict one at a time in priority order (#1047), but these two
-            // must never be what the window gives up.
+            // macOS: Compose is the column section's only button, beside
+            // the search field. Force-reload is Mailbox ▸ Refresh alone; a
+            // toolbar Reload took room the search field needs, and the
+            // list already merges new mail on its own poll.
             #if os(macOS)
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     presentCompose(seed: ReplyBuilder.newDraft())
                 } label: {
@@ -368,19 +380,10 @@ extension MessageListView {
                         .accessibilityLabel("New Message")
                 }
                 .keyboardShortcut("n", modifiers: .command)
-                // Force-reload button, macOS only (the touch platforms
-                // pull to refresh). Sent to this window as Mailbox > Refresh
-                // is, so both land on `MessageListViewModel.hardReload()`.
-                Button {
-                    windowCommands?.send(.refresh)
-                } label: {
-                    RefreshActivityIcon(isLoading: model?.isLoading == true)
-                        .accessibilityLabel("Refresh")
-                }
-                .disabled(model == nil || model?.isLoading == true)
             }
-            // Never the pair the » popup takes (see above); on 26.1+ the
-            // system honours that as a priority rather than by our ordering.
+            // Never what the » popup takes when the unified window toolbar
+            // (this column + MessageDetailView's eleven buttons) gets
+            // crowded; on 26.1+ the system honours that as a priority.
             .keepsInBar()
             #else
             ToolbarItem(placement: .listBar(.automatic, leads: listBarItemsLead)) {

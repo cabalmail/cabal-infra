@@ -51,8 +51,8 @@ struct FeedFolderSheet: View {
         }
         #else
         Form {
-            Section("Name") { nameField }
-            Section("Parent") { parentPicker }
+            Section(formHeader: "Name") { nameField }
+            Section(formHeader: "Parent") { parentPicker }
             errorLabel
         }
         #endif
@@ -76,7 +76,7 @@ struct FeedFolderSheet: View {
     private var errorLabel: some View {
         if let errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(ColorTokens.dangerFg)
         }
     }

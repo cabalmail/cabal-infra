@@ -40,10 +40,10 @@ private struct AttachmentChip: View {
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.filename)
-                    .font(.caption)
+                    .appFont(.caption)
                     .lineLimit(1)
                 Text(formatSize(attachment.size))
-                    .font(.caption2)
+                    .appFont(.caption2)
                     .foregroundStyle(.secondary)
             }
         }

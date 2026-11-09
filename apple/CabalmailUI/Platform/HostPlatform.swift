@@ -97,4 +97,12 @@ public enum HostPlatform {
     var searchDrawerFollowsScroll: Bool {
         self == .iOS
     }
+
+    /// Whether Settings offers the app's own text sizes (`AppTextSize`):
+    /// the Mac, which has no Dynamic Type. Everywhere else the system text
+    /// size already reaches every surface, and a second control would only
+    /// compound it.
+    var offersAppTextSize: Bool {
+        self == .macOS
+    }
 }

@@ -145,8 +145,11 @@ final class ToolbarSearchFieldWidthTests: XCTestCase {
     /// grows with the column and stops at `preferred`, exactly as it does
     /// with no menu at all.
     func testTheMenuIsChargedOffTheFieldsShare() {
-        let bare = ToolbarSearchFieldWidth.width(columnWidth: 420, inspectorPresented: false, leadingWidth: 0)
-        let charged = ToolbarSearchFieldWidth.width(columnWidth: 420, inspectorPresented: false, leadingWidth: 36)
+        // A column whose bare field sits below `preferred`, so the charge
+        // shows; built from the reserve so it holds for either sibling set.
+        let column = ToolbarSearchFieldWidth.siblingReserve + 200
+        let bare = ToolbarSearchFieldWidth.width(columnWidth: column, inspectorPresented: false, leadingWidth: 0)
+        let charged = ToolbarSearchFieldWidth.width(columnWidth: column, inspectorPresented: false, leadingWidth: 36)
         XCTAssertEqual(bare - charged, 36)
         XCTAssertEqual(
             ToolbarSearchFieldWidth.width(columnWidth: 1_000, inspectorPresented: false, leadingWidth: 120),
@@ -161,31 +164,35 @@ final class ToolbarSearchFieldWidthTests: XCTestCase {
     /// never the answer to a long folder name.
     func testAWideFolderMenuCannotPushTheFieldUnderItsFloor() {
         let reserved = ToolbarSearchFieldWidth.siblingReserve
-        // 300 - 140 - 88 - 24 = 48pt beside the floor: a 36pt menu is charged
-        // whole, a 95pt one only as far as the floor allows.
+        // A column with exactly 48pt beside the floor (column - reserved -
+        // minimum - margin): a 36pt menu is charged whole, a 95pt one only
+        // as far as the floor allows. Built from the reserve so the case
+        // holds on either platform's sibling set.
+        let column = reserved + ToolbarSearchFieldWidth.minimum + ToolbarSearchFieldWidth.margin + 48
         XCTAssertEqual(
-            ToolbarSearchFieldWidth.leadingCharge(columnWidth: 300, reserved: reserved, leadingWidth: 36), 36
+            ToolbarSearchFieldWidth.leadingCharge(columnWidth: column, reserved: reserved, leadingWidth: 36), 36
         )
         XCTAssertEqual(
-            ToolbarSearchFieldWidth.leadingCharge(columnWidth: 300, reserved: reserved, leadingWidth: 95), 48
+            ToolbarSearchFieldWidth.leadingCharge(columnWidth: column, reserved: reserved, leadingWidth: 95), 48
         )
         XCTAssertEqual(
-            ToolbarSearchFieldWidth.width(columnWidth: 300, inspectorPresented: false, leadingWidth: 95),
+            ToolbarSearchFieldWidth.width(columnWidth: column, inspectorPresented: false, leadingWidth: 95),
             ToolbarSearchFieldWidth.minimum
         )
         XCTAssertEqual(
-            ToolbarSearchFieldWidth.width(columnWidth: 300, inspectorPresented: false, leadingWidth: 400),
+            ToolbarSearchFieldWidth.width(columnWidth: column, inspectorPresented: false, leadingWidth: 400),
             ToolbarSearchFieldWidth.minimum
         )
         // A column too narrow to seat even the floor beside the siblings
         // charges nothing for the menu; the field is whatever it was before
         // the menu existed rather than less.
+        let narrow = reserved + 80
         XCTAssertEqual(
-            ToolbarSearchFieldWidth.leadingCharge(columnWidth: 220, reserved: reserved, leadingWidth: 36), 0
+            ToolbarSearchFieldWidth.leadingCharge(columnWidth: narrow, reserved: reserved, leadingWidth: 36), 0
         )
         XCTAssertEqual(
-            ToolbarSearchFieldWidth.width(columnWidth: 220, inspectorPresented: false, leadingWidth: 36),
-            ToolbarSearchFieldWidth.width(columnWidth: 220, inspectorPresented: false, leadingWidth: 0)
+            ToolbarSearchFieldWidth.width(columnWidth: narrow, inspectorPresented: false, leadingWidth: 36),
+            ToolbarSearchFieldWidth.width(columnWidth: narrow, inspectorPresented: false, leadingWidth: 0)
         )
     }
 

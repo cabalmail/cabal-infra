@@ -93,13 +93,11 @@ struct DesktopShell: View {
                 // Global search rides the message-list column (moved from
                 // above the reading pane in the #1047 toolbar rework — the
                 // results it drives show in this column, and the reader
-                // needs its toolbar section for its own buttons), next to
-                // the toggle for the trailing addresses inspector.
+                // needs its toolbar section for its own buttons).
                 .toolbar {
                     ToolbarItem(placement: .primaryAction) {
                         toolbarSearchField(mail)
                     }
-                    mail.addressInspectorToolbarItem
                 }
                 // The native divider resizes the column; the policy bounds it
                 // so the reading pane can't be starved, and opens it at the
@@ -122,6 +120,18 @@ struct DesktopShell: View {
                     items: EmptyFeedDetailToolbar()
                 )
             )
+            // The addresses toggle sits at the window toolbar's trailing
+            // edge, beside the inspector it opens, rather than in the list
+            // column's section, which needs the room for the search field.
+            // Each reader — message, feed item, and both placeholders —
+            // declares it as its last item (`TrailingAddressInspectorItem`),
+            // since an item declared out here would draw ahead of the
+            // reader's own. Ranked to stay (`AddressInspectorToolbarItem`),
+            // so the » overflow takes the reader's buttons before it.
+            .environment(\.addressInspectorToggle, AddressInspectorToggle(
+                presented: mail.addressInspectorPresented,
+                toggle: mail.toggleAddressInspector
+            ))
         }
         .wideMailBehaviour(mail)
     }
