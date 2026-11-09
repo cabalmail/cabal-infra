@@ -24,7 +24,7 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         // bar, `.automatic` at the Mac window toolbar's trailing end), or the
         // leading end in book pose on an iPhone Duo
         // (`ToolbarItemPlacement.listBar`); the rank is the same either way.
-        let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
+        let body = try Self.source("CabalmailUI/Shell/AddressInspectorToolbarItem.swift")
         let ranked = "if addressInspectorPresented {\n"
             + "            ToolbarItem(placement: .listBar(placement, leads: itemsLead)) "
             + "{ addressInspectorToggle }\n"
@@ -44,7 +44,7 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         // layout, so it ranks with Compose rather than below it: at the list
         // column's 300 pt floor the bar can seat two trailing items, and the
         // pair that must survive is Compose and `@` (#1626).
-        let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
+        let body = try Self.source("CabalmailUI/Shell/AddressInspectorToolbarItem.swift")
         let ranked = "} else {\n"
             + "            ToolbarItem(placement: .listBar(placement, leads: itemsLead)) "
             + "{ addressInspectorToggle }\n"

@@ -37,7 +37,7 @@ final class ToolbarOverflowTitleSourceScanTests: XCTestCase {
     func testTheAddressInspectorToggleIsTitled() throws {
         // The `@` toggle shares the bar and loses the same way: reported
         // absent from a 714 pt Stage Manager window's bar (#1787's thread).
-        let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
+        let body = try Self.source("CabalmailUI/Shell/AddressInspectorToolbarItem.swift")
         XCTAssertTrue(body.contains(#"Label("Addresses", systemImage: "at")"#))
         XCTAssertFalse(body.contains(#"Image(systemName: "at")"#))
     }
