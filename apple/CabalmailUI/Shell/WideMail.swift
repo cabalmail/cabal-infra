@@ -320,11 +320,49 @@ struct WideMail {
         )
     }
 
-    /// The `@` toggle for the content column's bar.
+    /// The `@` toggle for the iPad split's content column bar. The Mac draws
+    /// it at the window toolbar's trailing edge instead, from each reader
+    /// (`TrailingAddressInspectorItem`).
     var addressInspectorToolbarItem: AddressInspectorToolbarItem {
         AddressInspectorToolbarItem(
             addressInspectorPresented: addressInspectorPresented, toggle: toggleAddressInspector
         )
+    }
+}
+
+/// The addresses inspector's open state and its toggle, handed down to the
+/// readers by the Mac shell so each can draw the `@` toggle as its own last
+/// toolbar item (`TrailingAddressInspectorItem`). Nil everywhere else,
+/// including a message opened in a window of its own.
+struct AddressInspectorToggle {
+    let presented: Bool
+    let toggle: () -> Void
+}
+
+extension EnvironmentValues {
+    @Entry var addressInspectorToggle: AddressInspectorToggle?
+}
+
+/// The `@` toggle as a reader toolbar's last item, after a flexible space, so
+/// it sits at the window toolbar's trailing edge beside the inspector it
+/// opens. A reader declares it after its own items because a toolbar section
+/// draws items in declaration order, and anything declared on a view outside
+/// the reader comes *before* the reader's items whatever its placement.
+/// Draws nothing unless the shell set `\.addressInspectorToggle`.
+struct TrailingAddressInspectorItem: ToolbarContent {
+    @Environment(\.addressInspectorToggle) private var inspector
+
+    var body: some ToolbarContent {
+        if let inspector {
+            if #available(iOS 26.0, macOS 26.0, *) {
+                ToolbarSpacer(.flexible)
+            }
+            AddressInspectorToolbarItem(
+                addressInspectorPresented: inspector.presented,
+                placement: .automatic,
+                toggle: inspector.toggle
+            )
+        }
     }
 }
 
@@ -343,16 +381,18 @@ struct WideMail {
 /// ⌥⌘T.
 struct AddressInspectorToolbarItem: ToolbarContent {
     let addressInspectorPresented: Bool
+    /// Where the item sits when it isn't led by book pose.
+    var placement: ToolbarItemPlacement = .primaryAction
     let toggle: () -> Void
     /// At the bar's leading end in book pose (`\.listBarItemsLead`).
     @Environment(\.listBarItemsLead) private var itemsLead
 
     var body: some ToolbarContent {
         if addressInspectorPresented {
-            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) { addressInspectorToggle }
+            ToolbarItem(placement: .listBar(placement, leads: itemsLead)) { addressInspectorToggle }
                 .keepsInBarFirst()
         } else {
-            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) { addressInspectorToggle }
+            ToolbarItem(placement: .listBar(placement, leads: itemsLead)) { addressInspectorToggle }
                 .keepsInBar()
         }
     }
