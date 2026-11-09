@@ -80,13 +80,12 @@ struct FeedItemListView: View {
         .toolbar {
             // New Message stays in the toolbar in feed scope, in the same
             // slot the mail list gives it, so switching between mail and
-            // feeds never moves the primary action (macOS groups it with
-            // Refresh for the same reason the mail list does).
+            // feeds never moves the primary action. On macOS it is the
+            // section's only button, as in the mail list; Feeds ▸ Refresh
+            // Feeds is the force-refresh there.
             #if os(macOS)
-            ToolbarItemGroup(placement: .primaryAction) {
-                composeButton
-                if let model { refreshButton(model) }
-            }
+            ToolbarItem(placement: .primaryAction) { composeButton }
+                .keepsInBar()
             #else
             // Ranked to stay, as the message list's Compose is: on a narrow
             // column the bar folds its trailing items first (#1626).

@@ -36,6 +36,8 @@ struct EmptyDetailToolbar: ToolbarContent {
     var body: some ToolbarContent {
         leadingStandIns
         trailingStandIns
+        // Live, not a stand-in: the inspector opens with no message too.
+        TrailingAddressInspectorItem()
     }
 
     @ToolbarContentBuilder

@@ -58,14 +58,13 @@ struct CabalmailCommands: Commands {
             // No keyboard shortcut. Cmd+R is the Reply chord in the
             // Message menu above (Cmd+Shift+R reaches Reply All);
             // routing it to the message list as well left the binding
-            // ambiguous and depended on focus to dispatch. The menu
-            // item plus the message-list toolbar's arrow.clockwise
-            // button covers the discovery surface without overloading
-            // a chord the user expects to mean Reply.
+            // ambiguous and depended on focus to dispatch. This menu
+            // item is the only force-reload on the Mac: the list's
+            // toolbar Reload gave its room to the search field.
             //
-            // Both surfaces send `.refresh` -> `hardReload()`, not the
-            // cheap merge-refresh — the manual paths exist precisely so
-            // the user can escape stale in-memory state.
+            // It sends `.refresh` -> `hardReload()`, not the cheap
+            // merge-refresh — the manual path exists precisely so the
+            // user can escape stale in-memory state.
             Button("Refresh") {
                 commands?.send(.refresh)
             }

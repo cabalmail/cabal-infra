@@ -9,8 +9,8 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
 
     func testComposeKeepsItsPlaceInTheListBar() throws {
         let body = try Self.source("CabalmailUI/Mail/MessageList/MessageListView.swift")
-        // One per platform branch: the macOS Compose + Reload group and the
-        // touch platforms' lone Compose item.
+        // One per platform branch: the macOS Compose item and the touch
+        // platforms' own Compose item.
         XCTAssertEqual(
             body.components(separatedBy: ".keepsInBar()").count - 1, 2,
             "both New Message toolbar declarations carry keepsInBar()"
@@ -20,12 +20,13 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
     func testTheOpenInspectorsToggleOutranksCompose() throws {
         // With the inspector open, `@` is the one item that can close it, so
         // it takes the priority above `keepsInBar()`; closed, it is unranked.
-        // Its placement is the trailing end, or the leading end in book pose
-        // on an iPhone Duo (`ToolbarItemPlacement.listBar`); the rank is the
-        // same either way.
-        let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
+        // Its placement is the shell's (`.primaryAction` in the iPad list
+        // bar, `.automatic` at the Mac window toolbar's trailing end), or the
+        // leading end in book pose on an iPhone Duo
+        // (`ToolbarItemPlacement.listBar`); the rank is the same either way.
+        let body = try Self.source("CabalmailUI/Shell/AddressInspectorToolbarItem.swift")
         let ranked = "if addressInspectorPresented {\n"
-            + "            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) "
+            + "            ToolbarItem(placement: .listBar(placement, leads: itemsLead)) "
             + "{ addressInspectorToggle }\n"
             + "                .keepsInBarFirst()"
         XCTAssertTrue(body.contains(ranked))
@@ -43,9 +44,9 @@ final class ToolbarVisibilitySourceScanTests: XCTestCase {
         // layout, so it ranks with Compose rather than below it: at the list
         // column's 300 pt floor the bar can seat two trailing items, and the
         // pair that must survive is Compose and `@` (#1626).
-        let body = try Self.source("CabalmailUI/Shell/WideMail.swift")
+        let body = try Self.source("CabalmailUI/Shell/AddressInspectorToolbarItem.swift")
         let ranked = "} else {\n"
-            + "            ToolbarItem(placement: .listBar(.primaryAction, leads: itemsLead)) "
+            + "            ToolbarItem(placement: .listBar(placement, leads: itemsLead)) "
             + "{ addressInspectorToggle }\n"
             + "                .keepsInBar()"
         XCTAssertTrue(body.contains(ranked))

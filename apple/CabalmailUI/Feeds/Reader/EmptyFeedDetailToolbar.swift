@@ -14,6 +14,8 @@ struct EmptyFeedDetailToolbar: ToolbarContent {
         ForEach(FeedReaderToolbarLayout.standIns(), id: \.self) { action in
             ToolbarItem { standIn(for: action) }
         }
+        // Live, not a stand-in: the inspector opens with no item too.
+        TrailingAddressInspectorItem()
     }
 
     private func standIn(for action: FeedReaderAction) -> some View {

@@ -389,6 +389,7 @@ struct MessageDetailView: View {
         // Both halves live in `MessageDetailView+MacToolbar.swift`.
         macToolbarLeading
         macToolbarTrailing
+        TrailingAddressInspectorItem()
         #endif
     }
 
