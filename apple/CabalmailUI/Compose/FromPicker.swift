@@ -30,9 +30,12 @@ struct FromPicker: View {
             if !model.availableAddresses.isEmpty {
                 Divider()
                 if !favoriteAddresses.isEmpty {
+                    // Menu sections: the system draws these, at its own size.
+                    // swiftlint:disable:next string_titled_section
                     Section("Favorites") {
                         ForEach(favoriteAddresses) { addressButton($0) }
                     }
+                    // swiftlint:disable:next string_titled_section
                     Section("All addresses") {
                         ForEach(sortedAddresses) { addressButton($0) }
                     }

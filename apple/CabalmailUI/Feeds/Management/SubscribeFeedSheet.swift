@@ -50,8 +50,8 @@ struct SubscribeFeedSheet: View {
         }
         #else
         Form {
-            Section("Address") { urlField }
-            Section("Folder") { folderPicker }
+            Section(formHeader: "Address") { urlField }
+            Section(formHeader: "Folder") { folderPicker }
             errorLabel
         }
         #endif

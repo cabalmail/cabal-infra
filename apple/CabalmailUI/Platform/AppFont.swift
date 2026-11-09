@@ -32,6 +32,37 @@ public extension View {
     }
 }
 
+public extension View {
+    /// The style at the interface text size, but only off `.medium`: at
+    /// `.medium` the view keeps whatever font its container gives it.
+    ///
+    /// For text whose container styles it natively and SwiftUI exposes no
+    /// text style to ask for: a form's section headers and footers (which
+    /// the scene root's default font would otherwise flatten into body text
+    /// at any other size) and a sidebar's rows and headers (whose list
+    /// ignores a font set anywhere but on the text itself). The style named
+    /// is the one the container draws at the default size, so a step scales
+    /// the native look rather than replacing it.
+    func appFontWhenScaled(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> some View {
+        modifier(AppFontWhenScaledModifier(style: style, weight: weight))
+    }
+}
+
+private struct AppFontWhenScaledModifier: ViewModifier {
+    let style: Font.TextStyle
+    let weight: Font.Weight?
+    @Environment(\.interfaceTextSize) private var size
+
+    func body(content: Content) -> some View {
+        // Transformed rather than set, so `.medium` leaves the inherited
+        // value exactly as it was, and the view keeps its identity when
+        // the size changes.
+        content.transformEnvironment(\.font) { font in
+            if size != .medium { font = .app(style, size, weight: weight) }
+        }
+    }
+}
+
 private struct AppFontModifier: ViewModifier {
     let style: Font.TextStyle
     let weight: Font.Weight?

@@ -51,8 +51,8 @@ struct FeedFolderSheet: View {
         }
         #else
         Form {
-            Section("Name") { nameField }
-            Section("Parent") { parentPicker }
+            Section(formHeader: "Name") { nameField }
+            Section(formHeader: "Parent") { parentPicker }
             errorLabel
         }
         #endif

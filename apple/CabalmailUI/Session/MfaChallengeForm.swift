@@ -22,7 +22,7 @@ struct MfaChallengeForm: View {
 
     var body: some View {
         Form {
-            Section("Two-factor code") {
+            Section(formHeader: "Two-factor code") {
                 Text(method == .totp
                     ? "Enter the 6-digit code from your authenticator app."
                     : "Enter the code we just sent to your phone.")

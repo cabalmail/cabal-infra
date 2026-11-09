@@ -5,7 +5,10 @@
   composer; View > Larger Message Text (⌘+), Smaller Message Text (⌘−)
   and Default Message Text Size (⌘0) change it from any window. Interface
   text scales the app's own text everywhere else, each style keeping its
-  size relative to the others, with the message list's rows growing to
-  fit; menus and the toolbar stay the system's. Both are kept on the
-  device rather than synced with the account (`AppTextSize`, `appFont`;
-  the `raw_text_style_font` SwiftLint rule keeps raw text styles out).
+  size relative to the others: lists, the sidebar's folders and feeds,
+  form headers and footers in their own styles, buttons and other
+  controls (through the control size), with the message list's rows
+  growing to fit; menus and the toolbar stay the system's. Both are kept
+  on the device rather than synced with the account (`AppTextSize`,
+  `appFont`, `appFontWhenScaled`; the `raw_text_style_font` and
+  `string_titled_section` SwiftLint rules keep the unscaled forms out).
