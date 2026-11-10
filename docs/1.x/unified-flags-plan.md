@@ -6,9 +6,9 @@
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
-| 3 -- Apple client | Rendering and Settings > Flags merged (2026-11-10), #2375; affordances in review (2026-11-10), #2376 |
+| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. On stage; the acceptance below and the promotion are still to do |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
-| 5 -- Documentation | In review (2026-11-10), with Phase 3's second PR, #2376 |
+| 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
 This plan is run by Session 1 of
 [post-wave-3/flags-and-cross-media.md](post-wave-3/flags-and-cross-media.md),
@@ -329,7 +329,9 @@ the entry encodes back byte-identical after a no-op edit.
 **Status:** In two PRs, as flags-and-cross-media.md splits it. The
 first, rendering and Settings > Flags, merged (2026-11-10), #2375; the
 second, the affordances with the "Default" badge and "Make default",
-is in review (2026-11-10), #2376. What the first one settled:
+merged (2026-11-10), #2376. Both are on stage; the acceptance at the
+end of this phase has not been run on every platform, and the release
+waits for it. What the first one settled:
 
 - The reader's flag button is not recoloured. It was never gold: since
   `ReaderToggleFace` it draws the action ("Flag" / "Unflag"), not the
@@ -431,7 +433,7 @@ platform reads identically on the other.
 
 ## Phase 5 -- Documentation
 
-**Status:** In review (2026-11-10), #2376, with Phase 3's second PR.
+**Status:** Merged (2026-11-10), #2376, with Phase 3's second PR.
 The manual had no flags section, so it gains a Flags entry under Mail;
 the rules doc's Flag extra says the editor lists the flags as Settings
 > Flags does.

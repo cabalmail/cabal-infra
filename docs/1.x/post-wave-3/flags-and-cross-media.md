@@ -19,12 +19,12 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 | Work item | Status |
 |---|---|
 | Decisions 1 to 9 | 1 to 3 answered 2026-11-09, each with its default: sessions; the feed's Flag button follows the palette; Android legs in android-parity.md. 4 to 9 are asked in their phases. |
-| Session 1: Stage A, unified flags (A0 to A4) | Started (2026-11-09). |
+| Session 1: Stage A, unified flags (A0 to A4) | A0 to A4 merged (2026-11-10). Not promoted: the verification under Session 1 is still to do. |
 | A0: docs and decisions 1 to 3 | Merged (2026-11-09), in #2370 with A1. |
 | A1: server, the palette accepts `\Flagged` | Done: #2370, accepted on stage 2026-11-09, in prod with 1.46.0 (2026-11-10). |
 | A2: Kit model | Merged (2026-11-09), #2371. |
 | A3: rendering and Settings > Flags | Merged (2026-11-10), #2375. The maintainer waived the rest of gate G0 on 2026-11-10: A3 went ahead of feed-bulk-actions.md (PRs B to F not started) and of ipad-layout-and-keyboard.md PRs C and F, which build on its row marks when they run. |
-| A4: affordances and user docs | In review (2026-11-10), #2376. |
+| A4: affordances and user docs | Merged (2026-11-10), #2376. |
 | Session 2: Phase 2, custom flags on feed items (B2.1 to B2.4) | Not started (2026-10-15). |
 | Session 3: Phase 4, feed rules (B4.1 to B4.3) | Not started (2026-10-15). |
 | Session 4: Phase 5 structure, then Phase 6 (B5.1, B6.1) | Not started (2026-10-15). |
@@ -124,7 +124,7 @@ In short: cross-media Phase 1 shipped but its plan still says "In review"; every
 
 ### Session 1: Stage A, unified flags (one release)
 
-**Status:** Started (2026-11-09). A0 and A1 merged together as #2370: the answers to decisions 1 to 3 arrived while A1 was open, so the docs rode with it. A1 passed its acceptance on stage and reached prod with 1.46.0 (2026-11-10). A2 merged as #2371. A3 merged as #2375, started on 2026-11-10 when the maintainer waived the two sibling-plan conditions of gate G0. A4 is in review as #2376; its feed bulk bar item moves to the feed-bulk-actions.md PR that builds that bar. What each PR settled is under Phase 3 in `unified-flags-plan.md`.
+**Status:** A0 to A4 merged (2026-11-10); not promoted. A0 and A1 merged together as #2370: the answers to decisions 1 to 3 arrived while A1 was open, so the docs rode with it. A1 passed its acceptance on stage and reached prod with 1.46.0 (2026-11-10). A2 merged as #2371. A3 merged as #2375, started on 2026-11-10 when the maintainer waived the two sibling-plan conditions of gate G0. A4 merged as #2376; its feed bulk bar item moves to the feed-bulk-actions.md PR that builds that bar. Still to do before the promotion: the verification under "Release" below. So far the running app has been looked at only on the iPhone and iPad simulators, and for A4 on the iPhone alone. What each PR settled is under Phase 3 in `unified-flags-plan.md`.
 
 Scope: `unified-flags-plan.md` Phases 1, 2, 3 and 5 on Apple and the server, plus the shared row parts 1.5 deferred. Android (its Phase 4) goes to android-parity.md leg L1 (decision 3).
 
