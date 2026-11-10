@@ -131,7 +131,7 @@ final class SearchSourceFolderTests: XCTestCase {
         let imap = FakeImapClient()
         let model = try await collidingSearchModel(imap: imap)
 
-        await model.setFlagged(true, refs: [zeta])
+        await model.setDefaultFlag(true, refs: [zeta])
 
         let calls = await imap.flagCalls
         XCTAssertEqual(calls.map(\.folder), ["zeta0802"])

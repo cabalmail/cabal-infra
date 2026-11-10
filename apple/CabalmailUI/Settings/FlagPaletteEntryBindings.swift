@@ -49,6 +49,19 @@ struct FlagPaletteEntryBindings {
         isSystemEntry && preferences.flagPalette.contains { $0.slot == slot }
     }
 
+    /// Whether this entry is the default flag, the one the swipe, the flag
+    /// button and the flag shortcuts set: the first enabled entry.
+    var isDefault: Bool {
+        FlagPalette.defaultEntry(in: preferences.flagPalette)?.slot == slot
+    }
+
+    /// Whether `makeDefault()` would change anything: the entry is there,
+    /// enabled, and not the default already. A disabled flag is offered
+    /// nowhere, so it cannot be the one the gestures set.
+    var canMakeDefault: Bool {
+        entry?.enabled == true && !isDefault
+    }
+
     /// The palette as the list shows it.
     private var palette: [FlagPaletteEntry] {
         FlagPalette.effective(preferences.flagPalette)
@@ -119,6 +132,18 @@ struct FlagPaletteEntryBindings {
         var palette = self.palette
         guard let index = palette.firstIndex(where: { $0.slot == slot }) else { return }
         palette.insert(palette.remove(at: index), at: index + offset)
+        store(palette)
+    }
+
+    /// Makes the entry the default flag by moving it to the top of the
+    /// palette: the default is a position, not a field, so every shipped
+    /// build and the other platforms read it the same way. Nothing is
+    /// written when `canMakeDefault` is false.
+    func makeDefault() {
+        guard canMakeDefault else { return }
+        var palette = self.palette
+        guard let index = palette.firstIndex(where: { $0.slot == slot }) else { return }
+        palette.insert(palette.remove(at: index), at: 0)
         store(palette)
     }
 

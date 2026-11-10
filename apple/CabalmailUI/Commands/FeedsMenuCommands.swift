@@ -42,9 +42,11 @@ public struct FeedsMenuCommands: Commands {
             Button("Mark as Read/Unread") { commands?.send(.feed(.toggleRead)) }
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(!itemsLive)
-            Button("Flag/Unflag") { commands?.send(.feed(.toggleFlag)) }
-                .keyboardShortcut("8", modifiers: [.command, .shift])
-                .disabled(!itemsLive)
+            Button(commands?.feedFlag?.commandTitle ?? FlagToggle.idleCommandTitle) {
+                commands?.send(.feed(.toggleFlag))
+            }
+            .keyboardShortcut("8", modifiers: [.command, .shift])
+            .disabled(!itemsLive || commands?.feedFlag == nil)
             // The current feed scope, through the list's own confirmation.
             Button("Mark All as Read") { commands?.send(.feed(.markAllRead)) }
                 .keyboardShortcut("t", modifiers: [.command, .option])

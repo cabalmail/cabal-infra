@@ -98,7 +98,7 @@ final class SearchCopyRowActionTests: XCTestCase {
         let model = try await searchModel(imap: imap)
 
         await model.toggleSeen(try row(inbox, in: model))
-        await model.toggleFlag(try row(inbox, in: model))
+        await model.toggleDefaultFlag(try row(inbox, in: model))
 
         let calls = await imap.flagCalls
         XCTAssertEqual(calls.map(\.folder), ["INBOX", "INBOX"])

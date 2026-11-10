@@ -224,7 +224,7 @@ struct ActionsSettingsView: View {
     @ViewBuilder
     private var mailSwipeOptions: some View {
         Text("Toggle read").tag(MailSwipeAction.toggleRead)
-        Text("Toggle flag").tag(MailSwipeAction.toggleFlag)
+        Text("Toggle default flag").tag(MailSwipeAction.toggleFlag)
         Text("Dispose (per Dispose action)").tag(MailSwipeAction.dispose)
         Text("None").tag(MailSwipeAction.disabled)
     }

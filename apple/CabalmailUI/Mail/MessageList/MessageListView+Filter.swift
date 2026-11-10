@@ -7,12 +7,22 @@ import CabalmailKit
 /// where `Preferences` stores each folder's sticky pill; the labels and the
 /// client-side envelope predicate are the view's.
 extension MessageFilter {
-    public var label: String {
+    /// The pill's word. Flagged filters on the server's flag, the only one
+    /// it can filter on, so it carries that flag's name from Settings >
+    /// Flags: rename the entry "Urgent" and the pill reads "Urgent".
+    public func label(palette: [FlagPaletteEntry]) -> String {
         switch self {
         case .all:     return "All"
         case .unread:  return "Unread"
-        case .flagged: return "Flagged"
+        case .flagged: return FlagToggle.systemFlagName(in: palette)
         }
+    }
+
+    /// The pills the bar draws. Flagged leaves while its flag's entry is
+    /// disabled, unless it is the pill that is lit: that one stays, so it
+    /// can be switched off.
+    static func pills(palette: [FlagPaletteEntry], lit: MessageFilter) -> [MessageFilter] {
+        pills.filter { $0 != .flagged || $0 == lit || FlagToggle.systemFlag(in: palette) != nil }
     }
 
     /// True when the envelope passes this filter.
@@ -41,9 +51,9 @@ extension MessageListView {
     func filterTabsBar(model: MessageListViewModel, searchActive: Bool) -> some View {
         HStack(spacing: 6) {
             FilterPillStrip {
-                ForEach(MessageFilter.pills) { filter in
+                ForEach(MessageFilter.pills(palette: model.flagPalette, lit: model.filterTab)) { filter in
                     FilterPill(
-                        label: filter.label,
+                        label: filter.label(palette: model.flagPalette),
                         isOn: filter == model.filterTab,
                         count: pillCount(filter, model: model),
                         identifier: "filter.pill.\(filter.rawValue)"

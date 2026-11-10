@@ -257,51 +257,56 @@ extension MessageListView {
         }
     }
 
-    /// The menu's flag block: the classic Flag toggle plus, when the
-    /// palette has enabled entries, a Flags submenu of custom-flag toggles
-    /// (Phase 4). Extracted so `rowContextMenu` stays under SwiftLint's
-    /// function-body cap.
+    /// The menu's flag block: the default flag's toggle, named for the
+    /// flag (`FlagToggle`), plus a Flags submenu of every flag the palette
+    /// offers whenever that is more than the default flag alone. No toggle
+    /// while the palette has no default flag. Extracted so `rowContextMenu`
+    /// stays under SwiftLint's function-body cap.
     @ViewBuilder
     private func flagMenuSection(
         for envelope: Envelope,
         model: MessageListViewModel
     ) -> some View {
-        Button {
-            Task { await model.toggleFlag(envelope) }
-        } label: {
-            Label(
-                envelope.flags.contains(.flagged) ? "Unflag" : "Flag",
-                systemImage: envelope.flags.contains(.flagged) ? "flag.slash" : "flag"
-            )
+        if let toggle = model.defaultFlag {
+            let isSet = envelope.flags.contains(toggle.flag)
+            Button {
+                Task { await model.toggleDefaultFlag(envelope) }
+            } label: {
+                Label(toggle.title(isSet: isSet), systemImage: toggle.systemImage(isSet: isSet))
+            }
         }
-        if !offeredKeywordEntries(model).isEmpty {
+        let rows = FlagMenuPolicy.rows(
+            palette: model.flagPalette,
+            taggedSlots: Set(FlagPalette.slots(in: envelope.flags, palette: model.flagPalette))
+        )
+        if !rows.isEmpty {
             Menu {
-                keywordMenuItems(for: envelope, model: model)
+                flagMenuItems(rows, for: envelope, model: model)
             } label: {
                 Label("Flags", systemImage: "tag")
             }
         }
     }
 
-    /// The Flags submenu body: menu toggles so a tagged slot carries the
+    /// The Flags submenu body: menu toggles so a set flag carries the
     /// native checkmark (same construct as the reader's mark-read option
-    /// menu). Only enabled keyword entries are offered; a tag on a
-    /// disabled or deleted slot still shows in the row dots and clears
-    /// from the reader, keeping the palette editor's promises. The system
-    /// flag's entry is left out: the Flag / Unflag item above is its toggle.
+    /// menu). The rows are the reader's (`FlagMenuPolicy.rows`): every
+    /// enabled entry in palette order, then any flag the message carries
+    /// whose entry is disabled or deleted, so it can still be cleared.
     @ViewBuilder
-    func keywordMenuItems(
+    func flagMenuItems(
+        _ rows: [FlagMenuRow],
         for envelope: Envelope,
         model: MessageListViewModel
     ) -> some View {
-        ForEach(offeredKeywordEntries(model)) { entry in
+        ForEach(rows) { row in
             Toggle(isOn: Binding(
-                get: { envelope.flags.contains(.keyword(entry.slot)) },
+                get: { row.isOn },
                 set: { _ in
-                    Task { await model.toggleKeyword(envelope, slot: entry.slot) }
+                    Task { await model.toggle(Flag(wireValue: row.slot), on: envelope) }
                 }
             )) {
-                Text(entry.label)
+                Text(row.label)
             }
         }
     }
@@ -368,10 +373,6 @@ extension MessageListView {
     @ViewBuilder
     var purgeActionLabel: some View {
         Label("Delete Forever", systemImage: "trash.slash")
-    }
-
-    private func offeredKeywordEntries(_ model: MessageListViewModel) -> [FlagPaletteEntry] {
-        FlagPalette.keywordEntries(in: model.flagPalette).filter(\.enabled)
     }
 
     /// Archive affordance label inside the Archive folder, where archiving

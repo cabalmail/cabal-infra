@@ -57,16 +57,14 @@ extension MessageListView {
         model: MessageListViewModel
     ) -> some View {
         if !refs.isEmpty {
-            let chosen = model.loadedRows(refs)
-            let hasUnflagged = chosen.contains { !$0.flags.contains(.flagged) }
-            let hasUnread = chosen.contains { !$0.flags.contains(.seen) }
-            Button {
-                Task { await model.setFlagged(hasUnflagged, refs: refs) }
-            } label: {
-                Label(
-                    hasUnflagged ? "Flag" : "Unflag",
-                    systemImage: hasUnflagged ? "flag" : "flag.slash"
-                )
+            let hasUnread = model.loadedRows(refs).contains { !$0.flags.contains(.seen) }
+            if let toggle = model.defaultFlag {
+                let sets = model.defaultFlagIsMissing(from: refs)
+                Button {
+                    Task { await model.setDefaultFlag(sets, refs: refs) }
+                } label: {
+                    Label(toggle.title(isSet: !sets), systemImage: toggle.systemImage(isSet: !sets))
+                }
             }
             Button {
                 Task { await model.setSeen(hasUnread, refs: refs) }
@@ -167,13 +165,14 @@ extension MessageListView {
         Task { await model.setSeen(hasUnread, refs: refs) }
     }
 
-    /// Cmd+Shift+8 (Cmd+*). Any unflagged message means "flag all",
-    /// otherwise "unflag all".
+    /// Cmd+Shift+8 (Cmd+*), on the default flag. Any message without it
+    /// means "set it on all", otherwise "clear it from all". Does nothing
+    /// while the palette has no default flag; the menu item is dimmed then.
     func toggleFlaggedOnSelection(model: MessageListViewModel) {
         let refs = shortcutTargetRefs(model: model)
-        guard !refs.isEmpty else { return }
-        let hasUnflagged = model.loadedRows(refs).contains { !$0.flags.contains(.flagged) }
-        Task { await model.setFlagged(hasUnflagged, refs: refs) }
+        guard !refs.isEmpty, model.defaultFlag != nil else { return }
+        let sets = model.defaultFlagIsMissing(from: refs)
+        Task { await model.setDefaultFlag(sets, refs: refs) }
     }
 
     /// Cmd+M. Opens the destination picker for the current selection.

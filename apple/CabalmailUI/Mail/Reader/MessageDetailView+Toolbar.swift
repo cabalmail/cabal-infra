@@ -194,7 +194,7 @@ extension MessageDetailView {
     // `disposeButton` below.
 
     // `flagButton` lives in `MessageDetailView+FlagOptions.swift` with the
-    // custom-flag menu it grew in Phase 4 — the same arrangement as
+    // flag menu it grew in Phase 4 — the same arrangement as
     // `seenButton` above.
 
     @ViewBuilder

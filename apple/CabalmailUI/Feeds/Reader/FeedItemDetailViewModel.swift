@@ -35,6 +35,11 @@ final class FeedItemDetailViewModel {
 
     private let engine: RssSyncEngine?
     private let defaults: (any FeedDefaultsPersisting)?
+    private let preferences: Preferences
+
+    /// The flag the reader's button sets and clears, as the item list has
+    /// it (`FeedItemListView.feedFlag`). Nil while its entry is disabled.
+    var flagToggle: FlagToggle? { FlagToggle.systemFlag(in: preferences.flagPalette) }
 
     init(
         item: RssItem,
@@ -48,6 +53,7 @@ final class FeedItemDetailViewModel {
         self.engine = engine
         // The sync engine is the production persister; tests hand in a fake.
         self.defaults = defaults ?? engine
+        self.preferences = preferences
         let policy = FeedDetailPolicy.initial(
             for: subscription,
             hasArticleURL: URL(string: item.url) != nil,

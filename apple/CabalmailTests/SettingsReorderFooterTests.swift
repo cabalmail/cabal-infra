@@ -41,6 +41,20 @@ final class SettingsReorderFooterTests: XCTestCase {
         }
     }
 
+    /// With a second flag in the list there is a default to explain: which
+    /// flag the one-press controls set, and how to choose another.
+    func testTheFlagsFooterSaysWhichFlagIsTheDefault() {
+        for host in [HostPlatform.iOS, .visionOS, .macOS] {
+            let footer = FlagPaletteSettingsView.footerText(paletteIsEmpty: false, on: host)
+            XCTAssertTrue(footer.contains("marked Default"), footer)
+            XCTAssertTrue(footer.contains("to make it the default"), footer)
+            XCTAssertFalse(
+                FlagPaletteSettingsView.footerText(paletteIsEmpty: true, on: host).contains("Default"),
+                "one flag has no default to tell it from"
+            )
+        }
+    }
+
     func testAnEmptyPaletteFooterOffersNoReorder() {
         for host in [HostPlatform.iOS, .visionOS, .macOS] {
             let footer = FlagPaletteSettingsView.footerText(paletteIsEmpty: true, on: host)

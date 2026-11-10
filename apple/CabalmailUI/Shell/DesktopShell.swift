@@ -47,8 +47,8 @@ struct DesktopShell: View {
     /// How many palette rows the reader's flag control offers: none draws
     /// it as a plain button, any more as a split button with that many
     /// rows. The reader asks `FlagMenuPolicy.rows(palette:taggedSlots:)`
-    /// with the open message's tags; with no message open there are no
-    /// tags, so the enabled palette is the whole answer.
+    /// with the open message's flags; with no message open there are none,
+    /// so the enabled palette is the whole answer.
     private var flagMenuRowCount: Int {
         FlagMenuPolicy.rows(palette: preferences.flagPalette, taggedSlots: []).count
     }
