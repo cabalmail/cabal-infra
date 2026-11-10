@@ -172,6 +172,25 @@ class SetFlagPaletteTest(unittest.TestCase):
         self.assertEqual(response['statusCode'], 200)
         self.assertEqual(STORES, [('add', (1, 2), '\\Flagged')])
 
+    def test_a_system_entry_in_the_palette_changes_nothing(self):
+        # set_preferences accepts a `\Flagged` palette entry
+        # (docs/1.x/unified-flags-plan.md, Phase 1). It decorates the system
+        # flag and gates nothing: even disabled, the flag still sets, and
+        # the keyword slots beside it are judged as before.
+        global PREFS_ITEM  # pylint: disable=global-statement
+        PREFS_ITEM = _palette_item([
+            {'slot': '\\Flagged', 'label': 'Urgent', 'color': 'red',
+             'enabled': False},
+            {'slot': 'cabal-flag-01', 'label': 'Later', 'color': 'teal'},
+        ])
+        for flag, status in (('\\Flagged', 200), ('cabal-flag-01', 200),
+                             ('cabal-flag-02', 400)):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    set_flag.handler(_event(flag), None)['statusCode'], status)
+        self.assertEqual(STORES, [('add', (1, 2), '\\Flagged'),
+                                  ('add', (1, 2), 'cabal-flag-01')])
+
     def test_palette_slot_sets(self):
         response = set_flag.handler(_event('cabal-flag-01'), None)
         self.assertEqual(response['statusCode'], 200)
