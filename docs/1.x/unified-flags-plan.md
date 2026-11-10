@@ -4,7 +4,7 @@
 
 | Phase | Status |
 | --- | --- |
-| 1 -- Palette accepts the `\Flagged` slot | Not started |
+| 1 -- Palette accepts the `\Flagged` slot | In review (2026-11-09), #2370 |
 | 2 -- Kit model: synthesis, default resolution | Not started |
 | 3 -- Apple client | Not started |
 | 4 -- Android client | Not started |
@@ -238,7 +238,8 @@ Old-build interactions, enumerated:
 
 ## Phase 1 -- Palette accepts the `\Flagged` slot
 
-**Status:** Not started.
+**Status:** In review (2026-11-09), #2370. The acceptance below is
+checked on stage once the PR has merged and `app.yml` has deployed it.
 
 `lambda/api/set_preferences/function.py`: add `\Flagged` to
 `FLAG_PALETTE_SLOTS`; raise the entry cap from 20 to 21 with a comment

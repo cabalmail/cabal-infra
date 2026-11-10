@@ -18,8 +18,8 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 
 | Work item | Status |
 |---|---|
-| Decisions 1 to 9 | None answered (2026-10-15); 1 to 3 are needed before Stage A. |
-| Session 1: Stage A, unified flags (A0 to A4) | Not started (2026-10-15). |
+| Decisions 1 to 9 | None answered. 1 to 3 were put to the maintainer on 2026-11-09, with A1, and are needed before the rest of Stage A. |
+| Session 1: Stage A, unified flags (A0 to A4) | Started (2026-11-09). A1 (server) in review, #2370; A0 and A2 to A4 not started. |
 | Session 2: Phase 2, custom flags on feed items (B2.1 to B2.4) | Not started (2026-10-15). |
 | Session 3: Phase 4, feed rules (B4.1 to B4.3) | Not started (2026-10-15). |
 | Session 4: Phase 5 structure, then Phase 6 (B5.1, B6.1) | Not started (2026-10-15). |
@@ -91,7 +91,7 @@ In short: cross-media Phase 1 shipped but its plan still says "In review"; every
 - `MailMutationService.setFlag` (`Mail/Store/MailMutationService.swift:117`) takes any flag, so a keyword default flag needs no new write path. The feed reader's Flag button is one plain button in one toolbar slot (`FeedReaderToolbar.swift:72-80`; `FeedReaderToolbarLayout.swift:7`).
 
 **Server and storage facts.**
-- `set_preferences` allows only `cabal-flag-01..20` and at most 20 entries (`set_preferences/function.py:103, 152`), and rejects the whole `app` map on any invalid value (`:180-214`). Its palette validator has no unit tests; `test_set_preferences_app_map.py` covers filters, orders and swipes, and the suites run under stdlib `unittest` (`lint.yml:279`). `set_flag` already accepts `\Flagged` (`set_flag/function.py:51-54`).
+- Until A1 (#2370), `set_preferences` allows only `cabal-flag-01..20` and at most 20 entries, and its palette validator has no unit tests; A1 adds `\Flagged`, the cap of 21 and the tests (`FlagPalette` in `test_set_preferences_app_map.py`). It rejects the whole `app` map on any invalid value (`_validate_app`). The suites run under stdlib `unittest` (`lint.yml`, `unittest-shared`). `set_flag` already accepts `\Flagged` (`_check_keyword` in `set_flag/function.py`).
 - `rss_set_item_state` writes `is_read` and `is_favorite` only. An entry with neither returns `('', {})` and is skipped, and the call still answers 200 (`rss_set_item_state/function.py:34-40, 55-82`).
 - `search_envelopes` searches every subscribed folder but Trash when `folder` is omitted and accepts `flagged=1`, with no keyword criterion (`search_envelopes/function.py:9-13, 151-188`).
 - `set_rules` rejects unknown rule keys (`set_rules/function.py:234-236`) and writes only `rules`, `version` and `updatedAt` (`:317-323`). The compiler reads only `rules` (`docker/shared/compile-user-rules.py:615`).
@@ -116,7 +116,7 @@ In short: cross-media Phase 1 shipped but its plan still says "In review"; every
 
 ### Session 1: Stage A, unified flags (one release)
 
-**Status:** Not started (2026-10-15).
+**Status:** Started (2026-11-09). A1 is in review as #2370, ahead of A0 because it can merge at any time; A0 and A2 to A4 have not started and wait for decisions 1 to 3.
 
 Scope: `unified-flags-plan.md` Phases 1, 2, 3 and 5 on Apple and the server, plus the shared row parts 1.5 deferred. Android (its Phase 4) goes to android-parity.md leg L1 (decision 3).
 
