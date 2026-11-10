@@ -6,7 +6,7 @@
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
-| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. On stage; the acceptance below and the promotion are still to do |
+| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag; the fix is in review, #2378. Not promoted |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
@@ -329,9 +329,10 @@ the entry encodes back byte-identical after a no-op edit.
 **Status:** In two PRs, as flags-and-cross-media.md splits it. The
 first, rendering and Settings > Flags, merged (2026-11-10), #2375; the
 second, the affordances with the "Default" badge and "Make default",
-merged (2026-11-10), #2376. Both are on stage; the acceptance at the
-end of this phase has not been run on every platform, and the release
-waits for it. What the first one settled:
+merged (2026-11-10), #2376. Both are on stage. The acceptance at the
+end of this phase was run on 2026-11-10 and found one defect, fixed in
+#2378 (in review); its results are under the acceptance text. What the
+first one settled:
 
 - The reader's flag button is not recoloured. It was never gold: since
   `ReaderToggleFace` it draws the action ("Flag" / "Unflag"), not the
@@ -411,6 +412,39 @@ star is a gold dot/chip; renaming the entry to "Urgent" and recolouring
 it red updates the swipe label, the shortcut target, the pill, and the
 rule editor; moving another flag to the top retargets the swipe;
 disabling every flag hides the swipe and disables the shortcut.
+
+**Acceptance run (2026-11-10)**, against stage at 6538066c5 as the first
+stage test account, on the Mini's simulators and its Mac. The palette
+was put in four states (untouched; the entry renamed "Urgent" and red;
+another flag, "Todo", first; every entry disabled, which only data can
+do now), and each press was checked against the flags the server then
+held. The rename was done in the Settings editor on the iPhone and
+through the API elsewhere.
+
+| Platform | Result |
+| --- | --- |
+| iPhone simulator | Pass: swipe, pill, bulk bar, rule editor, the editor itself |
+| iPad simulator | Pass: swipe, pill, reader flag button |
+| visionOS simulator | Pass: reader flag button and pill in all four states, swipe with "Todo" first |
+| macOS | Pill, toolbar button, Message menu item, ⌘⇧L and the no-default case pass. **⌘⇧8 failed** once the default flag had a name |
+| Old build (2026-11-06, before Phase 2) | Pass: the entry lists as an ordinary flag, survives an edit made from the old build, and picking it sets `\Flagged` |
+
+The macOS failure: the Message and Feeds menus both declared ⌘⇧8, and
+#2376 made their two items take the flag's name. SwiftUI does not give
+a menu item it is updating a key equivalent another item already holds,
+so the Message item lost its key on its first retitle; the item, ⌘⇧L
+and the toolbar button still worked. #2378 declares the chord on one
+menu at a time, the one for the section in front
+(`SharedChordPolicy.flagChord`), and `FlagChordTests` counts the items
+on the chord in the menu bar the app built. Checked in the running Mac
+app with the fix: ⌘⇧8 sets and clears "Todo" on a message, the key
+moves to the Feeds item when a feed is in front and back again, a
+rename arriving while the app runs keeps it, and with a feed in front
+it sets and clears the feed item's flag.
+
+Not run: the Duo simulator pass, the physical-Duo check, a trackpad
+swipe on macOS, dark mode. "New build, old server" can no longer be
+run: Phase 1 is in prod.
 
 ## Phase 4 -- Android client
 
