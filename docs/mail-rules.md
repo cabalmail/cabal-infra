@@ -103,12 +103,13 @@ button when you pick that action.
 Extras (independent; all disabled when the destination is Delete —
 there is no message left to act on):
 
-- **Flag** — the message arrives flagged, and/or tagged with any of
-  the custom flags you have defined in Settings → Flags (the rule
-  editor's flag picker offers the classic flag plus your palette). If
-  you later delete or disable a custom flag, rules that set it are
-  skipped entirely — pick a different flag or remove it from the rule
-  to re-arm them.
+- **Flag** — the message arrives carrying whichever flags you switch
+  on in the rule editor, which lists them as Settings → Flags does. The
+  built-in flag, "Flagged" until you rename it, is that list's entry for
+  the mail server's own flag, and a rule can always set it; the rest
+  are the custom flags you have defined. If you later delete or disable
+  a custom flag, rules that set it are skipped entirely — pick a
+  different flag or remove it from the rule to re-arm them.
 - **Mark as read** — the message arrives read.
 - **Forward** — send a copy to up to 10 addresses. The forward carries
   the original message; forwarded copies are stamped with a loop-guard
