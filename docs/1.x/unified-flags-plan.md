@@ -4,7 +4,7 @@
 
 | Phase | Status |
 | --- | --- |
-| 1 -- Palette accepts the `\Flagged` slot | Merged (2026-11-09), #2370; accepted on stage; not yet in prod |
+| 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
 | 3 -- Apple client | Not started |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
@@ -264,8 +264,9 @@ day. The acceptance below was run against the stage API then and
 passed: the palette was stored and returned canonically, a 22-entry
 palette and `cabal-flag-00` each got a 400 and left the stored palette
 alone, and `set_flag` set and cleared `\Flagged` on a message as before.
-It reaches prod with the next promotion; Phase 3 waits for that
-(decision 8).
+It reached prod with 1.46.0 (2026-11-10): prod's `set_preferences` runs
+the same build that passed on stage. Phase 3's wait for it (decision 8)
+is over.
 
 `lambda/api/set_preferences/function.py`: add `\Flagged` to
 `FLAG_PALETTE_SLOTS`; raise the entry cap from 20 to 21 with a comment

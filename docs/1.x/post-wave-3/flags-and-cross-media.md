@@ -21,9 +21,9 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 | Decisions 1 to 9 | 1 to 3 answered 2026-11-09, each with its default: sessions; the feed's Flag button follows the palette; Android legs in android-parity.md. 4 to 9 are asked in their phases. |
 | Session 1: Stage A, unified flags (A0 to A4) | Started (2026-11-09). |
 | A0: docs and decisions 1 to 3 | Merged (2026-11-09), in #2370 with A1. |
-| A1: server, the palette accepts `\Flagged` | Merged (2026-11-09), #2370. Deployed to stage and its acceptance passed there the same day; not yet in prod. |
+| A1: server, the palette accepts `\Flagged` | Done: #2370, accepted on stage 2026-11-09, in prod with 1.46.0 (2026-11-10). |
 | A2: Kit model | Merged (2026-11-09), #2371. |
-| A3: rendering and Settings > Flags | Not started. Waits on gate G0: A1 in prod, feed-bulk-actions.md finished, ipad-layout-and-keyboard.md PRs A, C and F merged. |
+| A3: rendering and Settings > Flags | Not started. Gate G0 as of 2026-11-10: decisions 1 to 3 answered and A1 in prod; feed-bulk-actions.md not finished (PR A done, PRs B to F not started); ipad-layout-and-keyboard.md PR A mostly landed, PRs C and F not started. |
 | A4: affordances and user docs | Not started. |
 | Session 2: Phase 2, custom flags on feed items (B2.1 to B2.4) | Not started (2026-10-15). |
 | Session 3: Phase 4, feed rules (B4.1 to B4.3) | Not started (2026-10-15). |
@@ -124,7 +124,7 @@ In short: cross-media Phase 1 shipped but its plan still says "In review"; every
 
 ### Session 1: Stage A, unified flags (one release)
 
-**Status:** Started (2026-11-09). A0 and A1 merged together as #2370: the answers to decisions 1 to 3 arrived while A1 was open, so the docs rode with it. A1 is live on stage, where its acceptance passed, and waits for a promotion to reach prod. A2 merged as #2371. A3 and A4 have not started; A3 waits on gate G0, and the session stops here until it clears.
+**Status:** Started (2026-11-09). A0 and A1 merged together as #2370: the answers to decisions 1 to 3 arrived while A1 was open, so the docs rode with it. A1 passed its acceptance on stage and reached prod with 1.46.0 (2026-11-10). A2 merged as #2371. A3 and A4 have not started; A3 waits on gate G0, and the session stops here until it clears.
 
 Scope: `unified-flags-plan.md` Phases 1, 2, 3 and 5 on Apple and the server, plus the shared row parts 1.5 deferred. Android (its Phase 4) goes to android-parity.md leg L1 (decision 3).
 
