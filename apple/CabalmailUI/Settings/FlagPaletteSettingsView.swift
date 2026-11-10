@@ -10,7 +10,8 @@ import CabalmailKit
 ///
 /// The list is the effective palette (`FlagPalette.effective`), so the
 /// system entry is always a row, whether or not it has been stored yet.
-/// It edits and moves like the others and resets where they delete.
+/// It renames, recolors and moves like the others, resets where they
+/// delete, and cannot be disabled.
 ///
 /// The order is the order pickers use. Rows move by Move Up / Move Down in
 /// their context menu everywhere (the Mac's only route, since this grouped
@@ -147,7 +148,8 @@ enum FlagPaletteColor {
 /// on a retired slot outlive the palette entry. The system flag's entry has
 /// no deletion: it offers Reset to Default in its place, which needs no
 /// confirmation, because it changes a name, a color and a position and
-/// touches no message.
+/// touches no message. It has no Enabled toggle either: every mailbox has
+/// the flag, and switching a built-in flag off has nothing to mean.
 private struct FlagPaletteEntryEditor: View {
     let preferences: Preferences
     let slot: String
@@ -174,11 +176,15 @@ private struct FlagPaletteEntryEditor: View {
             Section {
                 TextField("Name", text: bindings.label)
                     .autocorrectionDisabled()
-                Toggle("Enabled", isOn: bindings.value(\.enabled, or: false))
+                if !bindings.isSystemEntry {
+                    Toggle("Enabled", isOn: bindings.value(\.enabled, or: false))
+                }
             } footer: {
                 FormSectionFooter {
-                    Text("A disabled flag keeps its tags but is offered nowhere.")
-                        .sectionFooter()
+                    if !bindings.isSystemEntry {
+                        Text("A disabled flag keeps its tags but is offered nowhere.")
+                            .sectionFooter()
+                    }
                 }
             }
             Section(formHeader: "Color") {

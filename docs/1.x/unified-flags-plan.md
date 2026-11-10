@@ -66,8 +66,8 @@ consequences shape this plan:
 
 1. One flags interface across the native clients: the palette is *the*
    list of flags, and `\Flagged` is an entry in it.
-2. Users can rename, recolour, reorder, and disable the `\Flagged`
-   entry exactly like any other.
+2. Users can rename, recolour and reorder the `\Flagged` entry exactly
+   like any other. It cannot be deleted or disabled (decision 2).
 3. Users who have never touched the palette see no change beyond
    rendering: a flag labelled "Flagged" in the same gold, first in the
    list, toggled by the same gestures.
@@ -133,15 +133,22 @@ palette:
   shift. The synthesized entry is not pushed to the server until the
   user edits it -- the wire palette stays byte-identical for users who
   never touch it.
-- Any edit (rename, recolour, reorder, disable) materializes the entry
-  in the pushed palette at its position.
+- Any edit (rename, recolour, reorder) materializes the entry in the
+  pushed palette at its position.
 - **The entry cannot be deleted, only reset.** Unlike a keyword slot,
   `\Flagged` cannot be un-minted: rules with `flag: true`, the
   `?flagged=1` search, `folder_status`, older builds, and the React app
   all still set or read it. Where other entries offer Delete, this one
   offers "Reset to default", which removes the wire entry so the
-  synthesized default takes over again. Disable remains available for
-  users who want it hidden from pickers and rendering.
+  synthesized default takes over again.
+- **The entry cannot be disabled** (decided 2026-11-10, with Phase 3's
+  first PR). This plan first kept an Enabled toggle on it "for users
+  who want it hidden from pickers and rendering"; the maintainer saw
+  nothing a disabled built-in flag could mean, so its editor has no
+  toggle. The wire format is unchanged and still carries `enabled`, so
+  an entry that arrives disabled (written through the API, or by a
+  client that offers the toggle) is honoured as data: it is passed over
+  as the default flag, and "Reset to default" clears it.
 
 ### 3. The default flag is positional: first enabled entry
 
@@ -164,7 +171,9 @@ Degenerate case: if every entry is disabled there is no default. The
 toggle affordances then behave as a `none` swipe binding does today --
 the swipe action is hidden and the shortcut and reader button are
 disabled -- rather than silently falling back to `\Flagged`. The
-palette itself can never be empty under decision 2.
+palette itself can never be empty under decision 2. Since the system
+entry cannot be disabled in the app, this case needs a palette that
+carries it disabled already; the handling stays, for that data.
 
 ### 4. One rendering for every slot
 
@@ -326,9 +335,10 @@ default", has not started. What the first one settled:
   `ReaderToggleFace` it draws the action ("Flag" / "Unflag"), not the
   state, so there is no state colour to take from the palette. Its
   title follows the default flag's label in the second PR.
-- A flag whose entry is disabled is still drawn on the messages that
-  carry it, the system flag included, as a disabled custom flag's dots
-  always were. "Disabled" means offered nowhere, not hidden.
+- The system entry's editor has no Enabled toggle (decision 2). A
+  custom flag whose entry is disabled is still drawn on the messages
+  that carry it, as it always was: "disabled" means offered nowhere,
+  not hidden.
 - Until the second PR, the flag menus and the rule editor list keyword
   entries only (`FlagPalette.keywordEntries(in:)`), because the control
   beside them still toggles `\Flagged` itself.
