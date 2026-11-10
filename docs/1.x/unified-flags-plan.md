@@ -6,7 +6,7 @@
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
-| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Not promoted: the Duo pass is still to do |
+| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass. Not promoted: the physical-Duo check is on the maintainer's checklist |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
@@ -427,6 +427,7 @@ through the API elsewhere.
 | iPad simulator | Pass: swipe, pill, reader flag button |
 | visionOS simulator | Pass: reader flag button and pill in all four states, swipe with "Todo" first |
 | macOS | Pill, toolbar button, Message menu item, ⌘⇧L and the no-default case pass. **⌘⇧8 failed** once the default flag had a name |
+| iPhone Duo simulator (stage at cbe028f1c, with #2378) | Pass. Closed: swipe and pill in all four states. Open: the reader's chips in list order, and its flag button sets and clears "Todo" |
 | Old build (2026-11-06, before Phase 2) | Pass: the entry lists as an ordinary flag, survives an edit made from the old build, and picking it sets `\Flagged` |
 
 The macOS failure: the Message and Feeds menus both declared ⌘⇧8, and
@@ -442,8 +443,9 @@ moves to the Feeds item when a feed is in front and back again, a
 rename arriving while the app runs keeps it, and with a feed in front
 it sets and clears the feed item's flag.
 
-Not run: the Duo simulator pass, the physical-Duo check, a trackpad
-swipe on macOS, dark mode. "New build, old server" can no longer be
+The Duo pass ran on the Mini's simulator, not the Studio's; book and
+laptop poses were not tried. Not run: the physical-Duo check, a
+trackpad swipe on macOS, dark mode. "New build, old server" can no longer be
 run: Phase 1 is in prod.
 
 ## Phase 4 -- Android client
