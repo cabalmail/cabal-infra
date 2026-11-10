@@ -1,6 +1,7 @@
 '''Unit tests for set_preferences' `app` map validation: the enum keys, the
-sticky filter-pill keys (`filter:mail:<folder>`, `filter:feeds:all`), and the
-unknown-key rejection that keeps a client typo from persisting silently.
+sticky filter-pill keys (`filter:mail:<folder>`, `filter:feeds:all`), the
+flag palette, and the unknown-key rejection that keeps a client typo from
+persisting silently.
 
 No pytest harness in this repo; run under the stdlib:
 
@@ -134,6 +135,90 @@ class AppMap(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(body['Error'], 'Invalid value for app.')
         self.assertEqual(TABLE.updates, [])
+
+
+def entry(slot, label='Flag', color='blue', **extra):
+    '''One palette entry as a client sends it.'''
+    return {'slot': slot, 'label': label, 'color': color, **extra}
+
+
+KEYWORD_SLOTS = [f'cabal-flag-{i:02d}' for i in range(1, 21)]
+
+
+def save_palette(entries):
+    '''Posts a palette (JSON-encoded, as it rides the app map); returns
+    (status, the palette string the handler answered with or None).'''
+    status, body = call({'flag_palette': json.dumps(entries)})
+    return status, body.get('app', {}).get('flag_palette')
+
+
+class FlagPalette(unittest.TestCase):
+    '''The palette validator: the 20 keyword slots plus the system flag's
+    `\\Flagged` entry (docs/1.x/unified-flags-plan.md, Phase 1).'''
+
+    def setUp(self):
+        TABLE.updates.clear()
+
+    def test_system_slot_round_trips_canonically(self):
+        sent = [entry('\\Flagged', 'Urgent', 'red'), entry('cabal-flag-03', 'Later', 'teal')]
+        status, stored = save_palette(sent)
+        self.assertEqual(status, 200)
+        # Compact, key-sorted, order-preserving: the system entry stays first.
+        self.assertEqual(
+            stored,
+            '[{"color":"red","label":"Urgent","slot":"\\\\Flagged"},'
+            '{"color":"teal","label":"Later","slot":"cabal-flag-03"}]')
+        self.assertEqual(json.loads(stored), sent)
+        # What the handler answered is what it wrote.
+        self.assertEqual(TABLE.updates[1]['ExpressionAttributeValues'], {':a0': stored})
+
+    def test_system_slot_takes_the_same_fields_as_a_keyword_slot(self):
+        self.assertEqual(save_palette([entry('\\Flagged', enabled=False)])[0], 200)
+        self.assertEqual(save_palette([entry('\\Flagged', color='gold')])[0], 400)
+        self.assertEqual(save_palette([entry('\\Flagged', label='')])[0], 400)
+        self.assertEqual(save_palette([entry('\\Flagged', default=True)])[0], 400)
+
+    def test_system_slot_is_unique_and_has_one_spelling(self):
+        self.assertEqual(save_palette([entry('\\Flagged'), entry('\\Flagged')])[0], 400)
+        # IMAP matches system flags case-insensitively; the palette does not,
+        # or two spellings of one flag could sit in the list side by side.
+        self.assertEqual(save_palette([entry('\\flagged')])[0], 400)
+        self.assertEqual(save_palette([entry('Flagged')])[0], 400)
+        # No other system flag is a palette entry.
+        self.assertEqual(save_palette([entry('\\Seen')])[0], 400)
+
+    def test_a_full_palette_is_every_keyword_slot_plus_the_system_flag(self):
+        # Longest labels and the optional key on every entry, so the raw-length
+        # bound is shown to leave room for the 21st entry.
+        full = [entry(slot, 'x' * MOD.MAX_FLAG_LABEL_LENGTH, 'indigo', enabled=False)
+                for slot in ['\\Flagged'] + KEYWORD_SLOTS]
+        self.assertEqual(len(full), MOD.MAX_FLAG_PALETTE_ENTRIES)
+        self.assertEqual(MOD.MAX_FLAG_PALETTE_ENTRIES, len(MOD.FLAG_PALETTE_SLOTS))
+        status, stored = save_palette(full)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(stored), full)
+
+    def test_twenty_two_entries_are_rejected(self):
+        full = [entry(slot) for slot in ['\\Flagged'] + KEYWORD_SLOTS]
+        status, _ = save_palette(full + [entry('cabal-flag-21')])
+        self.assertEqual(status, 400)
+        self.assertEqual(save_palette(full + [entry('cabal-flag-01')])[0], 400)
+        self.assertEqual(TABLE.updates, [])
+
+    def test_slot_ids_outside_the_fixed_set_are_still_rejected(self):
+        # There is no synthetic slot zero: the system flag is `\Flagged`.
+        self.assertEqual(save_palette([entry('cabal-flag-00')])[0], 400)
+        self.assertEqual(save_palette([entry('cabal-flag-21')])[0], 400)
+        self.assertEqual(save_palette([entry('cabal-flag-1')])[0], 400)
+        self.assertEqual(save_palette([entry('urgent')])[0], 400)
+
+    def test_keyword_only_palettes_are_unaffected(self):
+        # The shape every palette saved before the system slot existed has.
+        sent = [entry(slot) for slot in KEYWORD_SLOTS]
+        status, stored = save_palette(sent)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(stored), sent)
+        self.assertEqual(save_palette([])[1], '[]')
 
 
 if __name__ == '__main__':

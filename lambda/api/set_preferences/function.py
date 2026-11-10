@@ -98,9 +98,20 @@ MAX_SIGNATURE_LENGTH = 2000
 # non-string value would make the whole preferences pull fail silently on
 # builds already in the field. The API is the palette's sole enforcement
 # point - slot atoms are the only vocabulary the mailstore ever sees.
+#
+# The system flag rides the same list (docs/1.x/unified-flags-plan.md,
+# decision 1): its slot id is the literal IMAP atom `\Flagged`, in that one
+# spelling, so a client can hand any entry's slot straight to set_flag. It
+# is a Maildir info letter rather than a keyword, so it takes none of the 20
+# keyword slots. Readers that want keyword slots only (set_flag's palette
+# check, the rule compiler) match on the cabal-flag pattern and skip it.
 MAX_FLAG_PALETTE_RAW_LENGTH = 4000
 MAX_FLAG_LABEL_LENGTH = 32
-FLAG_PALETTE_SLOTS = {f'cabal-flag-{i:02d}' for i in range(1, 21)}
+FLAG_PALETTE_SYSTEM_SLOT = '\\Flagged'
+FLAG_PALETTE_SLOTS = ({f'cabal-flag-{i:02d}' for i in range(1, 21)}
+                      | {FLAG_PALETTE_SYSTEM_SLOT})
+# 20 keyword slots plus the system flag.
+MAX_FLAG_PALETTE_ENTRIES = 21
 FLAG_PALETTE_COLORS = {
     'red', 'orange', 'yellow', 'green', 'teal', 'blue',
     'indigo', 'purple', 'pink', 'gray',
@@ -136,12 +147,13 @@ def _validate_signature(value):
 def _validate_flag_palette(value):
     '''Returns the canonical palette JSON string, or None if invalid.
 
-    Structure: a JSON array of up to 20 entries, each
+    Structure: a JSON array of up to 21 entries, each
     {slot, label, color[, enabled]}; array order is the display order. Slot
-    ids are the fixed cabal-flag-01..20 atoms (decision 4) and must be
-    unique; labels are bounded and control-free; colors come from the fixed
-    set. Whole-palette last-writer-wins is accepted - palette edits are rare
-    and single-device in practice.
+    ids are the fixed cabal-flag-01..20 atoms (decision 4) or the system
+    flag's `\\Flagged`, and must be unique; labels are bounded and
+    control-free; colors come from the fixed set. Whole-palette
+    last-writer-wins is accepted - palette edits are rare and single-device
+    in practice.
     '''
     if not isinstance(value, str) or len(value) > MAX_FLAG_PALETTE_RAW_LENGTH:
         return None
@@ -149,7 +161,7 @@ def _validate_flag_palette(value):
         entries = json.loads(value)
     except ValueError:
         return None
-    if not isinstance(entries, list) or len(entries) > 20:
+    if not isinstance(entries, list) or len(entries) > MAX_FLAG_PALETTE_ENTRIES:
         return None
     seen_slots = set()
     for entry in entries:
