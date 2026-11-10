@@ -14,13 +14,15 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
 | Decisions | Not asked yet (2026-10-15): the session's scope doc, which asks them, has not been written. |
-| PR 1. Server: unsolicited FETCH entries (#1990) | Not started (2026-10-15). |
-| PR 2. The reader lets go of a message proved gone (#2037) | Not started (2026-10-15). |
-| PR 3. No folder total of 0 during a removal (#1977) | Not started (2026-10-15). |
-| PR 5. Overlapping flag writes (#1974) | Not started (2026-10-15). |
+| PR 1. Server: unsolicited FETCH entries (#1990) | Partly done (2026-10-21): #2164 drops unsolicited entries in `list_envelopes` and `search_envelopes`, and #1990 is closed. The `RFC822` guard in `get_message` and `push_envelope` did not land. |
+| PR 2. The reader lets go of a message proved gone (#2037) | Partly done (2026-10-22): #2189 lets go on a background poll or a pull, and #2037 is closed. The reset route, the reconciler's `gone` and a UIDVALIDITY change are not started. |
+| PR 3. No folder total of 0 during a removal (#1977) | Done (2026-10-18): #2119; #1977 closed. |
+| PR 5. Overlapping flag writes (#1974) | Done (2026-10-18): #2112; #1974 closed. The interleave with the newer write still out was filed as #2113 and closed as not planned (2026-10-25). |
 | PR 4. Notification actions through the mail store (#1973) | Not started (2026-10-15). |
 | PR 6. Page Up and Page Down in search and pills (issue to be filed) | Not started (2026-10-15). |
 | PRs 7 and 8, only if decision 2 is (b) | Not started (2026-10-15). |
@@ -104,7 +106,7 @@ One session: a scope doc, one batch of decisions, then PRs in the order 1, 2, 3,
 
 - Fragment `fixed`, with no `Apple:` prefix. Risk: low; `envelope_dict`'s output shape (read by React, Apple and Android) does not change. No macOS runners, so it may run beside an Apple PR.
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-21). #2164 added `helper.solicited_envelope_entries` and uses it in `list_envelopes` and in `search_envelopes`' `fetch_envelopes_grouped`; #1990 closed after a stage rerun of about 5,000 calls with no failure. The `RFC822` guard did not land: `get_message` in `helper.py` and `push_envelope` still index `[b'RFC822']` directly, as the PR says. #2183 (2026-10-22) fixed the neighbouring #2050.
 
 **PR 2. The reader lets go of a message proved gone (#2037).**
 - One removal point: add a `FolderWindowHost` requirement (for example `windowProvedGone(_:)`) that `MessageListViewModel` implements by queuing a `.removal` reaction with no target, no origin and `advances: false` (decision 1 (a)). Every proof calls it: `applyRefreshPage`'s `disappeared`, the reconciler's `gone`, a UIDVALIDITY change (every loaded row), and the reset route below. detached-reader-window.md's PR 2 posts its `.vanished` event at this same point, so keep it one function.
@@ -115,7 +117,7 @@ One session: a scope doc, one batch of decisions, then PRs in the order 1, 2, 3,
 - Verify: CI, then on the Mini the issue's steps on the signed Mac build with Refresh, Mailbox > Refresh and a background poll, and on the visionOS simulator; the iPhone simulator to see the compact let-go; one iPad simulator pass (its wide path is the Mac's since #2001). Pass: the reader clears within one refresh. If the Studio is free, one open-Duo pass; otherwise add a line to the maintainer's checklist for the Duo device round.
 - Fragment `Apple:` `fixed`. Risk: low to medium. PR 2 makes every prune visible in the reader, so a prune that was wrong but harmless before would now close the reader; the arrival test guards that.
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-22). #2189 added `FolderWindowHost.windowDidRemoveRows(_:)`, called from `applyRefreshPage`'s `disappeared`, so a background poll or a pull lets go of the message; it took decision 1's (a). #2037 closed on the visionOS poll arm; the macOS leg was not driven live. Not started: the reset route (Refresh, Mailbox > Refresh, `clearSearch`, `setSort`), the reconciler's `gone`, and a UIDVALIDITY change.
 
 **PR 3. No folder total of 0 during a removal (#1977).**
 - Scope: a reset must not leave 0 as the base a possibly stale STATUS is clamped against. Either carry the pre-reset total as the clamp base, or treat a just-reset total as unknown so the clamp skips it; the session picks with a test. Keep #1796's rule that a reset asks the server before it wipes anything.
@@ -123,7 +125,7 @@ One session: a scope doc, one batch of decisions, then PRs in the order 1, 2, 3,
 - Tests: with an archive held in flight, `hardReload`, `clearSearch` and Mark All as Read's reload each show the server's total less the removal on the All pill and save a total that is not 0. `OfflineCountTests`, `OptimisticPruneTotalTests` and `StatusAcrossWriteTests` stay green unchanged.
 - Verify: CI; the tester may try a delay shim like #1823's, otherwise decision 6. Fragment `Apple:` `fixed`. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-18): #2119 (`totalBeforeReset` as the clamp base in `resetForHardReload` and `clearSearch`). #1977 closed on tests.
 
 **PR 5. Overlapping flag writes (#1974).**
 - Scope: give `MessageShields` an order of writes per message and flag. A failed write that a newer write to the same message and flag has overtaken takes back nothing, neither the event nor the count. If the newer write also fails, its take-back must restore the state from before both; a plain "skip if overtaken" rule gets that case wrong, so its test comes first. Same rule for `\Flagged`.
@@ -131,7 +133,7 @@ One session: a scope doc, one batch of decisions, then PRs in the order 1, 2, 3,
 - Tests in `ServiceWorld` (`apple/CabalmailTests/MailMutationTestWorld.swift:8`), for `\Seen` and `\Flagged`: the first write fails; both fail; only the second fails. `MailMutationServiceTests`, `MailMutationFlaggedCountTests`, `StatusBoundEdgeTests` and `ReaderRemovalRevertTests` stay green unchanged.
 - Verify: CI; decision 6. Fragment `Apple:` `fixed`. Risk: medium-low; core write arithmetic, so keep it small.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-18): #2112. `MessageShields` records committed flag writes, and a failed write's count take-back defers to a newer committed one; only the count is skipped, and the flag event still posts. `MailFlagWriteSupersededTests` has three `\Seen` arms and no `\Flagged` arm. #1974 closed on tests. The interleave where the newer write is still out was filed as #2113, which the maintainer closed as not planned on 2026-10-25.
 
 **PR 4. Notification actions through the mail store (#1973).** Release B; merge after release A's promotion PR has merged, so it does not ride along.
 - Path: move the action path out of `PushRegistrar` into a type that owns it (for example `NotificationActionHandler`), written with no `#if os(...)` so the conditionals ratchet is untouched. This is a type extraction, not a `PushRegistrar+Actions.swift` extension, and it leaves room for account-isolation.md's PR D. When the borrowed client is the wired session's, call `mutations.setFlag(.seen, ...)` or `mutations.remove(..., .move(to: DisposeAction.archive.destinationFolder, markingSeen: true), ...)` through a new writer beside `.composer` (no window, no sender, `advances` per decision 1), and await the returned task inside `withBackgroundTask` so the system's budget ends on the real outcome. Otherwise keep today's direct call.

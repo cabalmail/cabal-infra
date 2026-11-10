@@ -16,10 +16,12 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
-| Decisions 1 to 6 (asked together at the start of Session 1) | Unanswered (2026-10-15). |
-| Session 1: the Rules bugs, then the mechanical tranche (PRs 1 to 11) | Not started (2026-10-15). |
+| Decisions 1 to 6 (asked together at the start of Session 1) | 1 and 2 were overtaken by the merged Rules fixes: #2168 shipped decision 1's recommended Yes with no recorded answer, and #2197 kept the switch role behind a hidden label, so decision 2 was not needed. 3 to 6 unanswered (2026-11-09). |
+| Session 1: the Rules bugs, then the mechanical tranche (PRs 1 to 11) | Partly done (2026-11-07), through the fixer pipeline, not a session: PR 1 merged as #2168 (2026-10-21) and PR 2 as #2197 (2026-10-23), and PR 11's blocks went with #2339 (2026-11-07). PRs 3 to 10 not started. |
 | Session 2: the decision tranche (PRs 1 and 3 to 7) | Not started (2026-10-15). |
 
 > **Duo spec (2026-10-13):** This plan was written before the maintainer's Oct 7 Duo spec (the Claude Doc linked in duo-support.md) was read in the rearchitecture project. duo-support.md now follows it; where this plan's text disagrees with the points below, the points win. In the spec, "fold" means book or laptop pose, which changes no size class and swaps no shell; what this plan calls folding or unfolding the Duo is closing or opening it.
@@ -93,7 +95,7 @@ Session 2:
 
 ### Session 1: the Rules bugs, then the mechanical tranche
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-11-07), through the fixer pipeline and other work, not as a session. PR 1 merged as #2168 (2026-10-21), which carried the Android half too and pins the editor push with a source scan; #2031 is closed. PR 2 merged as #2197 (2026-10-23) by this plan's first route, `RowSwitch` in `Platform/ListAndFormStyles.swift`, with `RowSwitchAccessibilityTests`; #2040 is closed. PR 11 was overtaken: #2339 (2026-11-07, touch on the Mac) removed all six trackpad-swipe gates behind `HostPlatform.drawsRowSwipeReveal`, including the one this plan kept pinned. PRs 3 to 10 are not started. Two changes from elsewhere touch them: #2292 (2026-10-31) moved `AttachmentStrip.swift`'s six blocks into `Platform/AttachmentPresentation.swift`, and #2186 (2026-10-22) made the `HTMLBodyView.swift` extraction that PR 6 expected to make. The checker prints 53 files and 129 blocks, against 55 and 141 when this was written.
 
 1. **#2031, Apple half.** `RulesViewModel.add`'s default rule gets `enabled: false` (decision 1). `RulesListView` keeps the returned id and pushes `RuleEditorView` for it from all five add paths (one `@State` id and `.navigationDestination(item:)`, as `SearchView.swift:41` uses; that it works inside the Mac Settings window's stack is inferred, so check it). Tests in `RulesViewModelTests`: a blank rule is off, the templates stay off, `add` returns the appended rule's id. Verify: CI; on the Mini, iPhone simulator and the Mac build, Add rule opens the editor and `get_rules` shows `enabled: false`, using test account 1 and deleting the rule afterwards. Fragment `Apple:` fixed. Wording, as android-parity.md PR 7 agreed: whichever half merges second writes "Fixes #2031", the first writes "Refs #2031". If this PR says "Refs", put the Apple retest on the soak checklist, since the dashboard only gates fix claims. Risk: low.
 2. **#2040.** Replace `.labelsHidden()` (`RulesView.swift:192`) through a Mac-only `Platform/` adapter, so touch rows cannot change and `RulesView.swift` gains no `#if`. Start with a short SwiftUI probe on the Mini, as the issue's probe did, for a label that is hidden but keeps `AXSwitch` (whether one exists is unknown). If none does, show "Enabled" only with decision 2's yes, with a screenshot in the PR. Keep `.miniSwitchStyleOnMac()` and keep the toggle outside the link label (`RuleRowHitTargetTests`, #1299). Verify: an accessibility read on the Mini's Mac build (every row reads "switch", labelled "Enabled") against Settings > Notifications, and the iPhone row unchanged. If test-debt.md B2's role-and-label harness has landed, add a test that reads the role; if not, the PR says only a manual read covers it. Fragment `Apple:` fixed; "Fixes #2040". Risk: low.

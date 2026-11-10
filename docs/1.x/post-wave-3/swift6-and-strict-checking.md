@@ -14,13 +14,15 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 | --- | --- |
 | A0. Thread Sanitizer baseline | Not started (2026-10-15) |
-| A1. Shipping code, #1841 and the shipping-target gate | Not started (2026-10-15) |
-| A2. Shared wait helper and ignored results | Not started (2026-10-15) |
-| A3. The main-actor test pattern and the rest | Not started (2026-10-15) |
-| A4. The gate on the test bundles | Not started (2026-10-15) |
+| A1. Shipping code, #1841 and the shipping-target gate | Partly done (2026-10-18): the shipping-code warnings are fixed (#2132) and #1841 is closed (#2093). The shipping-target gate is not started |
+| A2. Shared wait helper and ignored results | Done (2026-10-18): #2122 and #2130 |
+| A3. The main-actor test pattern and the rest | Done (2026-10-18): #2129; #1842 closed with the macOS test bundle at zero warnings (2026-10-19) |
+| A4. The gate on the test bundles | Partly done (2026-10-21): `CabalmailMacTests` is gated (#2130), with a scan for the isolation warnings the flag does not promote (#2167). `CabalmailiOSTests`, the xcconfig form, the deprecation exemption and the docs are not started |
 | B1. The small targets | Not started (2026-10-15) |
 | B2. The Kit | Not started (2026-10-15) |
 | Release and soak 1 | Not started (2026-10-15) |
@@ -106,19 +108,19 @@ Swift 6 readiness:
 
 - **A1, shipping code, #1841 and the shipping-target gate (one PR, three commits).** (1) `ContactsPrivacySettings.open()` becomes `@MainActor`. `PlainTextLinkDetector.scan` stops using the dynamic-member key paths: set the attributes through explicit key types (`attributed[range][AttributeScopes.FoundationAttributes.LinkAttribute.self] = url`, and SwiftUI's `UnderlineStyleAttribute` likewise), which form no key path; `mergeAttributes(AttributeContainer()...)` may not help, since its builder also uses key paths (inferred). Drop the needless `await` in the intent closure and make it `@MainActor @Sendable` if the compiler still asks (needs a 27A9269 compile to confirm). (2) Delete `generate-color-tokens.py:134`, fix its comment at `:131-132`, regenerate the 66 colour sets under `apple/CabalmailKit/Sources/CabalmailKit/Design/ColorTokens.xcassets`; `ColorTokensDriftTests` and `scripts/tests/test_check_color_tokens.py` prove the catalog matches. (3) The gate, as in A4, with `SWIFT_TREAT_WARNINGS_AS_ERRORS: NO` set temporarily on the `CabalmailMacTests` and `CabalmailiOSTests` targets in `project.yml` until A4. Verify: iOS and visionOS jobs show no warning outside test files; a clean `swift build` shows 0 "unassigned child"; existing suites, including `PlainTextLinkDetectorTests`, stay green. `no-changelog`. Risk: low. Optional check on the stage TestFlight build: create an address with Siri while the app is in the background, accept "Continue in Cabalmail", and paste it.
 
-  **Status:** Not started (2026-10-15).
+  **Status:** Partly done (2026-10-18). #2132 fixed the six shipping-code warnings in the three files named here, and #2093 fixed #1841 by dropping the watch high-contrast entry from the generator; #1841 is closed. The shipping-target gate is not started: the only `SWIFT_TREAT_WARNINGS_AS_ERRORS` in `project.yml` is on `CabalmailMacTests`.
 
 - **A2, shared wait helper and ignored results.** Give `waitUntil` the caller's isolation (an `isolation: isolated (any Actor)? = #isolation` parameter, so a main-actor test's closure stays on the main actor), or move main-actor callers to `waitUntilOnMainActor`; pick whichever clears more warnings without changing what any test waits for. At the 33 unused `.value` results write `_ =`, or assert the outcome where the outcome is what the test is about. Files: `WaitUntil.swift`, its forwarder `CabalmailKitTests/TestHelpers.swift:21-26`, about 15 test files. The Kit's tests compile `WaitUntil.swift` with warnings as errors, so CI checks it under both settings. `no-changelog`.
 
-  **Status:** Not started (2026-10-15).
+  **Status:** Done (2026-10-18): #2122 (the 33 ignored results) and #2130 (main-actor callers moved to `waitUntilOnMainActor`; `waitUntil` itself is unchanged).
 
 - **A3, the main-actor test pattern and the rest.** Try one fix on one file first (for example `override func setUp() async throws`, or building the fixture inside each test), then apply it. Replace the seven completion-handler `evaluateJavaScript` calls with awaited ones: `callAsyncJavaScript` or `evaluateJavaScript(_:in:contentWorld:)`, which return `Any?` and cope with `window.scrollTo` returning undefined (the plain async `evaluateJavaScript(_:)` may throw on that, inferred); check that awaiting the scroll does not change what the tests prove about the bridge's timing. Split by folder if the diff passes about 40 files. The macOS test count must not drop (2,107 at 50e6022). `no-changelog`.
 
-  **Status:** Not started (2026-10-15).
+  **Status:** Done (2026-10-18): #2129 (async `setUp` and `tearDown` in 23 files). The `evaluateJavaScript` calls stay fire-and-forget behind a synchronous helper; they are not awaited. The macOS test bundle measured zero warnings when #1842 closed (2026-10-19); nobody has measured it since, and the iOS test bundle's count was never recorded.
 
 - **A4, the gate on the test bundles.** Re-measure on current stage and fix stragglers in the same PR, since the app-layer plans add tests daily. Remove A1's two temporary `NO` lines. The gate itself (written in A1): `SWIFT_TREAT_WARNINGS_AS_ERRORS[config=Debug] = YES` in `apple/Base.xcconfig`, above its `#include? "Local.xcconfig"` line (`:21`), not in `project.yml`, so a rig on a newer beta can switch it off in its gitignored `Local.xcconfig` (project-level settings in `project.yml` would beat the xcconfig). Deprecation exemption: `-Wwarning DeprecatedDeclaration` in `OTHER_SWIFT_FLAGS[config=Debug]`; confirm in the build log that swiftc gets it after `-warnings-as-errors`, as 0.7 did for the Kit. First check whether Xcode 27 has a build setting for Swift diagnostic groups (unverified). If the order cannot be controlled, put both flags in `OTHER_SWIFT_FLAGS` through one xcconfig variable that `Local.xcconfig` can blank; if that fails too, ask the maintainer whether deprecations become errors. Confirm with `xcodebuild -showBuildSettings` that every target resolves to YES in Debug and NO in Release, and that no XcodeGen preset sets it. Prove the gate on the rig (add a warning, see the build fail); no red scratch push to CI. Docs: one paragraph in `docs/apple.md` by `:963-968` (the setting, the exemption, Debug only, the local switch) and one line in `CLAUDE.md`'s Apple section. Closes #1842 (A1 closes #1841); the soak verifies both, and the release dashboard holds Promote until they are closed. `no-changelog`.
 
-  **Status:** Not started (2026-10-15).
+  **Status:** Partly done (2026-10-21). `CabalmailMacTests` is gated by a target setting in `project.yml` (#2130), and `TestBundleIsolationScanTests` guards the actor-isolation warnings (#2167, for #2135), which #2167 measured stay warnings under the flag and under Swift 6 mode. #1842 is closed. Not started: `CabalmailiOSTests`, the Debug-only xcconfig form with its local switch, the deprecation exemption, and the docs.
 
 ### Session B: Swift 6 language mode (two releases)
 

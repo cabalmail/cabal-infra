@@ -16,16 +16,18 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 | --- | --- |
 | Decisions 1 to 6 | Unanswered (2026-10-15) |
-| PR 1. Reader mode runs no script (Android twin of #1911) | Not started (2026-10-15); its Apple twin, hardening PR 2 (#2056), is on `stage`, not yet released, and ships without this PR (the maintainer, 2026-10-17) |
-| PR 2. #1954: report feed, catalog and queue failures apart | Not started (2026-10-15) |
+| PR 1. Reader mode runs no script (Android twin of #1911) | Not started (2026-11-09): the feed reader's web view still loads with JavaScript on. Its Apple twin, hardening PR 2 (#2056), shipped in 1.31.3 (2026-10-17) without this PR, by the maintainer's choice that day |
+| PR 2. #1954: report feed, catalog and queue failures apart | Done (2026-10-18): #2096; #1954 closed. The `FeedsViewModel` test harness was not added |
 | PR 3 (only if decision 4 is Yes). A test harness for the feed database | Not started (2026-10-15) |
-| PR 4. #1955: each sync-state write records only its own columns | Not started (2026-10-15) |
-| PR 5. #2038: no suggestions on rule values | Not started (2026-10-15) |
-| PR 6. #1931: the resume prompt names its destination | Not started (2026-10-15) |
-| PR 7. #2031, Android half: a blank rule starts off | Not started (2026-10-15) |
+| PR 4. #1955: each sync-state write records only its own columns | Done (2026-10-18): #2097; #1955 closed. No DAO tests, which waited on PR 3 |
+| PR 5. #2038: no suggestions on rule values | Done (2026-10-22): #2190, then #2192, which added the input-type variation Gboard honours; #2038 closed |
+| PR 6. #1931: the resume prompt names its destination | Done (2026-10-18): #2101; #1931 closed. #2208 (2026-10-24) names the feed when the local catalogue is cold |
+| PR 7. #2031, Android half: a blank rule starts off | Done (2026-10-21): #2168, which carried both halves; #2031 closed |
 | PR 8 (only if decision 3 is Yes). The feed store ends with the session | Not started (2026-10-15) |
 | PR 9. Room version 2 | Not started (2026-10-15) |
 | PR 10. Folder and All Feeds order stick | Not started (2026-10-15) |
@@ -113,14 +115,14 @@ Order: the reader-mode fix first, then bugs, then the Room work. PRs 2, 3 and 4 
 
   > **Erratum (2026-10-17):** Hardening's PR 2 ships without this PR, by the maintainer's choice on 2026-10-17 (see the erratum under Priority).
 
-**Status:** Not started (2026-10-15). Its Apple twin, hardening-web-and-writes.md PR 2 (#2056, `5046716`, "Apple: feed reader mode runs no script from the article"), is merged to `stage` and not yet released; the hardening plan wanted both in one release, and on 2026-10-17 the maintainer chose to ship it without this PR. #1911 was closed on 2026-10-17 after the hardening session's stage check. Hardening decisions 2 (same view) and 3 (drop video players) were taken on their recommended answers: Apple's reader rendering loads with page JavaScript off and leads with a content security policy refusing script, plugins and frames, Readability drops every video player, and a link tapped in the reader leaves it only once its page commits.
+**Status:** Not started (2026-11-09): `ArticleWebView.kt` still turns JavaScript on once for the view, and nothing under `android/` sets a script policy. Its Apple twin, hardening-web-and-writes.md PR 2 (#2056, `5046716`, "Apple: feed reader mode runs no script from the article"), shipped in 1.31.3 (2026-10-17); the hardening plan wanted both in one release, and on 2026-10-17 the maintainer chose to ship it without this PR. #1911 was closed on 2026-10-17 after the hardening session's stage check. Hardening decisions 2 (same view) and 3 (drop video players) were taken on their recommended answers: Apple's reader rendering loads with page JavaScript off and leads with a content security policy refusing script, plugins and frames, Readability drops every video player, and a link tapped in the reader leaves it only once its page commits.
 
 **PR 2. #1954: report feed, catalog and queue failures apart.**
 - Scope: `syncAll` returns a report (catalog failure, pending failure, per-feed failures), modelled on `apple/CabalmailKit/Sources/CabalmailKit/RSS/RssSyncReport.swift`. `FeedsViewModel.refresh` shows the catalog failure, or the first failed feed's message only when every feed failed, as `apple/CabalmailUI/Feeds/Sidebar/FeedSidebarViewModel.swift:124-125` does. `FeedManagementViewModel.kt:246` keeps ignoring it. Optional: drop the second catalog fetch if the report carries the catalog diff.
 - Tests: `RssSyncEngineTest` with `FakeRssClient`, as the issue describes. This PR adds the first `FeedsViewModel` test harness (engine provider, store, `onDroppedProfiles`), in `FeedViewModelsTest` or a new file.
 - Verify: CI. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-18): #2096. `syncAll` returns an `RssSyncReport`, and the Feeds screen shows the failure line when the catalog fetch or every feed fails. #1954 is closed. Not built: the `FeedsViewModel` test harness, and the optional drop of the second catalog fetch.
 
 **PR 3 (only if decision 4 is Yes). A test harness for the feed database.** One test-only dependency so `RoomRssStore` runs against real SQLite in the kit's unit tests; the scope doc names the library (Robolectric with the JUnit vintage engine is the likely route, *inferred*). First tests: `clear()` and `markAllRead`'s queue row. If it cannot run in the existing `kotlin` job, stop and ask. `no-changelog`.
 
@@ -131,7 +133,7 @@ Order: the reader-mode fix first, then bugs, then the Room work. PRs 2, 3 and 4 
 - Tests: an engine test where `loadOlder` lands between `syncItems`' read and write (a suspending fake client) and the older cursor survives; a test that a feed's first sync leaves the older cursor set; DAO tests if PR 3 landed.
 - Verify: the issue's steps on the Mini's emulator. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-18): #2097 (`setSyncCursors` and `setOlderCursor`, no schema change). #1955 is closed. The DAO tests were conditional on PR 3 and were not written.
 
 **PR 5. #2038: no suggestions on rule values.**
 - Scope: every `RuleField`'s value input gets `TYPE_TEXT_FLAG_NO_SUGGESTIONS` in `EditorInfo.inputType`, through Compose's `InterceptPlatformTextInput` *(inferred to exist in BOM 2026.09.00, marked experimental)*, with an `AndroidView` `EditText` as the fallback.
@@ -139,15 +141,15 @@ Order: the reader-mode fix first, then bugs, then the Room work. PRs 2, 3 and 4 
 - Verify: on the emulator with Gboard, `adb shell dumpsys input_method` shows `0x80001` for Subject and Body and `0x80021` for From; "dont thier acheive " typed with real key taps stays as typed (`adb shell input text` bypasses the keyboard and cannot show this).
 - Risk: low to medium. The experimental opt-in must pass Lint, and a dependabot BOM bump could move the API.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-22). #2190 built this as written and Gboard still corrected; #2192 added `TYPE_TEXT_VARIATION_FILTER`, which fixed it, so Subject and Body report `0x800b1`, not the `0x80001` above. #2038 is closed.
 
 **PR 6. #1931: the resume prompt names its destination.** `resume_prompt` takes the name; a small resolver gives the mail folder's display name, or for a feed the subscription's title, then the item title, then "a feed", as Apple does. Change only the call site in `CabalmailNavHost.kt`. Tests: the resolver's fallbacks. Verify: #1931's recipe (seed `/set_nav_state` with a foreign `client_id`, cold-launch). Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-18): #2101. A mail cursor names the folder's path, not its leaf display name. #2208 (#2109, 2026-10-24) names the feed from the server when the local catalogue is cold. #1931 is closed.
 
 **PR 7. #2031, Android half: a blank rule starts off.** `RulesViewModel.add`'s default gets `enabled = false`, per platform-conditionals.md decision 1. Tests: `RulesViewModelTest`. Verify: CI and one emulator pass. Issue wording: platform-conditionals.md writes "Fixes #2031" only if this PR merged first, so whichever half merges second claims the fix; the first says "Refs #2031". Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-21): #2168, one PR for both halves. #2031 is closed.
 
 **PR 8 (only if decision 3 is Yes). The feed store ends with the session.**
 - Scope: one container method, called from `signOut` after push deregistration: stop in-flight feed work, read the stored subscriptions' web-profile ids, empty the store (`RoomRssStore.clear()`, `:390-397`), drop the memoized engine, and drop those profiles (`FeedWebProfiles.drop`). Feed syncs run in screen-owned coroutine scopes, so the scope doc picks either a session-owned job for the engine or a session check before each store write (#1957 records the edge case of Apple's closing design). On sign-in, also empty it when the username differs from the last session's, as Apple does (`SessionManager.swift:689-694`, username only), or the control domain differs, which Android adds because one build serves any deployment (#1158's body). The expired-session path does not empty it, so the same user signing back in keeps unsent marks. Do not touch #1158's mail caches, body cache or drafts.

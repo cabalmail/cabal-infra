@@ -16,6 +16,8 @@ Terms used below. An **umbrella** module: `CabalmailKit` keeps its name and re-e
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
 | Decisions 1 to 7 | Unanswered (2026-10-15) |
@@ -24,7 +26,7 @@ This table and the **Status:** line under each work item are updated in the same
 | PR B, Design target and the umbrella pattern | Not started (2026-10-15) |
 | PR C, Core, Networking and WatchCore (needs decision 4) | Not started (2026-10-15) |
 | PR D, Persistence, Mail, Editor and Feeds (skip under Watch cut) | Not started (2026-10-15) |
-| PR E, one client initializer (decision 5, Init) | Not started (2026-10-15); waits for hardening-web-and-writes.md's PR 5, whose Session B has not started |
+| PR E, one client initializer (decision 5, Init) | Not started (2026-11-09); hardening-web-and-writes.md's PR 5, which it waited for, merged as #2072 on 2026-10-17 and shipped in 1.32.0 |
 
 ## Decisions for the maintainer
 
@@ -135,7 +137,7 @@ Why not the audit's other targets (its module sketch is under "Background from t
 
   > **Erratum (2026-10-17):** That hardening PR is #2072, merged to `stage` on 2026-10-17, which also took the duplicated restamp (now `OutgoingMessage.stampingMessageId()`); PR E drops only `sentFolder`, and its wait on the binding task is over.
 
-  **Status:** Not started (2026-10-15). That hardening PR is its PR 5, in Session B, which has not started.
+  **Status:** Not started (2026-11-09). That hardening PR is its PR 5, which merged as #2072 on 2026-10-17 and shipped in 1.32.0, so nothing holds this PR but the ones before it.
 
 **Signing checks.** Before PR B, check whether the Mini can produce a signed iOS archive with the watch embedded; 1.7 only signed a macOS build there (its lessons are under "Background from the rearchitecture"). If it can, run `codesign --verify --deep --strict` on that archive and on a signed Mac build in B, C and D, and list the bundles present. If it cannot, the Mac check still runs, and the first signed iOS proof is the stage push's TestFlight upload.
 

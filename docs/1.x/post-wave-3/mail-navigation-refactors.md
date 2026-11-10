@@ -14,14 +14,16 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
 | Decisions 1 and 2 | Unanswered (2026-10-15). |
 | PR 6. `FakeImapClient`'s call gate | Not started (2026-10-15). |
-| PR 3a. `ComposeAutosave` | Not started (2026-10-15). Hardening PR 1, which it waits for, merged as #2053 and shipped in 1.31.2. |
+| PR 3a. `ComposeAutosave` | Partly done (2026-10-28), under another name: #2256 (duo-support.md's PR 7b) moved both loops into `ComposeAutosaveLoops`. The loop exit, the injected interval and the tests are not started. Hardening PR 1, which it waited for, merged as #2053 and shipped in 1.31.2. |
 | PR 1. `MailNavigationState` (the navigator split) | Not started (2026-10-15). |
 | PR 2. The split's width write (only if decision 2 is Yes) | Not started (2026-10-15). |
-| PR 3b. `SendCoordinator` | Not started (2026-10-15). |
+| PR 3b. `SendCoordinator` | Partly done (2026-10-28), under another name: #2256 moved the after-Send, Save Draft and Discard effects into `ComposeOutcomeReport`. The tests, `FolderTree.draftsPath` and the toast value are not started. |
 | PR 4. `MessageRenderer` (measure first) | Not started (2026-10-15). |
 | PR 5 | Moved to sqlite-mail-store.md's Phase 3; not this plan's work. |
 | PR 7. `GlobalSearchModel` (only if decision 1 is Yes) | Not started (2026-10-15). |
@@ -93,7 +95,7 @@ Counts strip blank and comment-only lines, as SwiftLint does. The script reprodu
 - Tests: new `ComposeAutosaveTests`: both bodies run on each step; `stop()` ends both; a released model ends both without `stop()`. Existing compose suites unchanged. Target: about 230 (inferred).
 - Verify: CI; on the Mini, a composer open past 60 seconds still saves its draft. Risk: low.
 
-**Status:** Not started (2026-10-15). Hardening PR 1, which this waits for, merged as #2053 (`5eb7284`) and shipped in 1.31.2.
+**Status:** Partly done (2026-10-28), under another name. #2256 (duo-support.md's PR 7b) moved both loops into `Compose/ComposeAutosaveLoops.swift`, with `start(for:)` and `stop()`. Not started: ending a loop when its model is gone (the loops still sleep and wake on a model that has gone), the injected interval and sleep, `ComposeAutosaveTests`, and the Duo note's `flush()`. Hardening PR 1, which this waited for, merged as #2053 (`5eb7284`) and shipped in 1.31.2.
 
 **PR 1. `MailNavigationState` (the navigator split).** After ipad-layout-and-keyboard.md's PR B merges, with no multi-window-and-restore.md or feed-bulk-actions.md PR open in `SceneNavigator.swift`.
 - Scope: a value type beside `FeedNavigationState` that owns the window's mail folder, open message, compact column and `TreeGate`, the per-tree readers, and the transitions now in `setFolder`, `applyMessage`, `setCompactColumn` and `canWrite`. As in the feed type, each transition returns records (folder, message, no message) and the navigator applies them to the route, the recorder, `listHold` and the tab, in the mail extension. Read-only forwarders keep `selectedFolder`, `folder(in:)`, `envelope(in:)` and `compactColumn(in:)`, so the 180 navigator tests stay as they are. `layoutIsWide` stays where it is.
@@ -124,7 +126,7 @@ Counts strip blank and comment-only lines, as SwiftLint does. The script reprodu
 - Tests: new `SendCoordinatorTests`: a sent reply marks its original answered; a queued send shows the warning toast and prunes nothing (`supersededDraftUIDs` is empty unless sent, `ComposeViewModel+Internals.swift:359-360`); a send from a draft removes every superseded UID; a discard and a save post `.draftReplaced` for Drafts. Existing compose suites unchanged. Target: `ComposeView` about 215 (inferred).
 - Verify: CI; on the Mini, signed in as a stage test account, send from a draft and watch its Drafts row go, and reply and see the arrow; the visionOS composer unchanged. The maintainer on the Mac: Command-W with text, a failed send while offline, and a failed Save Draft each keep the window and its prompt (the re-arm at :271-277 and :315-317 is Mac only). Risk: low to medium.
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-28), under another name. #2256 moved the after-Send, Save Draft and Discard effects out of `ComposeView`'s closures into `Compose/ComposeOutcomeReport.swift` (`sent()`, `draftRetired()`). Not started: unit tests, `FolderTree.draftsPath` for the `.draftReplaced` event (it still posts a raw `"Drafts"`), and the toast value carrying kind and origin.
 
 **PR 4. `MessageRenderer` (the reader off the main actor).** Measure first; no PR open on `MessageDetailViewModel*.swift`.
 - Measure: a Mac-host test times `MimeParser.parse` plus `hydrate` on a 10 MB fixture with 20 attachments (the mail tiers accept up to 50 MiB, `docker/templates/in-sendmail.mc:21`, and the raw body arrives through a presigned S3 URL, `lambda/api/fetch_message/function.py:72`). Under 4 ms on the Mac: record it and drop this PR (the default). Over 8 ms, one frame at 120 Hz: ship. Between: a Time Profiler run with `xctrace` on the Mini's iPhone simulator decides, as audit 01's W6 asked (an Instruments check that a large message open shows no main-thread hitch). The thresholds are inferred: a phone is slower than the Mini.
