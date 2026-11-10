@@ -12,7 +12,9 @@
   menus and the flag shortcuts (Shift-Command-8 in the list,
   Shift-Command-L in the reader) set and clear it, and take its name
   and color once it is anything but the built-in flag under its
-  original name. Make Default in a flag's menu moves it to the top. The
+  original name. On the Mac the Message and Feeds menus name the flag
+  their item sets, and show Shift-Command-8 beside whichever of the two
+  is in front. Make Default in a flag's menu moves it to the top. The
   Flags menus list every flag, the built-in one included; the Flagged
   pills and the search filter take the built-in flag's name; and the
   rule editor lists the built-in flag with the others. Feed items keep

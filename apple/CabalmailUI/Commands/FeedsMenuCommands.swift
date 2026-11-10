@@ -9,7 +9,9 @@ import SwiftUI
 /// The item commands carry the Message menu's own chords (⌘T, ⌘⇧8) and the
 /// Mailbox menu's ⌥⌘T, so a user who learned them on mail has them on feeds.
 /// Two menus on one chord are only safe if exactly one is enabled at a time:
-/// `SharedChordPolicy` gives the chord to the section in front.
+/// `SharedChordPolicy` gives the chord to the section in front. ⌘⇧8 goes
+/// further and is declared only on that section's item, so this menu shows
+/// it while feeds are in front (`SharedChordPolicy.flagChord`).
 public struct FeedsMenuCommands: Commands {
     /// The main window in front, whose surfaces say what the items act on.
     @FocusedValue(\.windowCommands) private var commands
@@ -45,7 +47,7 @@ public struct FeedsMenuCommands: Commands {
             Button(commands?.feedFlag?.commandTitle ?? FlagToggle.idleCommandTitle) {
                 commands?.send(.feed(.toggleFlag))
             }
-            .keyboardShortcut("8", modifiers: [.command, .shift])
+            .keyboardShortcut(SharedChordPolicy.flagChord(for: .feeds, activeSection: section))
             .disabled(!itemsLive || commands?.feedFlag == nil)
             // The current feed scope, through the list's own confirmation.
             Button("Mark All as Read") { commands?.send(.feed(.markAllRead)) }

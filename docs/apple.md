@@ -2203,7 +2203,14 @@ keep every tab they have shown mounted (`FrontSurfacePolicy`). The feed
 catalog and sidebar trees, one handler a window, answer from a tab
 behind (`whileBehind`). `SharedChordPolicy` gives each chord the Feeds
 menu shares with the Message or Mailbox menu (⌘T, ⌘⇧8, ⌥⌘T) to the
-section in front.
+section in front. ⌘T and ⌥⌘T are declared on both menus and only one
+item is enabled. ⌘⇧8 is declared on one menu at a time, the one for the
+section in front (`SharedChordPolicy.flagChord`), so the other menu's
+flag item shows no shortcut: its two items are retitled when the palette
+changes, and SwiftUI does not give a menu item it is updating a key
+equivalent another item already holds. A chord on an item whose title
+can change must have one declaring item; `FlagChordTests` counts them in
+the menu bar the app built.
 
 The shared Message menu (`MessageMenuCommands`) carries Reply ⌘R, Reply
 All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T, Flag/Unflag ⌘⇧8 (the
