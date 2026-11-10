@@ -55,6 +55,21 @@ final class FlagMenuPolicyTests: XCTestCase {
         XCTAssertEqual(rows.last?.label, "cabal-flag-07")
     }
 
+    /// The control the menu hangs from toggles the system flag itself, so
+    /// its palette entry is never a row: not when stored and enabled, and
+    /// not as a "stray" tag on a flagged message.
+    func testTheSystemFlagsEntryIsNeverARow() {
+        let rows = FlagMenuPolicy.rows(
+            palette: [entry(FlagPalette.systemSlot, "Urgent"), entry("cabal-flag-01", "Alpha")],
+            taggedSlots: [FlagPalette.systemSlot]
+        )
+        XCTAssertEqual(rows.map(\.slot), ["cabal-flag-01"])
+        XCTAssertTrue(
+            FlagMenuPolicy.rows(palette: [entry(FlagPalette.systemSlot, "Urgent")], taggedSlots: []).isEmpty,
+            "a palette holding only the system entry leaves the control a plain button"
+        )
+    }
+
     func testAnUntaggedDisabledEntryIsNotOffered() {
         let rows = FlagMenuPolicy.rows(
             palette: [entry("cabal-flag-01", "Alpha", enabled: false)],

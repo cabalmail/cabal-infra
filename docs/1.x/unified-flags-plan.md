@@ -6,7 +6,7 @@
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
-| 3 -- Apple client | Not started |
+| 3 -- Apple client | Rendering and Settings > Flags in review (2026-11-10), #2375; affordances not started |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
 | 5 -- Documentation | Not started |
 
@@ -317,7 +317,23 @@ the entry encodes back byte-identical after a no-op edit.
 
 ## Phase 3 -- Apple client
 
-**Status:** Not started.
+**Status:** In two PRs, as flags-and-cross-media.md splits it. The
+first, rendering and Settings > Flags, is in review (2026-11-10), #2375;
+the second, the affordances with the "Default" badge and "Make
+default", has not started. What the first one settled:
+
+- The reader's flag button is not recoloured. It was never gold: since
+  `ReaderToggleFace` it draws the action ("Flag" / "Unflag"), not the
+  state, so there is no state colour to take from the palette. Its
+  title follows the default flag's label in the second PR.
+- A flag whose entry is disabled is still drawn on the messages that
+  carry it, the system flag included, as a disabled custom flag's dots
+  always were. "Disabled" means offered nowhere, not hidden.
+- Until the second PR, the flag menus and the rule editor list keyword
+  entries only (`FlagPalette.keywordEntries(in:)`), because the control
+  beside them still toggles `\Flagged` itself.
+- Feed rows draw the system entry's dot beside the date, from
+  `is_favorite`.
 
 - Settings > Flags: the effective palette; "Default" badge and caption
   on the first enabled row; "Make default" in row menus; "Reset to

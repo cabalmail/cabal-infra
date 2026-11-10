@@ -23,7 +23,7 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 | A0: docs and decisions 1 to 3 | Merged (2026-11-09), in #2370 with A1. |
 | A1: server, the palette accepts `\Flagged` | Done: #2370, accepted on stage 2026-11-09, in prod with 1.46.0 (2026-11-10). |
 | A2: Kit model | Merged (2026-11-09), #2371. |
-| A3: rendering and Settings > Flags | Not started. Gate G0 as of 2026-11-10: decisions 1 to 3 answered and A1 in prod; feed-bulk-actions.md not finished (PR A done, PRs B to F not started); ipad-layout-and-keyboard.md PR A mostly landed, PRs C and F not started. |
+| A3: rendering and Settings > Flags | In review (2026-11-10), #2375. The maintainer waived the rest of gate G0 on 2026-11-10: A3 goes ahead of feed-bulk-actions.md (PRs B to F not started) and of ipad-layout-and-keyboard.md PRs C and F, which build on its row marks when they run. |
 | A4: affordances and user docs | Not started. |
 | Session 2: Phase 2, custom flags on feed items (B2.1 to B2.4) | Not started (2026-10-15). |
 | Session 3: Phase 4, feed rules (B4.1 to B4.3) | Not started (2026-10-15). |
@@ -124,7 +124,7 @@ In short: cross-media Phase 1 shipped but its plan still says "In review"; every
 
 ### Session 1: Stage A, unified flags (one release)
 
-**Status:** Started (2026-11-09). A0 and A1 merged together as #2370: the answers to decisions 1 to 3 arrived while A1 was open, so the docs rode with it. A1 passed its acceptance on stage and reached prod with 1.46.0 (2026-11-10). A2 merged as #2371. A3 and A4 have not started; A3 waits on gate G0, and the session stops here until it clears.
+**Status:** Started (2026-11-09). A0 and A1 merged together as #2370: the answers to decisions 1 to 3 arrived while A1 was open, so the docs rode with it. A1 passed its acceptance on stage and reached prod with 1.46.0 (2026-11-10). A2 merged as #2371. A3 is in review as #2375, started on 2026-11-10 when the maintainer waived the two sibling-plan conditions of gate G0. A4 has not started; its feed bulk bar item moves to the feed-bulk-actions.md PR that builds that bar.
 
 Scope: `unified-flags-plan.md` Phases 1, 2, 3 and 5 on Apple and the server, plus the shared row parts 1.5 deferred. Android (its Phase 4) goes to android-parity.md leg L1 (decision 3).
 
@@ -195,7 +195,7 @@ Verify: Mini lanes on all four platforms; a Studio Duo pass for the Flagged entr
 
 | Gate | Before | Needs |
 |---|---|---|
-| G0 | A3 merges | Decisions 1 to 3; A1 in prod; feed-bulk-actions.md finished (it holds `Feeds/ItemList/*`, `FlagPaletteSettingsView.swift` and the shared bulk bar); ipad-layout-and-keyboard.md PRs A, C and F merged (rows, menu commands, `FilterPill.swift`); docs-and-bookkeeping.md PRs 1 and 2 merged (soft) |
+| G0 (the sibling-plan conditions waived 2026-11-10) | A3 merges | Decisions 1 to 3; A1 in prod; feed-bulk-actions.md finished (it holds `Feeds/ItemList/*`, `FlagPaletteSettingsView.swift` and the shared bulk bar); ipad-layout-and-keyboard.md PRs A, C and F merged (rows, menu commands, `FilterPill.swift`); docs-and-bookkeeping.md PRs 1 and 2 merged (soft) |
 | G1 | B2.3 merges | Stage A promoted; sqlite-mail-store.md PRs 0.1 and 0.2 merged and its Phase 4 not yet in `RSS/` (decision 5); decisions 4 and 5 |
 | G2 | B2.4 merges | B2.1 and B2.2 in prod; multi-window-and-restore.md W4 merged, or B2.4 takes the feed stand-in |
 | G3 | B4.3 merges | Phase 2 promoted; B4.1 and B4.2 in prod; decision 6; shared-load-error-state.md A3 (#1903) merged, since otherwise a garbled save reply turns the next edit into a false "Rules updated on another device"; platform-conditionals.md's Rules PRs (#2031, #2040) merged |

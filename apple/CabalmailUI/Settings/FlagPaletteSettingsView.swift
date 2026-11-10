@@ -1,11 +1,16 @@
 import SwiftUI
 import CabalmailKit
 
-/// The custom-flag palette manager (rules-composition plan, Phase 3): up to
-/// 20 named, colored flags on fixed slot atoms. All edits write straight
+/// The flag palette manager: the system flag's entry, "Flagged" until the
+/// user renames it, and up to 20 named, colored flags on fixed slot atoms
+/// (rules-composition plan, Phase 3; unified-flags plan). All edits write
 /// through `Preferences.flagPalette`, so the sync coordinator pushes them
 /// like any other setting; renames and recolors are metadata edits that
 /// touch zero messages.
+///
+/// The list is the effective palette (`FlagPalette.effective`), so the
+/// system entry is always a row, whether or not it has been stored yet.
+/// It edits and moves like the others and resets where they delete.
 ///
 /// The order is the order pickers use. Rows move by Move Up / Move Down in
 /// their context menu everywhere (the Mac's only route, since this grouped
@@ -16,7 +21,7 @@ struct FlagPaletteSettingsView: View {
     var body: some View {
         SettingsForm(title: "Flags") {
             Section {
-                ForEach(preferences.flagPalette) { entry in
+                ForEach(FlagPalette.effective(preferences.flagPalette)) { entry in
                     // The whole row is one NavigationLink hit target — no
                     // nested controls, so the macOS single-target folding
                     // (#1299) has nothing to swallow. Move Up / Move Down
@@ -35,9 +40,9 @@ struct FlagPaletteSettingsView: View {
                 // Edit-mode drag on iOS and visionOS; inert in the Mac's
                 // grouped form.
                 .onMove { source, destination in
-                    var palette = preferences.flagPalette
+                    var palette = FlagPalette.effective(preferences.flagPalette)
                     palette.move(fromOffsets: source, toOffset: destination)
-                    preferences.flagPalette = palette
+                    store(palette)
                 }
                 Button {
                     addFlag()
@@ -47,8 +52,11 @@ struct FlagPaletteSettingsView: View {
                 .disabled(FlagPalette.firstFreeSlot(in: preferences.flagPalette) == nil)
             } footer: {
                 FormSectionFooter {
-                    Text(Self.footerText(paletteIsEmpty: preferences.flagPalette.isEmpty, on: .current))
-                        .sectionFooter()
+                    Text(Self.footerText(
+                        paletteIsEmpty: FlagPalette.keywordEntries(in: preferences.flagPalette).isEmpty,
+                        on: .current
+                    ))
+                    .sectionFooter()
                 }
             }
         }
@@ -58,16 +66,19 @@ struct FlagPaletteSettingsView: View {
     /// The footer under the palette: what the order means and how to change
     /// it on `host`. Drag is promised only where Edit offers it; on the Mac
     /// the grouped form ignores `onMove`, so it names the context menu.
+    /// `paletteIsEmpty` is true while the user has added no flag of their
+    /// own: the list then holds the built-in entry alone, and there is no
+    /// order to explain. The count is of flags the user can add.
     static func footerText(paletteIsEmpty: Bool, on host: HostPlatform) -> String {
         if paletteIsEmpty {
-            return "Flags you define here can be put on any message from any of "
-                + "your devices. Up to \(FlagPalette.slots.count)."
+            return "Flags you add here can be put on any message from any of "
+                + "your devices. Up to \(FlagPalette.slots.count) of your own."
         }
         let reorder = host.reordersInEditMode
             ? "Tap Edit to drag flags into a new order"
             : "Right-click a flag to move it up or down"
         return reorder + "; the order here is the order pickers use. "
-            + "Up to \(FlagPalette.slots.count) flags."
+            + "Up to \(FlagPalette.slots.count) flags of your own."
     }
 
     /// Move Up / Move Down for one row, addressed by slot like the editor's
@@ -91,13 +102,19 @@ struct FlagPaletteSettingsView: View {
 
     private func addFlag() {
         guard let slot = FlagPalette.firstFreeSlot(in: preferences.flagPalette) else { return }
-        var palette = preferences.flagPalette
+        var palette = FlagPalette.effective(preferences.flagPalette)
         palette.append(FlagPaletteEntry(
             slot: slot,
             label: "New flag",
             color: FlagPalette.colors.first ?? "gray"
         ))
-        preferences.flagPalette = palette
+        store(palette)
+    }
+
+    /// Stores an edit to the list as shown, leaving the system entry off
+    /// the wire while it is still the untouched default.
+    private func store(_ edited: [FlagPaletteEntry]) {
+        preferences.flagPalette = FlagPalette.stored(afterEditing: edited, from: preferences.flagPalette)
     }
 }
 
@@ -127,7 +144,10 @@ enum FlagPaletteColor {
 
 /// Detail editor for one palette entry: label, color, enabled, and the only
 /// route to deletion — which needs a confirmation, because per-message tags
-/// on a retired slot outlive the palette entry.
+/// on a retired slot outlive the palette entry. The system flag's entry has
+/// no deletion: it offers Reset to Default in its place, which needs no
+/// confirmation, because it changes a name, a color and a position and
+/// touches no message.
 private struct FlagPaletteEntryEditor: View {
     let preferences: Preferences
     let slot: String
@@ -164,33 +184,59 @@ private struct FlagPaletteEntryEditor: View {
             Section(formHeader: "Color") {
                 colorGrid(selected: entry.color)
             }
-            Section {
-                Button("Delete Flag", role: .destructive) {
-                    confirmingDelete = true
-                }
-                .confirmationPrompt(
-                    "Delete \u{201C}\(entry.label)\u{201D}?",
-                    isPresented: $confirmingDelete,
-                    titleVisibility: .visible
-                ) {
-                    Button("Delete Flag", role: .destructive) {
-                        bindings.delete()
-                        dismiss()
-                    }
-                    Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
-                } message: {
-                    Text(
-                        "Deleting a flag hides its name and color. Messages "
-                        + "already tagged with it keep the tag (shown by its "
-                        + "slot id) until untagged, and a new flag created "
-                        + "later may reuse the slot."
-                    )
-                }
+            if bindings.isSystemEntry {
+                resetSection
+            } else {
+                deleteSection(entry)
             }
         }
         .navigationTitle(entry.label)
         .groupedFormStyleOnMac()
         .inlineNavigationTitle()
+    }
+
+    private var resetSection: some View {
+        Section {
+            Button("Reset to Default") {
+                bindings.reset()
+            }
+            .disabled(!bindings.canReset)
+            .accessibilityIdentifier("flag.resetToDefault")
+        } footer: {
+            FormSectionFooter {
+                Text(
+                    "This flag is built in and can't be deleted. Resetting gives it back "
+                    + "its original name and color and returns it to the top of the list."
+                )
+                .sectionFooter()
+            }
+        }
+    }
+
+    private func deleteSection(_ entry: FlagPaletteEntry) -> some View {
+        Section {
+            Button("Delete Flag", role: .destructive) {
+                confirmingDelete = true
+            }
+            .confirmationPrompt(
+                "Delete \u{201C}\(entry.label)\u{201D}?",
+                isPresented: $confirmingDelete,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Flag", role: .destructive) {
+                    bindings.delete()
+                    dismiss()
+                }
+                Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}
+            } message: {
+                Text(
+                    "Deleting a flag hides its name and color. Messages "
+                    + "already tagged with it keep the tag (shown by its "
+                    + "slot id) until untagged, and a new flag created "
+                    + "later may reuse the slot."
+                )
+            }
+        }
     }
 
     private func colorGrid(selected: String) -> some View {
