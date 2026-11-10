@@ -5,7 +5,7 @@
 | Phase | Status |
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Merged (2026-11-09), #2370; accepted on stage; not yet in prod |
-| 2 -- Kit model: synthesis, default resolution | Apple Kit in review (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
+| 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
 | 3 -- Apple client | Not started |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
 | 5 -- Documentation | Not started |
@@ -282,10 +282,10 @@ returns it canonically; a 22-entry palette 400s; `set_flag` with
 
 ## Phase 2 -- Kit model: synthesis, default resolution
 
-**Status:** The `CabalmailKit` half is in review (2026-11-09), #2371.
-It could merge once Phase 1 was live on stage, which it is; it adds the
-model and no way to edit the system entry, so it does not need Phase 1
-in prod. As built, the encode rule is `FlagPalette.stored(afterEditing:from:)`
+**Status:** The `CabalmailKit` half merged (2026-11-09), #2371, once
+Phase 1 was live on stage; it adds the model and no way to edit the
+system entry, so it did not need Phase 1 in prod. The `android/kit`
+half has not started. As built, the encode rule is `FlagPalette.stored(afterEditing:from:)`
 with `resettingSystemEntry(in:)` for reset, and palette-ordered slots
 are a second form, `slots(in:palette:)`: the existing `slots(in:)`
 keeps its keyword-only result until Phase 3 moves the row and the
