@@ -6,7 +6,7 @@
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
-| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass in five poses, the flag button's hold menu not settled. Not promoted. The physical-Duo check waits for the device and does not hold the promotion until it arrives (duo-support.md, Decision 7) |
+| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass in five poses; the flag button's hold menu passes closed and is not settled in the open poses. Soak run (2026-11-10) on the Mini, four platforms: no regression found, five older defects filed (#2381 to #2385). Not promoted. The physical-Duo check waits for the device and does not hold the promotion until it arrives (duo-support.md, Decision 7) |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
@@ -427,7 +427,7 @@ through the API elsewhere.
 | iPad simulator | Pass: swipe, pill, reader flag button |
 | visionOS simulator | Pass: reader flag button and pill in all four states, swipe with "Todo" first |
 | macOS | Pill, toolbar button, Message menu item, ⌘⇧L and the no-default case pass. **⌘⇧8 failed** once the default flag had a name |
-| iPhone Duo simulator (stage at cbe028f1c, with #2378) | Pass. Closed: swipe and pill in all four states. Open landscape, book pose, open portrait and laptop pose, with "Todo" first: the reader's chips in list order, and its flag button sets and clears "Todo", from the side strip in the first two and from the bottom bar in the last two (below the fold in laptop pose). Not settled: the flag button's touch-and-hold menu |
+| iPhone Duo simulator (stage at cbe028f1c, with #2378) | Pass. Closed: swipe and pill in all four states. Open landscape, book pose, open portrait and laptop pose, with "Todo" first: the reader's chips in list order, and its flag button sets and clears "Todo", from the side strip in the first two and from the bottom bar in the last two (below the fold in laptop pose). The flag button's touch-and-hold menu (checked during the soak): closed, it lists the flags in list order and sets and clears one that is not the default; not settled in the open poses |
 | Old build (2026-11-06, before Phase 2) | Pass: the entry lists as an ordinary flag, survives an edit made from the old build, and picking it sets `\Flagged` |
 
 The macOS failure: the Message and Feeds menus both declared ⌘⇧8, and
@@ -443,16 +443,69 @@ moves to the Feeds item when a feed is in front and back again, a
 rename arriving while the app runs keeps it, and with a feed in front
 it sets and clears the feed item's flag.
 
-The Duo pass ran on the Mini's simulator, not the Studio's. It could
-not settle the flag button's touch-and-hold menu, which on a wide
-window is the reader's one way to a flag other than the default (the
-Message menu of the bottom bar has no Flags row): a synthesized hold
-opened no menu, and none on the read button beside it either, which
-uses the same control, so the harness cannot open these menus and the
-reading says nothing about the app. A person holding the button in
-Device Hub, or on the device, settles it. Not run: the physical-Duo
-check, a trackpad swipe on macOS, dark mode. "New build, old server" can no longer be
-run: Phase 1 is in prod.
+The Duo pass ran on the Mini's simulator, not the Studio's. The flag
+button's touch-and-hold menu is, on a wide window, the reader's one way
+to a flag other than the default (the Message menu of the bottom bar
+has no Flags row). The pass itself could not open it. The soak found
+the press that does (a held press of 1.5 s through the driver's `drag`
+verb), and with it the menu passes on the Duo closed and on the iPad's
+wide layout, which is the layout the open Duo uses: it lists the flags
+in list order, sets one that is not the default, marks it, and clears
+it, each checked against the server. In the Duo's open poses the
+driver's coordinate presses do not land at all (a held press on a list
+row opens no menu either), so there the reading says nothing about the
+app; a person holding the button in Device Hub, or on the device,
+settles it. Not run: the physical-Duo check, a trackpad swipe on
+macOS. "New build, old server" can no longer be run: Phase 1 is in
+prod.
+
+**Soak (2026-11-10)**, stage at cbe028f1c (the same code as a3f5ed023),
+on the Mini with the first stage test account. The acceptance run
+above checked what Stage A set out to change; the soak looked for
+anything nearby that it broke. Everything stage holds that prod does
+not is this change (#2375, #2376, #2378), so the lanes worked through
+what it touched: list rows, swipes, filter pills, row menus, bulk
+actions, the reader's header and bar, reply, move, search and its
+filter sheet, the feed list and reader, Settings > Flags, the rule
+editor's flag list, the menu commands, relaunch and background. Each
+lane had eight seeded messages of its own; every action was checked
+against the server's flags. The flag list was the built-in flag first
+under its original name, then two custom flags; a short second pass
+made a custom flag the default (the iPhone's row menu and the Duo's
+hold menu).
+
+| Lane | Result |
+| --- | --- |
+| iPhone 17 simulator | No regression. Every check passes but the search for the lane's tag, which is the server defect below. Among them: the settings writes (add, rename, recolor, move and delete a flag; the swipe set to the default flag; add and delete a rule), largest text and landscape. Dark mode (list dots and reader chips) was run after the lanes, because the account's theme is a synced setting, and passes |
+| iPad Pro 11-inch simulator | No regression. Every check passes but the same search. Among them: the hardware-keyboard chords (⌘⇧8, ⌘⇧L, ⌘⇧U, ⌘T), the menu bar's Message menu, a 375 pt window, portrait, largest text and the flag button's hold menu. Dark mode not run there |
+| Apple Vision Pro simulator | No regression. Every check the driver could deliver passes. Not run: the row's hold menu, trailing swipes in the narrow lists and hover, none of which it can deliver there |
+| macOS (the app on the Mini) | No regression. Rows, the reader's bar and flag menu, ⌘⇧8 in mail and in feeds, the Message and Feeds menus with a compose window in front and without, reply, move there and back, a three-message selection (bulk flag, bulk read, ⌘⇧8), the pills, Settings > Flags (add, recolor, delete; the built-in flag's editor) and the rule editor |
+
+Each defect a lane reported was run again on a build of `main` at
+af998ca22 (1.46.0), or asked of the server directly. All five are older
+than Stage A and are filed:
+
+- #2381, macOS: after a visit to Feeds, the reader's Flag, reader view
+  and Move buttons stay in the toolbar's overflow in a narrow window.
+- #2382, server: a search for a hyphenated word finds only some of the
+  messages that contain it.
+- #2383, iOS: the reader's sender avatar falls back to initials after
+  the first message opened in a launch.
+- #2384, visionOS: the reader pane is blank, or says "1 Message
+  Selected", after a folder switch with a message open.
+- #2385, Apple: under the Flagged pill, an unflagged row can come back
+  for about a minute when a list refresh lands after the unflag. The
+  iPad lane saw it twice in six tries; forced with a held reply, stage
+  and `main` behave alike.
+
+Seen and left as they are: on iPhone and visionOS, rows in Select mode
+run to both edges of the list (the same on `main`); the flag dots take
+room from the sender's name, about 16 pt each; on the iPad the flag
+button's hold menu, opening upward from the bar, lists the flags
+bottom-up. The test account is back as it was: no soak mail, an empty
+flag list, the swipes, filters and theme as before. One disabled rule
+named "New rule", left by the acceptance run's rule-editor check, was
+removed.
 
 ## Phase 4 -- Android client
 
