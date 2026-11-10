@@ -7,7 +7,7 @@
 #
 # Permanent fixture in dev and stage; precondition refuses prod. Reachable
 # only from inside the VPC via Cloud Map (sinkhole.cabal.internal).
-FROM amazonlinux:2023@sha256:c04a1012acc483977f61f7f91c28624a39a621e56a59781319a75dec528be9b6
+FROM amazonlinux:2023@sha256:3ccfbe800f864982b0a4e124a614b2382518cbd04b3c1cd35202bd46f392675b
 
 # AL2023 pins $releasever to the base image's own release snapshot, so
 # dnf here only ever sees the package set frozen at base-image build

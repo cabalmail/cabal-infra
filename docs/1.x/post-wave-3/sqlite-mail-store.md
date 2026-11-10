@@ -14,11 +14,13 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
-| Phase 0: Standalone fixes and the SQLite foundation (PRs 0.1 to 0.4) | Not started (2026-10-15) |
+| Phase 0: Standalone fixes and the SQLite foundation (PRs 0.1 to 0.4) | Partly done (2026-10-21), as standalone fixes, not as PRs 0.1 to 0.4: #1871 in #2092, #1956 in #2117, #1957 in #2118, the not-deleted count in #2161. Not started: PR 0.1 (the SQLite foundation) and the rest of PR 0.2 |
 | Phase 1: The account directory (PRs 1.1 and 1.2) | Not started (2026-10-15) |
-| Phase 2: Envelopes into SQLite (PRs 2.1 to 2.5) | Not started (2026-10-15) |
+| Phase 2: Envelopes into SQLite (PRs 2.1 to 2.5) | Not started (2026-11-09), except PR 2.5 (#1836), done ahead on the JSON cache (2026-10-21): #2161, #2162, #2174, #2178 |
 | Phase 3: Rows leave the lists (PRs 3.1 to 3.5) | Not started (2026-10-15) |
 | Phase 4: The shared offline queue (PRs 4.0 to 4.5) | Not started (2026-10-15) |
 | Phase 5: Flagged query and offline search (PRs 5.1 and 5.2) | Not started (2026-10-15) |
@@ -131,7 +133,7 @@ While an older build runs, its sign-out wipes only the old paths, so the account
 
 ### Phase 0: Standalone fixes and the SQLite foundation (one session, one release)
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-21). The three bugs and the count landed as standalone fixes, not as the PRs below. PR 0.1 is not started: `SQLiteDatabase` is still in `RSS/`, with no `transaction { }` and no migration runner. PR 0.2 is partly done: #2117 writes `setRead` and `setFavorite` with their queue row in one inline transaction (#1956 closed), and #2118 closes the database in `retire()` even when `clear()` throws (#1957 closed); `clear()` in one transaction, setting a corrupt file aside and the pending-row import are not done. PR 0.3 is done as #2092 (#1871 closed): a slug-plus-digest name shared by both caches, with old files dropped at open, not renamed, and no downgrade drill recorded. PR 0.4 is done as #2161, in a different shape: `/folder_status?flagged=1` also returns `undeleted`, where the text below has `?not_deleted=1` and `messages_not_deleted`.
 
 Runs before the project opens (decision 1). The Lambda PR runs beside the Kit PRs; the Kit PRs go in order, one open at a time.
 
@@ -157,7 +159,7 @@ Verify: Kit and app-layer tests with fixture directories, and two clients of one
 
 ### Phase 2: Envelopes into SQLite (one release)
 
-**Status:** Not started (2026-10-15).
+**Status:** Not started (2026-11-09), except PR 2.5. #1836 was fixed ahead of this phase, on the JSON cache, and closed on 2026-10-21: #2162, #2174 and #2178 save a window record with the snapshot and anchor a hydrated window on it (part 1), and #2161 anchors on the not-deleted count, which the server returns as `undeleted` (part 2). PRs 2.1 to 2.4 are not started; there is no `mail.sqlite`.
 
 Kit thread, plus one loader PR. Hotspots: `Cache/*`, `Persistence/*`, `WindowSnapshot.swift`, `WindowPlanner.swift`.
 

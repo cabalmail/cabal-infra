@@ -4,11 +4,20 @@
 
 | Phase | Status |
 | --- | --- |
-| 1 -- Palette accepts the `\Flagged` slot | Not started |
-| 2 -- Kit model: synthesis, default resolution | Not started |
+| 1 -- Palette accepts the `\Flagged` slot | Merged (2026-11-09), #2370; accepted on stage; not yet in prod |
+| 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
 | 3 -- Apple client | Not started |
-| 4 -- Android client | Not started |
+| 4 -- Android client | Not started; runs as android-parity.md leg L1 |
 | 5 -- Documentation | Not started |
+
+This plan is run by Session 1 of
+[post-wave-3/flags-and-cross-media.md](post-wave-3/flags-and-cross-media.md),
+which splits the Apple work into PRs A0 to A4 and records the
+maintainer's answers. Two of them shape this plan (2026-11-09): the
+feed's Flag button follows the palette's Flagged entry (decisions 4 and
+6 below), and the Android work -- Phase 4 and Phase 2's `android/kit`
+half -- runs separately, as android-parity.md leg L1, about a release
+after Apple.
 
 ## Context
 
@@ -18,7 +27,8 @@ IMAP keywords `cabal-flag-01..20`, labelled and coloured in synced
 preferences -- beside the pre-existing system `\Flagged` toggle. The
 clients now ship two flag vocabularies with two sets of affordances:
 
-- **`\Flagged`**: a star, toggled by swipe, keyboard shortcut (Apple
+- **`\Flagged`**: a flag glyph on Apple and a star on Android, toggled
+  by swipe, keyboard shortcut (Apple
   ⌘⇧8 in the list and ⌘⇧L in the reader; Android Shift+L), the row
   and bulk menus, and the reader toolbar; filterable via the
   All/Unread/Flagged pill and `?flagged=1` search; settable by a rule's
@@ -159,7 +169,8 @@ palette itself can never be empty under decision 2.
 ### 4. One rendering for every slot
 
 "Unified" has to mean one rendering, or the user still sees two
-systems. The star goes: `\Flagged` renders as a coloured dot on the
+systems. The separate glyph goes (`flag.fill` on Apple, a star on
+Android): `\Flagged` renders as a coloured dot on the
 row and a labelled chip in the reader, exactly like a keyword slot, in
 its palette colour. Dot order on the row is palette order, so the
 Flagged dot leads by default; the Android row's four-dot cap counts it
@@ -167,8 +178,15 @@ first. The reader flag button's icon reflects whether the default flag
 is set, using the palette colour rather than the fixed gold.
 
 The gold star survives where it means something else: address
-favourites and feed favourites reuse the `flagged.fg` token for a
-different concept and are out of scope.
+favourites reuse the `flagged.fg` token for a different concept and are
+out of scope.
+
+Feed items are in scope. Their favourite became the feed's flag in
+1.22.0 and draws mail's glyph and colour, so it follows the palette's
+Flagged entry (decided 2026-11-09): the feed row draws the same dot in
+the entry's colour, from `is_favorite`, and the feed's Flag button and
+swipe take the entry's label and hide when the entry is disabled.
+Nothing changes on the server for this.
 
 ### 5. Toggle affordances retarget to the default flag
 
@@ -196,7 +214,8 @@ The All/Unread/Flagged pill and the search sheet's Flagged toggle keep
 filtering on `\Flagged`, because that is the only flag the server can
 filter on today. Their label follows the palette entry's label (a user
 who renamed it "Urgent" sees an "Urgent" pill), and they are hidden
-when the entry is disabled. Per-slot filtering is the natural next
+when the entry is disabled. The feed list's Flagged pill follows the
+same entry. Per-slot filtering is the natural next
 step once this ships and is not part of this plan.
 
 ### 7. Rules are unchanged on the wire
@@ -232,13 +251,21 @@ Old-build interactions, enumerated:
   `\Flagged` entry is rejected with a 400 on the whole `app` map, the
   same failure mode `flagPaletteSyncable` already guards. Phase 2 must
   therefore materialize the entry only on an explicit user edit, and
-  the client PRs merge after Phase 1 is live. Until the user edits it,
-  the synthesized entry never reaches the wire and the old server is
-  never asked to accept it.
+  the first client PR that lets a user make that edit (Phase 3's
+  Settings > Flags) merges only after Phase 1 is in **prod**, not just
+  on stage: a TestFlight build cut from stage talks to the prod API.
+  Until the user edits it, the synthesized entry never reaches the wire
+  and the old server is never asked to accept it.
 
 ## Phase 1 -- Palette accepts the `\Flagged` slot
 
-**Status:** Not started.
+**Status:** Merged (2026-11-09), #2370, and deployed to stage the same
+day. The acceptance below was run against the stage API then and
+passed: the palette was stored and returned canonically, a 22-entry
+palette and `cabal-flag-00` each got a 400 and left the stored palette
+alone, and `set_flag` set and cleared `\Flagged` on a message as before.
+It reaches prod with the next promotion; Phase 3 waits for that
+(decision 8).
 
 `lambda/api/set_preferences/function.py`: add `\Flagged` to
 `FLAG_PALETTE_SLOTS`; raise the entry cap from 20 to 21 with a comment
@@ -255,9 +282,17 @@ returns it canonically; a 22-entry palette 400s; `set_flag` with
 
 ## Phase 2 -- Kit model: synthesis, default resolution
 
-**Status:** Not started. Merges after Phase 1 is live on stage.
+**Status:** The `CabalmailKit` half merged (2026-11-09), #2371, once
+Phase 1 was live on stage; it adds the model and no way to edit the
+system entry, so it did not need Phase 1 in prod. The `android/kit`
+half has not started. As built, the encode rule is `FlagPalette.stored(afterEditing:from:)`
+with `resettingSystemEntry(in:)` for reset, and palette-ordered slots
+are a second form, `slots(in:palette:)`: the existing `slots(in:)`
+keeps its keyword-only result until Phase 3 moves the row and the
+reader over, so that no flag is drawn twice in between.
 
-`CabalmailKit` and `android/kit`, mirrored:
+`CabalmailKit` here; `android/kit` mirrors it in android-parity.md leg
+L1:
 
 - `FlagPalette.systemSlot` (`"\\Flagged"`), `maxEntries` 21, and the
   `slots` list unchanged (`firstFreeSlot` must keep ignoring the
@@ -276,7 +311,7 @@ returns it canonically; a 22-entry palette 400s; `set_flag` with
 - Tests: synthesis, materialize-on-edit, reset, default resolution
   with disabled entries, ordering, and the `firstFreeSlot` invariant.
 
-Acceptance: kit tests green on both platforms; a wire palette without
+Acceptance: Kit tests green; a wire palette without
 the entry encodes back byte-identical after a no-op edit.
 
 ## Phase 3 -- Apple client
@@ -295,9 +330,9 @@ the entry encodes back byte-identical after a no-op edit.
   > default"), and drag reorder via Edit is iOS / iPadOS / visionOS only.
 - Rendering (decision 4): row dots and reader chips include the system
   entry; the reader flag button reflects the default flag in its
-  palette colour; the star and `flaggedFg` usage on mail surfaces go.
+  palette colour; the flag glyph and `flaggedFg` usage on mail surfaces go.
 - Affordances (decision 5): swipe, ⌘⇧8 / ⌘⇧L, row/bulk menus, bulk
-  bar, `AppState.requestToggleFlagged` -> default-flag toggle;
+  bar, `WindowCommand.toggleFlagged` -> default-flag toggle;
   `FlagMenuPolicy` lists the system entry first; labels follow the
   palette; the degenerate no-default case disables them.
 - Filter pill and search toggle labels follow the palette (decision 6).
@@ -314,7 +349,8 @@ disabling every flag hides the swipe and disables the shortcut.
 
 ## Phase 4 -- Android client
 
-**Status:** Not started.
+**Status:** Not started. Runs as android-parity.md leg L1, with Phase
+2's `android/kit` half, after the Apple release is promoted.
 
 The same items as Phase 3 against the Android surfaces:
 `FlagPaletteSettings` (up/down reorder gains "Make default"; Reset in
@@ -346,7 +382,7 @@ platform reads identically on the other.
 - **Per-slot filtering.** `search_envelopes` and the list pills could
   accept `?keyword=<slot>` (IMAP `KEYWORD`), making every palette entry
   filterable and retiring the `\Flagged` asymmetry left by decision 6.
-- **Feed and address favourites** keep the gold star and the
-  `flagged.fg` token; if the star's disappearance from mail makes that
-  read as inconsistent, the token note in `design/color-tokens.json`
-  should be revisited then.
+- **Address favourites** keep the gold star and the `flagged.fg`
+  token; if the glyph's disappearance from mail makes that read as
+  inconsistent, the token note in `design/color-tokens.json` should be
+  revisited then.

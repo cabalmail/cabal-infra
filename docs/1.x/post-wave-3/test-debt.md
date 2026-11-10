@@ -14,10 +14,12 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 | --- | --- |
-| A1. Search rows get their own identifiers (#1991) | In review (2026-10-24) |
-| A2. The five #1981 guards | Not started (2026-10-15) |
+| A1. Search rows get their own identifiers (#1991) | Done (2026-10-24): #2209; #1991 closed after the tester's SimDrive drive |
+| A2. The five #1981 guards | Done (2026-10-21): #2159, #2175, #2176; #1981 closed. Three of the five guards got a comment and a new source scan, not a test |
 | A3. Shared waits, temp folders, one fake feed client | Not started (2026-10-15) |
 | A4. Absence checks | Not started (2026-10-15) |
 | A5. Spotlight seam and the feed sign-out pin | Not started (2026-10-15) |
@@ -105,11 +107,11 @@ Rules for both sessions: one open Apple PR at a time; run `CabalmailMacTests` (a
 
 **A1. Search rows get their own identifiers (#1991).** A small pure function gives a row `message.row.<uid>` in a folder list and a folder-qualified form on the search surface (for example `message.row.<folder>/<uid>`; the scope doc fixes it). Files: `MessageListView+Selection.swift:272`, a new type beside `MessageRowIdentity.swift`, `docs/apple.md:195-199`. Tests: both surfaces; two refs with one UID get different identifiers. Verify: CI; on the Mini, signed in as test account 1, search for a self-sent message and `simdrive cmd wait id:` each copy; post that on #1991, since the PR says "Fixes #1991" and an open fix claim holds the next promote. Risk: low. Leave `SwipeActionContainerSourceScanTests`' lines intact (the `virtualizedList` slice, the `ForEach` and `MessageRowIdentity.identify` lines, three `proxy.scrollTo(model.rowSlot(at:` calls), and grep `Tools/` and `docs/` for recipes that tap search rows.
 
-**Status:** In review (2026-10-24). Landed as written, with the scope doc's choice recorded in `docs/apple.md` ("Message rows across folders"): `message.row.<uid>` in a folder list, `message.row.<folder>/<uid>` on the search surface, the folder being the row's own `/`-delimited path. The gate is `MessageListScope.isSearch`, not "a search is showing" -- a folder list's Unread / Flagged pills are searches narrowed to that folder, and qualifying their rows would have moved identifiers the folder-list recipes address. New type `MessageRowIdentifier.swift` beside `MessageRowIdentity.swift`; `MessageRowIdentifierTests` covers both surfaces, the reported collision with a folder-list negative control, and pins the one call site. `SwipeActionContainerSourceScanTests`' lines are untouched. No live arm yet: the Mini drive named under Verify is owed, and the issue says so.
+**Status:** Done (2026-10-24): #2209. Landed as written, with the scope doc's choice recorded in `docs/apple.md` ("Message rows across folders"): `message.row.<uid>` in a folder list, `message.row.<folder>/<uid>` on the search surface, the folder being the row's own `/`-delimited path. The gate is `MessageListScope.isSearch`, not "a search is showing" -- a folder list's Unread / Flagged pills are searches narrowed to that folder, and qualifying their rows would have moved identifiers the folder-list recipes address. New type `MessageRowIdentifier.swift` beside `MessageRowIdentity.swift`; `MessageRowIdentifierTests` covers both surfaces, the reported collision with a folder-list negative control, and pins the one call site. `SwipeActionContainerSourceScanTests`' lines are untouched. The tester drove it with SimDrive on an iPad Pro 11-inch simulator and closed #1991 (2026-10-24).
 
 **A2. The five #1981 guards.** After mail-correctness.md PRs 2 and 3, and preferably after mail-navigation-refactors.md PR 6 frees room in `FakeImapClient`. For each site, delete the guard locally. If a stand-down test fails without it, keep the test; if no reachable order breaks it (the issue suspects the bottom prefetch, which also checks `Task.isCancelled`, and the re-read, which waits for the page tasks), add a one-line comment naming what else guards it. Files: one new test file; comments in `WindowPager.swift`, `WindowRefresher.swift`, `WindowReconciler.swift`. Verify: CI and the mutation table, which the PR ("Fixes #1981") also posts on the issue. Risk: low; do not grow `FakeImapClient`.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-21): #2159, #2175 and #2176; #1981 is closed. The re-read got a stand-down test (`MessageListRereadStandDownTests`) and the bottom prefetch a comment. The other three guards got a comment and a new source scan each (`WindowReadingGenerationSourceScanTests`, `CacheAwaitGenerationSourceScanTests`), against this plan's default of adding no new scan; the maintainer agreed on the issue that the two cache-await guards get no holdable cache double.
 
 **A3. Shared waits, temp folders, one fake feed client.** After swift6-and-strict-checking.md's A2 if that session is running (it reshapes `waitUntil`'s isolation); otherwise go first and tell it. Move the eleven local helpers onto `waitUntil` or `waitUntilOnMainActor`; the hosted harnesses keep their true/false shape but take the 30-second ceiling. Fix the comment at `BackgroundActivityTests.swift:66-68`. Put every test temp folder under one per-run root that a test observer deletes when the bundle finishes (the six files above). Merge the two `FakeRssClient`s into one public type in `CabalmailKitTestSupport`. Verify: CI; test counts unchanged. Risk: low; a stuck test fails slower.
 

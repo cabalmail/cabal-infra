@@ -14,12 +14,14 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
-| Decisions 1 to 8 | Decision 6 answered yes (2026-10-25); the rest unanswered (2026-10-15). |
-| PR A: an honest gate and an honest Xcode | Not started (2026-10-15). |
-| PR B: one setup action, one simulator script, time limits and pins | Not started (2026-10-15). Its decision-6 bullet shipped on its own (2026-10-25). |
-| PR C: project configuration from single sources | Not started (2026-10-15). |
+| Decisions 1 to 8 | Decision 6 answered yes (2026-10-25). Decision 4 was overtaken (2026-10-24): on #1865 the maintainer chose a separate visionOS target, shipped as #2213; the visionOS upload still signs with the iOS profile. The rest unanswered (2026-10-15). |
+| PR A: an honest gate and an honest Xcode | Not started (2026-10-15). Its Xcode comment rewrite shipped on its own (#2304, 2026-11-01), keeping `latest-stable`. |
+| PR B: one setup action, one simulator script, time limits and pins | Partly done (2026-10-25): the simulator script shipped as `resolve-sim-destination.sh` (#2196), narrower than the planned `create-sim.sh`, and the decision-6 bullet shipped as #2218. The setup action, the pins, the time limits and the rest are not started. |
+| PR C: project configuration from single sources | Partly done (2026-10-25): its #1865 item shipped on its own as #2213 (visionOS builds from its own target, `CabalmailVision`). Single-source versions, the committed plists and the floor check are not started. |
 | PR C2, only if decision 3 is 27 | Not started (2026-10-15). |
 | PR D: the release dashboard sees every claimed fix | Not started (2026-10-15). |
 | PR E: CI calls `scripts/build-apple.sh` | Not started (2026-10-15). |
@@ -28,7 +30,7 @@ This table and the **Status:** line under each work item are updated in the same
 
 ## Decisions for the maintainer
 
-**Status:** Decision 6 answered (2026-10-25); the rest unanswered (2026-10-15).
+**Status:** Decision 6 answered (2026-10-25). Decision 4 was overtaken (2026-10-24): on #1865 the maintainer wrote "Let's go with option 2: Split the visionOS app into its own target", which shipped as #2213, though the visionOS upload still signs with the iOS profile, so the decision's own aim is not met. Decision 1 is not in force: neither `stage` nor `main` lists a required check, and `apple.yml` still has `paths` on `pull_request`. The rest unanswered (2026-10-15).
 
 1. **Make `apple-gate` a required check once PR A has merged?** Stage and main **(recommended)** / stage only / no. Consequence of stage and main: a red, cancelled or missing Apple check disables the merge button on every PR. Your own direct pushes to stage (the release-date commit `scripts/promote.sh:143` pushes, local merges) still go through, because admin enforcement is off and you are an admin; GitHub records them as bypasses (inferred). Default: the gate stays advisory. The clicks, and the check to make first, are under "How to start it".
 2. **Which Xcode should CI and the TestFlight uploads use?** Today `latest-stable` selects `/Applications/Xcode_27.1_beta.app`, "27.1.0 (27A9269)", because the runner image ships that beta without the beta flag `setup-xcode` reads. The workflow comment says it is 27.0 GA. (a) Name 27.1 in the workflow, record the expected build (27A9269), have every job print what it got and warn when the build differs, and move to the 27.1 release build by a one-line PR when the image carries it **(recommended)**. (b) Keep `latest-stable` and add only the warning. (c) Go back to 27.0, as the Wave 3 rule said: "Gates use 27.0. The 27.1 beta is only for the Duo simulator run" (the Wave 3.2 scope; see "Background from the rearchitecture"). Consequence of (a): no silent compiler change, and the uploads stay on the 27.1 SDK that duo-support.md needs. (c) would take the 27.1 behaviour out of the shipped app and turn that plan's tripwire red. Default: (a).
@@ -90,7 +92,7 @@ PRs A, B, E and F all edit `apple.yml`, so they go strictly in that order, with 
 - `apple/.gitignore`: `.dd-*/` and `.derivedData*/` replace `.derivedData/`. No tracked path under `apple/` matches either. Update `CLAUDE.md:89, :153`.
 - Verify: the PR's own run is green and names 27A9269; one throwaway commit with a wrong expected build shows the warning, then is reverted. After merge, PR D (or any non-Apple PR) is pushed or rebased and shows `apple-gate` green with no Mac job. A PR opened before PR A merged ran the old workflow and shows no gate at all. Only then does the maintainer tick the setting. Risk: low; the failure to guard against is a missed input (risk 2).
 
-**Status:** Not started (2026-10-15).
+**Status:** Not started (2026-10-15). One piece shipped on its own: #2304 (2026-11-01) rewrote `apple.yml`'s Xcode comment and kept `XCODE_VERSION: 'latest-stable'`, which CI resolved to Xcode 27.2.0 (27B48) that day. There is still no `changes` job and no expected-build check.
 
 **PR B: one setup action, one simulator script, time limits and pins.**
 - `.github/actions/apple-setup/action.yml`: inputs for the Xcode version and expected build, a tool list and `generate: true|false`. It installs SwiftLint and XcodeGen from their release archives at fixed versions with a SHA-256 check (start from 0.65.1 and 2.46.0), cached by version; installs `coreutils` and `xcbeautify` for every job that uses them, `app-build` included; runs PR A's Xcode check; and runs the "Ensure watchOS platform" logic when asked.
@@ -101,7 +103,7 @@ PRs A, B, E and F all edit `apple.yml`, so they go strictly in that order, with 
 - Docs: rewrite `docs/apple.md:422` and the "CI workflow" section (:702-716), fix `:1074` and `CLAUDE.md:89, :91`, and record that CI tests only 27.x runtimes, that uploads use the 27.1 beta until the release build lands, and that CodeQL for Swift waits on Swift 6.4 support.
 - Verify: green PR run. One `workflow_dispatch` on the branch covers the push-only legs (Kit visionOS, iOS and macOS device builds); uploads skip off `main` and `stage`, and `approval` may wait on `gate-development`, so cancel it once the build legs finish. Compare wall times with the medians above. Risk: low to medium; simulator resolution is finicky and pinned downloads are a new failure point.
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-25). The simulator script shipped as `.github/scripts/resolve-sim-destination.sh` and `select-sim-pair.jq` (#2196), with a narrower interface than the `create-sim.sh` planned here: family, device-name prefix and simulator name, with no `--runtime`, `--boot`, retry or watchOS. The Duo leg uses it (#2235, required since #2284). The decision-6 bullet shipped as #2218. Not started: the setup action, the SwiftLint and XcodeGen pins, the job time limits, `app-build`'s `gtimeout`, `--kit-only`, and dropping the package caches.
 
 **PR C: project configuration from single sources.**
 - Define `MARKETING_VERSION` (0.0.0, which cannot pass for a release) and `CURRENT_PROJECT_VERSION` once in `apple/Base.xcconfig`, above the `#include?` line, and delete the seven per-target copies. `scripts/build-apple.sh` and `apple/scripts/build-sim.sh` pass the `CHANGELOG.md` version, as CI does. CI still passes one value to every target, so extensions keep matching their host. swift6-and-strict-checking.md also inserts above that include line; either order works.
@@ -110,7 +112,7 @@ PRs A, B, E and F all edit `apple.yml`, so they go strictly in that order, with 
 - #1865: one hour on the Mini with the tester's recipe. Look for an output inside `Cabalmail.app` that the CodeSign step's directory-tree input also covers (the tester's lead). If the cause is in `project.yml`, fix it here. If not, add a workaround note beside "Default DerivedData location" (`docs/apple.md:68-70`) and ask the maintainer whether to close #1865 as not planned.
 - Verify: before merge, an `xcodebuild -showBuildSettings` diff on the Mini for every target, in which only the two version settings may change (05 WS-H's check, from audit 05's build-config hygiene workstream). After merge, the stage uploads succeed and the maintainer sees the release version in Settings on one device. If a stage upload fails, revert PR C. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-25). Its #1865 item shipped on its own as #2213: the visionOS app is its own target, `CabalmailVision`, and #1865 is closed. Not started: single-source versions (`MARKETING_VERSION` now appears eight times in `project.yml`), the three committed plists, and `check-apple-floors.py`.
 
 **PR C2, only if decision 3 is 27, as its own release.** Move the three floor declarations to 27, remove the 11 always-true availability checks and the test helper's (`SwipeTestHarness.swift:29`), and change the two scans only with the maintainer's yes, asked in the scope doc. Add one `Apple:` fragment under `changed`. Install check on each platform before Promote. It edits `SwipeActionRow.swift` and `ToolbarVisibility.swift`, which platform-conditionals.md also edits.
 

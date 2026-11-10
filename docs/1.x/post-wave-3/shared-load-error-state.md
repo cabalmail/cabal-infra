@@ -14,16 +14,18 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
-| A1, #1900 alone | Not started (2026-10-15) |
-| A2, Kit error contract (#1902, #1918 client half, decision 1) | Not started (2026-10-15) |
-| A3, #1903 in the Kit | Not started (2026-10-15) |
+| A1, #1900 alone | Done (2026-10-18): #2094; #1900 closed |
+| A2, Kit error contract (#1902, #1918 client half, decision 1) | Partly done (2026-10-18): #2099 fixed #1902 and #2095 fixed #1918's client half; both closed. Decision 1 and the two `docs/apple.md` sentences not started |
+| A3, #1903 in the Kit | Partly done (2026-10-18): #2100 fixed #1903 in the app layer, not the Kit, and #2226 (2026-10-25) did the same for `/save_draft` (#2102); both closed. The rule that the app never keys on `.decoding` was not delivered |
 | A4, the mapper, logging and compose | Not started (2026-10-15) |
 | A5, sign-in and Siri | Not started (2026-10-15) |
 | A6, sheets, Rules, Settings, Addresses and feed management | Not started (2026-10-15) |
 | A7, optional: the Lambda 500s (decision 2) | Not started (2026-10-15) |
-| A8, only if decision 3 is Tolerate | Not started (2026-10-15) |
+| A8, only if decision 3 is Tolerate | Done (2026-10-20): #2158; #1901 closed. Decision 3 has no recorded answer |
 | B1, the type and the simple screens | Not started (2026-10-15) |
 | B2, sidebars and feeds | Not started (2026-10-15) |
 | B3, the reader and the action failures | Not started (2026-10-15) |
@@ -103,15 +105,15 @@ One PR open at a time, in any order the files allow, except that A4 comes before
 
 - **A1, #1900 alone.** Scope: the draft-save path stops using the send wording; `describe` gains the action or the draft path stops calling it. Files: `Compose/ComposeViewModel+Internals.swift`. Tests: every `CabalmailError` case, including `.http(500, ...)` and `.bulkPartialFailure`, through the draft-save path, none reading "Send failed". Verify: CI. Going offline on the Mini shows only wording, since `.network` already reads clean; a live check needs a `/save_draft` refusal. Fragment: `Apple:`, fixed. Risk: low.
 
-  **Status:** Not started (2026-10-15).
+  **Status:** Done (2026-10-18): #2094 (new `Compose/ComposeErrorText.swift` with `draftSaveFailure` and `sendFailure`; `ComposeViewModel.describe` removed). #1900 is closed.
 
 - **A2, Kit error contract (#1902, #1918 client half, decision 1).** Files: `Auth/AuthService.swift` (guard the parse; throw an error `OfflineLaunch` treats as unreachable, for example `.transport`, since a captive portal is the likeliest cause (inferred); a JSON reply that lacks its tokens keeps `.decoding`), `Auth/OfflineLaunch.swift` if needed, `Models/Errors.swift` (`serverExplanation` also reads `Error` for an `.http` status of 400 to 499; under 1a `.decoding` drops its detail from the copy), `docs/apple.md:1198-1199, 1213-1214`. Tests: `AuthServiceTests` with a scripted transport (a fake network layer) answering an empty body, an HTML page and the tester's `{}` control; `OfflineLaunchTests`; `ErrorsLocalizedDescriptionTests` for `Error` at 400, 403 and 500 (500 stays generic); the copy assertion at `ApiClientDecodeFailureTests.swift:31`. Verify: CI; on the Mini, macOS signed in as test account 1, New Address with subdomain `mail-admin` shows the reason and creates nothing; the same on the watch simulator. Fragment: `Apple:`, fixed. Risk: low. It is Kit-only, so the watch and Siri get it too.
 
-  **Status:** Not started (2026-10-15).
+  **Status:** Partly done (2026-10-18). #2099 fixed #1902: a Cognito 2xx that isn't JSON throws `.decoding`, and restore tolerates it through a new `OfflineLaunch.isUnreadableReply`, not through `.transport`. #2095 fixed #1918's client half: `serverExplanation` reads `Error` for a 4xx only. Both issues are closed. Not started: decision 1 (the endpoint name is still in the copy, and `CognitoWire` now adds Cognito target names to it) and the two `docs/apple.md` sentences, which still describe #1902 and the unread `Error` key as open.
 
 - **A3, #1903 in the Kit.** Rule: a 2xx from the Lambda whose body does not decode counts as done. The app never keys on `.decoding`, because a token refresh throws it before any request is sent. Files: `API/URLSessionApiClient+Rules.swift` (on an unreadable 2xx, `setRules` re-reads `/get_rules` and returns that set; `RulesViewModel`'s existing `rules == snapshot` guard keeps a newer local edit), `API/URLSessionApiClient+Messages.swift` and the `markFolderRead` protocol chain (an unreadable 2xx returns no count instead of throwing; no app caller uses the count), the shared `FakeImapClient`, and a few lines in `MailMutationService.swift` and `FolderMarkAllRead.swift`. If the re-read also fails, behaviour stays as today and a test pins it. Tests: a garbled 200 then an edit raises no conflict; a garbled 200 still zeroes the badge; a refresh that throws `.decoding` adopts nothing and zeroes nothing. Verify: CI; Mini smoke of a rule save and Mark All as Read. Fragment: `Apple:`, fixed. Risk: low. sqlite-mail-store.md PR 4.2 applies the same rule to its queued writes.
 
-  **Status:** Not started (2026-10-15).
+  **Status:** Partly done (2026-10-18). #2100 fixed #1903 in `CabalmailUI`, not in the Kit: `RulesViewModel` and `MailMutationService` catch `CabalmailError.decoding` and treat the write as committed. #2226 (2026-10-25) applied the same reading to `/save_draft` (#2102). Both issues are closed. Not delivered: the rule that the app never keys on `.decoding`. `URLSessionApiClient+Rules.swift` and the `markFolderRead` chain are unchanged, and the test "a refresh that throws `.decoding` adopts nothing and zeroes nothing" does not exist.
 
 - **A4, the mapper, logging and compose.** Scope: one public mapper in `CabalmailUI/Shared/` (audit F8 called it `UserFacingError`): an error and an optional action in, one sentence out, with no side effects. Catch sites log through one explicit report call (the action, the error case and its detail, the status; never a reply body), so a redraw never writes a log line. The mapper depends only on `CabalmailKit`, so a later `project.yml` line could compile it into the watch. Files: the new type; `Compose/ComposeViewModel+Internals.swift`, `ComposeViewModel.swift:293, 459, 461`, `ComposeView+Subviews.swift:73`; delete `describe`. Tests: a table test of every `CabalmailError` case against a few actions. Verify: CI; Mini, compose offline and Close with Save Draft (wording only). Fragment: `Apple:`, changed. Risk: low.
 
@@ -131,7 +133,7 @@ One PR open at a time, in any order the files allow, except that A4 comes before
 
 - **A8, only if decision 3 is Tolerate.** `Rule` keeps an unknown field or action as opaque data, the editor shows such rules read-only and refuses to save. Kit and `Rules/` files. Fragment: `Apple:`, changed.
 
-  **Status:** Not started (2026-10-15).
+  **Status:** Done (2026-10-20): #2158. `Rule.Field` and `Rule.Action` gain `.unknown(raw)`, and such a rule lists locked and read-only. #1901 is closed. It differs from the scope above: the set still saves, re-encoding the opaque rule as it came, where this item said to refuse the save, and there is no "Update Cabalmail" prompt. Decision 3 has no recorded answer; the fixer took Tolerate and the maintainer merged it. No Android twin has merged.
 
 **Releases and soak.** A1 to A3 ride the next release. Aim to land A4 to A6 in one release; a release with only some of them has mixed wording but nothing broken, so it does not hold Promote. Soak on the Mini: the reserved-subdomain refusal on macOS, the iPhone simulator and the watch simulator; Mark All as Read and a rule save; a wrong password; signing in offline. visionOS shares these view models and copy, so it gets no separate check (inferred). #1902 and #1903 can only be shown by tests; the tester could not trigger either live. Siri's copy on a device goes on live-verification.md's list.
 

@@ -61,13 +61,13 @@ struct FlagPaletteSettingsView: View {
     static func footerText(paletteIsEmpty: Bool, on host: HostPlatform) -> String {
         if paletteIsEmpty {
             return "Flags you define here can be put on any message from any of "
-                + "your devices. Up to \(FlagPalette.maxEntries)."
+                + "your devices. Up to \(FlagPalette.slots.count)."
         }
         let reorder = host.reordersInEditMode
             ? "Tap Edit to drag flags into a new order"
             : "Right-click a flag to move it up or down"
         return reorder + "; the order here is the order pickers use. "
-            + "Up to \(FlagPalette.maxEntries) flags."
+            + "Up to \(FlagPalette.slots.count) flags."
     }
 
     /// Move Up / Move Down for one row, addressed by slot like the editor's

@@ -14,11 +14,13 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 | --- | --- |
-| Decisions 1 to 3 | Unanswered (2026-10-15); each defaults to (a). |
+| Decisions 1 to 3 | Decision 1 was settled as (b) by #2104 (2026-10-18), merged without a written answer. Decisions 2 and 3 unanswered (2026-10-15); each defaults to (a). |
 | Step 0. Measure | Not started (2026-10-15). |
-| PR 1. #1983 (decision 1) | Not started (2026-10-15). |
+| PR 1. #1983 (decision 1) | Done (2026-10-18): #2104, option (b); #1983 closed. |
 | PR 2. One loop helper with a steppable clock | Not started (2026-10-15). |
 | PR 3. Reconnect and foreground triggers | Not started (2026-10-15). |
 | PR 5. Subscribed folder counts (decision 3) | Not started (2026-10-15). |
@@ -87,7 +89,7 @@ One session, one Apple PR in CI at a time, in the order 1, 2, 3, 5, 4. PR 4 goes
 - (b) Guard `startWatching()` (`MessageListViewModel.swift:231-235`) with the banner's own rule, `UnsubscribedBannerPolicy` against `mailStore.counts.subscribedFolderPaths`, never `folder.isSubscribed` (`UnsubscribedBannerPolicy.swift:7-17`). Subscribing or unsubscribing the open folder starts or stops its watching; observe that in the model or the store, not in `MessageListView.swift`, whose re-appear branch (`:500-508`) a source-scan test pins. Tests in `MessageListFolderPollTests`: no poller for an unsubscribed folder; one starts on subscribe and stops on unsubscribe; the re-appear refresh still runs.
 - `Apple:` fragment under `changed`; PR body "Addresses #1983", so the soak verifies and closes it. Verify: CI; on the Mini (macOS), open Sent and read the banner (a), or send from that account with Sent open and see the copy appear only on pull (b). Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-18): #2104, as option (b): the code follows the banner. `folderIsKeptCurrent`, from `UnsubscribedBannerPolicy`, guards `startWatching`, and `updateWatching` applies it again when the subscribed set changes; the banner text is unchanged. Triage had picked neither option; the fixer took (b) on the maintainer's standing rule that subscribed means proactive, and the maintainer merged it. The observer is an `.onChange` in `MessageListView.swift`, which this item said to avoid; the tests are in `MessageListUnsubscribedPollingTests`. #1983 is closed.
 
 **PR 2. One loop helper with a steppable clock.** `no-changelog`.
 - A small `@MainActor` helper in `Shared/Primitives/` (the session names it) that runs a body every interval, with `now` and `sleep` injected the way `FolderPollTiming` injects them (`FolderPollers.swift:41-50`), and ends when cancelled or when its owner is gone (`guard let self else { return }`, as `FolderPoller.swift:142-147` does). Move both `SessionPollers` loops onto it. Keep `feedRefreshTask` an internal settable `Task<Void, Never>?` that the stop call cancels (three suites assign it), and keep `inboxBadgeTask` `private(set)` and readable, as today.

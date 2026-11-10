@@ -21,20 +21,22 @@ Sources: every `#if` line in `apple/CabalmailUI/`, `apple/Cabalmail/` and `apple
 
 ## Progress
 
-This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it. Block counts are the lint's at `50e6022` (141 in all).
+This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it. Block counts are the lint's at `50e6022` (141 in all) unless a row says otherwise; at `5a4fa701c` (2026-11-09) the lint counts 129, in 53 files.
+
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
 
 | Work item | Status |
 |---|---|
-| FU-1: Dead and redundant gates | Not started (2026-10-15). 18 blocks. |
+| FU-1: Dead and redundant gates | Partly done (2026-10-31): 15 of 18 blocks left. `AttachmentStrip.swift`'s three moved into `Platform/` with #2292. The rest not started. |
 | FU-2: Small Platform/ adapters | Not started (2026-10-15). 15 blocks. |
-| FU-3: Contacts and calendar sheets | Not started (2026-10-15). 7 blocks. |
+| FU-3: Contacts and calendar sheets | Partly done (2026-10-31): 4 of 7 blocks left. `AttachmentStrip.swift`'s three moved into `Platform/` with #2292. The Contacts editor's four not started. |
 | FU-4: Private-window link handoff | Not started (2026-10-15). 5 blocks, plus `HTMLBodyView.swift:173` in an exempt wrapper file. |
 | FU-5: Compose window close gate | Not started (2026-10-15). 9 blocks. |
 | FU-6: Photo-library attach capability | Not started (2026-10-15). 7 blocks. |
 | FU-7: Push scope on visionOS | Not started (2026-10-15). 6 blocks. |
 | FU-8: Mac residency settings | Not started (2026-10-15). 8 blocks. |
 | FU-9: List selection input | Not started (2026-10-15). 5 blocks. |
-| FU-10: Sign-in chrome | Not started (2026-10-15). 6 blocks. |
+| FU-10: Sign-in chrome | Not started (2026-10-15). 6 blocks, now 4 in `SignInView.swift` and 2 in `Session/MfaChallengeForm.swift` (#2152). |
 | FU-11: List primary-toolbar twins | Not started (2026-10-15). 2 blocks. |
 | FU-12: Reader action bar on ShellLayout | Not started (2026-10-15). 15 blocks. |
 | FU-13: Title-switch host | Not started (2026-10-15). 5 blocks. |
@@ -42,7 +44,7 @@ This table and the **Status:** line under each work item are updated in the same
 | FU-15: Sheet chrome | Not started (2026-10-15). 12 blocks: 6 in the four simple sheets and `MacSheetForm.swift`, 6 in `SearchFiltersSheet` and `NewAddressSheet`. |
 | FU-16: One compose body | Not started (2026-10-15). 6 blocks. |
 | FU-17: Rules list on macOS | Parked until Rules is next touched (2026-10-15). 1 block; its other block (:101, the Mac's inline Add row) went with #2017. |
-| FU-18: Trackpad swipe bridge | Not started (2026-10-15). 6 blocks (5 in part 1). |
+| FU-18: Trackpad swipe bridge | Part 1 done (2026-11-07) by #2339, which went further than planned: 0 of 6 blocks left, the pinned one included. Part 2 needs rethinking, since the drawn reveal is now the Mac's finger-swipe path too. |
 | FU-19: ToolbarVisibility adapter | Waits on dropping Xcode 26 (2026-10-15). 2 blocks. |
 
 ## Totals
@@ -124,7 +126,7 @@ The ratchet's lint counts 142 of the 143 follow-up blocks, spread over 55 files.
 
 ### FU-1: Dead and redundant gates
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-31): 15 of 18 blocks left. #2292 (the Duo's Message menu work) moved `AttachmentStrip.swift`'s three into `Platform/AttachmentPresentation.swift`; they moved, where this item would delete them. The other 15 are untouched.
 
 **Goal:** Delete gates whose content already compiles everywhere, or that guard an unused or redundant import. No new types.
 
@@ -225,7 +227,7 @@ The ratchet's lint counts 142 of the 143 follow-up blocks, spread over 55 files.
 
 ### FU-3: Contacts and calendar sheets
 
-**Status:** Not started (2026-10-15).
+**Status:** Partly done (2026-10-31): 4 of 7 blocks left. #2292 moved `AttachmentStrip.swift`'s three behind `presentsAttachments()`, `\.openAttachment` and `AttachmentOpenRoute` in `Platform/`. The Contacts editor's four (`MessageDetailView.swift` and its `+AddressMenu`) are not started; there is no `supportsContactEditor`.
 
 **Goal:** Present the Contacts editor and the calendar-invite sheet through adapters, so the reader and the attachment strip carry no Contacts/EventKitUI gates.
 
@@ -473,7 +475,7 @@ The ratchet's lint counts 142 of the 143 follow-up blocks, spread over 55 files.
 
 ### FU-10: Sign-in chrome
 
-**Status:** Not started (2026-10-15).
+**Status:** Not started (2026-10-15). #2152 (2026-10-20) moved two of the six blocks from `SignInView.swift` into `Session/MfaChallengeForm.swift`, so the `SignInView.swift:183` and `:223` entries below are now `MfaChallengeForm.swift:35` and `:73`.
 
 **Goal:** Move the Mac sign-in chrome and its button rows into Platform/ adapters, so SignInView carries no `#if`.
 
@@ -801,7 +803,7 @@ Requirement on 3.2: its shell selector keeps calling `SectionLayoutPolicy.layout
 
 ### FU-18: Trackpad swipe bridge
 
-**Status:** Not started (2026-10-15).
+**Status:** Part 1 done (2026-11-07) by #2339 (touch on the Mac), which went further than planned. It created `Platform/TrackpadSwipeRecognizer.swift` as described here, but removed all six gates behind `HostPlatform.drawsRowSwipeReveal`, including the `SwipeActionRow.swift` one this item kept pinned; both files are off the allowlist, and the scan now pins the capability gate. Part 2 needs rethinking: the drawn reveal is now also the Mac's finger-swipe path, so deleting the bridge once the iOS floor passes no longer applies as written.
 
 **Goal:** First, shrink the iPad trackpad swipe bridge's gates to the one UIKit type and move that type into Platform/. Later, delete the bridge once no supported iPadOS needs it.
 

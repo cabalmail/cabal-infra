@@ -14,10 +14,17 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
-| Decisions 1 to 9 | None answered (2026-10-15); 1 to 3 are needed before Stage A. |
-| Session 1: Stage A, unified flags (A0 to A4) | Not started (2026-10-15). |
+| Decisions 1 to 9 | 1 to 3 answered 2026-11-09, each with its default: sessions; the feed's Flag button follows the palette; Android legs in android-parity.md. 4 to 9 are asked in their phases. |
+| Session 1: Stage A, unified flags (A0 to A4) | Started (2026-11-09). |
+| A0: docs and decisions 1 to 3 | Merged (2026-11-09), in #2370 with A1. |
+| A1: server, the palette accepts `\Flagged` | Merged (2026-11-09), #2370. Deployed to stage and its acceptance passed there the same day; not yet in prod. |
+| A2: Kit model | Merged (2026-11-09), #2371. |
+| A3: rendering and Settings > Flags | Not started. Waits on gate G0: A1 in prod, feed-bulk-actions.md finished, ipad-layout-and-keyboard.md PRs A, C and F merged. |
+| A4: affordances and user docs | Not started. |
 | Session 2: Phase 2, custom flags on feed items (B2.1 to B2.4) | Not started (2026-10-15). |
 | Session 3: Phase 4, feed rules (B4.1 to B4.3) | Not started (2026-10-15). |
 | Session 4: Phase 5 structure, then Phase 6 (B5.1, B6.1) | Not started (2026-10-15). |
@@ -33,8 +40,11 @@ This table and the **Status:** line under each work item are updated in the same
 ### Answer now (before Stage A)
 
 1. **Sessions or a project for this work?** **Sessions (recommended)**: Stage A now as one session, then one session per cross-media phase, each opened when its gate below clears. Project: one coordinator for Phases 2 to 6 with a server thread a phase ahead; worth it only if you want Phases 2 and 4 to run back to back. Default: sessions.
+   - **Answered 2026-11-09: Sessions.**
 2. **The feed's Flag button after unified flags: Follows the palette or Fixed?** **Follows the palette (recommended)**: the feed's existing flag (stored as `is_favorite`) takes the name and colour of the palette's Flagged entry and hides when that entry is disabled; once Phase 2 gives feed items custom flags, the feed swipe and ⇧⌘8 toggle the default flag, as mail's do. Fixed: the feed keeps a "Flagged" toggle whatever the palette says. Neither changes the server. Default: Follows the palette.
+   - **Answered 2026-11-09: Follows the palette.** `unified-flags-plan.md` decisions 4 and 6 now say so.
 3. **Android legs: android-parity.md or here?** **android-parity.md (recommended)**: each Android leg runs as one short session after its Apple leg is promoted (android-parity.md decision 6), so Android runs about a release behind. This changes the cross-media plan's rule that "Apple and Android are the reference clients and ship together per phase" (`cross-media-ux-plan.md:52-53`). Your words, "leave it for now and revisit in another project that isn't dedicated to the Apple clients" (the maintainer, answering the sticky feed order plan's Android question with "Android: yes, with caveats..."), were about Android feed order; this extends them. Server changes stay additive, so shipped Android keeps working, and until its leg ships it shows an edited Flagged entry as one more custom flag. Here: each phase waits for its Android half. Default: android-parity.md.
+   - **Answered 2026-11-09: android-parity.md.** `unified-flags-plan.md` Phase 2 is the Apple Kit alone; its `android/kit` half and Phase 4 are android-parity.md leg L1. `cross-media-ux-plan.md` was already written to this default on 2026-10-20, so it needs no change.
 
 ### Due later (each asked again in its phase's scope doc)
 
@@ -89,7 +99,7 @@ In short: cross-media Phase 1 shipped but its plan still says "In review"; every
 - `MailMutationService.setFlag` (`Mail/Store/MailMutationService.swift:117`) takes any flag, so a keyword default flag needs no new write path. The feed reader's Flag button is one plain button in one toolbar slot (`FeedReaderToolbar.swift:72-80`; `FeedReaderToolbarLayout.swift:7`).
 
 **Server and storage facts.**
-- `set_preferences` allows only `cabal-flag-01..20` and at most 20 entries (`set_preferences/function.py:103, 152`), and rejects the whole `app` map on any invalid value (`:180-214`). Its palette validator has no unit tests; `test_set_preferences_app_map.py` covers filters, orders and swipes, and the suites run under stdlib `unittest` (`lint.yml:279`). `set_flag` already accepts `\Flagged` (`set_flag/function.py:51-54`).
+- Until A1 (#2370), `set_preferences` allows only `cabal-flag-01..20` and at most 20 entries, and its palette validator has no unit tests; A1 adds `\Flagged`, the cap of 21 and the tests (`FlagPalette` in `test_set_preferences_app_map.py`). It rejects the whole `app` map on any invalid value (`_validate_app`). The suites run under stdlib `unittest` (`lint.yml`, `unittest-shared`). `set_flag` already accepts `\Flagged` (`_check_keyword` in `set_flag/function.py`).
 - `rss_set_item_state` writes `is_read` and `is_favorite` only. An entry with neither returns `('', {})` and is skipped, and the call still answers 200 (`rss_set_item_state/function.py:34-40, 55-82`).
 - `search_envelopes` searches every subscribed folder but Trash when `folder` is omitted and accepts `flagged=1`, with no keyword criterion (`search_envelopes/function.py:9-13, 151-188`).
 - `set_rules` rejects unknown rule keys (`set_rules/function.py:234-236`) and writes only `rules`, `version` and `updatedAt` (`:317-323`). The compiler reads only `rules` (`docker/shared/compile-user-rules.py:615`).
@@ -114,11 +124,11 @@ In short: cross-media Phase 1 shipped but its plan still says "In review"; every
 
 ### Session 1: Stage A, unified flags (one release)
 
-**Status:** Not started (2026-10-15).
+**Status:** Started (2026-11-09). A0 and A1 merged together as #2370: the answers to decisions 1 to 3 arrived while A1 was open, so the docs rode with it. A1 is live on stage, where its acceptance passed, and waits for a promotion to reach prod. A2 merged as #2371. A3 and A4 have not started; A3 waits on gate G0, and the session stops here until it clears.
 
 Scope: `unified-flags-plan.md` Phases 1, 2, 3 and 5 on Apple and the server, plus the shared row parts 1.5 deferred. Android (its Phase 4) goes to android-parity.md leg L1 (decision 3).
 
-- **A0 Docs** (`no-changelog`). Fact errata and decisions 1 to 3 only, from the drift list below. Check that docs-and-bookkeeping.md PR 2 has marked cross-media Phase 1 shipped; do it here only if it has not.
+- **A0 Docs** (`no-changelog`). Fact corrections and decisions 1 to 3 only, from the drift list below. Check that docs-and-bookkeeping.md PR 2 has marked cross-media Phase 1 shipped; do it here only if it has not.
 - **A1 Server** (plain `added` fragment). `set_preferences`: `\Flagged` joins `FLAG_PALETTE_SLOTS`; the cap becomes 21, with a comment tying it to "20 keyword slots plus the system flag". These are the first `_validate_flag_palette` tests: in `lambda/api/_shared/tests/test_set_preferences_app_map.py` (stdlib `unittest`), the slot round-trips, 22 entries reject, `cabal-flag-00` still rejects. Pylint per CLAUDE.md. The edit also runs `linux.yml` (`linux/xtask/tests/support/mod.rs:26`); the key list does not change. It can merge now and ride the next release. Risk low.
 - **A2 Kit** (`no-changelog`). In `CabalmailKit/Settings/FlagPalette.swift`: `systemSlot`, `maxEntries` 21, `effective(_:)`, `defaultEntry(in:)`, `slots(in:)` in palette order including `\Flagged`, and the encode rule (write the entry only when edited or already on the wire). Tests in `FlagPaletteTests.swift` per `unified-flags-plan.md:276-280`. Risk low.
 - **A3 Rendering** (`Apple:` changed, "One flags list"). Merges only after A1 is in prod. New `UnreadDot` and `FlagDots` in `Shared/Chrome/`, used by the mail and feed rows; `\Flagged` drawn as a palette-coloured dot and chip; the reader flag button in the default flag's colour; Settings > Flags lists the system entry with rename, recolour, disable and "Reset to default", and it joins Move Up and Move Down (every platform) and edit-mode drag (iOS and visionOS) (`FlagPaletteSettingsView.swift:10-12`). The feed row's dot comes from `is_favorite` (decision 2). `MessageListView+Rows.swift` has 586 raw lines and about 400 that SwiftLint counts, under the 500 warning. App-layer tests for the row inputs. Risk medium.
@@ -135,6 +145,8 @@ Release: one. Promote waits for A4, so the badge never ships without the retarge
 6. `:52-53`: decision 3 (Android legs ship separately).
 7. `unified-flags-plan.md:169-171, 349-352`: feed favourites have been flags since 1.22.0 and draw mail's glyph and colour (`FeedItemListView.swift:337-341`). Record decision 2.
 8. `unified-flags-plan.md:162-167, 300`: on Apple the mark is `flag.fill`, not a star; `AppState.requestToggleFlagged` is now `WindowCommand.toggleFlagged`; client PRs merge after Phase 1 is in prod, not only "live on stage" (`:235, 258`).
+
+> **Done (2026-11-09):** Items 7 and 8 went into `unified-flags-plan.md` as in-place rewrites in #2370, for the same reason the erratum below gives for items 1 to 6: that plan still has phases to ship.
 
 > **Erratum (2026-10-20):** Items 1 to 6, and Phase 1's status, were folded into `cross-media-ux-plan.md` on 2026-10-20 as in-place rewrites against `stage` at d6d36148, not as dated errata: that plan still has phases to ship, and such a plan is corrected in place. It now writes each open decision to its default and lists them under "Open decisions". A0 is left with items 7 and 8 and recording decisions 1 to 3; where an answer differs from the default, A0 rewrites the affected text of the cross-media plan in place.
 

@@ -8,7 +8,27 @@ Written 2026-10-13 at the close of the Cabalmail Client Architecture project. Th
 
 > **Erratum (2026-10-15):** By 2026-10-15 `stage` had also gained #2051, hardening PRs 1, 6, 2 and 3 (#2053, #2054, #2056, #2057) and dependabot bumps #2044 to #2048, and `main` had released 1.31.1 and 1.31.2. The hardening PRs change the hardening plan's status and the `HTMLBodyView.swift` call below; see "Where things stand".
 
-## Where things stand (2026-10-16)
+## Where things stand (2026-11-09)
+
+Checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub. Each plan's Progress table is the detailed record; this is the summary. Most of the bug backlog was cleared issue by issue through the fixer pipeline, not as the plans' sessions, so several rows read "partly done": the issue is closed and a piece of the planned PR did not land.
+
+- **Finished.** hardening-web-and-writes.md: both sessions, released by 1.32.0 (2026-10-18); #1911 is closed.
+- **Duo.** duo-support.md Session 1 is complete, and Session 2's builds merged ahead of the device (#2279 to #2297). The device pass waits for the maintainer's Duo, back-ordered until December 2026. Decision 9 was answered yes; the one-tree merge is Session 3, not started.
+- **mail-correctness.md.** PRs 3 and 5 done (#2119, #2112). PRs 1 and 2 partly done: #1990 and #2037 are closed (#2164, #2189), without the `RFC822` guard and the reset route. PR 4 (#1973, still open) and PR 6 not started. #2050 was fixed by #2183.
+- **shared-load-error-state.md.** Session A: A1 and A8 done (#2094, #2158); A2 and A3 partly done (#2099, #2095, #2100, #2226), with all five issues closed. A4 to A7 and Session B not started.
+- **ipad-layout-and-keyboard.md.** PR A mostly landed; PRs B, E and H done (#2228, #2091, #2212); PR G dropped with #1929. PRs C, D and F not started; their issues (#2024, #2026, #2027, #2004, #2014) are open.
+- **multi-window-and-restore.md.** R1a, W1, W3 and W4 done (#2166, #2195, #2203, #2140). R2 and R3 dropped and W5 closed without a fix, all three as not planned. R1b, R4, W2 and the rest of R5 not started.
+- **sqlite-mail-store.md.** Phase 0's three bugs and the not-deleted count landed as standalone fixes (#2092, #2117, #2118, #2161); PR 0.1, the SQLite foundation, is not started. #1836 (PR 2.5) was fixed ahead of Phase 2. Phases 1 to 5 are otherwise not started.
+- **android-parity.md.** PRs 2, 4, 5, 6 and 7 done (#2096, #2097, #2190 with #2192, #2101, #2168). PR 1, the twin of #1911, is still not started: the Android feed reader loads with JavaScript on. PRs 9 and 10 not started.
+- **platform-conditionals.md.** Both Rules PRs done (#2168, #2197). The checker counts 129 blocks in 53 files, against 141 in 55; FU-18's part 1 went with #2339, and the rest of the mechanical tranche is not started.
+- **swift6-and-strict-checking.md.** A2 and A3 done; A1 and A4 partly done (#2122, #2129, #2130, #2132, #2167); #1841 and #1842 are closed. A0 and Session B not started.
+- **Smaller moves.** feed-bulk-actions.md PR A done (#2155). refresh-scheduling.md PR 1 done as option (b) (#2104). test-debt.md A1 and A2 done (#2209; #2159, #2175, #2176). apple-ci-and-build-config.md PRs B and C partly done (#2196, #2218, #2213); `apple-gate` is still not a required check. mail-navigation-refactors.md PRs 3a and 3b partly done under other names, by duo-support.md's PR 7b (#2256).
+- **Not started.** account-isolation.md, live-verification.md, detached-reader-window.md, flags-and-cross-media.md and kit-split.md. In docs-and-bookkeeping.md, PRs 1 and 3 and the issue bookkeeping: #1912, #1915, #1970, #1995 and #1996 are still open, and the 1.31.0 iPad keys paragraph, now at `CHANGELOG.md:1493-1494`, is still uncorrected.
+- **Still open, with recommendations:** SQLite decision 7.
+
+## Where things stood (2026-10-16)
+
+The record as of 2026-10-16, kept as written; the section above replaces it.
 
 - **Released since the plans were written.** 1.31.1 (PR #2052, 2026-10-13) shipped #2049 (the Lambda API accepts IMAP lines up to 10 MB, so a folder of about 140,000 messages lists again) and #2051 (certificate renewal runs daily). 1.31.2 (PR #2055, dated 2026-10-14) shipped hardening PR 1 (#2053, `5eb7284`, "Apple: composer keeps only formatting from content it did not write") and hardening PR 6 (#2054, `c467789`, "API: /new folds case and answers clearly for an existing address").
 - **Hardening Session A is under way.** Merged to `stage` and not yet released: PR 2 (#2056, `5046716`, "Apple: feed reader mode runs no script from the article", the fix for #1911) and PR 3 (#2057, `f078467`, "Apple: reader bridges run in the app's own script world"), plus dependabot bumps #2044 to #2048; `stage` is at `5a56ce2`. #1911 is still open; it closes after a reader check on the Mini and your check of the stage TestFlight build on iPhone. PR 6's stage proof waits on you running a proof script on the Mini as test accounts 2 and 3, the two that the rig's credential helper serves. If Session A does not finish these, the plan's "Session A remainder" brief picks them up. Session A recorded decision 1 as private (2026-10-13) and took decisions 2, 3, 6 and 7 on their recommended answers. PR 3 extracted nothing from `HTMLBodyView.swift` (see the erratum under "Calls made here"). Session B (PRs 4 and 5) has not started, and neither has android-parity.md PR 1, the Android twin of #1911 that the hardening plan wanted in PR 2's release.
@@ -117,12 +137,16 @@ Each plan's Depends and Unblocks lines are the detailed record.
 
   > **Erratum (2026-10-15):** Hardening PR 3 merged to `stage` as #2057 (`f078467`) without the extraction. It keeps `HTMLBodyView.swift` code-line-neutral (one-for-one line changes; `apple/.swiftlint.yml` sets `ignore_comment_only_lines: true`) and extracts no type, so the file stays at its 500-line `file_length` cap. The extraction falls to the next PR that adds a code line there: platform-conditionals.md Session 1 PR 6.
 
+  > **Erratum (2026-11-09):** #2186 (2026-10-22, "Apple: HTML message and article text follows Dynamic Type") made the extraction instead, moving `RemoteContentBlocker` and `ReaderTextScale` into their own files. Platform-conditionals Session 1 PR 6 no longer has to.
+
 - **The Android twin of #1911 has no coordinator,** because Android work ran outside the rearchitecture project. Whoever runs hardening Session A also opens android-parity.md PR 1, which is one small Android-only PR, so one thread owns the pairing. If it isn't ready, the Apple fix ships without it.
 - **Shared rigs and CI.** The Studio has one screen and the only Duo simulator, and nine plans want it. The Mini is shared with your tester agent and the Android emulator. Each plan says to post before taking a screen. Until the Duo ships, the Duo work has first claim on the Studio and on the macOS runners. Nothing enforces either rule. They are agreements.
 
   > **Erratum (2026-10-16):** Posting before taking a screen worked because the rearchitecture's sessions shared threads. A session started from this repo cannot see other sessions, so it tells you instead, as `00-working-agreements.md` "Working from the repo" says.
 
 - **Still open, with recommendations:** duo-support.md Decision 9 (one view tree or two shells; a spike first, recommended) and SQLite decision 7 (do SQLite before the Kit split; recommended). apple-ci decision 6 (retire `lint.yml`'s macOS swift job) was answered yes on 2026-10-25 and is done: the platform-conditionals checker runs in an Ubuntu `lint.yml` job and in `apple.yml`, and SwiftLint in `apple.yml` only. test-debt's ratchet step and platform-conditionals' docs fix take the decision-6-yes wording of their plans.
+
+  > **Erratum (2026-11-09):** duo-support.md Decision 9 is answered: a trimmed spike ran in Session 1 and answered yes (2026-10-26), and the merge was taken as Session 3 (2026-10-27). SQLite decision 7 is still open.
 
 ## Not planned, recorded so they aren't lost
 

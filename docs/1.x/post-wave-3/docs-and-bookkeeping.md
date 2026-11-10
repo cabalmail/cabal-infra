@@ -16,11 +16,13 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
 | Decisions | 3 and 4 answered 2026-10-15 (see "Decisions for the maintainer"); 1 and 2 open. |
 | PR 1. Released notes and the API rule | Not started (2026-10-15). |
-| PR 2. Apple docs and the catalogue | Partly done (2026-10-15): the catalogue and the folder index came in with the change that added `docs/1.x/post-wave-3/`. The rest is not started. |
+| PR 2. Apple docs and the catalogue | Partly done (2026-10-21): the catalogue and the folder index came in with the change that added `docs/1.x/post-wave-3/`, and the cross-media plan update is done (#2163). The rest is not started, bar two `docs/apple.md` sites fixed in passing. |
 | PR 3. Stale comments | Not started (2026-10-15). |
 | Issue bookkeeping | Not started (2026-10-15). |
 | The maintainer's checklist | Not started (2026-10-15). |
@@ -128,7 +130,7 @@ If a release PR is open, every merge to `stage` re-runs its whole suite. In that
 - After the merge, if decision 1 is Yes, run `gh release edit 1.31.0 --notes-file` with the output of `bash .github/scripts/changelog-section.sh 1.31.0` from `stage`. The 1.31.0 TestFlight "What to Test" text was set per build at upload; leave it.
 - Check: run `changelog-section.sh 1.31.0` and read the rendered diff. Risk: none. The tooling reads only the top version header.
 
-**Status:** Not started (2026-10-15). The 1.31.0 iPad keys paragraph is still uncorrected, now at `CHANGELOG.md:85-86`.
+**Status:** Not started (2026-10-15). The 1.31.0 iPad keys paragraph is still uncorrected (2026-11-09), now at `CHANGELOG.md:1493-1494`. The API rule is in no repo doc, and `00-working-agreements.md` no longer carries it either: the copy that came into the repo (#2058) has no endpoint rule, so it survives only where this plan and sqlite-mail-store.md quote it.
 
 **PR 2. Apple docs and the catalogue (docs only).**
 - `docs/apple.md`: fix the six drift sites above. Write the Settings list from the `Settings/` code. Replace :1449-1456 with two sentences that point to the shells in the folder guide. Record the three merged defaults where a section fits. Link the catalogue from "Platform conditionals".
@@ -154,7 +156,7 @@ If a release PR is open, every merge to `stage` re-runs its whole suite. In that
 - Optional, last: update the "In review" rows in `color-tokens-plan.md` (:3, :19), `resume-session-plan.md` (:109, :188, :250) and `rss-implementation-plan.md` (:30, :1336, :1432, :1467, :1668), but only where a released `CHANGELOG.md` section names that work. List the rest in the PR body.
 - Check: read each changed section rendered on GitHub. Grep the diff for the maintainer's first name, personal names, `/Users/`, production addresses, account names and hostnames. Risk: low.
 
-**Status:** Partly done (2026-10-15). The catalogue and the folder index came in with the change that added `docs/1.x/post-wave-3/` (see the errata above). The `docs/apple.md` fixes, the catalogue links from `docs/apple.md`, `CLAUDE.md` and the allowlist header, the cross-media plan update and the optional "In review" updates are not started.
+**Status:** Partly done (2026-10-21). The catalogue and the folder index came in with the change that added `docs/1.x/post-wave-3/` (see the errata above), and the cross-media plan update is done (#2163, brought up to 1.44 by #2360). Two of the six `docs/apple.md` sites were fixed in passing: `Compose/WebAssets/` by #2053 and the outbox sentence by #2072. Not started: the other four `docs/apple.md` fixes, the catalogue links from `docs/apple.md`, `CLAUDE.md` and the allowlist header, and the optional "In review" updates.
 
 **PR 3. Stale comments (Apple sources, `no-changelog`).**
 - Scope: the comment sites listed under "Where things stand". For `RssSyncEngine`, list only the triggers that exist when the PR is written. If refresh-scheduling.md PR 3 has merged, "reconnect" stays.

@@ -14,20 +14,22 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 |---|---|
-| Decisions 1 to 6 | Unanswered (2026-10-15) |
-| Session 1, R1a. #2030, the place of a list picked after launch | Not started (2026-10-15) |
-| Session 1, R3. #2035, the window in front on iPad | Not started (2026-10-15) |
-| Session 1, R1b. #2030, a stale stored route after a foreground terminate | Not started (2026-10-15) |
-| Session 1, R2. #2042, the Mac quit hook | Not started (2026-10-15) |
+| Decisions 1 to 6 | 4 is moot: #2042 was closed as not planned and R2 dropped. 3 has no explicit answer, but #2203 shipped its default (per window) and the maintainer closed #2039 with "Works" (2026-10-24). 1, 2, 5 and 6 unanswered (2026-11-09) |
+| Session 1, R1a. #2030, the place of a list picked after launch | Done (2026-10-21): PR #2166; #2030 closed |
+| Session 1, R3. #2035, the window in front on iPad | Dropped (2026-10-24): #2035 closed as not planned; no spike, no PR |
+| Session 1, R1b. #2030, a stale stored route after a foreground terminate | Not started (2026-11-09). #2030 was closed on R1a alone; this symptom still reproduced on 2026-10-21 and has no issue of its own |
+| Session 1, R2. #2042, the Mac quit hook | Dropped (2026-10-25): #2042 closed as not planned; no PR |
 | Session 1, R4. #2028, the warm notification | Not started (2026-10-15) |
 | Session 1, R5. Compose routing residue, decisions 1 and 5 | Partly done (2026-10-28): the first bullet (a mailto into an open composer) came with duo-support.md's PR 7b; the rest not started |
-| Session 2, W1. #2036, iPad window titles | Done (2026-10-22) |
+| Session 2, W1. #2036, iPad window titles | Done (2026-10-22): PR #2195 |
 | Session 2, W2. Mac File > New Window (decision 2), and two stale comments | Not started (2026-10-15) |
-| Session 2, W3. #2039, tree expansion (decision 3) | Per window, done (2026-10-23) |
-| Session 2, W4. #2016, the reader's toolbar stand-ins | Not started (2026-10-15) |
-| Session 2, W5. #2041, one attempt | Not started (2026-10-15) |
+| Session 2, W3. #2039, tree expansion (decision 3) | Per window, done (2026-10-23): PR #2203 |
+| Session 2, W4. #2016, the reader's toolbar stand-ins | Done (2026-10-19): PR #2140; #2016 closed |
+| Session 2, W5. #2041, one attempt | Closed without a fix (2026-10-25): the fixer found no clean fix, and the maintainer closed #2041 as not planned |
 | Session 2, R6 (decision 6 Now only). Placement before the refresh | Not started (2026-10-15); built only if decision 6 is Now |
 
 > **Duo spec (2026-10-13):** This plan was written before the maintainer's Oct 7 Duo spec (the Claude Doc linked in duo-support.md) had been read in the rearchitecture project. duo-support.md now follows it; where this plan's text disagrees with the points below, the points win. In the spec, "fold" means book or laptop pose, which changes no size class and swaps no shell; what this plan calls folding or unfolding the Duo is closing or opening it.
@@ -102,7 +104,7 @@ Wave 3 made restore, links and compose per window (3.3 B to G2, PRs #2003 to #20
 - Verify: CI; Mini iPhone simulator, #2030's steps with a background first (pick Sent, scroll, wait, terminate, relaunch), 4 of 4; the launch-folder control still restores. "Refs #2030".
 - Risk: low to medium.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-21): PR #2166. The landing was refused on `Task.isCancelled` when the list mounted twice; the fix is in `ListPlaceTracking.swift` alone. The tester's retest passed 2 of 2 on the iPhone 17 simulator and #2030 is closed. A follow-up, #2173 (a short list reopens at its end), was closed as not planned on 2026-10-22.
 
 **R3. #2035, the window in front on iPad.** Before R1b, because it changes which window `WindowPlaceKeeper` flags `wasLastUsed`.
 - Spike first, about an hour on the Mini's iPad simulator: log `UIScene.didActivateNotification` and `UIWindow.didBecomeKeyNotification` per main scene while swapping full-screen windows through the app switcher and the Window menu. If neither fires on a swap, comment on #2035 with the log and stop R3.
@@ -112,7 +114,7 @@ Wave 3 made restore, links and compose per window (3.3 B to G2, PRs #2003 to #20
 - Verify: #2035's steps and its mirror, both switch routes; then a `xcrun simctl push` notification aimed at no window, and which window writes the resume session. visionOS: CI build only, behaviour not checked.
 - Risk: low to medium. If iPadOS reports a compose scene as key, the rule must skip it, or a mailto would return to the composer.
 
-**Status:** Not started (2026-10-15).
+**Status:** Dropped (2026-10-24): the maintainer closed #2035 as not planned ("Not worth fixing"). The tester had no route to a second iPad window to verify it. No spike, no PR.
 
 **R1b. #2030, a stale stored route after a foreground terminate.** Its own PR, so it can be reverted alone.
 - Scope: `StoredRoute` gains an optional `savedAt`. For the window flagged `wasLastUsed`, a stored route older than the resume session's `savedAt` (set at `NavStateCoordinator+Session.swift:231`) is ignored, so the window starts as one with no stored route, on the session's folder and message (inferred that this is today's no-stored-route landing, the #1555 rule; confirm in tests). The rule sits beside `placeToReopen` and is applied in the convenience init, so the navigator's landing order is untouched. `store()`'s equality check must ignore `savedAt`, or every store becomes a write that re-renders the window. Old data decodes with `savedAt` nil and behaves as today.
@@ -121,7 +123,7 @@ Wave 3 made restore, links and compose per window (3.3 B to G2, PRs #2003 to #20
 - Verify: #2030's foreground-terminate case on the iPhone simulator; on iPad, two windows, an Xcode stop and a relaunch, each window back where it was (the Wave 3 TestFlight checklist's "Two iPad windows come back after an Xcode stop", under "Background from the rearchitecture"). "Fixes #2030".
 - Risk: medium; it changes which place wins on a relaunch.
 
-**Status:** Not started (2026-10-15).
+**Status:** Not started (2026-11-09). #2030 was closed by R1a (PR #2166), which left this half out by name. The fixer and the tester both still reproduced the foreground-terminate symptom on 2026-10-21, and it has no issue of its own.
 
 **R2. #2042, the Mac quit hook.**
 - Measure first, before production code: on a throwaway branch, does a scene-storage write made while the app holds `.terminateLater` reach the restored window? Use #2042's steps with `NSQuitAlwaysKeepsWindows` on. If not, decision 4 decides (No: comment on #2042 and stop).
@@ -131,7 +133,7 @@ Wave 3 made restore, links and compose per window (3.3 B to G2, PRs #2003 to #20
 - Verify: signed Mac build on the Mini, #2042's steps 3 of 3, and its controls (default setting; clicking B first). `kill -TERM` stays out of scope.
 - Risk: low to medium; AppKit's restoration timing, settled by the measurement.
 
-**Status:** Not started (2026-10-15).
+**Status:** Dropped (2026-10-25): the maintainer closed #2042 as not planned. The tester reproduced it on 2026-10-24; no measurement was taken and no PR opened.
 
 **R4. #2028, the warm notification.**
 - Scope: a restore whose message is not among the loaded rows waits for that list's next refresh, then retries once; it is dropped on a folder change, a newer park or a second miss. Keep the consume at `MessageListView.swift:608` one-shot so the characterization row stays green: on a miss, the view hands the restore back to `WindowRestores` in a separate slot that the `onChange` at :582-584 does not watch, awaits one refresh, then asks for it back. The keep, retry and drop rules live in `WindowRestores`; in the view only the miss branch after :613 changes. Do not add or quote `applyPendingRestoreWhenReady()`.
@@ -181,7 +183,7 @@ Wave 3 made restore, links and compose per window (3.3 B to G2, PRs #2003 to #20
 - Verify: Mini, two Mac windows, #2039's steps (menu, in-sidebar buttons, a chevron); two iPad windows.
 - Risk: low.
 
-**Status:** Done, per window (2026-10-23), PR #PRNUM. Decision 3 was still
+**Status:** Done, per window (2026-10-23), PR #2203. Decision 3 was still
 unanswered, so the item took the plan's default. Both keys moved into a
 `DefaultsKey` enum (`CabalmailUI/Shared/Primitives/DefaultsKey.swift`), which
 closes audit 06 F16; the per-window rule is `SidebarCollapse`
@@ -207,13 +209,13 @@ nested mail folder on the test account.
 - Verify: Mini screenshots of the Mac toolbar, empty and opened, mail and feeds.
 - Risk: low. platform-conditionals.md S1 PR 3 (FU-1) edits the same two files: whichever is ready first goes first, never both open.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-19): PR #2140, as scoped. Each stand-in takes its live twin's control shape through `ReaderToolbarLayout.macControlShape`; the "spacing" turned out to be the chevron's width. #2016 is closed. #2207 (#2144) and #2254 followed in the same files.
 
 **W5. #2041, one attempt.**
 - Scope: try to keep the `.inspector` (`Shell/WideMail.swift:433`) below the window tab bar. `ToolbarVisibilitySourceScanTests` reads this file. Files: `WideMail.swift`.
 - Verify: Mini with the tab bar shown, full and half-width windows. If there is no clean fix, comment on #2041 and leave it open; it is cosmetic and predates Wave 3.
 
-**Status:** Not started (2026-10-15).
+**Status:** Closed without a fix (2026-10-25). The fixer found no clean fix (its comment on #2041, 2026-10-24), and the maintainer closed #2041 as not planned: "Can't reproduce on my laptop, and cosmetic anyway so not worth the effort."
 
 **R6 (decision 6 Now only). Placement before the refresh, last in session 2.**
 - Scope: a new `ListPlaceTracker` entry point lands the anchor once the saved rows are in place (`hydrateFromCache`) and the list has appeared, if the anchor's Message-ID is among them. It does not set `didLand`, so the existing `land` (called only from `MessageListView.swift:597`, behind the pinned guard) still corrects once after the refresh; the user's scroll wins. The message restore and reader push still wait for both gates. No `MessageListViewModel*` change; `proxy.scrollTo(model.rowSlot(at:` stays at 3.
