@@ -38,6 +38,15 @@ extension MessageDetailViewModel {
         }
     }
 
+    /// The palette flags the reader shows on the message: the system flag
+    /// and the custom slots, from the optimistic state the toggles write,
+    /// so a chip follows a toggle without waiting for the server.
+    var shownFlags: Set<Flag> {
+        var flags = Set(keywordSlots.map(Flag.keyword))
+        if isFlagged { flags.insert(.flagged) }
+        return flags
+    }
+
     /// Flip the server's `\Flagged` bit. Optimistic update with revert-on-
     /// failure mirrors `setSeen(_:)`; the change reaches every list, so the
     /// row's flag indicator appears or disappears without a refresh.

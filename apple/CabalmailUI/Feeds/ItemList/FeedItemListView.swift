@@ -284,7 +284,8 @@ struct FeedItemListView: View {
     private func itemRow(_ item: RssItem, model: FeedItemListViewModel) -> some View {
         FeedItemRow(item: item,
                     feedName: model.subscription == nil ? model.feedName(for: item) : nil,
-                    isPending: model.pendingIds.contains(item.id))
+                    isPending: model.pendingIds.contains(item.id),
+                    palette: preferences.flagPalette)
                     .tag(item)
                     .accessibilityIdentifier("feed.item.\(item.id)")
                     .onAppear {
@@ -348,24 +349,25 @@ extension FeedItemListView {
 
 /// One item row: unread dot, title, the first line of the body (when it
 /// has one), feed name (in multi-feed scopes), relative date, the flag
-/// mark, and a "queued" mark while a state change waits for the network.
+/// dot, and a "queued" mark while a state change waits for the network.
 struct FeedItemRow: View {
     let item: RssItem
     /// The feed's name, in multi-feed scopes; nil in a single feed's list.
     let feedName: String?
     let isPending: Bool
+    /// The user's stored flag palette, passed in like the mail row's.
+    let palette: [FlagPaletteEntry]
 
     var body: some View {
         // Cheap enough to derive per render: the scan stops at the first
         // line of prose, not the end of the body (see `HTMLText.firstLine`).
         let snippet = HTMLText.firstLine(from: item.bodyHtml)
         let title = item.title.isEmpty ? "Untitled" : item.title
+        // The item's flag is the system flag, so its mark is the mail
+        // row's: the same dot, in the palette entry's color and name.
+        let flagMarks = FlagDotMark.marks(isFlagged: item.isFavorite, palette: palette)
         HStack(alignment: .top, spacing: 10) {
-            Circle()
-                .fill(item.isRead ? Color.clear : ColorTokens.accentForestFg)
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
-                .accessibilityHidden(true)
+            UnreadDot(isUnread: !item.isRead)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .appFont(.body, weight: item.isRead ? .regular : .semibold)
@@ -385,6 +387,8 @@ struct FeedItemRow: View {
                             .lineLimit(1)
                     }
                     Text(FeedItemDate.relative(item.publishedAt))
+                    // Inline with the date, as on a mail row.
+                    FlagDots(marks: flagMarks)
                     if isPending {
                         Image(systemName: "clock.arrow.circlepath")
                             .accessibilityLabel("Change queued")
@@ -394,20 +398,28 @@ struct FeedItemRow: View {
                 .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            if item.isFavorite {
-                // The mail row's `\Flagged` indicator, glyph and tint.
-                Image(systemName: "flag.fill")
-                    .foregroundStyle(ColorTokens.flaggedFg)
-                    .accessibilityLabel("Flagged")
-            }
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            [item.isRead ? "" : "Unread", title, snippet, FeedItemDate.relative(item.publishedAt)]
-                .filter { !$0.isEmpty }
-                .joined(separator: ", ")
+            Self.accessibilityLabel(
+                isRead: item.isRead, title: title, snippet: snippet,
+                date: FeedItemDate.relative(item.publishedAt), flags: flagMarks.map(\.label)
+            )
         )
+    }
+}
+
+extension FeedItemRow {
+    /// What the row says of itself as one element: unread, then the title,
+    /// the first line, the date and the names of its flags. A pure function
+    /// of its arguments, so it does not take the view's main-actor isolation.
+    nonisolated static func accessibilityLabel(
+        isRead: Bool, title: String, snippet: String, date: String, flags: [String]
+    ) -> String {
+        ([isRead ? "" : "Unread", title, snippet, date] + flags)
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 }
 

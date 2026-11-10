@@ -31,17 +31,20 @@ struct FlagMenuRow: Equatable, Hashable, Identifiable {
 /// individual rows is not enough (measured: it changes nothing); the
 /// `Menu` itself is what has to be replaced.
 enum FlagMenuPolicy {
-    /// The rows the menu offers: every enabled palette entry, plus any
+    /// The rows the menu offers: every enabled keyword entry, plus any
     /// slot the message is already tagged with whose entry is disabled or
     /// deleted — those still need an untag affordance (the palette
     /// editor's delete confirmation promises tags stay removable). A
     /// deleted slot's surviving tag is labelled by slot id, having no
     /// palette entry to name it.
+    ///
+    /// The system flag's entry is never a row, stored or not: the control
+    /// this menu hangs from toggles that flag as its primary action.
     static func rows(
         palette: [FlagPaletteEntry],
         taggedSlots: Set<String>
     ) -> [FlagMenuRow] {
-        let offered = palette.filter(\.enabled)
+        let offered = FlagPalette.keywordEntries(in: palette).filter(\.enabled)
         let offeredSlots = Set(offered.map(\.slot))
         let stray = FlagPalette.slots.filter {
             taggedSlots.contains($0) && !offeredSlots.contains($0)

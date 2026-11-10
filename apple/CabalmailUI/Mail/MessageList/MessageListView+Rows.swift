@@ -274,7 +274,7 @@ extension MessageListView {
                 systemImage: envelope.flags.contains(.flagged) ? "flag.slash" : "flag"
             )
         }
-        if !model.flagPalette.filter(\.enabled).isEmpty {
+        if !offeredKeywordEntries(model).isEmpty {
             Menu {
                 keywordMenuItems(for: envelope, model: model)
             } label: {
@@ -285,15 +285,16 @@ extension MessageListView {
 
     /// The Flags submenu body: menu toggles so a tagged slot carries the
     /// native checkmark (same construct as the reader's mark-read option
-    /// menu). Only enabled palette entries are offered; a tag on a
+    /// menu). Only enabled keyword entries are offered; a tag on a
     /// disabled or deleted slot still shows in the row dots and clears
-    /// from the reader, keeping the palette editor's promises.
+    /// from the reader, keeping the palette editor's promises. The system
+    /// flag's entry is left out: the Flag / Unflag item above is its toggle.
     @ViewBuilder
     func keywordMenuItems(
         for envelope: Envelope,
         model: MessageListViewModel
     ) -> some View {
-        ForEach(model.flagPalette.filter(\.enabled)) { entry in
+        ForEach(offeredKeywordEntries(model)) { entry in
             Toggle(isOn: Binding(
                 get: { envelope.flags.contains(.keyword(entry.slot)) },
                 set: { _ in
@@ -369,6 +370,10 @@ extension MessageListView {
         Label("Delete Forever", systemImage: "trash.slash")
     }
 
+    private func offeredKeywordEntries(_ model: MessageListViewModel) -> [FlagPaletteEntry] {
+        FlagPalette.keywordEntries(in: model.flagPalette).filter(\.enabled)
+    }
+
     /// Archive affordance label inside the Archive folder, where archiving
     /// has nowhere to send the message and the action puts it back in the
     /// inbox instead. Shared by the row / selection context menus.
@@ -392,23 +397,13 @@ private struct MessageRow: View {
     let envelope: Envelope
     let isChecked: Bool
     let bulkMode: Bool
-    /// The user's custom-flag palette, for the keyword dots. Passed in by
+    /// The user's stored flag palette, for the flag dots. Passed in by
     /// the call sites (which hold the model) so the row never reaches into
     /// the preferences environment itself.
     let palette: [FlagPaletteEntry]
 
     @Environment(AppState.self) private var appState
     @State private var contactName: String?
-
-    /// The row's tagged slots, capped so the fixed-height indicator run
-    /// can never overflow however many tags a message carries.
-    private var keywordSlots: [String] {
-        Array(FlagPalette.slots(in: envelope.flags).prefix(4))
-    }
-
-    private func paletteEntry(for slot: String) -> FlagPaletteEntry? {
-        palette.first { $0.slot == slot }
-    }
 
     var body: some View {
         HStack(alignment: .top) {
@@ -418,10 +413,7 @@ private struct MessageRow: View {
                     .padding(.top, 2)
                     .accessibilityLabel(isChecked ? "Selected" : "Not selected")
             }
-            Circle()
-                .fill(unreadDotColor)
-                .frame(width: 8, height: 8)
-                .padding(.top, 6)
+            UnreadDot(isUnread: !envelope.flags.contains(.seen))
             // Sender avatar: the user's Contacts photo for the sender, else
             // the domain's BIMI logo, else a colored initials circle (same
             // precedence as the detail header, reusing `AvatarView`). The
@@ -473,23 +465,12 @@ private struct MessageRow: View {
                             .foregroundStyle(ColorTokens.dangerFg)
                             .accessibilityLabel("High importance")
                     }
-                    if envelope.flags.contains(.flagged) {
-                        Image(systemName: "flag.fill")
-                            .appFont(.caption)
-                            .foregroundStyle(ColorTokens.flaggedFg)
-                    }
-                    // Custom-flag dots (Phase 4): one color dot per tagged
-                    // palette slot, capped so the indicator run can never
-                    // push the row past its fixed height. A tag whose
-                    // palette entry was deleted renders gray.
-                    ForEach(keywordSlots, id: \.self) { slot in
-                        Circle()
-                            .fill(FlagPaletteColor.color(
-                                for: paletteEntry(for: slot)?.color ?? ""))
-                            .frame(width: 8, height: 8)
-                            .accessibilityLabel(
-                                paletteEntry(for: slot)?.label ?? slot)
-                    }
+                    // One color dot per flag the message carries, the
+                    // system flag included, in palette order and capped so
+                    // the indicator run can never push the row past its
+                    // fixed height. A tag whose palette entry was deleted
+                    // renders gray.
+                    FlagDots(marks: FlagDotMark.marks(for: envelope.flags, palette: palette))
                     Text(dateLabel)
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
@@ -504,15 +485,6 @@ private struct MessageRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: senderKey) { await hydrateContactName() }
-    }
-
-    // Read/unread indicator, painted in the brand forest green rather than
-    // the platform blue. The asset-catalog color is pinned explicitly rather
-    // than taken from `Color.accentColor`, which macOS repaints with the
-    // user's system accent whenever that isn't "multicolor" (same reasoning
-    // as `SidebarTreeRowLabel.iconStyle`).
-    private var unreadDotColor: Color {
-        envelope.flags.contains(.seen) ? .clear : ColorTokens.accentForestFg
     }
 
     /// The row's first line: `source -> destination`. The destination is the

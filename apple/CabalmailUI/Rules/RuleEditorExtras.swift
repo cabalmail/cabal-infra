@@ -14,7 +14,9 @@ struct RuleExtrasSection: View {
     /// model deliberately knows nothing about preferences.
     @Environment(Preferences.self) private var preferences
 
-    private var palette: [FlagPaletteEntry] { preferences.flagPalette }
+    /// Keyword entries only: a rule's `flags` list names keyword slots, and
+    /// the system flag is the `Flag` toggle above them.
+    private var palette: [FlagPaletteEntry] { FlagPalette.keywordEntries(in: preferences.flagPalette) }
 
     var body: some View {
         Section {

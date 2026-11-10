@@ -155,13 +155,14 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
     }
 
     /// The ends disable their item, and a move that can't happen writes
-    /// nothing, including once the entry is gone.
+    /// nothing, including once the entry is gone. The list's first row is
+    /// the system flag's entry, so that is the one that cannot move up.
     func testMovePastEitherEndOrOnceGoneIsANoOp() {
         let prefs = preferences([
             entry("cabal-flag-01", "Alpha"),
             entry("cabal-flag-02", "Beta"),
         ])
-        let first = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+        let first = FlagPaletteEntryBindings(preferences: prefs, slot: FlagPalette.systemSlot)
         let last = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-02")
         XCTAssertFalse(first.canMove(by: -1))
         XCTAssertTrue(first.canMove(by: 1))
@@ -179,6 +180,109 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
         last.move(by: -1)
         XCTAssertEqual(prefs.flagPalette.map(\.label), ["Alpha"])
         XCTAssertEqual(localChanges, 1, "only the delete should have written")
+    }
+
+    // MARK: - The system flag's entry
+
+    private var system: FlagPaletteEntry { FlagPalette.defaultSystemEntry }
+
+    private func systemBindings(_ prefs: Preferences) -> FlagPaletteEntryBindings {
+        FlagPaletteEntryBindings(preferences: prefs, slot: FlagPalette.systemSlot)
+    }
+
+    func testTheSystemEntryIsEditableBeforeItIsStored() {
+        let prefs = preferences([entry("cabal-flag-01", "Alpha")])
+        let bindings = systemBindings(prefs)
+        XCTAssertTrue(bindings.isSystemEntry)
+        XCTAssertEqual(bindings.entry, system)
+        XCTAssertEqual(bindings.label.wrappedValue, "Flagged")
+        XCTAssertFalse(bindings.canReset, "nothing stored, nothing to reset")
+        XCTAssertFalse(
+            FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01").isSystemEntry
+        )
+    }
+
+    func testEditingTheSystemEntryStoresItFirst() {
+        let prefs = preferences([entry("cabal-flag-01", "Alpha")])
+        let bindings = systemBindings(prefs)
+        bindings.label.wrappedValue = "Urgent"
+        bindings.set(\.color, to: "red")
+
+        XCTAssertEqual(prefs.flagPalette.map(\.slot), [FlagPalette.systemSlot, "cabal-flag-01"])
+        XCTAssertEqual(prefs.flagPalette[0].label, "Urgent")
+        XCTAssertEqual(prefs.flagPalette[0].color, "red")
+        XCTAssertTrue(bindings.canReset)
+    }
+
+    /// Editing some other flag is the common case, and must not put the
+    /// untouched system entry on the wire.
+    func testEditingAnotherFlagLeavesTheSystemEntryUnstored() {
+        let prefs = preferences([entry("cabal-flag-01", "Alpha"), entry("cabal-flag-02", "Beta")])
+        let alpha = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+        alpha.label.wrappedValue = "Renamed"
+        alpha.value(\.enabled, or: true).wrappedValue = false
+        FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-02").move(by: 1)
+
+        XCTAssertEqual(prefs.flagPalette.map(\.slot), ["cabal-flag-01", "cabal-flag-02"])
+        XCTAssertFalse(systemBindings(prefs).canReset)
+    }
+
+    /// Moving a flag above the system entry is an edit to the system
+    /// entry's place, so the entry is stored where it now sits.
+    func testMovingAFlagAboveTheSystemEntryStoresTheNewOrder() {
+        let prefs = preferences([entry("cabal-flag-01", "Alpha"), entry("cabal-flag-02", "Beta")])
+        let alpha = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+        XCTAssertTrue(alpha.canMove(by: -1))
+        alpha.move(by: -1)
+
+        XCTAssertEqual(
+            prefs.flagPalette.map(\.slot),
+            ["cabal-flag-01", FlagPalette.systemSlot, "cabal-flag-02"]
+        )
+        XCTAssertEqual(prefs.flagPalette[1], system)
+
+        // And the system entry moves like any other.
+        systemBindings(prefs).move(by: 1)
+        XCTAssertEqual(
+            prefs.flagPalette.map(\.slot),
+            ["cabal-flag-01", "cabal-flag-02", FlagPalette.systemSlot]
+        )
+    }
+
+    func testResetDropsTheStoredSystemEntryAndWritesOnce() {
+        let prefs = preferences([
+            entry("cabal-flag-01", "Alpha"),
+            entry(FlagPalette.systemSlot, "Urgent", color: "red", enabled: false),
+        ])
+        let bindings = systemBindings(prefs)
+        var localChanges = 0
+        prefs.onLocalChange = { localChanges += 1 }
+
+        bindings.reset()
+        XCTAssertEqual(prefs.flagPalette.map(\.slot), ["cabal-flag-01"])
+        XCTAssertEqual(bindings.entry, system, "the default entry takes over")
+        XCTAssertFalse(bindings.canMove(by: -1), "back in first place")
+        XCTAssertFalse(bindings.canReset)
+
+        bindings.reset()
+        XCTAssertEqual(localChanges, 1, "a second reset has nothing to write")
+    }
+
+    /// The system flag cannot be deleted: asked to, the entry resets, and
+    /// reset is not offered for any other flag.
+    func testDeleteOnTheSystemEntryResetsItAndResetOnAnotherDoesNothing() {
+        let prefs = preferences([
+            entry(FlagPalette.systemSlot, "Urgent"),
+            entry("cabal-flag-01", "Alpha"),
+        ])
+        systemBindings(prefs).delete()
+        XCTAssertEqual(prefs.flagPalette.map(\.slot), ["cabal-flag-01"])
+        XCTAssertNotNil(systemBindings(prefs).entry)
+
+        let alpha = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+        XCTAssertFalse(alpha.canReset)
+        alpha.reset()
+        XCTAssertEqual(prefs.flagPalette.map(\.label), ["Alpha"])
     }
 
     // MARK: - The delete has to be able to reach the server

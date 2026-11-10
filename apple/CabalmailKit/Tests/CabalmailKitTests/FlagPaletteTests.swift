@@ -130,6 +130,16 @@ final class FlagPaletteTests: XCTestCase {
         )
     }
 
+    func testKeywordEntriesLeaveOutTheSystemEntry() {
+        XCTAssertEqual(FlagPalette.keywordEntries(in: samplePalette()), samplePalette())
+        // Left out wherever it sits; the rest keep the palette's order.
+        let stored = [samplePalette()[1], system(label: "Urgent", color: "red"), samplePalette()[0]]
+        XCTAssertEqual(
+            FlagPalette.keywordEntries(in: stored).map(\.slot),
+            ["cabal-flag-02", "cabal-flag-01"]
+        )
+    }
+
     func testDefaultEntryIsTheFirstEnabledOne() {
         // Untouched palette: the system flag, as before the palette had it.
         XCTAssertEqual(FlagPalette.defaultEntry(in: []), system())
