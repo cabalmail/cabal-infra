@@ -4,11 +4,11 @@
 # module actually references.
 
 [versions]
-agp = "9.5.0"
+agp = "9.5.1"
 kotlin = "2.4.21"
 # KSP2 (2.3.x+) versions independently of Kotlin; check the KSP release notes for
 # the supported Kotlin range when bumping either.
-ksp = "2.3.12"
+ksp = "2.3.13"
 ktlint = "14.2.0"
 coreKtx = "1.19.1"
 lifecycle = "2.9.0"
