@@ -34,8 +34,10 @@ public struct MessageMenuCommands: Commands {
         // mirrors the two target rules the handlers themselves use.
         let availability = commands?.messageMenu ?? .none
         // ⌘T and ⌘⇧8 are also the Feeds menu's chords; only the section in
-        // front may hold them live (`SharedChordPolicy`).
-        let itemsLive = SharedChordPolicy.mailItemsLive(availability, activeSection: commands?.activeSection ?? .mail)
+        // front may hold them live, and only its menu declares ⌘⇧8 at all
+        // (`SharedChordPolicy`).
+        let section = commands?.activeSection ?? .mail
+        let itemsLive = SharedChordPolicy.mailItemsLive(availability, activeSection: section)
         CommandMenu("Message") {
             Button("Reply") { commands?.send(.reply) }
                 .keyboardShortcut("r", modifiers: .command)
@@ -56,7 +58,7 @@ public struct MessageMenuCommands: Commands {
             Button(commands?.mailFlag?.commandTitle ?? FlagToggle.idleCommandTitle) {
                 commands?.send(.toggleFlagged)
             }
-            .keyboardShortcut("8", modifiers: [.command, .shift])
+            .keyboardShortcut(SharedChordPolicy.flagChord(for: .mail, activeSection: section))
             .disabled(!itemsLive || commands?.mailFlag == nil)
             Button("Move to Folder…") { commands?.send(.moveSelection) }
                 .keyboardShortcut("m", modifiers: .command)
