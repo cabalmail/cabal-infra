@@ -4,8 +4,8 @@
 
 | Phase | Status |
 | --- | --- |
-| 1 -- Palette accepts the `\Flagged` slot | In review (2026-11-09), #2370 |
-| 2 -- Kit model: synthesis, default resolution | Not started |
+| 1 -- Palette accepts the `\Flagged` slot | Merged (2026-11-09), #2370; accepted on stage; not yet in prod |
+| 2 -- Kit model: synthesis, default resolution | Apple Kit in review (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
 | 3 -- Apple client | Not started |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
 | 5 -- Documentation | Not started |
@@ -259,8 +259,13 @@ Old-build interactions, enumerated:
 
 ## Phase 1 -- Palette accepts the `\Flagged` slot
 
-**Status:** In review (2026-11-09), #2370. The acceptance below is
-checked on stage once the PR has merged and `app.yml` has deployed it.
+**Status:** Merged (2026-11-09), #2370, and deployed to stage the same
+day. The acceptance below was run against the stage API then and
+passed: the palette was stored and returned canonically, a 22-entry
+palette and `cabal-flag-00` each got a 400 and left the stored palette
+alone, and `set_flag` set and cleared `\Flagged` on a message as before.
+It reaches prod with the next promotion; Phase 3 waits for that
+(decision 8).
 
 `lambda/api/set_preferences/function.py`: add `\Flagged` to
 `FLAG_PALETTE_SLOTS`; raise the entry cap from 20 to 21 with a comment
@@ -277,9 +282,14 @@ returns it canonically; a 22-entry palette 400s; `set_flag` with
 
 ## Phase 2 -- Kit model: synthesis, default resolution
 
-**Status:** Not started. Merges after Phase 1 is live on stage; it adds
-the model and no way to edit the system entry, so it does not need
-Phase 1 in prod.
+**Status:** The `CabalmailKit` half is in review (2026-11-09), #2371.
+It could merge once Phase 1 was live on stage, which it is; it adds the
+model and no way to edit the system entry, so it does not need Phase 1
+in prod. As built, the encode rule is `FlagPalette.stored(afterEditing:from:)`
+with `resettingSystemEntry(in:)` for reset, and palette-ordered slots
+are a second form, `slots(in:palette:)`: the existing `slots(in:)`
+keeps its keyword-only result until Phase 3 moves the row and the
+reader over, so that no flag is drawn twice in between.
 
 `CabalmailKit` here; `android/kit` mirrors it in android-parity.md leg
 L1:
