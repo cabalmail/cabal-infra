@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.46.0] - 2026-11-10
+
+### Added
+- **Kit model for the system flag's palette entry.** `FlagPalette` in
+  CabalmailKit learns the `\Flagged` entry the server now accepts: the
+  effective palette (the stored one, with a default "Flagged" entry
+  supplied first when it has none), the default flag (the first enabled
+  entry), the rule that stores the entry only once the user has changed
+  it, "reset to default", and message slots in palette order with the
+  system flag included. `maxEntries` becomes 21. Nothing in the apps uses
+  it yet, so nothing a user sees changes; Settings > Flags still counts
+  the 20 flags a user can add. Second phase of the unified-flags plan
+  (`docs/1.x/unified-flags-plan.md`), Apple half.
+- **Flag palette entry for the system flag.** `set_preferences` accepts a
+  `\Flagged` entry in `flag_palette` beside the 20 keyword slots, so a
+  palette holds up to 21 entries and the system flag can carry a label, a
+  colour, a position and an enabled state like any other. The entry
+  decorates the flag and gates nothing: `set_flag`, the rule compiler and
+  every shipped client behave as before, and no client writes it yet. The
+  palette validator gets its first unit tests. First phase of the
+  unified-flags plan (`docs/1.x/unified-flags-plan.md`).
+
 ## [1.45.0] - 2026-11-09
 
 ### Added
