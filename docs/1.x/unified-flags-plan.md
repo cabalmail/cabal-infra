@@ -6,7 +6,7 @@
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
-| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag; the fix is in review, #2378. Not promoted |
+| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Not promoted: the Duo pass is still to do |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
@@ -331,7 +331,7 @@ first, rendering and Settings > Flags, merged (2026-11-10), #2375; the
 second, the affordances with the "Default" badge and "Make default",
 merged (2026-11-10), #2376. Both are on stage. The acceptance at the
 end of this phase was run on 2026-11-10 and found one defect, fixed in
-#2378 (in review); its results are under the acceptance text. What the
+#2378 (merged 2026-11-10); its results are under the acceptance text. What the
 first one settled:
 
 - The reader's flag button is not recoloured. It was never gold: since
