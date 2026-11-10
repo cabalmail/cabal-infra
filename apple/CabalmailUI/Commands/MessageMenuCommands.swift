@@ -50,9 +50,14 @@ public struct MessageMenuCommands: Commands {
             Button("Mark as Read/Unread") { commands?.send(.toggleSeen) }
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(!itemsLive)
-            Button("Flag/Unflag") { commands?.send(.toggleFlagged) }
-                .keyboardShortcut("8", modifiers: [.command, .shift])
-                .disabled(!itemsLive)
+            // The default flag, by name once it is not the built-in one
+            // under its own (`FlagToggle.commandTitle`); dimmed while the
+            // palette has no default flag.
+            Button(commands?.mailFlag?.commandTitle ?? FlagToggle.idleCommandTitle) {
+                commands?.send(.toggleFlagged)
+            }
+            .keyboardShortcut("8", modifiers: [.command, .shift])
+            .disabled(!itemsLive || commands?.mailFlag == nil)
             Button("Move to Folder…") { commands?.send(.moveSelection) }
                 .keyboardShortcut("m", modifiers: .command)
                 .disabled(!availability.canActOnSelection)

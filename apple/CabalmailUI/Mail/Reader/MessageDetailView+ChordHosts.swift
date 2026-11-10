@@ -26,9 +26,10 @@ extension MessageDetailView {
                 // next press goes.
                 Button("") { runToggleSeen(model: model) }
                     .keyboardShortcut("u", modifiers: [.command, .shift])
-                // Cmd+Shift+L — Mail.app's flag chord.
-                Button("") { Task { await model.toggleFlagged() } }
+                // Cmd+Shift+L — Mail.app's flag chord, on the default flag.
+                Button("") { Task { await model.toggleDefaultFlag() } }
                     .keyboardShortcut("l", modifiers: [.command, .shift])
+                    .disabled(model.defaultFlag == nil)
                 Button("") { model.toggleRemoteContent() }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                     .disabled(model.htmlBody == nil)

@@ -107,7 +107,7 @@ final class SelfSentSearchCopyTests: XCTestCase {
         let imap = FakeImapClient()
         let model = try await selfSentSearchModel(imap: imap)
 
-        await model.setFlagged(true, refs: [inbox])
+        await model.setDefaultFlag(true, refs: [inbox])
 
         let calls = await imap.flagCalls
         XCTAssertEqual(calls.map(\.folder), ["INBOX"])
@@ -166,7 +166,7 @@ final class SelfSentSearchCopyTests: XCTestCase {
         await model.search.loadMore()
         XCTAssertEqual(model.envelopes.count, 51, "the copy from Sent is a new row, not a repeat of INBOX's")
 
-        await model.setFlagged(true, refs: [sent])
+        await model.setDefaultFlag(true, refs: [sent])
 
         let calls = await imap.flagCalls
         XCTAssertEqual(calls.map(\.folder), ["Sent"])

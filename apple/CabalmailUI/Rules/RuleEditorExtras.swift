@@ -8,20 +8,21 @@ import CabalmailKit
 /// no message left to flag, forward, or answer).
 struct RuleExtrasSection: View {
     @Binding var rule: Rule
-    /// The user's custom-flag palette; the Flag extra grew into a picker of
-    /// the classic flag plus these (rules-composition plan, Phase 5). Read
-    /// from the environment like `FlagPaletteSettingsView` — the rules view
-    /// model deliberately knows nothing about preferences.
+    /// The user's flag palette; the Flag extra is a picker of its entries
+    /// (rules-composition plan, Phase 5), listed as Settings > Flags lists
+    /// them (unified-flags plan, decision 7). Read from the environment
+    /// like `FlagPaletteSettingsView` — the rules view model deliberately
+    /// knows nothing about preferences.
     @Environment(Preferences.self) private var preferences
 
-    /// Keyword entries only: a rule's `flags` list names keyword slots, and
-    /// the system flag is the `Flag` toggle above them.
-    private var palette: [FlagPaletteEntry] { FlagPalette.keywordEntries(in: preferences.flagPalette) }
+    /// The palette as Settings > Flags shows it, the built-in flag's entry
+    /// included. On the wire the rule is unchanged: that entry's toggle is
+    /// the rule's `flag`, and every other one a slot in its `flags`.
+    private var palette: [FlagPaletteEntry] { FlagPalette.effective(preferences.flagPalette) }
 
     var body: some View {
         Section {
             Group {
-                Toggle("Flag", isOn: $rule.flag)
                 paletteToggles
                 Toggle("Mark as read", isOn: $rule.markRead)
                 forwardRows
@@ -45,16 +46,16 @@ struct RuleExtrasSection: View {
         }
     }
 
-    /// One toggle per enabled palette entry, plus any slot this rule already
-    /// sets whose entry is disabled or deleted — the compiler skips the rule
-    /// while such a slot remains (`flag_not_in_palette`), so the stray
-    /// toggle is the affordance for clearing it, labelled by slot id when
-    /// the entry is gone.
+    /// One toggle per enabled palette entry, in palette order, plus any slot
+    /// this rule already sets whose entry is disabled or deleted — the
+    /// compiler skips the rule while such a slot remains
+    /// (`flag_not_in_palette`), so the stray toggle is the affordance for
+    /// clearing it, labelled by slot id when the entry is gone.
     @ViewBuilder
     private var paletteToggles: some View {
         ForEach(pickerSlots, id: \.self) { slot in
             let entry = palette.first { $0.slot == slot }
-            Toggle(isOn: slotBinding(slot)) {
+            Toggle(isOn: slot == FlagPalette.systemSlot ? $rule.flag : slotBinding(slot)) {
                 HStack(spacing: 8) {
                     Circle()
                         .fill(FlagPaletteColor.color(for: entry?.color ?? ""))
@@ -65,8 +66,11 @@ struct RuleExtrasSection: View {
         }
     }
 
+    /// The built-in flag is offered whatever its entry says: a rule can
+    /// always set the server's flag, and the compiler never skips one for
+    /// it (decision 7).
     private var pickerSlots: [String] {
-        let offered = palette.filter(\.enabled).map(\.slot)
+        let offered = palette.filter { $0.enabled || $0.slot == FlagPalette.systemSlot }.map(\.slot)
         let stray = FlagPalette.slots
             .filter { rule.flags.contains($0) && !offered.contains($0) }
         return offered + stray

@@ -106,6 +106,9 @@ public final class WindowCommands {
     var reportedSection: ResumeSession.Section = .mail
     /// What the macOS Mailbox menu can act on in this window.
     public internal(set) var mailbox = MailboxMenuAvailability()
+    /// The flag palette, kept current by the window's root view, for the
+    /// menus' flag items: a menu cannot read the window's preferences.
+    var flagPalette: [FlagPaletteEntry] = []
 
     init(navigator: SceneNavigator) {
         self.navigator = navigator
@@ -138,6 +141,15 @@ public final class WindowCommands {
     public var activeSection: ResumeSession.Section {
         FrontSurfacePolicy.activeSection(front: front, reported: reportedSection)
     }
+
+    // MARK: - The flag items
+
+    /// What the Message menu's flag item toggles and is titled for: the
+    /// default flag. Nil, and the item dimmed, while the palette has none.
+    var mailFlag: FlagToggle? { FlagToggle.defaultFlag(in: flagPalette) }
+
+    /// The Feeds menu's: the server's flag, the one mark a feed item has.
+    var feedFlag: FlagToggle? { FlagToggle.systemFlag(in: flagPalette) }
 
     // MARK: - Availability
 

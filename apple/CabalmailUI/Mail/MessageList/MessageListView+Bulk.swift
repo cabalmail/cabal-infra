@@ -102,7 +102,6 @@ extension MessageListView {
         showsCaptions: Bool
     ) -> some View {
         let hasUnread = bulkSelectionContainsUnread(model)
-        let hasUnflagged = bulkSelectionContainsUnflagged(model)
         let archive = BulkArchiveButtonPolicy.button(in: model.folder?.path)
         bulkActionButton(
             systemImage: archive.systemImage,
@@ -131,16 +130,32 @@ extension MessageListView {
         ) {
             Task { await model.bulkSetSeen(hasUnread) }
         }
-        bulkActionButton(
-            systemImage: hasUnflagged ? "flag" : "flag.slash",
-            label: hasUnflagged ? "Flag" : "Unflag",
-            accessibilityLabel: "\(hasUnflagged ? "Flag" : "Unflag") \(messageCount(count))",
-            identifier: "bulk.toggleFlag",
-            showsCaption: showsCaptions
-        ) {
-            Task { await model.bulkSetFlagged(hasUnflagged) }
-        }
+        bulkFlagButton(model: model, count: count, showsCaptions: showsCaptions)
         bulkDeleteButton(model: model, count: count, showsCaptions: showsCaptions)
+    }
+
+    /// The default flag for the whole selection, in the flag's own words
+    /// (`FlagToggle`). Absent while the palette has no default flag. Split
+    /// out to keep `bulkActionButtons` under SwiftLint's body-length cap.
+    @ViewBuilder
+    private func bulkFlagButton(
+        model: MessageListViewModel,
+        count: Int,
+        showsCaptions: Bool
+    ) -> some View {
+        if let toggle = model.defaultFlag {
+            let sets = model.defaultFlagIsMissing(from: model.selectedRefs)
+            let title = toggle.title(isSet: !sets)
+            bulkActionButton(
+                systemImage: toggle.systemImage(isSet: !sets),
+                label: title,
+                accessibilityLabel: "\(title) \(messageCount(count))",
+                identifier: "bulk.toggleFlag",
+                showsCaption: showsCaptions
+            ) {
+                Task { await model.bulkSetDefaultFlag(sets) }
+            }
+        }
     }
 
     /// Trash only: permanent delete for the whole selection, behind the same
@@ -257,9 +272,5 @@ extension MessageListView {
     /// always matches the majority intent.
     private func bulkSelectionContainsUnread(_ model: MessageListViewModel) -> Bool {
         model.loadedRows(model.selectedRefs).contains { !$0.flags.contains(.seen) }
-    }
-
-    private func bulkSelectionContainsUnflagged(_ model: MessageListViewModel) -> Bool {
-        model.loadedRows(model.selectedRefs).contains { !$0.flags.contains(.flagged) }
     }
 }

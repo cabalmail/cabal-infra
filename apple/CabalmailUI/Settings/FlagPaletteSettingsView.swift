@@ -13,6 +13,11 @@ import CabalmailKit
 /// It renames, recolors and moves like the others, resets where they
 /// delete, and cannot be disabled.
 ///
+/// The first enabled entry is the default flag, the one the swipe, the flag
+/// button and the flag shortcuts set (`FlagToggle`). Its row says so once
+/// there is a second flag to tell it from, and every other row's context
+/// menu offers Make Default, which moves that row to the top.
+///
 /// The order is the order pickers use. Rows move by Move Up / Move Down in
 /// their context menu everywhere (the Mac's only route, since this grouped
 /// form ignores `onMove` there) and by edit-mode drag on iOS and visionOS.
@@ -22,7 +27,9 @@ struct FlagPaletteSettingsView: View {
     var body: some View {
         SettingsForm(title: "Flags") {
             Section {
-                ForEach(FlagPalette.effective(preferences.flagPalette)) { entry in
+                let palette = FlagPalette.effective(preferences.flagPalette)
+                let defaultSlot = FlagPalette.defaultEntry(in: preferences.flagPalette)?.slot
+                ForEach(palette) { entry in
                     // The whole row is one NavigationLink hit target — no
                     // nested controls, so the macOS single-target folding
                     // (#1299) has nothing to swallow. Move Up / Move Down
@@ -32,7 +39,10 @@ struct FlagPaletteSettingsView: View {
                     NavigationLink {
                         FlagPaletteEntryEditor(preferences: preferences, slot: entry.slot)
                     } label: {
-                        FlagPaletteRowLabel(entry: entry)
+                        FlagPaletteRowLabel(
+                            entry: entry,
+                            isDefault: palette.count > 1 && entry.slot == defaultSlot
+                        )
                     }
                     .contextMenu {
                         moveActions(for: entry.slot)
@@ -64,8 +74,8 @@ struct FlagPaletteSettingsView: View {
         .editButtonToolbar()
     }
 
-    /// The footer under the palette: what the order means and how to change
-    /// it on `host`. Drag is promised only where Edit offers it; on the Mac
+    /// The footer under the palette: what the order means, how to change it
+    /// on `host`, and which flag the one-press controls set. Drag is promised only where Edit offers it; on the Mac
     /// the grouped form ignores `onMove`, so it names the context menu.
     /// `paletteIsEmpty` is true while the user has added no flag of their
     /// own: the list then holds the built-in entry alone, and there is no
@@ -78,15 +88,27 @@ struct FlagPaletteSettingsView: View {
         let reorder = host.reordersInEditMode
             ? "Tap Edit to drag flags into a new order"
             : "Right-click a flag to move it up or down"
+        let makeDefault = host.reordersInEditMode
+            ? "touch and hold another flag to make it the default"
+            : "right-click another flag to make it the default"
         return reorder + "; the order here is the order pickers use. "
+            + "A swipe, the flag button and the flag shortcut set the first enabled flag, marked Default; "
+            + makeDefault + ". "
             + "Up to \(FlagPalette.slots.count) flags of your own."
     }
 
-    /// Move Up / Move Down for one row, addressed by slot like the editor's
-    /// bindings (#1340) rather than by a captured index.
+    /// Make Default, then Move Up / Move Down, for one row, addressed by
+    /// slot like the editor's bindings (#1340) rather than by a captured
+    /// index.
     @ViewBuilder
     private func moveActions(for slot: String) -> some View {
         let bindings = FlagPaletteEntryBindings(preferences: preferences, slot: slot)
+        Button {
+            bindings.makeDefault()
+        } label: {
+            Label("Make Default", systemImage: "arrow.up.to.line")
+        }
+        .disabled(!bindings.canMakeDefault)
         Button {
             bindings.move(by: -1)
         } label: {
@@ -120,9 +142,11 @@ struct FlagPaletteSettingsView: View {
 }
 
 /// Color dot + label, shared by the list row and anywhere else a palette
-/// entry needs naming.
+/// entry needs naming. `isDefault` adds the "Default" badge the list gives
+/// the default flag's row.
 struct FlagPaletteRowLabel: View {
     let entry: FlagPaletteEntry
+    var isDefault = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -130,6 +154,13 @@ struct FlagPaletteRowLabel: View {
                 .foregroundStyle(FlagPaletteColor.color(for: entry.color))
             Text(entry.label)
                 .foregroundStyle(entry.enabled ? .primary : .secondary)
+            if isDefault {
+                Spacer(minLength: 8)
+                Text("Default")
+                    .appFont(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("flag.defaultBadge")
+            }
         }
     }
 }

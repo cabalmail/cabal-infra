@@ -1,39 +1,42 @@
 import SwiftUI
 import CabalmailKit
 
-// The reader toolbar's flag control and its custom-flag menu
-// (rules-composition plan, Phase 4). A sibling of
+// The reader toolbar's flag control and its flag menu (rules-composition
+// plan, Phase 4; unified-flags plan, Phase 3). A sibling of
 // `MessageDetailView+SeenOptions.swift` — same split-control pattern,
 // same file-length reasoning.
 
 extension MessageDetailView {
-    /// The toolbar's flag control: the face still toggles `\Flagged` (the
-    /// primary action, same as before Phase 4), and the menu offers one
-    /// checkmark toggle per palette flag. macOS renders a split button;
-    /// touch platforms keep the plain toggle with the menu on
-    /// touch-and-hold. While the palette is empty the control stays the
-    /// plain button it always was — no dead menu, no footprint change.
+    /// The toolbar's flag control: the face toggles the default flag (the
+    /// primary action, named for the flag by `FlagToggle`), and the menu
+    /// offers one checkmark toggle per palette flag. macOS renders a split
+    /// button; touch platforms keep the plain toggle with the menu on
+    /// touch-and-hold. While the default flag is the only one offered the
+    /// control stays the plain button it always was — no dead menu, no
+    /// footprint change. With no default flag the face is dimmed, and the
+    /// menu, if the message carries a flag to clear, still opens.
     @ViewBuilder
     var flagButton: some View {
         if let model {
             let rows = menuRows(model: model)
             if rows.isEmpty {
                 Button {
-                    Task { await model.toggleFlagged() }
+                    Task { await model.toggleDefaultFlag() }
                 } label: {
-                    flagToolbarLabel(isFlagged: model.isFlagged)
+                    flagToolbarLabel(model: model)
                 }
+                .disabled(model.defaultFlag == nil)
                 // Cmd+Shift+L rides `readerChordHosts`, not this button — an
                 // equivalent on a toolbar item dies with the item when the
                 // toolbar overflows (#1047).
                 .accessibilityIdentifier("reader.toggleFlag")
             } else {
                 Menu {
-                    keywordOptionItems(rows: rows, model: model)
+                    flagOptionItems(rows: rows, model: model)
                 } label: {
-                    flagToolbarLabel(isFlagged: model.isFlagged)
+                    flagToolbarLabel(model: model)
                 } primaryAction: {
-                    Task { await model.toggleFlagged() }
+                    Task { await model.toggleDefaultFlag() }
                 }
                 .menuIndicator(optionMenuIndicator)
                 .accessibilityIdentifier("reader.toggleFlag")
@@ -55,15 +58,16 @@ extension MessageDetailView {
     var flagMenuItems: some View {
         if let model {
             Button {
-                Task { await model.toggleFlagged() }
+                Task { await model.toggleDefaultFlag() }
             } label: {
-                flagToolbarLabel(isFlagged: model.isFlagged)
+                flagToolbarLabel(model: model)
             }
+            .disabled(model.defaultFlag == nil)
             .accessibilityIdentifier("reader.toggleFlag")
             let rows = menuRows(model: model)
             if !rows.isEmpty {
                 Menu {
-                    keywordOptionItems(rows: rows, model: model)
+                    flagOptionItems(rows: rows, model: model)
                 } label: {
                     Label("Flags", systemImage: "tag")
                 }
@@ -72,23 +76,27 @@ extension MessageDetailView {
     }
     #endif
 
-    private func flagToolbarLabel(isFlagged: Bool) -> some View {
-        ReaderToggleFace.flag(isFlagged: isFlagged).label
+    /// The face of the control: what a press does to the default flag.
+    /// With none, the classic "Flag" face, dimmed by its caller.
+    private func flagToolbarLabel(model: MessageDetailViewModel) -> some View {
+        let face = model.defaultFlag?.face(isSet: model.isDefaultFlagSet)
+            ?? ReaderToggleFace.flag(isFlagged: false)
+        return face.label
     }
 
     /// The rows the menu offers, read here so the enclosing body observes
-    /// the tag set — the identity below is derived from the same values.
+    /// the flags — the identity below is derived from the same values.
     func menuRows(model: MessageDetailViewModel) -> [FlagMenuRow] {
         FlagMenuPolicy.rows(
             palette: preferences.flagPalette,
-            taggedSlots: model.keywordSlots
+            taggedSlots: Set(FlagPalette.slots(in: model.shownFlags, palette: preferences.flagPalette))
         )
     }
 
     /// One checkmark toggle per row. `isOn` reads the row rather than the
     /// model so the drawn state and the menu's identity can never disagree.
     @ViewBuilder
-    func keywordOptionItems(
+    func flagOptionItems(
         rows: [FlagMenuRow],
         model: MessageDetailViewModel
     ) -> some View {
@@ -96,7 +104,7 @@ extension MessageDetailView {
             Toggle(isOn: Binding(
                 get: { row.isOn },
                 set: { _ in
-                    Task { await model.toggleKeyword(row.slot) }
+                    Task { await model.toggle(Flag(wireValue: row.slot)) }
                 }
             )) {
                 Text(row.label)

@@ -94,7 +94,7 @@ final class MessageListPillCountTests: XCTestCase {
         // not what the Unread/Flagged pills count.
         let model = try makeModel()
         model.flagged = 1
-        await model.toggleKeyword(model.envelopes[0], slot: "cabal-flag-01")
+        await model.toggle(.keyword("cabal-flag-01"), on: model.envelopes[0])
         XCTAssertEqual(model.unseen, 1)
         XCTAssertEqual(model.flagged, 1)
         XCTAssertTrue(model.envelopes[0].flags.contains(.keyword("cabal-flag-01")))

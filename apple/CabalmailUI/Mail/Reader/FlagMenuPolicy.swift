@@ -1,8 +1,8 @@
 import Foundation
 import CabalmailKit
 
-/// One row of the reader's custom-flag menu: everything the row draws,
-/// plus whether it is checked.
+/// One row of a flag menu (the reader's, and the list row's Flags
+/// submenu): everything the row draws, plus whether it is checked.
 ///
 /// A value type rather than a bare slot id because the menu's SwiftUI
 /// identity is derived from what it draws (see `FlagMenuPolicy.identity`),
@@ -15,8 +15,7 @@ struct FlagMenuRow: Equatable, Hashable, Identifiable {
     var id: String { slot }
 }
 
-/// What the reader's flag menu offers, and the identity SwiftUI needs to
-/// redraw it.
+/// What a flag menu offers, and the identity SwiftUI needs to redraw it.
 ///
 /// A pure rule rather than inline `if`s in the view so it can be tested
 /// directly — the same reason `CompactColumnPolicy` is its own type.
@@ -31,33 +30,42 @@ struct FlagMenuRow: Equatable, Hashable, Identifiable {
 /// individual rows is not enough (measured: it changes nothing); the
 /// `Menu` itself is what has to be replaced.
 enum FlagMenuPolicy {
-    /// The rows the menu offers: every enabled keyword entry, plus any
-    /// slot the message is already tagged with whose entry is disabled or
-    /// deleted — those still need an untag affordance (the palette
-    /// editor's delete confirmation promises tags stay removable). A
-    /// deleted slot's surviving tag is labelled by slot id, having no
-    /// palette entry to name it.
+    /// The rows the menu offers: every enabled entry of the effective
+    /// palette in its order, the built-in flag's included, plus any flag
+    /// the message already carries whose entry is disabled or deleted —
+    /// those still need an untag affordance (the palette editor's delete
+    /// confirmation promises tags stay removable). A deleted slot's
+    /// surviving tag is labelled by slot id, having no palette entry to
+    /// name it. `taggedSlots` are wire slots, the built-in flag's atom
+    /// among them (`FlagPalette.slots(in:palette:)`).
     ///
-    /// The system flag's entry is never a row, stored or not: the control
-    /// this menu hangs from toggles that flag as its primary action.
+    /// No rows when the default flag is all there is to offer: the control
+    /// the menu hangs from toggles that flag as its primary action, so the
+    /// menu would repeat it and nothing else. That keeps the control a
+    /// plain button for a palette nobody has added a flag to.
     static func rows(
         palette: [FlagPaletteEntry],
         taggedSlots: Set<String>
     ) -> [FlagMenuRow] {
-        let offered = FlagPalette.keywordEntries(in: palette).filter(\.enabled)
+        let effective = FlagPalette.effective(palette)
+        let offered = effective.filter(\.enabled)
         let offeredSlots = Set(offered.map(\.slot))
-        let stray = FlagPalette.slots.filter {
+        let stray = ([FlagPalette.systemSlot] + FlagPalette.slots).filter {
             taggedSlots.contains($0) && !offeredSlots.contains($0)
         }
-        return offered.map {
+        let rows = offered.map {
             FlagMenuRow(slot: $0.slot, label: $0.label, isOn: taggedSlots.contains($0.slot))
         } + stray.map { slot in
             FlagMenuRow(
                 slot: slot,
-                label: palette.first { $0.slot == slot }?.label ?? slot,
+                label: effective.first { $0.slot == slot }?.label ?? slot,
                 isOn: true
             )
         }
+        if rows.count == 1, rows.first?.slot == offered.first?.slot {
+            return []
+        }
+        return rows
     }
 
     /// Identity for the `Menu`, covering everything a row draws so any

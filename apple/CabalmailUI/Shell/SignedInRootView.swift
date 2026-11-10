@@ -31,6 +31,8 @@ import CabalmailKit
 /// so a swap between shells rebuilds only the layout.
 struct SignedInRootView: View {
     @Environment(AppState.self) private var appState
+    /// For the menus' flag items, whose titles follow the palette.
+    @Environment(Preferences.self) private var preferences
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.commandWindowID) private var commandWindowID
     /// This window's navigation, held here — above the layout switch — so a
@@ -161,7 +163,11 @@ struct SignedInRootView: View {
             .onChange(of: appState.client.map { ObjectIdentifier($0) }) {
                 navigator = SceneNavigator(appState: appState, windowID: commandWindowID)
                 windowCommands = WindowCommands(navigator: navigator)
+                windowCommands.flagPalette = preferences.flagPalette
                 appState.deepLinks.register(navigator)
+            }
+            .onChange(of: preferences.flagPalette, initial: true) { _, palette in
+                windowCommands.flagPalette = palette
             }
     }
 

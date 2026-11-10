@@ -6,9 +6,9 @@
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
-| 3 -- Apple client | Rendering and Settings > Flags in review (2026-11-10), #2375; affordances not started |
+| 3 -- Apple client | Rendering and Settings > Flags merged (2026-11-10), #2375; affordances in review (2026-11-10), #2376 |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
-| 5 -- Documentation | Not started |
+| 5 -- Documentation | In review (2026-11-10), with Phase 3's second PR, #2376 |
 
 This plan is run by Session 1 of
 [post-wave-3/flags-and-cross-media.md](post-wave-3/flags-and-cross-media.md),
@@ -327,23 +327,59 @@ the entry encodes back byte-identical after a no-op edit.
 ## Phase 3 -- Apple client
 
 **Status:** In two PRs, as flags-and-cross-media.md splits it. The
-first, rendering and Settings > Flags, is in review (2026-11-10), #2375;
-the second, the affordances with the "Default" badge and "Make
-default", has not started. What the first one settled:
+first, rendering and Settings > Flags, merged (2026-11-10), #2375; the
+second, the affordances with the "Default" badge and "Make default",
+is in review (2026-11-10), #2376. What the first one settled:
 
 - The reader's flag button is not recoloured. It was never gold: since
   `ReaderToggleFace` it draws the action ("Flag" / "Unflag"), not the
   state, so there is no state colour to take from the palette. Its
-  title follows the default flag's label in the second PR.
+  title follows the default flag's label (second PR).
 - The system entry's editor has no Enabled toggle (decision 2). A
   custom flag whose entry is disabled is still drawn on the messages
   that carry it, as it always was: "disabled" means offered nowhere,
   not hidden.
-- Until the second PR, the flag menus and the rule editor list keyword
-  entries only (`FlagPalette.keywordEntries(in:)`), because the control
-  beside them still toggles `\Flagged` itself.
 - Feed rows draw the system entry's dot beside the date, from
   `is_favorite`.
+
+What the second one settled, all in one value the controls read
+(`FlagToggle`):
+
+- **Words.** The built-in flag under its original name keeps "Flag" /
+  "Unflag", so goal 3 holds for the labels too; decision 5's
+  "<label>" / "Remove <label>" applies to every other default flag,
+  including the built-in one once renamed. A recolour alone keeps the
+  old words. The menu bar item reads both ways ("Urgent/Remove
+  Urgent"), as "Flag/Unflag" did.
+- **Colour.** The swipe's fill is the flag's palette colour, so the
+  `flagged.fill` token has no user left on Apple mail or feed surfaces.
+- **Flag menus** (the reader button's, and the row menu's Flags
+  submenu, now one rule: `FlagMenuPolicy.rows`) list every enabled
+  entry in palette order, the built-in one included, then any flag the
+  message carries whose entry is disabled or gone. When the default
+  flag would be the only row there is no menu, so an untouched palette
+  keeps the plain button. The selection menu keeps its one item, the
+  default flag's toggle; it never had a Flags submenu.
+- **Settings > Flags.** The "Default" badge appears once the list has
+  a second flag, and the footer carries the caption. "Make Default" is
+  in each row's context menu, above Move Up / Move Down, and is a move
+  to the top; a disabled flag cannot be made the default.
+- **No default flag** (reachable only from a stored palette whose
+  built-in entry is disabled, decision 3): the swipe, the row and
+  selection menu items and the bulk bar's button are absent, and the
+  reader button, both shortcuts and the menu bar item are dimmed.
+- **Filters** (decision 6). The Flagged pills and the search sheet's
+  toggle take the built-in entry's label. With that entry disabled they
+  are hidden unless lit, so a filter that is on can be turned off.
+- **Rule editor** (decision 7). One list in palette order; the built-in
+  entry's toggle is the rule's `flag`, and it is offered even when the
+  entry is disabled, since a rule can always set the server's flag.
+- **Feeds** (decision 4). The swipe, the row menu item, the reader
+  button, the pill and the Feeds menu item take the built-in entry's
+  name and colour whatever its position, because a feed item has that
+  flag and no other. With the entry disabled the swipe and the menu
+  item go and the reader button is dimmed, not removed, so its bar
+  keeps its shape.
 
 - Settings > Flags: the effective palette; "Default" badge and caption
   on the first enabled row; "Make default" in row menus; "Reset to
@@ -395,7 +431,10 @@ platform reads identically on the other.
 
 ## Phase 5 -- Documentation
 
-**Status:** Not started.
+**Status:** In review (2026-11-10), #2376, with Phase 3's second PR.
+The manual had no flags section, so it gains a Flags entry under Mail;
+the rules doc's Flag extra says the editor lists the flags as Settings
+> Flags does.
 
 - `docs/user_manual.md`: the flags section describes one list, the
   default flag, and reset-vs-delete.
