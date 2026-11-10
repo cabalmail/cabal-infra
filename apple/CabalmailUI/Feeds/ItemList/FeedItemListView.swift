@@ -412,8 +412,9 @@ struct FeedItemRow: View {
 
 extension FeedItemRow {
     /// What the row says of itself as one element: unread, then the title,
-    /// the first line, the date and the names of its flags.
-    static func accessibilityLabel(
+    /// the first line, the date and the names of its flags. A pure function
+    /// of its arguments, so it does not take the view's main-actor isolation.
+    nonisolated static func accessibilityLabel(
         isRead: Bool, title: String, snippet: String, date: String, flags: [String]
     ) -> String {
         ([isRead ? "" : "Unread", title, snippet, date] + flags)
