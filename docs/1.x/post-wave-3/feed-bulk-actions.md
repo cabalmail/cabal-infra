@@ -14,10 +14,12 @@
 
 This table and the **Status:** line under each work item are updated in the same PR as the work, so the next session reads where things stand instead of reconstructing it.
 
+Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
+
 | Work item | Status |
 | --- | --- |
-| PR A: #1914 back-out buttons | Not started (2026-10-15). |
-| Session 1: Kit writes and list tidy-ups | Not started (2026-10-15). Waits on sqlite-mail-store.md PR 0.2, which has not started. |
+| PR A: #1914 back-out buttons | Done (2026-10-20): #2155; #1914 closed. The guard is a new scan test, not decision 1's count check. |
+| Session 1: Kit writes and list tidy-ups | Not started (2026-11-09). Of sqlite-mail-store.md PR 0.2, the `setRead` and `setFavorite` rewrite merged as #2117 (#1956, 2026-10-18); the rest of PR 0.2, and PR 0.1's `transaction { }`, have not. |
 | PR B: Kit feed writes | Not started (2026-10-15). |
 | PR C: feed list tidy-ups | Not started (2026-10-15). |
 | Release R1 | Not started (2026-10-15). |
@@ -92,11 +94,11 @@ One Apple PR open at a time. Each PR updates the cross-media plan's Progress row
 
 **PR A: #1914 back-out buttons (standalone, now).** Add `Button("Cancel", role: ConfirmationDialogPolicy.backOutRole) {}` to the six dialogs. With decision 1, add the paired count check to `ConfirmationDialogRoleTests.swift`, with a self-test on synthetic snippets as that file's other checks have. `Apple:` fragment. Verify: CI; on the Mini, open each dialog on the iPhone and visionOS simulators and back out, using a throwaway feed, folder and flag (never confirm on the shared account's real feeds, as the issue asks); the Mac build still backs out with Escape. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-10-20): #2155 added the six buttons, and #1914 is closed. In place of decision 1's count check inside `ConfirmationDialogRoleTests`, it added `ConfirmationDialogBackOutScanTests`, which checks that every dialog declares a back-out. Decision 1 has no recorded answer.
 
 ### Session 1: Kit writes and list tidy-ups (Next; starts when sqlite-mail-store.md PR 0.2 has merged)
 
-**Status:** Not started (2026-10-15). sqlite-mail-store.md PR 0.2 has not started.
+**Status:** Not started (2026-11-09). sqlite-mail-store.md PR 0.2 has not merged as one PR, but the rewrite of `setRead` and `setFavorite` that this session waited for has: #2117 (2026-10-18) made each write atomic with its queue row, closing #1956. PR 0.1's `transaction { }` helper, which PR B names, does not exist; #2117 used an inline `BEGIN` and `COMMIT`.
 
 **PR B: Kit feed writes.** Files: `RSS/RssStore+State.swift`, `RssPendingDrain.swift`, `RssSyncEngine.swift`, both view models.
 - `RssSyncEngine.markAllRead(scope:)`, the one helper, used by both view models. Under decision 3 (a), in one PR 0.1 `transaction { }` it applies one tap-time watermark to every subscription in scope and queues one ordinary `mark_all_read` row per subscription, all with the same watermark. Same queue kind as today, so older builds, PR 0.2's import of set-aside files and sqlite-mail-store.md PR 4.5 need nothing new.
