@@ -7,7 +7,7 @@
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` merged (2026-11-10), #2389, the first PR of android-parity.md leg L1 |
 | 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass in five poses; the flag button's hold menu passes closed and is not settled in the open poses. Soak run (2026-11-10) on the Mini, four platforms: no regression found, five older defects filed (#2381 to #2385). Promoted to prod as 1.47.0 (2026-11-11), with the iOS, macOS and visionOS builds uploaded from `main`. The physical-Duo check waits for the device (duo-support.md, Decision 7) |
-| 4 -- Android client | Started (2026-11-10) as android-parity.md leg L1: rendering and Settings > Flags merged, #2390; the controls in review. The acceptance run follows the merge |
+| 4 -- Android client | Merged (2026-11-10) as android-parity.md leg L1: rendering and Settings > Flags, #2390; the controls, #2391. Acceptance run on stage (2026-11-10): pass in the four flag-list states on the Pixel 8 emulator, and a list edited on Android read correctly on the iPhone simulator and the reverse. Not promoted |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
 This plan is run by Session 1 of
@@ -514,12 +514,13 @@ removed.
 
 ## Phase 4 -- Android client
 
-**Status:** Started (2026-11-10), as android-parity.md leg L1, after
+**Status:** Merged (2026-11-10), as android-parity.md leg L1, after
 the Apple release was promoted as 1.47.0, on Phase 2's `android/kit`
-half (#2389). The app takes two PRs, as Apple's did. The first,
-rendering and Settings > Flags, merged (2026-11-10), #2390; the second, which moves the
-controls to the default flag, is in review (2026-11-10). The acceptance
-below runs after both merge. What the first one settled:
+half (#2389). The app took two PRs, as Apple's did: rendering and
+Settings > Flags, #2390, and the controls moved to the default flag,
+#2391. All three are on stage; none is promoted. The acceptance at the
+end of this phase was run on 2026-11-10 and passed; its results are
+under the acceptance text. What the first PR settled:
 
 - The star leaves every row. A flagged message shows a dot in the
   built-in entry's color on its row, with the custom-flag dots, in the
@@ -593,6 +594,55 @@ headline is the only text that reaches Play release notes.
 
 Acceptance: the Phase 3 script run on Android; a palette edited on one
 platform reads identically on the other.
+
+**Acceptance run (2026-11-10)**, against stage at 3129933cb (#2389,
+#2390 and #2391 merged) as the first stage test account, on the Mac
+mini's Pixel 8 emulator (API 35) with a debug build of that commit. The
+flag list was put in the four states the Apple run used, and each press
+was checked against the flags the server then held. States 2 and 3 were
+made in Settings > Flags on the device (rename and recolor the built-in
+flag; add a flag, name it, color it, Make default), with the stored list
+read back from the server; state 4 can only be made through the API.
+
+| State | Result |
+| --- | --- |
+| 1. Untouched | Pass. Pill "Flagged"; swipe "Flag" / "Remove flag"; the row menu's one plain item; the reader's chip and star button; Ctrl+Shift+L; the selection bar's star and its overflow "Remove flag"; a search result's long-press; the search sheet's "Flagged". Every press wrote `\Flagged` |
+| 2. Built-in flag renamed "Urgent", red | Pass. Pill, row dot, chip, swipe, row menu item, reader star and search sheet read "Urgent" / "Remove Urgent"; every press still wrote `\Flagged` |
+| 3. A custom flag, "Todo", first | Pass. Settings marks Todo "Default". The swipe, the reader's star, Ctrl+Shift+L, the selection bar (set on two messages, removed from both) and the search long-press read "Todo" / "Remove Todo" and wrote `cabal-flag-01`. Row dots and reader chips in list order (Todo, Urgent); the row menu and the reader's menu list both flags, and choosing Urgent there wrote `\Flagged` |
+| 4. Every entry disabled | Pass. No Flagged pill in mail or in a feed; the flag swipe does not drag on either list; the mail reader's star and the selection bar's star are dimmed and its overflow has no remove item; Ctrl+Shift+L does nothing; the row menu still lists the flags a message carries, and removing one there cleared it on the server |
+
+Also checked on that build: the rule editor lists the flags in list
+order under "Also", and a blank rule with both switched on was stored
+as `flag: true` with `flags: ["cabal-flag-01"]`; in a feed the pill,
+the swipe and the flagged row's description read "Urgent", and the
+flag was put on an item and taken off again.
+
+**Across platforms**, with the same account on the Mini's iPhone 17
+simulator (the 1.47.0 stage build):
+
+- *Edited on Android, read on Apple.* State 3's list (Todo, blue,
+  first; the built-in flag as Urgent, red) was made in the Android
+  Settings screen. The Apple app's pill read "Urgent", its rows drew the
+  blue dot before the red one on the messages carrying both, and its
+  Settings > Flags listed Todo with the Default badge, then Urgent.
+- *Edited on Apple, read on Android.* In the Apple app the built-in
+  flag was recolored purple in its editor and made the default from its
+  row menu; the server's stored list had it first. After a relaunch the
+  Android rows drew the purple dot before the blue one, the pill read
+  "Urgent", and the flag swipe read "Urgent" on a purple wash and wrote
+  `\Flagged`.
+
+Each of the three PRs was also looked at in the running app on the same
+emulator before it was marked ready (their bodies say what). Not run:
+the tablet layout, dark mode, TalkBack, a physical device, and the
+feed reader's star button and the no-default feed reader on the merged
+build (both were checked on the controls branch before the merge, on
+the same code). One older defect turned up and is filed as #2392: with
+keys injected as hardware key events, the Name field of a flag's dialog
+moves its caret and drops keys; typing on the on-screen keyboard was
+correct in every run, and a build from 2026-10-27 behaves the same way,
+so it is not from this leg. The test account is back as it was: an
+empty flag list, no rules, the swipes as before, the seeded mail purged.
 
 ## Phase 5 -- Documentation
 

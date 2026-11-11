@@ -31,7 +31,7 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 | PR 8 (only if decision 3 is Yes). The feed store ends with the session | Not started (2026-10-15) |
 | PR 9. Room version 2 | Not started (2026-10-15) |
 | PR 10. Folder and All Feeds order stick | Not started (2026-10-15) |
-| Later legs L1 to L6 | L1 (unified flags) started (2026-11-10): the kit model is #2389, rendering with Settings > Flags is #2390, both merged, and the controls are in review. L2 to L6 not started |
+| Later legs L1 to L6 | L1 (unified flags) merged (2026-11-10), not promoted: #2389, #2390, #2391, with its acceptance run recorded under Phase 4 of `unified-flags-plan.md`. L2 to L6 not started |
 
 ## Decisions for the maintainer
 
@@ -184,7 +184,7 @@ Order: the reader-mode fix first, then bugs, then the Room work. PRs 2, 3 and 4 
 
 ### Later legs (one short session each, decision 6)
 
-**Status:** L1 started (2026-11-10), after its Apple leg was promoted as 1.47.0 (2026-11-11 UTC). L2 to L6 not started; none of the Apple legs they follow has started.
+**Status:** L1 merged (2026-11-10), not promoted; it started after its Apple leg was promoted as 1.47.0 (2026-11-11 UTC). Its acceptance run passed on stage the same day (Phase 4 of `unified-flags-plan.md` has the record). Promotion is the maintainer's call and comes after a soak; nothing in L1 changed the feed database, so its release needs no upgrade check. L2 to L6 not started; none of the Apple legs they follow has started.
 
 L1's PRs, each based on `stage`, in order:
 
@@ -192,8 +192,8 @@ L1's PRs, each based on `stage`, in order:
 | --- | --- | --- |
 | Kit model | Nothing. `FlagPalette.kt` learns the built-in flag's entry and the cap of 21 | Merged (2026-11-10): #2389 |
 | Rendering and Settings > Flags | "Flagged" is first in Settings > Flags, with Reset to default and no Enabled switch; a flagged message shows a dot on its row and a named chip in the reader, in list order, where the star was; a flagged feed item shows the same dot beside its date; search results draw the dots too | Merged (2026-11-10): #2390. Checked in the running app on the Mac mini's Pixel 8 emulator against stage |
-| Controls | The Default mark and Make default; the flag swipe, the reader's button, Ctrl+Shift+L, the selection bar, the row menu and the search long-press act on the default flag under its name; the pills take the built-in flag's name; the rule editor lists it with the others; the feed's swipe, reader button and pill take the built-in flag's name and color | In review (2026-11-10). Checked in the running app on the same emulator, in the four palette states, each press read back from the server |
-| Acceptance record (docs) | The four palette states on an Android emulator against stage, and a palette edited on each platform read on the other, recorded under Phase 4 of `unified-flags-plan.md` | Not started |
+| Controls | The Default mark and Make default; the flag swipe, the reader's button, Ctrl+Shift+L, the selection bar, the row menu and the search long-press act on the default flag under its name; the pills take the built-in flag's name; the rule editor lists it with the others; the feed's swipe, reader button and pill take the built-in flag's name and color | Merged (2026-11-10): #2391. Checked in the running app on the same emulator, in the four palette states, each press read back from the server |
+| Acceptance record (docs) | The four palette states on an Android emulator against stage, and a palette edited on each platform read on the other, recorded under Phase 4 of `unified-flags-plan.md` | Run on 2026-11-10 against stage at 3129933cb: pass. One older defect filed, #2392 |
 
 L1's scope questions, put to the maintainer in one batch:
 
