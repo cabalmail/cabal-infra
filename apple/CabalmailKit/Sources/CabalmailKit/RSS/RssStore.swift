@@ -508,8 +508,16 @@ enum Schema {
     /// queued read or favorite change still has. An older build cannot read
     /// a file with these and sets it aside (`openRecovering`), so its unsent
     /// changes wait there for a build that can.
+    ///
+    /// The state-sync cursors are emptied, as version 2 left them, so the
+    /// next sync of each feed pulls its whole state partition: the build
+    /// that wrote this file read the server's state rows without their
+    /// flags and stepped its cursor past them, and the state sync only
+    /// delivers rows changed since the cursor, so a flag another device set
+    /// before this one was upgraded would otherwise never arrive.
     static let version7 = """
         ALTER TABLE items ADD COLUMN flags TEXT NOT NULL DEFAULT '[]';
         ALTER TABLE pending ADD COLUMN slot TEXT NOT NULL DEFAULT '';
+        UPDATE feed_sync SET state_cursor = '';
         """
 }

@@ -1784,7 +1784,11 @@ a second copy.
   What the server reports for an item, in a listing or the state sync, is
   laid under the changes still queued, slot by slot (`RssStoredFlags`): a
   slot with a queued change stays as that change left it, and every
-  other slot is the server's.
+  other slot is the server's. The schema 7 step also empties each feed's
+  state-sync cursor, so the first sync after the upgrade pulls every
+  state row again: the older build read those rows without their flags
+  and stepped past them, and a flag another device set before this one
+  was upgraded would otherwise never arrive.
 - The server refuses a whole `/rss_set_item_state` call that adds a flag
   the palette does not enable, which is what a flag disabled or deleted
   on another device leaves in the queue. It names the slots, the API

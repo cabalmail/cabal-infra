@@ -68,6 +68,45 @@ final class RssStoreFlagSetAsideTests: RssSetAsideTestCase {
         XCTAssertEqual(reads.map(\.value), [false])
     }
 
+    /// The build that wrote a schema 6 file read the server's state rows
+    /// without their flags and stepped its cursor past them. The migration
+    /// empties that cursor, so the next sync pulls every state row again
+    /// and a flag another device set before the upgrade arrives. The item
+    /// sync's own cursors are not touched: items are not fetched again.
+    func testTheMigrationMakesTheNextSyncPullEveryStateRowAgain() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        do {
+            let database = try SQLiteDatabase(path: live.path)
+            defer { database.close() }
+            try migrator(through: 6).migrate(database, newerSchema: .refuse)
+            try database.run("""
+                INSERT INTO feed_sync (feed_id, since_cursor, older_cursor, older_exhausted, last_synced_at,
+                  state_cursor) VALUES ('f1', 'since-9', 'older-3', 1, '2026-02-01T00:00:00Z', 'state-9')
+                """)
+        }
+
+        let store = try RssStore(directory: directory)
+
+        let state = try await store.syncState(feedId: "f1")
+        XCTAssertEqual(state.stateCursor, "", "the state sync starts over")
+        XCTAssertEqual(state.sinceCursor, "since-9")
+        XCTAssertEqual(state.olderCursor, "older-3")
+        XCTAssertTrue(state.olderExhausted)
+    }
+
+    /// And a store already at schema 7 keeps its cursor: the step runs once.
+    func testAStoreAlreadyAtSchemaSevenKeepsItsStateCursor() async throws {
+        try await withSeededStore { store in
+            try await store.setSyncProgress(feedId: "f1", sinceCursor: "since-9", stateCursor: "state-9",
+                                            lastSyncedAt: "2026-02-01T00:00:00Z")
+        }
+
+        let reopened = try RssStore(directory: directory)
+
+        let state = try await reopened.syncState(feedId: "f1")
+        XCTAssertEqual(state.stateCursor, "state-9")
+    }
+
     // MARK: - A schema 7 file set aside by an older build
 
     /// The downgrade and the return, with flag changes in the queue. This
