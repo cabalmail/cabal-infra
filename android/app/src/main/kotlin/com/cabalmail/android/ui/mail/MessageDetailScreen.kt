@@ -12,6 +12,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
@@ -70,6 +73,8 @@ import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
 import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.FlagDot
+import com.cabalmail.android.ui.theme.FlagDotMark
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.AuthResults
@@ -534,44 +539,43 @@ private fun MessageHeader(
             )
         }
         HeaderChips(envelope = envelope)
-        KeywordChips(envelope = envelope, palette = palette)
+        FlagChips(envelope = envelope, palette = palette)
     }
 }
 
 /**
- * Custom-flag chips (Phase 4): color dot + label per tagged palette slot.
- * A deleted slot's surviving tag shows its slot id in gray, per the
- * palette editor's delete-confirmation copy.
+ * Flag chips: color dot + label per flag the message carries, the built-in
+ * flag included, in the order of Settings > Flags. A deleted slot's
+ * surviving tag shows its slot id in gray, per the palette editor's
+ * delete-confirmation copy.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun KeywordChips(
+private fun FlagChips(
     envelope: Envelope,
     palette: List<FlagPaletteEntry>,
 ) {
-    val slots = FlagPalette.slotsIn(envelope.flags)
-    if (slots.isEmpty()) {
+    val marks = FlagDotMark.marks(envelope.flags, palette, limit = Int.MAX_VALUE)
+    if (marks.isEmpty()) {
         return
     }
-    Row(
+    // A message can carry every flag in the palette, so the chips wrap
+    // rather than run off the header's edge.
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.padding(top = 6.dp),
     ) {
-        slots.forEach { slot ->
-            val entry = palette.firstOrNull { it.slot == slot }
+        marks.forEach { mark ->
             Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(flagColor(entry?.color ?: "")),
-                    )
+                    // The chip's text names the flag; the dot is decoration.
+                    FlagDot(mark, modifier = Modifier.clearAndSetSemantics {})
                     Spacer(Modifier.width(4.dp))
-                    Text(text = entry?.label ?: slot, style = MaterialTheme.typography.labelSmall)
+                    Text(text = mark.label, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
@@ -580,15 +584,16 @@ private fun KeywordChips(
 
 /**
  * The (slot, label, tagged) triples the reader's flag menu renders: enabled
- * palette entries first, then stray tagged slots whose entry is disabled or
- * deleted (labelled from the palette when present, else by slot id). Pure,
- * so it unit-tests without Compose.
+ * keyword entries first, then stray tagged slots whose entry is disabled or
+ * deleted (labelled from the palette when present, else by slot id). The
+ * built-in flag's entry is never a row here: the star button beside the
+ * menu already toggles that flag. Pure, so it unit-tests without Compose.
  */
 internal fun readerFlagSlots(
     palette: List<FlagPaletteEntry>,
     flags: List<String>,
 ): List<Triple<String, String, Boolean>> {
-    val offered = palette.filter { it.enabled }
+    val offered = FlagPalette.keywordEntries(palette).filter { it.enabled }
     val tagged = FlagPalette.slotsIn(flags).toSet()
     val stray =
         FlagPalette.SLOTS.filter { slot ->
