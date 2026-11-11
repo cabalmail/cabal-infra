@@ -129,6 +129,12 @@ A stable element is removed only after a deprecation period:
 2. It keeps working for at least the remainder of the current major series.
 3. It is removed no earlier than the next **major** release.
 
+### Current deprecations
+
+| Element | Deprecated | Stops working | What to do |
+| --- | --- | --- | --- |
+| `enabled` on an entry of the `flag_palette` preference (`/set_preferences`) | November 2026 | 2.0.0 | Send entries as `{slot, label, color}`. The field is still accepted and stored, and nothing reads it: a flag is in the palette or it is not. From 2.0.0 an entry that carries it is refused, and the settings push with it. Plan: [2.x/flag-palette-enabled-removal.md](./2.x/flag-palette-enabled-removal.md). |
+
 ## Consumer responsibilities
 
 Compatibility is a two-way contract. To stay compatible across minor and patch

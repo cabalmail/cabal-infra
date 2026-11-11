@@ -23,7 +23,7 @@ DATA_DIR = os.environ.get('SELFTEST_DATA_DIR',
 # Must match the folder set the golden file was generated against.
 FIXTURE_FOLDERS = {'', '.Receipts', '.Archive', '.Work.Clients', '.Trash',
                    '.My Stuff', '.Newsletters'}
-# And the enabled palette slots (rules-composition plan, decision 6).
+# And the palette's slots (rules-composition plan, decision 6).
 FIXTURE_PALETTE = frozenset({'cabal-flag-01', 'cabal-flag-02',
                              'cabal-flag-07'})
 

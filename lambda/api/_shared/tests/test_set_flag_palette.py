@@ -202,14 +202,17 @@ class SetFlagPaletteTest(unittest.TestCase):
         self.assertIn('flag not in palette', json.loads(response['body'])['status'])
         self.assertEqual(STORES, [])
 
-    def test_disabled_slot_is_rejected_for_set(self):
+    def test_an_entry_stored_as_disabled_still_sets(self):
+        # `enabled` is deprecated and read by nothing: a slot is in the
+        # palette or it is not (docs/2.x/flag-palette-enabled-removal.md).
+        # test_slot_not_in_palette_is_rejected is the other half.
         response = set_flag.handler(_event('cabal-flag-02'), None)
-        self.assertEqual(response['statusCode'], 400)
-        self.assertEqual(STORES, [])
+        self.assertEqual(response['statusCode'], 200)
+        self.assertEqual(STORES, [('add', (1, 2), 'cabal-flag-02')])
 
     def test_unset_skips_the_palette_check(self):
-        # Untagging a retired (or disabled) slot must stay possible, and
-        # must not even need the palette read to succeed.
+        # Untagging a retired slot must stay possible, and must not even
+        # need the palette read to succeed.
         global PREFS_ERROR  # pylint: disable=global-statement
         PREFS_ERROR = _ClientError('down')
         response = set_flag.handler(_event('cabal-flag-19', op='unset'), None)

@@ -17,11 +17,10 @@ Custom flags are the keyword slots of the caller's flag palette
 the string set `flags` on the state row. They change by ADD and DELETE,
 never by replacing the set, so two devices that change different slots of
 one item both win. The system flag is not one of them: on a feed item it is
-is_favorite. Adding needs a slot that is enabled in the palette; removing
-needs only a well-formed slot, so a flag whose palette entry is gone can
-still be cleared (set_flag's rule for mail). Every entry's flags are checked
-before anything is written, so a call refused for a flag has changed
-nothing.
+is_favorite. Adding needs a slot that is in the palette; removing needs only
+a well-formed slot, so a flag whose palette entry is gone can still be
+cleared (set_flag's rule for mail). Every entry's flags are checked before
+anything is written, so a call refused for a flag has changed nothing.
 '''
 import json
 import os
@@ -110,39 +109,38 @@ def slots_of(entry, name):
 
 
 def check_palette(user, changes):
-    '''Refuses the call unless every slot it adds is enabled in the caller's
-    palette. A call that adds nothing does not read the palette, so nothing
-    about the palette can fail it.'''
+    '''Refuses the call unless every slot it adds is in the caller's palette.
+    A call that adds nothing does not read the palette, so nothing about the
+    palette can fail it.'''
     adding = set().union(*(add for add, _ in changes))
     if not adding:
         return
     try:
-        enabled = palette_slots(user)
+        listed = palette_slots(user)
     except ClientError as err:
         # Fail closed, as set_flag does: without the palette no slot can be
         # vouched for.
         raise ApiError(500, 'palette_unavailable', 'The flag palette could not be read.') from err
-    refused = sorted(slot for slot in adding if not enabled.get(slot, False))
+    refused = sorted(adding - listed)
     if refused:
         raise ApiError(400, 'flag_not_in_palette',
-                       f'Not an enabled flag in the palette: {", ".join(refused)}.',
+                       f'Not a flag in the palette: {", ".join(refused)}.',
                        flags=refused)
 
 
 def palette_slots(user):
-    '''The caller's palette as {slot: enabled}, read as set_flag reads it: an
-    entry without `enabled` is enabled, and a missing or malformed palette has
-    no slots.'''
+    '''The slots in the caller's palette, read as set_flag reads it: an
+    entry's `enabled` is not read (docs/2.x/flag-palette-enabled-removal.md),
+    and a missing or malformed palette has no slots.'''
     item = preferences.get_item(Key={'user': user}).get('Item', {})
     raw = item.get('app', {}).get('flag_palette', '[]')
     try:
         entries = json.loads(raw)
     except (TypeError, ValueError):
-        return {}
+        return set()
     if not isinstance(entries, list):
-        return {}
-    return {entry.get('slot'): entry.get('enabled', True)
-            for entry in entries if isinstance(entry, dict)}
+        return set()
+    return {entry.get('slot') for entry in entries if isinstance(entry, dict)}
 
 
 def build_updates(entry, sort_key, now, add, remove):
