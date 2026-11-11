@@ -205,12 +205,11 @@ class SearchViewModel(
     }
 
     /**
-     * Sets or clears the default flag, the first enabled entry of Settings >
-     * Flags (a result row's long-press). Nothing happens while every flag
-     * is disabled.
+     * Sets or clears the default flag, the first entry of Settings > Flags
+     * (a result row's long-press).
      */
     fun toggleDefaultFlag(envelope: Envelope) {
-        val flag = FlagToggle.defaultFlag(container.preferences.preferences.value.flagPalette) ?: return
+        val flag = FlagToggle.defaultFlag(container.preferences.preferences.value.flagPalette)
         setFlag(envelope, flag.slot, !flag.isSetIn(envelope.flags))
     }
 

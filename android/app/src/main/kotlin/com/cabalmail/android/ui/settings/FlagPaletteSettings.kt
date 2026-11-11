@@ -20,7 +20,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,10 +52,10 @@ import com.cabalmail.kit.settings.FlagPaletteEntry
  *
  * The list is the effective palette ([FlagPalette.effective]), so the
  * built-in entry is always a row, whether or not it has been stored yet. It
- * renames, recolors and moves like the others, resets where they delete,
- * and cannot be disabled. Every edit goes through [FlagPaletteEdits].
+ * renames, recolors and moves like the others, and resets where they
+ * delete. Every edit goes through [FlagPaletteEdits].
  *
- * The first enabled entry is the default flag, the one the swipe, the star
+ * The first entry is the default flag, the one the swipe, the star
  * button and the flag shortcut set (`FlagToggle`). Its row says so once
  * there is a second flag to tell it from, and every other flag's dialog
  * offers Make default, which moves that flag to the top.
@@ -71,7 +70,7 @@ internal fun FlagPaletteSettings(
 ) {
     val palette = FlagPalette.effective(preferences.flagPalette)
     // The Default mark needs a second flag to mean anything.
-    val defaultSlot = FlagPalette.defaultEntry(preferences.flagPalette)?.slot.takeIf { palette.size > 1 }
+    val defaultSlot = FlagPalette.defaultEntry(preferences.flagPalette).slot.takeIf { palette.size > 1 }
     var editingSlot by rememberSaveable { mutableStateOf<String?>(null) }
 
     palette.forEachIndexed { index, entry ->
@@ -87,14 +86,10 @@ internal fun FlagPaletteSettings(
             },
             headlineContent = { Text(entry.label) },
             supportingContent =
-                when {
-                    !entry.enabled -> {
-                        { Text(stringResource(R.string.flags_disabled)) }
-                    }
-                    entry.slot == defaultSlot -> {
-                        { Text(stringResource(R.string.flags_default)) }
-                    }
-                    else -> null
+                if (entry.slot == defaultSlot) {
+                    { Text(stringResource(R.string.flags_default)) }
+                } else {
+                    null
                 },
             trailingContent = {
                 Row {
@@ -170,13 +165,11 @@ internal fun FlagPaletteSettings(
 }
 
 /**
- * Label, color, enabled, and the only route to deletion — behind a
- * confirmation, because per-message tags on a retired slot outlive the
- * palette entry. The built-in flag's entry has no deletion: it offers Reset
- * to default in its place, which needs no confirmation, because it changes
- * a name, a color and a position and touches no message. It has no Enabled
- * switch either: every mailbox has the flag, and switching a built-in flag
- * off has nothing to mean.
+ * Label, color, and the only route to deletion — behind a confirmation,
+ * because per-message tags on a retired slot outlive the palette entry.
+ * The built-in flag's entry has no deletion: it offers Reset to default in
+ * its place, which needs no confirmation, because it changes a name, a
+ * color and a position and touches no message.
  */
 @Composable
 private fun FlagEditorDialog(
@@ -207,9 +200,9 @@ private fun FlagEditorDialog(
                 )
                 Text(stringResource(R.string.flags_color), style = MaterialTheme.typography.titleSmall)
                 ColorSwatches(selectedColor = entry.color, onSelect = { onChange(entry.copy(color = it)) })
-                // Disabled, never hidden, on the flag that is the default
-                // already and on one that is switched off: the dialog keeps
-                // its shape whichever flag it opens on.
+                // Dimmed, never hidden, on the flag that is the default
+                // already: the dialog keeps its shape whichever flag it
+                // opens on.
                 TextButton(onClick = onMakeDefault, enabled = canMakeDefault) {
                     Text(stringResource(R.string.flags_make_default))
                 }
@@ -223,18 +216,6 @@ private fun FlagEditorDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.flags_enabled), modifier = Modifier.weight(1f))
-                        Switch(checked = entry.enabled, onCheckedChange = { onChange(entry.copy(enabled = it)) })
-                    }
-                    Text(
-                        stringResource(R.string.flags_enabled_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     TextButton(onClick = { confirmingDelete = true }) {
                         Text(stringResource(R.string.flags_delete), color = MaterialTheme.colorScheme.error)
                     }

@@ -563,21 +563,40 @@ What the second one settled, all from one value the controls read
   the list replaces the "Flag" item instead of sitting in a submenu
   beside it. When the default flag would be the only row, the reader
   shows no flag rows and the row menu keeps its one plain item.
+
+  > **Erratum (2026-11-11):** the menus list every entry. The Enabled
+  > switch left custom flags (`post-wave-3/flags-and-cross-media.md`,
+  > decision 10), so no entry is disabled: a flag an older build stored
+  > as switched off is offered like any other, and the extra rows are
+  > only for a flag the message carries whose entry was deleted.
 - **Settings > Flags.** The first enabled row says "Default" under its
   name once the list has a second flag, and the footer says what that
   means. "Make default" is a button in each flag's dialog, since these
   rows have no context menu; it is a move to the top, and is dimmed on
   the default flag and on a disabled one. The swipe picker's option
   reads "Toggle default flag".
+
+  > **Erratum (2026-11-11):** the default flag is the first row, with
+  > nothing passed over, and "Make default" is dimmed on that row
+  > alone. A flag's dialog has no Enabled switch, and a row never says
+  > "Disabled" (`post-wave-3/flags-and-cross-media.md`, decision 10).
 - **No default flag** (reachable only from a stored palette whose
   built-in entry is disabled): the swipe edge does not drag, the
   selection bar's star and the reader's star are dimmed, the overflow
   item is absent, and the shortcut and the search long-press do nothing.
   A flag the message already carries is still listed in the menus, for
   removal.
+
+  > **Erratum (2026-11-11):** this state is gone. The list always
+  > holds the built-in flag and the app no longer reads `enabled`, so
+  > there is always a default flag, and the handling described here was
+  > deleted (`post-wave-3/flags-and-cross-media.md`, decision 10).
 - **Filters.** The Flagged pills (mail and feeds) and the search sheet's
   checkbox take the built-in entry's label. With that entry disabled
   they are hidden unless lit.
+
+  > **Erratum (2026-11-11):** they are always shown; the entry cannot
+  > be disabled (`post-wave-3/flags-and-cross-media.md`, decision 10).
 - **Rule editor.** One list in palette order; the built-in entry's
   toggle is the rule's `flag`, offered even when the entry is disabled,
   and its atom is never written to the rule's `flags`.
@@ -585,6 +604,10 @@ What the second one settled, all from one value the controls read
   built-in entry's name and color whatever its position. With the entry
   disabled the swipe edge does not drag and the reader's button is
   dimmed, not removed.
+
+  > **Erratum (2026-11-11):** the swipe edge always drags and the
+  > button is never dimmed for this; the entry cannot be disabled
+  > (`post-wave-3/flags-and-cross-media.md`, decision 10).
 
 The same items as Phase 3 against the Android surfaces:
 `FlagPaletteSettings` (up/down reorder gains "Make default"; Reset in

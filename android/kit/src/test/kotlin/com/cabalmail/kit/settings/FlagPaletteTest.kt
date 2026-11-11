@@ -18,8 +18,17 @@ class FlagPaletteTest {
     private fun samplePalette() =
         listOf(
             FlagPaletteEntry(slot = "cabal-flag-01", label = "Urgent", color = "red"),
-            FlagPaletteEntry(slot = "cabal-flag-02", label = "Waiting", color = "blue", enabled = false),
+            FlagPaletteEntry(slot = "cabal-flag-02", label = "Waiting", color = "blue"),
         )
+
+    /**
+     * A palette as a build from before the Enabled switch was removed
+     * stored it: `enabled` on every entry, and the first flag switched off.
+     */
+    private val olderBuildWire =
+        """[{"slot":"cabal-flag-01","label":"Urgent","color":"red","enabled":false},""" +
+            """{"slot":"\\Flagged","label":"Flagged","color":"yellow","enabled":false},""" +
+            """{"slot":"cabal-flag-02","label":"Waiting","color":"blue","enabled":true}]"""
 
     @Test
     fun `encode decode round-trip`() {
@@ -27,16 +36,41 @@ class FlagPaletteTest {
     }
 
     @Test
-    fun `enabled always rides the wire and defaults true on decode`() {
-        val wire = FlagPalette.encode(listOf(FlagPaletteEntry("cabal-flag-01", "A", "red")))
-        assertTrue("\"enabled\":true" in wire)
+    fun `an entry rides the wire as slot label and color`() {
+        // `enabled` is deprecated on the server and stops being accepted in
+        // 2.0, so this build must never write it.
+        assertEquals(
+            """[{"slot":"cabal-flag-01","label":"A","color":"red"}]""",
+            FlagPalette.encode(listOf(FlagPaletteEntry("cabal-flag-01", "A", "red"))),
+        )
+        assertFalse("enabled" in FlagPalette.encode(listOf(system()) + samplePalette()))
+    }
 
+    @Test
+    fun `an unknown color is carried rather than coerced`() {
+        // A newer server's vocabulary round-trips back out unchanged.
         val decoded = FlagPalette.decode("""[{"slot":"cabal-flag-03","label":"New","color":"chartreuse"}]""")!!
-        assertTrue(decoded.single().enabled)
-        // An unknown color (a newer server's vocabulary) is carried, not
-        // coerced, and round-trips back out unchanged.
         assertEquals("chartreuse", decoded.single().color)
         assertTrue("chartreuse" in FlagPalette.encode(decoded))
+    }
+
+    @Test
+    fun `an older build's enabled is read past and not written back`() {
+        // The palette decodes whole, whatever `enabled` says...
+        val decoded = FlagPalette.decode(olderBuildWire)!!
+        assertEquals(
+            listOf(samplePalette()[0], system(), samplePalette()[1]),
+            decoded,
+        )
+        // ...a flag stored as switched off is a flag like any other, here
+        // the default one because it is first...
+        assertEquals("cabal-flag-01", FlagPalette.defaultEntry(decoded).slot)
+        // ...and the next push from this build drops the key.
+        val applied =
+            PreferencesWire.applyRemote(AppPreferences(), Preferences(app = mapOf("flag_palette" to olderBuildWire)))
+        val pushed = PreferencesWire.toUpdate(applied).app!!["flag_palette"]!!
+        assertFalse("enabled" in pushed, pushed)
+        assertEquals(decoded, FlagPalette.decode(pushed))
     }
 
     @Test
@@ -79,8 +113,7 @@ class FlagPaletteTest {
     private fun system(
         label: String = "Flagged",
         color: String = "yellow",
-        enabled: Boolean = true,
-    ) = FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = label, color = color, enabled = enabled)
+    ) = FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = label, color = color)
 
     @Test
     fun `the system slot is the Flagged atom`() {
@@ -122,26 +155,31 @@ class FlagPaletteTest {
     }
 
     @Test
-    fun `the default entry is the first enabled one`() {
+    fun `the default entry is the first one`() {
         // Untouched palette: the system flag, as before the palette had it.
         assertEquals(system(), FlagPalette.defaultEntry(emptyList()))
         assertEquals(system(), FlagPalette.defaultEntry(samplePalette()))
         // Another flag moved to the top takes over.
-        assertEquals("cabal-flag-01", FlagPalette.defaultEntry(listOf(samplePalette()[0], system()))?.slot)
-        // A disabled entry is passed over, wherever it sits.
+        assertEquals("cabal-flag-01", FlagPalette.defaultEntry(listOf(samplePalette()[0], system())).slot)
+        assertEquals("cabal-flag-02", FlagPalette.defaultEntry(listOf(samplePalette()[1], system())).slot)
+        // Position is the whole rule: a stored system entry in first place
+        // is the default whatever follows it.
         assertEquals(
-            "cabal-flag-01",
-            FlagPalette.defaultEntry(listOf(system(enabled = false)) + samplePalette())?.slot,
+            FlagPalette.SYSTEM_SLOT,
+            FlagPalette.defaultEntry(listOf(system(label = "Urgent")) + samplePalette()).slot,
         )
-        assertEquals(system(), FlagPalette.defaultEntry(listOf(samplePalette()[1], system())))
     }
 
     @Test
-    fun `there is no default entry when every flag is disabled`() {
-        // No silent fallback to the system flag: the toggles have nothing
-        // to act on.
-        assertNull(FlagPalette.defaultEntry(listOf(system(enabled = false))))
-        assertNull(FlagPalette.defaultEntry(listOf(system(enabled = false), samplePalette()[1])))
+    fun `there is a default entry even where an older build switched every flag off`() {
+        // Such a palette used to have no default flag, and the swipe, the
+        // star and the shortcut went inert on it.
+        val allOff =
+            FlagPalette.decode(
+                """[{"slot":"\\Flagged","label":"Flagged","color":"yellow","enabled":false},""" +
+                    """{"slot":"cabal-flag-02","label":"Waiting","color":"blue","enabled":false}]""",
+            )!!
+        assertEquals(system(), FlagPalette.defaultEntry(allOff))
     }
 
     @Test
@@ -176,8 +214,8 @@ class FlagPaletteTest {
     @Test
     fun `editing the system entry stores it in place`() {
         val stored = samplePalette()
-        // Renamed, recolored or disabled: stored first, where it sat.
-        listOf(system(label = "Urgent"), system(color = "red"), system(enabled = false)).forEach { changed ->
+        // Renamed or recolored: stored first, where it sat.
+        listOf(system(label = "Urgent"), system(color = "red")).forEach { changed ->
             val edited = FlagPalette.effective(stored).toMutableList().apply { this[0] = changed }
             assertEquals(listOf(changed) + stored, FlagPalette.storedAfterEditing(edited, previous = stored))
         }
@@ -201,7 +239,7 @@ class FlagPaletteTest {
         val stored =
             listOf(
                 samplePalette()[0],
-                system(label = "Urgent", color = "red", enabled = false),
+                system(label = "Urgent", color = "red"),
                 samplePalette()[1],
             )
         val reset = FlagPalette.resettingSystemEntry(stored)
@@ -218,7 +256,8 @@ class FlagPaletteTest {
         // One backslash in the atom, escaped once by JSON.
         assertTrue(""""slot":"\\Flagged"""" in wire, wire)
         assertEquals(palette, FlagPalette.decode(wire))
-        // The server's canonical form (keys sorted) decodes the same.
+        // The server's canonical form (keys sorted), as an older build
+        // stored it with `enabled`, decodes the same.
         val canonical =
             """[{"color":"red","enabled":true,"label":"Urgent","slot":"\\Flagged"},""" +
                 """{"color":"red","enabled":true,"label":"Urgent","slot":"cabal-flag-01"}]"""
@@ -233,8 +272,8 @@ class FlagPaletteTest {
             listOf(FlagPalette.SYSTEM_SLOT, "cabal-flag-01", "cabal-flag-02"),
             FlagPalette.slotsIn(flags, samplePalette()),
         )
-        // Palette order, not slot order; a disabled entry still counts.
-        val reordered = listOf(samplePalette()[1], system(enabled = false), samplePalette()[0])
+        // Palette order, not slot order.
+        val reordered = listOf(samplePalette()[1], system(), samplePalette()[0])
         assertEquals(
             listOf("cabal-flag-02", FlagPalette.SYSTEM_SLOT, "cabal-flag-01"),
             FlagPalette.slotsIn(flags, reordered),
@@ -292,7 +331,7 @@ class FlagPaletteTest {
 
         val applied = PreferencesWire.applyRemote(AppPreferences(), Preferences(app = mapOf("flag_palette" to wire!!)))
         assertEquals(edited, applied.flagPalette)
-        assertEquals("Urgent", FlagPalette.defaultEntry(applied.flagPalette)?.label)
+        assertEquals("Urgent", FlagPalette.defaultEntry(applied.flagPalette).label)
     }
 
     @Test

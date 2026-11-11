@@ -89,14 +89,24 @@ class FlagPaletteEditsTest {
         assertEquals(stored, FlagPaletteEdits.moved(stored, waiting.slot, 1))
     }
 
+    /** A palette as an older build stored it: "Urgent" first and switched off, then the built-in flag. */
+    private val olderBuildPalette =
+        FlagPalette.decode(
+            """[{"slot":"cabal-flag-01","label":"Urgent","color":"red","enabled":false},""" +
+                """{"slot":"\\Flagged","label":"Flagged","color":"yellow"},""" +
+                """{"slot":"cabal-flag-02","label":"Waiting","color":"blue","enabled":false}]""",
+        )!!
+
     @Test
-    fun `the default flag is the first enabled one`() {
+    fun `the default flag is the first one`() {
         assertTrue(FlagPaletteEdits.isDefault(emptyList(), FlagPalette.SYSTEM_SLOT))
         assertTrue(FlagPaletteEdits.isDefault(listOf(urgent), FlagPalette.SYSTEM_SLOT))
         assertFalse(FlagPaletteEdits.isDefault(listOf(urgent), urgent.slot))
         assertTrue(FlagPaletteEdits.isDefault(listOf(urgent, system), urgent.slot))
-        // A disabled first entry is passed over.
-        assertTrue(FlagPaletteEdits.isDefault(listOf(urgent.copy(enabled = false), system), FlagPalette.SYSTEM_SLOT))
+        // A first entry an older build switched off is the default all the
+        // same. It used to be passed over for the next one.
+        assertTrue(FlagPaletteEdits.isDefault(olderBuildPalette, urgent.slot))
+        assertFalse(FlagPaletteEdits.isDefault(olderBuildPalette, FlagPalette.SYSTEM_SLOT))
     }
 
     @Test
@@ -111,20 +121,30 @@ class FlagPaletteEditsTest {
     }
 
     @Test
-    fun `make default is not offered for the default, a disabled flag, or a flag that is gone`() {
-        val stored = listOf(urgent, waiting.copy(enabled = false))
+    fun `make default is not offered for the default or for a flag that is gone`() {
+        val stored = listOf(urgent, waiting)
         assertFalse(FlagPaletteEdits.canMakeDefault(stored, FlagPalette.SYSTEM_SLOT))
-        assertFalse(FlagPaletteEdits.canMakeDefault(stored, waiting.slot))
         assertFalse(FlagPaletteEdits.canMakeDefault(stored, "cabal-flag-09"))
         assertEquals(stored, FlagPaletteEdits.madeDefault(stored, FlagPalette.SYSTEM_SLOT))
-        assertEquals(stored, FlagPaletteEdits.madeDefault(stored, waiting.slot))
         assertEquals(stored, FlagPaletteEdits.madeDefault(stored, "cabal-flag-09"))
+    }
+
+    @Test
+    fun `a flag an older build switched off can be made the default`() {
+        // It was refused: a switched-off flag was offered nowhere.
+        assertTrue(FlagPaletteEdits.canMakeDefault(olderBuildPalette, waiting.slot))
+        assertEquals(
+            listOf(waiting.slot, urgent.slot, FlagPalette.SYSTEM_SLOT),
+            FlagPaletteEdits.madeDefault(olderBuildPalette, waiting.slot).map { it.slot },
+        )
+        // The first one is the default already, so there is nothing to do.
+        assertFalse(FlagPaletteEdits.canMakeDefault(olderBuildPalette, urgent.slot))
     }
 
     @Test
     fun `reset drops the stored entry and is offered only when there is one`() {
         assertFalse(FlagPaletteEdits.canReset(listOf(urgent)))
-        val stored = listOf(urgent, system.copy(label = "Later", color = "teal", enabled = false))
+        val stored = listOf(urgent, system.copy(label = "Later", color = "teal"))
         assertTrue(FlagPaletteEdits.canReset(stored))
         assertEquals(listOf(urgent), FlagPaletteEdits.reset(stored))
         assertEquals(listOf(system, urgent), FlagPalette.effective(FlagPaletteEdits.reset(stored)))

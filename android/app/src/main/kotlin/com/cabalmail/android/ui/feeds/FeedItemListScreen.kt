@@ -186,12 +186,9 @@ fun FeedItemListScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                // The Flagged pill filters on the built-in flag. While that
-                // flag's entry is disabled the pill is hidden unless lit, so
-                // a filter that is on can still be turned off.
-                val showFlagPill =
-                    FlagToggle.systemFlag(LocalFlagPalette.current) != null || state.filter == RssItemFilter.FAVORITE
-                RssItemFilter.PILLS.filter { it != RssItemFilter.FAVORITE || showFlagPill }.forEach { filter ->
+                // The Flagged pill filters on the built-in flag, under the
+                // name it has in Settings > Flags (RssItemFilter.label).
+                RssItemFilter.PILLS.forEach { filter ->
                     FilterChip(
                         selected = state.filter == filter,
                         onClick = { viewModel.setFilter(state.filter.toggling(filter)) },
@@ -480,8 +477,7 @@ private fun FeedSwipeRow(
 ) {
     val bindings = LocalSwipeBindings.current
     // A feed item's one flag is the built-in flag, so its swipe takes that
-    // flag's name and color from Settings > Flags. While that entry is
-    // disabled the edge bound to the flag does not drag.
+    // flag's name and color from Settings > Flags.
     val flag = FlagToggle.systemFlag(LocalFlagPalette.current)
     val currentToggleRead by rememberUpdatedState(onToggleRead)
     val currentToggleFavorite by rememberUpdatedState(onToggleFavorite)

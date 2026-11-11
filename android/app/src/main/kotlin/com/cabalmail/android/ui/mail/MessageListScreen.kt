@@ -74,7 +74,6 @@ import com.cabalmail.android.ui.settings.labelRes
 import com.cabalmail.android.ui.theme.FlagMenu
 import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.ui.theme.LocalFlagPalette
-import com.cabalmail.android.ui.theme.UiLabel
 import com.cabalmail.android.ui.theme.text
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.settings.FlagPaletteEntry
@@ -152,12 +151,11 @@ fun MessageListScreen(
             val envelope = envelopeAt(cursor) ?: return@collect
             when (shortcut) {
                 Shortcut.TOGGLE_READ -> viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen)
-                // The default flag, read live like the envelope; with none
-                // (every flag disabled) the chord does nothing.
+                // The default flag, read live like the envelope.
                 Shortcut.TOGGLE_FLAG ->
                     FlagToggle
                         .defaultFlag(container.preferences.preferences.value.flagPalette)
-                        ?.let { flag ->
+                        .let { flag ->
                             viewModel.setFlag(setOf(envelope.id), flag.slot, !flag.isSetIn(envelope.flags))
                         }
                 else -> Unit
@@ -498,8 +496,7 @@ private fun SelectionTopBar(
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     // The bar's star sets the default flag on the selection and the
-    // overflow item clears it, each under the flag's name. With no default
-    // flag the star is dimmed and the overflow item is absent.
+    // overflow item clears it, each under the flag's name.
     val defaultFlag = FlagToggle.defaultFlag(LocalFlagPalette.current)
     TopAppBar(
         title = {
@@ -520,13 +517,10 @@ private fun SelectionTopBar(
                 Icon(Icons.Default.MailOutline, contentDescription = stringResource(R.string.mark_read))
             }
             IconButton(
-                onClick = { defaultFlag?.let { viewModel.setFlag(state.selected, it.slot, true) } },
-                enabled = state.selected.isNotEmpty() && defaultFlag != null,
+                onClick = { viewModel.setFlag(state.selected, defaultFlag.slot, true) },
+                enabled = state.selected.isNotEmpty(),
             ) {
-                Icon(
-                    Icons.Default.Star,
-                    contentDescription = (defaultFlag?.title(isSet = false) ?: UiLabel.Fixed(R.string.add_flag)).text(),
-                )
+                Icon(Icons.Default.Star, contentDescription = defaultFlag.title(isSet = false).text())
             }
             IconButton(
                 onClick = onDispose,
@@ -549,15 +543,13 @@ private fun SelectionTopBar(
                         viewModel.setFlag(state.selected, "\\Seen", false)
                     },
                 )
-                if (defaultFlag != null) {
-                    DropdownMenuItem(
-                        text = { Text(defaultFlag.title(isSet = true).text()) },
-                        onClick = {
-                            menuOpen = false
-                            viewModel.setFlag(state.selected, defaultFlag.slot, false)
-                        },
-                    )
-                }
+                DropdownMenuItem(
+                    text = { Text(defaultFlag.title(isSet = true).text()) },
+                    onClick = {
+                        menuOpen = false
+                        viewModel.setFlag(state.selected, defaultFlag.slot, false)
+                    },
+                )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.move_to)) },
                     onClick = {
@@ -666,12 +658,10 @@ private fun FilterPills(
 ) {
     // The Flagged pill filters on the built-in flag, the one flag the
     // server can filter on, so it carries that flag's name from Settings >
-    // Flags. While that flag's entry is disabled the pill is hidden unless
-    // lit, so a filter that is on can still be turned off.
+    // Flags.
     val palette = LocalFlagPalette.current
-    val showFlagPill = FlagToggle.systemFlag(palette) != null || state.filter == MessageFilter.FLAGGED
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        MessageFilter.PILLS.filter { it != MessageFilter.FLAGGED || showFlagPill }.forEach { filter ->
+        MessageFilter.PILLS.forEach { filter ->
             val count =
                 when (filter) {
                     MessageFilter.ALL -> state.counts?.all
@@ -782,10 +772,10 @@ private fun InteractiveRow(
                     viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen)
                 },
             )
-            // Flags: one run of every enabled flag in the order of
-            // Settings > Flags, the built-in one included, each check-marked
-            // when the message carries it, then any flag it carries whose
-            // entry is disabled or deleted (FlagMenu.rows). When the default
+            // Flags: one run of every flag in the order of Settings >
+            // Flags, the built-in one included, each check-marked when the
+            // message carries it, then any flag it carries whose entry was
+            // deleted (FlagMenu.rows). When the default
             // flag is all there is, the run is the one plain item it always
             // was: "Flag" / "Remove flag", or the flag's own name.
             val flagRows = FlagMenu.rows(palette, envelope.flags)

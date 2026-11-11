@@ -48,8 +48,8 @@ internal data class FlagDotMark(
         /**
          * A message's marks: every palette flag it carries, the system flag
          * included, in palette order ([FlagPalette.slotsIn]) and capped at
-         * [limit]. A flag whose entry is disabled is still drawn, like every
-         * tag that outlives being offered.
+         * [limit]. A flag whose entry was deleted is still drawn, gray and
+         * under its slot id, like every tag that outlives being offered.
          */
         fun marks(
             flags: List<String>,

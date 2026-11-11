@@ -5,7 +5,6 @@ import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -17,25 +16,35 @@ import org.junit.jupiter.api.Test
  */
 class FlagToggleTest {
     private val todo = FlagPaletteEntry(slot = "cabal-flag-01", label = "Todo", color = "blue")
-    private val later = FlagPaletteEntry(slot = "cabal-flag-02", label = "Later", color = "teal", enabled = false)
+    private val later = FlagPaletteEntry(slot = "cabal-flag-02", label = "Later", color = "teal")
 
     private fun system(
         label: String = "Flagged",
         color: String = "yellow",
-        enabled: Boolean = true,
-    ) = FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = label, color = color, enabled = enabled)
+    ) = FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = label, color = color)
+
+    /**
+     * A palette as a build from before the Enabled switch was removed
+     * stored it: "Later" first and switched off, the built-in flag renamed
+     * and switched off, then "Todo".
+     */
+    private val olderBuildPalette =
+        FlagPalette.decode(
+            """[{"slot":"cabal-flag-02","label":"Later","color":"teal","enabled":false},""" +
+                """{"slot":"\\Flagged","label":"Urgent","color":"red","enabled":false},""" +
+                """{"slot":"cabal-flag-01","label":"Todo","color":"blue"}]""",
+        )!!
 
     // ---------------------------------------------------------- which flag
 
     @Test
-    fun `mail's controls act on the first enabled entry`() {
+    fun `mail's controls act on the first entry`() {
         assertEquals(FlagToggle(FlagPalette.SYSTEM_SLOT, "Flagged", "yellow"), FlagToggle.defaultFlag(emptyList()))
         assertEquals(FlagToggle(FlagPalette.SYSTEM_SLOT, "Flagged", "yellow"), FlagToggle.defaultFlag(listOf(todo)))
         assertEquals(FlagToggle("cabal-flag-01", "Todo", "blue"), FlagToggle.defaultFlag(listOf(todo, system())))
-        // A disabled entry is passed over, and with every entry disabled
-        // there is no default: nothing falls back to the built-in flag.
-        assertEquals("cabal-flag-01", FlagToggle.defaultFlag(listOf(later, system(enabled = false), todo))?.slot)
-        assertNull(FlagToggle.defaultFlag(listOf(system(enabled = false), later)))
+        // A flag an older build switched off is a flag like any other:
+        // first in the list, it is the default. It used to be passed over.
+        assertEquals(FlagToggle("cabal-flag-02", "Later", "teal"), FlagToggle.defaultFlag(olderBuildPalette))
     }
 
     @Test
@@ -45,15 +54,17 @@ class FlagToggleTest {
             FlagToggle(FlagPalette.SYSTEM_SLOT, "Urgent", "red"),
             FlagToggle.systemFlag(listOf(todo, system(label = "Urgent", color = "red"))),
         )
-        assertNull(FlagToggle.systemFlag(listOf(todo, system(enabled = false))))
+        // Switched off by an older build, it is still the feed's flag. The
+        // feed's swipe, star and pill used to go away on such a palette.
+        assertEquals(FlagToggle(FlagPalette.SYSTEM_SLOT, "Urgent", "red"), FlagToggle.systemFlag(olderBuildPalette))
     }
 
     @Test
-    fun `the filters take the built-in flag's name, enabled or not`() {
+    fun `the filters take the built-in flag's name`() {
         assertEquals("Flagged", FlagToggle.systemFlagName(emptyList()))
         assertEquals("Flagged", FlagToggle.systemFlagName(listOf(todo)))
         assertEquals("Urgent", FlagToggle.systemFlagName(listOf(todo, system(label = "Urgent"))))
-        assertEquals("Urgent", FlagToggle.systemFlagName(listOf(system(label = "Urgent", enabled = false))))
+        assertEquals("Urgent", FlagToggle.systemFlagName(olderBuildPalette))
     }
 
     // --------------------------------------------------------------- words
@@ -92,48 +103,62 @@ class FlagToggleTest {
     // ---------------------------------------------------------- flag menus
 
     @Test
-    fun `a flag menu lists every enabled flag in list order, the built-in one included`() {
+    fun `a flag menu lists every flag in list order, the built-in one included`() {
         val palette = listOf(todo, system(label = "Urgent", color = "red"), later)
         assertEquals(
             listOf(
                 FlagMenuRow("cabal-flag-01", "Todo", "blue", isOn = false),
                 FlagMenuRow(FlagPalette.SYSTEM_SLOT, "Urgent", "red", isOn = true),
+                FlagMenuRow("cabal-flag-02", "Later", "teal", isOn = false),
             ),
             FlagMenu.rows(palette, flags = listOf("\\Seen", "\\Flagged")),
         )
         // An untouched palette with flags of the user's own: the built-in
         // flag leads.
         assertEquals(
-            listOf(FlagPalette.SYSTEM_SLOT, "cabal-flag-01"),
+            listOf(FlagPalette.SYSTEM_SLOT, "cabal-flag-01", "cabal-flag-02"),
             FlagMenu.rows(listOf(todo, later), flags = emptyList()).map { it.slot },
         )
     }
 
     @Test
-    fun `a flag the message carries whose entry is disabled or deleted stays removable`() {
-        val palette = listOf(todo, later)
+    fun `a flag an older build switched off is offered like any other`() {
+        // Carried by nothing: offered, unchecked. It used to be left out.
+        assertEquals(
+            listOf(
+                FlagMenuRow("cabal-flag-02", "Later", "teal", isOn = false),
+                FlagMenuRow(FlagPalette.SYSTEM_SLOT, "Urgent", "red", isOn = false),
+                FlagMenuRow("cabal-flag-01", "Todo", "blue", isOn = false),
+            ),
+            FlagMenu.rows(olderBuildPalette, flags = emptyList()),
+        )
+        // Carried: checked in its own place in the list. It used to be
+        // moved after the list, as a tag that could only be removed.
+        assertEquals(
+            listOf("cabal-flag-02" to true, FlagPalette.SYSTEM_SLOT to true, "cabal-flag-01" to false),
+            FlagMenu.rows(olderBuildPalette, flags = listOf("\\Flagged", "cabal-flag-02")).map { it.slot to it.isOn },
+        )
+    }
+
+    @Test
+    fun `a flag the message carries whose entry was deleted stays removable`() {
+        val palette = listOf(todo)
+        // Named by its slot id and gray, having no entry; after the list.
         assertEquals(
             listOf(
                 FlagMenuRow(FlagPalette.SYSTEM_SLOT, "Flagged", "yellow", isOn = false),
                 FlagMenuRow("cabal-flag-01", "Todo", "blue", isOn = false),
-                FlagMenuRow("cabal-flag-02", "Later", "teal", isOn = true),
                 FlagMenuRow("cabal-flag-09", "cabal-flag-09", "", isOn = true),
             ),
-            FlagMenu.rows(palette, flags = listOf("cabal-flag-09", "cabal-flag-02")),
+            FlagMenu.rows(palette, flags = listOf("cabal-flag-09")),
         )
-        // The built-in flag too, once its entry is disabled: not offered,
-        // but removable from a message that has it.
-        val disabled = listOf(system(label = "Urgent", enabled = false), todo)
-        assertEquals(listOf("cabal-flag-01"), FlagMenu.rows(disabled, flags = emptyList()).map { it.slot })
+        // Two of them come in slot order.
         assertEquals(
-            listOf(
-                FlagMenuRow("cabal-flag-01", "Todo", "blue", isOn = false),
-                FlagMenuRow(FlagPalette.SYSTEM_SLOT, "Urgent", "yellow", isOn = true),
-            ),
-            FlagMenu.rows(disabled, flags = listOf("\\Flagged")),
+            listOf(FlagPalette.SYSTEM_SLOT, "cabal-flag-01", "cabal-flag-05", "cabal-flag-09"),
+            FlagMenu.rows(palette, flags = listOf("cabal-flag-09", "cabal-flag-05")).map { it.slot },
         )
-        // An untagged disabled flag is not offered.
-        assertFalse(FlagMenu.rows(palette, flags = emptyList()).any { it.slot == "cabal-flag-02" })
+        // A deleted flag that the message does not carry is not offered.
+        assertFalse(FlagMenu.rows(palette, flags = emptyList()).any { it.slot == "cabal-flag-09" })
     }
 
     @Test
@@ -141,17 +166,18 @@ class FlagToggleTest {
         val untouched = FlagMenu.rows(emptyList(), flags = listOf("\\Flagged"))
         assertEquals(listOf(FlagMenuRow(FlagPalette.SYSTEM_SLOT, "Flagged", "yellow", isOn = true)), untouched)
         assertTrue(FlagMenu.isOnlyTheDefault(untouched, emptyList()))
+        // The row is there whether or not the message is flagged.
+        assertTrue(FlagMenu.isOnlyTheDefault(FlagMenu.rows(emptyList(), flags = emptyList()), emptyList()))
         // A second flag, or a stray tag, makes it a list.
         assertFalse(FlagMenu.isOnlyTheDefault(FlagMenu.rows(listOf(todo), emptyList()), listOf(todo)))
         assertFalse(
             FlagMenu.isOnlyTheDefault(FlagMenu.rows(emptyList(), listOf("cabal-flag-09")), emptyList()),
         )
-        // A lone stray row is not the default flag: with every flag
-        // disabled there is no default, and the row is there to remove it.
-        val noDefault = listOf(system(enabled = false))
-        val stray = FlagMenu.rows(noDefault, flags = listOf("\\Flagged"))
-        assertEquals(1, stray.size)
-        assertFalse(FlagMenu.isOnlyTheDefault(stray, noDefault))
-        assertEquals(emptyList<FlagMenuRow>(), FlagMenu.rows(noDefault, flags = emptyList()))
+        // A palette whose one entry an older build switched off has the
+        // same single row: there is always a default flag now.
+        val allOff =
+            FlagPalette.decode("""[{"slot":"\\Flagged","label":"Flagged","color":"yellow","enabled":false}]""")!!
+        assertTrue(FlagMenu.isOnlyTheDefault(FlagMenu.rows(allOff, flags = listOf("\\Flagged")), allOff))
+        assertEquals(1, FlagMenu.rows(allOff, flags = emptyList()).size)
     }
 }
