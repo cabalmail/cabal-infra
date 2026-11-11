@@ -19,7 +19,7 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 | Work item | Status |
 | --- | --- |
 | PR A: #1914 back-out buttons | Done (2026-10-20): #2155; #1914 closed. The guard is a new scan test, not decision 1's count check. |
-| Session 1: Kit writes and list tidy-ups | Not started (2026-11-09). Of sqlite-mail-store.md PR 0.2, the `setRead` and `setFavorite` rewrite merged as #2117 (#1956, 2026-10-18); the rest of PR 0.2, and PR 0.1's `transaction { }`, have not. |
+| Session 1: Kit writes and list tidy-ups | Not started (2026-11-09). Of sqlite-mail-store.md PR 0.2, the `setRead` and `setFavorite` rewrite merged as #2117 (#1956, 2026-10-18); PR 0.1's `transaction { }` landed in #2403 (2026-11-11) and the rest of PR 0.2 in #2404 (2026-11-11), so this session can start. |
 | PR B: Kit feed writes | Not started (2026-10-15). |
 | PR C: feed list tidy-ups | Not started (2026-10-15). |
 | Release R1 | Not started (2026-10-15). |
@@ -98,7 +98,7 @@ One Apple PR open at a time. Each PR updates the cross-media plan's Progress row
 
 ### Session 1: Kit writes and list tidy-ups (Next; starts when sqlite-mail-store.md PR 0.2 has merged)
 
-**Status:** Not started (2026-11-09). sqlite-mail-store.md PR 0.2 has not merged as one PR, but the rewrite of `setRead` and `setFavorite` that this session waited for has: #2117 (2026-10-18) made each write atomic with its queue row, closing #1956. PR 0.1's `transaction { }` helper, which PR B names, does not exist; #2117 used an inline `BEGIN` and `COMMIT`.
+**Status:** Not started (2026-11-11). sqlite-mail-store.md PR 0.2 did not merge as one PR, but all of it has merged: #2117 (2026-10-18) made `setRead` and `setFavorite` atomic with their queue row, closing #1956, and #2404 (2026-11-11) added the rest. PR 0.1's `transaction { }` helper, which PR B names, landed in #2403 (2026-11-11), and `setRead`, `setFavorite` and `markAllRead(subscriptionId:)` now run on it. It does not nest, so PR B's helper writes every subscription inside one `transaction { }` of its own rather than calling `markAllRead(subscriptionId:)` in a loop inside one.
 
 **PR B: Kit feed writes.** Files: `RSS/RssStore+State.swift`, `RssPendingDrain.swift`, `RssSyncEngine.swift`, both view models.
 - `RssSyncEngine.markAllRead(scope:)`, the one helper, used by both view models. Under decision 3 (a), in one PR 0.1 `transaction { }` it applies one tap-time watermark to every subscription in scope and queues one ordinary `mark_all_read` row per subscription, all with the same watermark. Same queue kind as today, so older builds, PR 0.2's import of set-aside files and sqlite-mail-store.md PR 4.5 need nothing new.

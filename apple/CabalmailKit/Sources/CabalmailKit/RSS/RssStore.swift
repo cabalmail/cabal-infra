@@ -34,13 +34,31 @@ public actor RssStore {
 
     static let schemaVersion = 6
 
+    /// The schema, one step per version. A file from a newer build (a
+    /// downgrade) is refused, and `openRecovering` sets it aside and starts
+    /// a new one, rather than read it with columns this build does not know.
+    static let migrator = SchemaMigrator(name: "rss.sqlite", steps: [
+        .sql(Schema.version1), .sql(Schema.version2), .sql(Schema.version3), .sql(Schema.version4),
+        .sql(Schema.version5), .sql(Schema.version6),
+    ])
+
     public init(directory: URL) throws {
+        try self.init(directory: directory, recoveringSetAside: false)
+    }
+
+    /// `recoveringSetAside` also brings back the unsent changes of files set
+    /// aside in `directory` (`recoverSetAside`), which `openRecovering` asks
+    /// for and a test opening a store by hand does not.
+    init(directory: URL, recoveringSetAside: Bool) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         self.directory = directory
-        database = try SQLiteDatabase(path: directory.appendingPathComponent("rss.sqlite").path)
+        let database = try SQLiteDatabase(path: directory.appendingPathComponent("rss.sqlite").path)
+        self.database = database
         try database.exec("PRAGMA journal_mode = WAL")
         try database.exec("PRAGMA synchronous = NORMAL")
-        try Self.migrate(database)
+        assert(Self.migrator.version == Self.schemaVersion)
+        try Self.migrator.migrate(database, newerSchema: .refuse)
+        if recoveringSetAside { Self.recoverSetAside(into: database, directory: directory) }
     }
 
     // MARK: - Changes
@@ -77,60 +95,40 @@ public actor RssStore {
 
     /// Opens the store, and when the file cannot be opened or migrated -
     /// corrupt, left half-migrated by an older build, or written by a newer
-    /// schema - deletes it and starts empty: the store is a cache of server
-    /// state, and the next sync repopulates it. Nil when even a fresh file
-    /// fails, so the caller runs without feeds rather than without mail.
+    /// schema - sets it aside and starts empty. Most of the store is a cache
+    /// of server state, which the next sync repopulates, but the file also
+    /// holds the queue of changes not yet sent, so it is never deleted: it
+    /// waits in `set-aside/` for a build that can read it. Every open brings
+    /// back the unsent changes of the set-aside files this build can read.
+    /// Nil when even a fresh file fails, or the old one cannot be moved, so
+    /// the caller runs without feeds rather than without mail.
     public static func openRecovering(directory: URL) -> RssStore? {
-        if let store = try? RssStore(directory: directory) { return store }
-        removeDatabaseFiles(in: directory)
-        return try? RssStore(directory: directory)
-    }
-
-    /// Deletes the database and its WAL and shared-memory side files.
-    static func removeDatabaseFiles(in directory: URL) {
-        for suffix in ["", "-wal", "-shm"] {
-            try? FileManager.default.removeItem(at: directory.appendingPathComponent("rss.sqlite" + suffix))
+        do {
+            return try RssStore(directory: directory, recoveringSetAside: true)
+        } catch {
+            guard setAside(in: directory).setAside(reason: "\(error)") else { return nil }
         }
+        return try? RssStore(directory: directory, recoveringSetAside: true)
     }
 
-    /// The file's `user_version` is past what this build knows.
-    struct NewerSchemaError: Error, CustomStringConvertible {
-        let found: Int
-        var description: String { "rss.sqlite schema \(found) is newer than \(RssStore.schemaVersion)" }
-    }
-
-    /// Forward-only migrations keyed on `user_version`, each step and its
-    /// `user_version` write in one transaction (SQLite DDL is transactional),
-    /// so a crash mid-step leaves the previous version intact rather than a
-    /// half-applied one that fails on every rerun. A downgrade (a file from
-    /// a newer build) throws, and `openRecovering` deletes and repopulates.
-    private static func migrate(_ database: SQLiteDatabase) throws {
-        let steps = [Schema.version1, Schema.version2, Schema.version3, Schema.version4, Schema.version5,
-                     Schema.version6]
-        assert(steps.count == schemaVersion)
-        let current = database.userVersion
-        guard current <= schemaVersion else { throw NewerSchemaError(found: current) }
-        for (index, sql) in steps.enumerated() where index >= current {
-            try database.exec("BEGIN")
-            do {
-                try database.exec(sql)
-                try database.exec("PRAGMA user_version = \(index + 1)")
-                try database.exec("COMMIT")
-            } catch {
-                try? database.exec("ROLLBACK")
-                throw error
-            }
-        }
-    }
-
-    /// Drops every row (sign-out, or a corrupt-cache recovery). Read
-    /// `allDataStoreUuids()` first if the web storage must go too.
+    /// Drops every row, in one transaction so a failure part-way leaves
+    /// every table as it was, and deletes the set-aside files: they hold
+    /// this account's unsent changes, which the next account's store would
+    /// otherwise bring back as its own (sign-out, or a different user
+    /// signing in). Read `allDataStoreUuids()` first if the web storage
+    /// must go too.
     public func clear() throws {
-        try database.exec("""
-            DELETE FROM pending; DELETE FROM feed_sync; DELETE FROM items;
-            DELETE FROM subscriptions; DELETE FROM folders; DELETE FROM departed_data_stores;
-            """)
+        // The files go whatever happens to the rows: a store too busy to
+        // clear should still not leave them for the next account.
+        let filesRemoved = Result { try Self.setAside(in: directory).removeAll() }
+        try database.transaction {
+            try database.exec("""
+                DELETE FROM pending; DELETE FROM feed_sync; DELETE FROM items;
+                DELETE FROM subscriptions; DELETE FROM folders; DELETE FROM departed_data_stores;
+                """)
+        }
         emit(.cleared)
+        try filesRemoved.get()
     }
 
     /// Drops every row and closes this store for good: every later read or
@@ -167,15 +165,10 @@ public actor RssStore {
     /// drop the storage after any sync path - the poller's `syncAll`
     /// included - not just the ones that kept the `CatalogDiff`.
     public func takeDepartedDataStoreUuids() throws -> [String] {
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             let uuids = try database.rows("SELECT uuid FROM departed_data_stores ORDER BY uuid").map { $0.string(0) }
             try database.exec("DELETE FROM departed_data_stores")
-            try database.exec("COMMIT")
             return uuids
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
     }
 
@@ -198,8 +191,7 @@ public actor RssStore {
         let keep = Set(catalog.subscriptions.map(\.subscriptionId))
         let removed = existing.filter { !keep.contains($0.subscriptionId) }
         let keptFeeds = Set(catalog.subscriptions.map(\.feedId))
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             for sub in removed {
                 try database.run("DELETE FROM subscriptions WHERE subscription_id = ?", [.init(sub.subscriptionId)])
                 if !sub.dataStoreUuid.isEmpty {
@@ -220,10 +212,6 @@ public actor RssStore {
             for folder in catalog.folders {
                 try writeFolder(folder)
             }
-            try database.exec("COMMIT")
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
         let diff = CatalogDiff(
             removedSubscriptionIds: removed.map(\.subscriptionId),

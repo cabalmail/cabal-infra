@@ -99,12 +99,12 @@ final class RssStoreTests: XCTestCase {
         try database.run("""
             INSERT INTO folders (folder_id, name, default_filter) VALUES ('fo', 'Tech', 'all')
             """, [])
-        database.userVersion = 5
+        try database.setUserVersion(5)
         let migrated = try RssStore(directory: dir)
         let loaded = try await migrated.folder(id: "fo")
         XCTAssertEqual(loaded?.orderingMode, .newestFirst)
         XCTAssertEqual(loaded?.defaultFilter, .all)
-        XCTAssertEqual(database.userVersion, RssStore.schemaVersion)
+        XCTAssertEqual(try database.userVersion(), RssStore.schemaVersion)
     }
 
     /// The per-feed defaults round-trip through the row, including the
@@ -138,7 +138,7 @@ final class RssStoreTests: XCTestCase {
         try database.run("""
             INSERT INTO subscriptions (subscription_id, feed_id, default_open_mode) VALUES ('s1', 'f1', 'article')
             """, [])
-        database.userVersion = 2
+        try database.setUserVersion(2)
         let migrated = try RssStore(directory: dir)
         let loaded = try await migrated.subscription(id: "s1")
         XCTAssertEqual(loaded?.defaultOpenMode, .article)

@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server merged and accepted on stage (2026-11-11): #2399 and #2400; not in prod yet. Kit and clients not started |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit and clients not started |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -228,14 +228,14 @@ says.
 
 ### 2. Feed item flags are a string set on the state row
 
-The per-user, per-item state row already carries `is_read`,
-`is_read_explicit`, and `is_favorite`. It gains `flags`, a DynamoDB
-string set of keyword slot identifiers (`\Flagged` stays
-`is_favorite`). `/rss_set_item_state` accepts `add_flags` and
-`remove_flags` lists per item and applies them with `ADD` and
-`DELETE`, which are atomic and commutative. That matches IMAP's
-`+FLAGS` / `-FLAGS` semantics and means two devices flagging the same
-item offline cannot clobber each other, which a whole-set replace
+The per-user, per-item state row carries `is_read`,
+`is_read_explicit`, `is_favorite` and, since #2399 (in prod with
+1.49.0), `flags`: a DynamoDB string set of keyword slot identifiers
+(`\Flagged` stays `is_favorite`). `/rss_set_item_state` accepts
+`add_flags` and `remove_flags` lists per item and applies them with
+`ADD` and `DELETE`, which are atomic and commutative. That matches
+IMAP's `+FLAGS` / `-FLAGS` semantics and means two devices flagging the
+same item offline cannot clobber each other, which a whole-set replace
 would.
 
 Validation follows `set_flag`'s `_check_keyword`: adding needs a slot
@@ -373,11 +373,11 @@ flagged query ([`post-wave-3/sqlite-mail-store.md`](./post-wave-3/sqlite-mail-st
 PR 5.1) keeps it for offline use. By default the Flagged view waits for
 that query rather than being built twice.
 
-Filtering either half by a custom flag needs one server change:
-`search_envelopes` has no keyword criterion, so it gains an optional
-`keyword`, checked against the slot pattern and mapped to IMAP
-`KEYWORD`. The same parameter serves the per-flag filter on the mail
-list (Phase 2).
+Filtering either half by a custom flag needed one server change:
+`search_envelopes` had no keyword criterion, so it gained an optional
+`keyword` (#2400, in prod with 1.49.0), checked against the slot
+pattern and mapped to IMAP `KEYWORD`. The same parameter serves the
+per-flag filter on the mail list (Phase 2).
 
 Rows in a mixed list need one identity for either medium: a two-case
 `ItemRef` in the Kit (`.mail(MessageRef)` and a feed case keyed by feed
@@ -450,14 +450,14 @@ The motivating feature. It follows the unified flags plan, which puts
 and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
-**Status:** Server merged and accepted on stage (2026-11-11). The
-unified flags plan shipped on Apple in 1.47.0 and on Android in 1.48.0.
-The two server PRs are merged: #2399 (items 1, 2 and 4 of 2a, with
-their tests) and #2400 (item 3, with its tests). Both passed their
-checks against the stage API; `flags-and-cross-media.md`, Session 2,
-has what was run. Neither is in prod yet: they merged after 1.48.0 was
-cut and ride the next release. The Kit and the clients (2b) have not
-started; `flags-and-cross-media.md` gates them.
+**Status:** Server in prod (2026-11-11). The unified flags plan
+shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
+are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
+(item 3, with its tests). Both passed their checks against the stage
+API; `flags-and-cross-media.md`, Session 2, has what was run. Both
+merged after 1.48.0 was cut and shipped in 1.49.0 the same day. The Kit
+and the clients (2b) have not started; `flags-and-cross-media.md` gates
+them.
 
 ### 2a. Server
 

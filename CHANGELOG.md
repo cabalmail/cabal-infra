@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.50.0] - 2026-11-11
+
+### Changed
+- **SQLite foundation for the Apple stores.** `SQLiteDatabase` moved from
+  the feed code to the Kit's `Persistence/` folder and gained a write
+  transaction (`BEGIN IMMEDIATE`, rolled back on a throw), a schema
+  migration runner keyed on `user_version`, BLOB binds and a `user_version`
+  read and write that throw instead of swallowing a failure. The feed
+  store runs on them with its schema unchanged, and a SQLite failure now
+  reaches its callers as `CabalmailError.storage`. Debug builds take
+  `-CabalmailFailNextWrite <table>`, which fails the next write to that
+  table once, so a failed write can be shown live.
+
+### Fixed
+- Apple: **Unsent feed marks outlive a feed store that cannot be opened.**
+  A feed store that was damaged, or was written by a newer build than
+  the one installed, used to be deleted, and with it any read and flag
+  marks that had not reached the server. It is now set aside, and the
+  next build that can read it sends those marks. Signing out still
+  removes everything, the set-aside copies included, and its wipe of the
+  feed store now happens all at once or not at all.
+
 ## [1.49.0] - 2026-11-11
 
 ### Added
