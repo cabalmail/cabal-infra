@@ -69,11 +69,14 @@ import com.cabalmail.android.ui.mail.ForegroundPolling
 import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.android.ui.theme.FlagDot
 import com.cabalmail.android.ui.theme.FlagDotMark
+import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.ui.theme.LocalFlagPalette
 import com.cabalmail.android.ui.theme.LocalSwipeBindings
+import com.cabalmail.android.ui.theme.SwipeReveal
 import com.cabalmail.android.ui.theme.color
 import com.cabalmail.android.ui.theme.feedSwipeReveal
 import com.cabalmail.android.ui.theme.painter
+import com.cabalmail.android.ui.theme.text
 import com.cabalmail.kit.compose.HtmlText
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemFilter
@@ -183,7 +186,12 @@ fun FeedItemListScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                RssItemFilter.PILLS.forEach { filter ->
+                // The Flagged pill filters on the built-in flag. While that
+                // flag's entry is disabled the pill is hidden unless lit, so
+                // a filter that is on can still be turned off.
+                val showFlagPill =
+                    FlagToggle.systemFlag(LocalFlagPalette.current) != null || state.filter == RssItemFilter.FAVORITE
+                RssItemFilter.PILLS.filter { it != RssItemFilter.FAVORITE || showFlagPill }.forEach { filter ->
                     FilterChip(
                         selected = state.filter == filter,
                         onClick = { viewModel.setFilter(state.filter.toggling(filter)) },
@@ -471,8 +479,15 @@ private fun FeedSwipeRow(
     content: @Composable () -> Unit,
 ) {
     val bindings = LocalSwipeBindings.current
+    // A feed item's one flag is the built-in flag, so its swipe takes that
+    // flag's name and color from Settings > Flags. While that entry is
+    // disabled the edge bound to the flag does not drag.
+    val flag = FlagToggle.systemFlag(LocalFlagPalette.current)
     val currentToggleRead by rememberUpdatedState(onToggleRead)
     val currentToggleFavorite by rememberUpdatedState(onToggleFavorite)
+    val reveal: (FeedSwipeAction) -> SwipeReveal? = { action ->
+        feedSwipeReveal(action = action, isRead = isRead, flag = flag, isFavorite = isFavorite)
+    }
     val perform: (FeedSwipeAction) -> Unit = { action ->
         when (action) {
             FeedSwipeAction.TOGGLE_READ -> currentToggleRead()
@@ -511,22 +526,17 @@ private fun FeedSwipeRow(
         }
     SwipeToDismissBox(
         state = swipeState,
-        enableDismissFromStartToEnd = bindings.feedLeading != FeedSwipeAction.NONE,
-        enableDismissFromEndToStart = bindings.feedTrailing != FeedSwipeAction.NONE,
+        enableDismissFromStartToEnd = reveal(bindings.feedLeading) != null,
+        enableDismissFromEndToStart = reveal(bindings.feedTrailing) != null,
         backgroundContent = {
             val leading = swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-            val reveal =
-                feedSwipeReveal(
-                    action = if (leading) bindings.feedLeading else bindings.feedTrailing,
-                    isRead = isRead,
-                    isFavorite = isFavorite,
-                )
-            if (reveal != null) {
+            val revealed = reveal(if (leading) bindings.feedLeading else bindings.feedTrailing)
+            if (revealed != null) {
                 Box(
                     contentAlignment = if (leading) Alignment.CenterStart else Alignment.CenterEnd,
-                    modifier = Modifier.fillMaxSize().background(reveal.color()).padding(horizontal = 24.dp),
+                    modifier = Modifier.fillMaxSize().background(revealed.color()).padding(horizontal = 24.dp),
                 ) {
-                    Icon(reveal.painter(), contentDescription = stringResource(reveal.label))
+                    Icon(revealed.painter(), contentDescription = revealed.label.text())
                 }
             }
         },

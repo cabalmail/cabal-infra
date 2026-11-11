@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.FlagToggle
+import com.cabalmail.android.ui.theme.LocalFlagPalette
 import com.cabalmail.kit.models.RssItemFilter
 import com.cabalmail.kit.models.RssItemScope
 import com.cabalmail.kit.models.RssOpenMode
@@ -12,15 +14,18 @@ import com.cabalmail.kit.models.RssRemoteContentMode
 import com.cabalmail.kit.models.RssStyling
 import com.cabalmail.kit.settings.FolderCountDisplay
 
+/**
+ * The filter pill's label. The Flagged pill filters on the one flag a feed
+ * item has, the built-in flag, so it carries that flag's name from
+ * Settings > Flags.
+ */
 @Composable
 internal fun RssItemFilter.label(): String =
-    stringResource(
-        when (this) {
-            RssItemFilter.ALL -> R.string.filter_all
-            RssItemFilter.UNREAD -> R.string.filter_unread
-            RssItemFilter.FAVORITE -> R.string.feed_filter_favorites
-        },
-    )
+    when (this) {
+        RssItemFilter.ALL -> stringResource(R.string.filter_all)
+        RssItemFilter.UNREAD -> stringResource(R.string.filter_unread)
+        RssItemFilter.FAVORITE -> FlagToggle.systemFlagName(LocalFlagPalette.current)
+    }
 
 @Composable
 internal fun RssOrderingMode.label(): String =

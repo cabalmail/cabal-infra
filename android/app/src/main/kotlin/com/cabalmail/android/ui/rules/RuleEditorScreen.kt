@@ -457,23 +457,18 @@ private fun ExtrasSection(
 ) {
     SectionLabel(stringResource(R.string.rules_extras))
     val locked = rule.action == RuleAction.DELETE
-    ToggleRow(stringResource(R.string.rules_flag), rule.flag, enabled = !locked) {
-        onUpdate(rule.copy(flag = it))
-    }
-    // One toggle per enabled palette entry, plus any slot this rule already
-    // sets whose entry is disabled or deleted — the compiler skips the rule
-    // while such a slot remains (flag_not_in_palette), so the stray toggle
-    // is the affordance for clearing it, labelled by slot id when gone.
-    pickerSlots(palette, rule.flags).forEach { slot ->
-        val entry = palette.firstOrNull { it.slot == slot }
+    // One list of flags in the order of Settings > Flags (ruleFlagRows).
+    // The built-in flag's toggle is the rule's `flag`; every other toggle
+    // adds or removes a slot in its `flags`. The rule on the wire is
+    // unchanged.
+    ruleFlagRows(palette, rule).forEach { row ->
         FlagToggleRow(
-            label = entry?.label ?: slot,
-            color = flagColor(entry?.color ?: ""),
-            checked = slot in rule.flags,
+            label = row.label,
+            color = flagColor(row.color),
+            checked = row.isOn,
             enabled = !locked,
         ) { on ->
-            val next = if (on) rule.flags + slot else rule.flags - slot
-            onUpdate(rule.copy(flags = next))
+            onUpdate(rule.settingFlag(row.slot, on))
         }
     }
     ToggleRow(stringResource(R.string.rules_mark_read), rule.markRead, enabled = !locked) {
@@ -612,18 +607,58 @@ private fun ToggleRow(
     }
 }
 
-/** The slots the picker offers: enabled keyword entries in palette order,
- * then stray already-set slots (see ExtrasSection). The built-in flag's
- * entry is never one of them: a rule sets that flag through its own `flag`
- * field, and `set_rules` refuses its atom in `flags`. Pure, tested. */
-internal fun pickerSlots(
+/** One flag toggle in the rule editor: what it draws, and whether the rule sets the flag. */
+internal data class RuleFlagRow(
+    val slot: String,
+    val label: String,
+    val color: String,
+    val isOn: Boolean,
+)
+
+/**
+ * The flag toggles the rule editor shows: the effective palette in its
+ * order, so the list matches Settings > Flags.
+ *
+ * The built-in flag's row is always offered, enabled or not, since a rule
+ * can always set the server's flag (unified-flags plan, decision 7); it
+ * reads the rule's `flag`. A keyword entry is offered while enabled, and
+ * reads the rule's `flags`. Last come slots the rule already sets whose
+ * entry is disabled or deleted: the compiler skips the rule while such a
+ * slot remains (`flag_not_in_palette`), so the stray toggle is the
+ * affordance for clearing it, labelled by slot id when the entry is gone.
+ * Pure, tested.
+ */
+internal fun ruleFlagRows(
     palette: List<FlagPaletteEntry>,
-    ruleFlags: List<String>,
-): List<String> {
-    val offered = FlagPalette.keywordEntries(palette).filter { it.enabled }.map { it.slot }
-    val stray = FlagPalette.SLOTS.filter { it in ruleFlags && it !in offered }
-    return offered + stray
+    rule: Rule,
+): List<RuleFlagRow> {
+    val effective = FlagPalette.effective(palette)
+    val offered = effective.filter { it.slot == FlagPalette.SYSTEM_SLOT || it.enabled }
+    val stray = FlagPalette.SLOTS.filter { slot -> slot in rule.flags && offered.none { it.slot == slot } }
+    return offered.map { entry ->
+        val isOn = if (entry.slot == FlagPalette.SYSTEM_SLOT) rule.flag else entry.slot in rule.flags
+        RuleFlagRow(entry.slot, entry.label, entry.color, isOn)
+    } +
+        stray.map { slot ->
+            val entry = effective.firstOrNull { it.slot == slot }
+            RuleFlagRow(slot, entry?.label ?: slot, entry?.color.orEmpty(), isOn = true)
+        }
 }
+
+/**
+ * The rule after one flag toggle: the built-in flag's slot writes `flag`,
+ * and any other slot is added to or removed from `flags`. The built-in
+ * flag's atom never enters `flags`, which `set_rules` would refuse.
+ */
+internal fun Rule.settingFlag(
+    slot: String,
+    on: Boolean,
+): Rule =
+    when {
+        slot == FlagPalette.SYSTEM_SLOT -> copy(flag = on)
+        on -> copy(flags = (flags + slot).distinct())
+        else -> copy(flags = flags - slot)
+    }
 
 @Composable
 private fun FlagToggleRow(

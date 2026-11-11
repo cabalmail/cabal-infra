@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.cabalmail.android.AppContainer
 import com.cabalmail.android.MailEvent
+import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.userMessage
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.SearchFilters
@@ -203,8 +204,23 @@ class SearchViewModel(
         setFlag(envelope, "\\Seen", !envelope.isSeen)
     }
 
-    fun toggleFlag(envelope: Envelope) {
-        setFlag(envelope, "\\Flagged", !envelope.isFlagged)
+    /**
+     * Sets or clears the default flag, the first enabled entry of Settings >
+     * Flags (a result row's long-press). Nothing happens while every flag
+     * is disabled.
+     */
+    fun toggleDefaultFlag(envelope: Envelope) {
+        val flag = FlagToggle.defaultFlag(container.preferences.preferences.value.flagPalette) ?: return
+        setFlag(envelope, flag.slot, !flag.isSetIn(envelope.flags))
+    }
+
+    /** Sets or clears one flag by its slot (the flag swipe passes the default flag's). */
+    fun setFlagOn(
+        envelope: Envelope,
+        slot: String,
+        value: Boolean,
+    ) {
+        setFlag(envelope, slot, value)
     }
 
     /**

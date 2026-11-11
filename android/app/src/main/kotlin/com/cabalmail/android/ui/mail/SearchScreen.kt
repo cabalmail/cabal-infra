@@ -41,6 +41,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.FlagToggle
+import com.cabalmail.android.ui.theme.LocalFlagPalette
 import com.cabalmail.kit.models.Envelope
 
 /**
@@ -143,9 +145,9 @@ fun SearchScreen(
                 Column(modifier = Modifier.animateRowRemoval(this)) {
                     SwipeRow(
                         isSeen = envelope.isSeen,
-                        isFlagged = envelope.isFlagged,
+                        flags = envelope.flags,
                         onToggleSeen = { viewModel.toggleSeen(envelope) },
-                        onToggleFlag = { viewModel.toggleFlag(envelope) },
+                        onSetFlag = { slot, value -> viewModel.setFlagOn(envelope, slot, value) },
                         onDispose = {
                             if (disposeIntent == DisposeIntent.Purge) {
                                 pendingPurge = envelope
@@ -158,7 +160,7 @@ fun SearchScreen(
                         EnvelopeRow(
                             envelope = envelope,
                             onClick = { onOpenMessage(envelope) },
-                            onLongClick = { viewModel.toggleFlag(envelope) },
+                            onLongClick = { viewModel.toggleDefaultFlag(envelope) },
                             folderLabel = envelope.folder,
                             bimiLookup = bimiLookup,
                             mailDomains = mailDomains,
@@ -298,11 +300,18 @@ private fun SearchFilterSheet(
                 checked = state.filters.unread,
                 onChange = { value -> viewModel.updateFilters { it.copy(unread = value) } },
             )
-            LabeledCheckbox(
-                label = stringResource(R.string.filter_flagged),
-                checked = state.filters.flagged,
-                onChange = { value -> viewModel.updateFilters { it.copy(flagged = value) } },
-            )
+            // The server filters on the built-in flag only, so the checkbox
+            // carries that flag's name from Settings > Flags. While that
+            // flag's entry is disabled it is hidden unless checked, so a
+            // filter that is on can still be turned off.
+            val palette = LocalFlagPalette.current
+            if (FlagToggle.systemFlag(palette) != null || state.filters.flagged) {
+                LabeledCheckbox(
+                    label = FlagToggle.systemFlagName(palette),
+                    checked = state.filters.flagged,
+                    onChange = { value -> viewModel.updateFilters { it.copy(flagged = value) } },
+                )
+            }
             LabeledCheckbox(
                 label = stringResource(R.string.search_has_attachment),
                 checked = state.filters.hasAttachment,
