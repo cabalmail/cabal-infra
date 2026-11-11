@@ -258,6 +258,9 @@ actor FakeRssClient: RssClient {
     private var emptyPagesByDefault = false
     private var markAllReadWatermark = "w"
     private var failNextState = false
+    private var servesStates = false
+    private var enabledSlots: Set<String>?
+    private var nextStateRefusal: RssFlagRefusal?
     private var armed: [Gate: Int] = [:]
     private var parked: [Gate: [CheckedContinuation<Void, Never>]] = [:]
     private var syncsInFlight = 0
@@ -266,6 +269,14 @@ actor FakeRssClient: RssClient {
     private(set) var syncCalls: [SyncCall] = []
     private(set) var stateSyncCalls: [SyncCall] = []
     private(set) var stateCalls: [[RssItemStateChange]] = []
+    /// `setItemState` calls refused for a flag. Like the server, a refused
+    /// call wrote nothing, and is not among `stateCalls`.
+    private(set) var refusedStateCalls: [[RssItemStateChange]] = []
+    /// The caller's state rows as the server would hold them after the
+    /// `setItemState` calls so far, by `RssItem.id`. Flags change one slot
+    /// at a time, as the server's do, so two devices that each change a
+    /// different flag of one item both take effect.
+    private(set) var serverStates: [String: RssItemState] = [:]
     private(set) var markAllReadCalls: [RssItemScope] = []
     /// The watermark each mark-all-read sent (nil = none).
     private(set) var markAllReadWatermarks: [String?] = []
@@ -284,6 +295,14 @@ actor FakeRssClient: RssClient {
     func set(statePages: [RssStateSyncPage]) { self.statePages = statePages }
     func set(markAllReadWatermark: String) { self.markAllReadWatermark = markAllReadWatermark }
     func set(failNextState: Bool) { self.failNextState = failNextState }
+    /// Answer an unscripted state sync with `serverStates` for that feed,
+    /// instead of an empty page.
+    func set(servesStates: Bool) { self.servesStates = servesStates }
+    /// The slots the palette enables: adding any other refuses the whole
+    /// call, naming it. Nil, the default, enables every slot.
+    func set(enabledSlots: Set<String>?) { self.enabledSlots = enabledSlots }
+    /// Refuse the next `setItemState` with this, whatever it adds.
+    func set(nextStateRefusal: RssFlagRefusal?) { self.nextStateRefusal = nextStateRefusal }
     func set(syncError: Error?, for subscriptionId: String) { syncErrors[subscriptionId] = syncError }
     /// Answer unscripted list and since-sync calls with an empty, exhausted
     /// page instead of failing them.
@@ -358,6 +377,11 @@ actor FakeRssClient: RssClient {
 
     func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage {
         stateSyncCalls.append(SyncCall(subscriptionId: subscriptionId, since: since))
+        if statePages.isEmpty, servesStates {
+            let feedId = catalog.subscriptions.first { $0.subscriptionId == subscriptionId }?.feedId
+            let states = serverStates.values.filter { $0.feedId == feedId }.sorted { $0.sortKey < $1.sortKey }
+            return RssStateSyncPage(states: states, nextSince: "", hasMore: false)
+        }
         guard !statePages.isEmpty else { return RssStateSyncPage(states: [], nextSince: "", hasMore: false) }
         return statePages.removeFirst()
     }
@@ -370,9 +394,31 @@ actor FakeRssClient: RssClient {
             failNextState = false
             throw CabalmailError.transport("offline")
         }
+        if let refusal = nextStateRefusal ?? paletteRefusal(of: changes) {
+            nextStateRefusal = nil
+            refusedStateCalls.append(changes)
+            throw refusal
+        }
         stateCalls.append(changes)
         pushLog.append("state")
+        for change in changes {
+            var state = serverStates["\(change.feedId)#\(change.sortKey)"]
+                ?? RssItemState(feedId: change.feedId, sortKey: change.sortKey)
+            if let isRead = change.isRead { (state.isRead, state.isReadExplicit) = (isRead, true) }
+            if let isFavorite = change.isFavorite { state.isFavorite = isFavorite }
+            state.flags = state.flags.union(change.addFlags).subtracting(change.removeFlags)
+            serverStates["\(change.feedId)#\(change.sortKey)"] = state
+        }
         return changes.count
+    }
+
+    /// The server's check before it writes anything: every slot a call adds
+    /// must be one the palette enables. Removing needs no palette entry.
+    private func paletteRefusal(of changes: [RssItemStateChange]) -> RssFlagRefusal? {
+        guard let enabledSlots else { return nil }
+        let refused = changes.reduce(into: Set<String>()) { $0.formUnion($1.addFlags) }.subtracting(enabledSlots)
+        guard !refused.isEmpty else { return nil }
+        return RssFlagRefusal(slots: refused, message: "Not an enabled flag in the palette.")
     }
 
     func markAllRead(scope: RssItemScope, watermark: String?) async throws -> RssMarkAllReadResult {

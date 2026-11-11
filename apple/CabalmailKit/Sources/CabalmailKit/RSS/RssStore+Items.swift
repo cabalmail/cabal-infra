@@ -47,7 +47,8 @@ extension RssStore {
     /// every other item takes the server's `is_read` / `is_favorite`, and
     /// whether that read state is an explicit mark - without which an
     /// explicit unread on an item older than the watermark would read as
-    /// read here.
+    /// read here. Custom flags are kept slot by slot: the server's, with
+    /// each slot that has a queued change as that change leaves it.
     public func upsertItems(_ items: [RssItem]) throws {
         guard !items.isEmpty else { return }
         let now = Self.isoNow()
@@ -55,14 +56,16 @@ extension RssStore {
             try database.rows("SELECT feed_id, sort_key FROM pending WHERE kind IN ('read', 'favorite')")
                 .map { "\($0.string(0))#\($0.string(1))" }
         )
+        let queuedFlags = try RssStoredFlags.queued(in: database)
         try database.transaction {
             for item in items {
                 let keepLocalState = pendingKeys.contains(item.id)
+                let flags = RssStoredFlags.overlaying(queuedFlags[item.id] ?? [:], on: item.flags)
                 try database.run("""
                     INSERT INTO items (feed_id, sort_key, item_id, guid, title, author, url, published_at,
                       updated_at, fetched_at, fetched_key, summary_html, content_html, body_text,
-                      is_read, is_favorite, state_is_explicit, cached_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      is_read, is_favorite, state_is_explicit, cached_at, flags)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(feed_id, sort_key) DO UPDATE SET item_id = excluded.item_id,
                       guid = excluded.guid, title = excluded.title, author = excluded.author,
                       url = excluded.url, published_at = excluded.published_at,
@@ -73,7 +76,7 @@ extension RssStore {
                       is_favorite = CASE WHEN ? THEN items.is_favorite ELSE excluded.is_favorite END,
                       state_is_explicit = CASE WHEN ? THEN items.state_is_explicit
                                                ELSE excluded.state_is_explicit END,
-                      cached_at = excluded.cached_at
+                      cached_at = excluded.cached_at, flags = excluded.flags
                     """, [
                         .init(item.feedId), .init(item.sortKey), .init(item.itemId), .init(item.guid),
                         .init(item.title), .init(item.author), .init(item.url), .init(item.publishedAt),
@@ -81,6 +84,7 @@ extension RssStore {
                         .init(item.summaryHtml), .init(item.contentHtml),
                         .init(HTMLText.plainText(from: item.bodyHtml)),
                         .init(item.isRead), .init(item.isFavorite), .init(item.isReadExplicit), .init(now),
+                        .init(RssStoredFlags.encode(flags)),
                         .init(keepLocalState), .init(keepLocalState), .init(keepLocalState),
                     ])
             }
@@ -259,7 +263,8 @@ extension RssStore {
             guid: row.string(3), title: row.string(4), author: row.string(5), url: row.string(6),
             publishedAt: row.string(7), updatedAt: row.string(8), fetchedAt: row.string(9),
             fetchedKey: row.string(10), summaryHtml: row.string(11), contentHtml: row.string(12),
-            isRead: row.bool(13), isReadExplicit: row.bool(16), isFavorite: row.bool(14)
+            isRead: row.bool(13), isReadExplicit: row.bool(16), isFavorite: row.bool(14),
+            flags: RssStoredFlags.decode(row.string(17))
         )
     }
 

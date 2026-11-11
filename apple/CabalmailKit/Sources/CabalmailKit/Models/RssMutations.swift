@@ -138,13 +138,46 @@ public struct RssItemStateChange: Sendable, Hashable {
     public var sortKey: String
     public var isRead: Bool?
     public var isFavorite: Bool?
+    /// Custom flags to add to the item and to remove from it, as palette
+    /// slots. The server changes one slot at a time, so two devices that
+    /// change different flags of one item both take effect. A slot in both
+    /// sets, or one the palette does not enable in `addFlags`, refuses the
+    /// whole call.
+    public var addFlags: Set<String>
+    public var removeFlags: Set<String>
 
-    public init(feedId: String, sortKey: String, isRead: Bool? = nil, isFavorite: Bool? = nil) {
+    public init(feedId: String, sortKey: String, isRead: Bool? = nil, isFavorite: Bool? = nil,
+                addFlags: Set<String> = [], removeFlags: Set<String> = []) {
         self.feedId = feedId
         self.sortKey = sortKey
         self.isRead = isRead
         self.isFavorite = isFavorite
+        self.addFlags = addFlags
+        self.removeFlags = removeFlags
     }
+}
+
+/// `/rss_set_item_state` refused a whole call because an entry adds a flag
+/// the palette does not enable (400 `flag_not_in_palette`): the flag was
+/// disabled or deleted, on this device or another, after the change was
+/// made. The server checks every entry before it writes, so nothing in the
+/// call was applied. `slots` are the ones it refused, which is what lets
+/// the pending queue drop those changes and send the rest
+/// (`RssPendingDrain`); `CabalmailError.server` could not carry them.
+public struct RssFlagRefusal: Error, Equatable, Sendable, LocalizedError {
+    /// The code the server answers with.
+    public static let code = "flag_not_in_palette"
+
+    public let slots: Set<String>
+    /// The server's own sentence.
+    public let message: String
+
+    public init(slots: Set<String>, message: String) {
+        self.slots = slots
+        self.message = message
+    }
+
+    public var errorDescription: String? { message }
 }
 
 /// `/rss_mark_all_read`.

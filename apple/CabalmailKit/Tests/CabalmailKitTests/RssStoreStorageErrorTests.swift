@@ -76,7 +76,7 @@ final class RssStoreStorageErrorTests: XCTestCase {
 
         XCTAssertThrowsError(try RssStore(directory: directory)) { error in
             XCTAssertEqual(error as? CabalmailError,
-                           .storage("rss.sqlite schema 7 is newer than this build's 6"))
+                           .storage("rss.sqlite schema 8 is newer than this build's 7"))
         }
     }
 }

@@ -2,11 +2,22 @@ import Foundation
 
 // MARK: - RSS reader endpoints (docs/rss.md)
 
-/// The RSS endpoints' error body: `{"Error": message, "code": token}`.
+/// The RSS endpoints' error body: `{"Error": message, "code": token}`, with
+/// `flags` beside them where a code names flag slots.
 private struct RssErrorEnvelope: Decodable {
     let code: String?
     let error: String?
-    private enum CodingKeys: String, CodingKey { case code, error = "Error" }
+    let flags: [String]?
+    private enum CodingKeys: String, CodingKey { case code, error = "Error", flags }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        code = try container.decodeIfPresent(String.self, forKey: .code)
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+        // Read apart from the rest: a `flags` this build cannot read must
+        // not cost the code and the sentence beside it.
+        flags = (try? container.decodeIfPresent([String].self, forKey: .flags)) ?? nil
+    }
 }
 
 extension URLSessionApiClient: RssClient {
@@ -115,6 +126,8 @@ extension URLSessionApiClient: RssClient {
             var entry: [String: Any] = ["feed_id": change.feedId, "sort_key": change.sortKey]
             if let isRead = change.isRead { entry["is_read"] = isRead }
             if let isFavorite = change.isFavorite { entry["is_favorite"] = isFavorite }
+            if !change.addFlags.isEmpty { entry["add_flags"] = change.addFlags.sorted() }
+            if !change.removeFlags.isEmpty { entry["remove_flags"] = change.removeFlags.sorted() }
             return entry
         }
         let request = try await post("/rss_set_item_state", json: ["items": entries])
@@ -161,6 +174,9 @@ extension URLSessionApiClient: RssClient {
     /// `not_a_feed`, `needs_credentials`, and friends instead of on status.
     /// A failure without a token stays `.http(status:body:)`.
     /// A 2xx that doesn't decode is `.decoding`, like every other endpoint's.
+    /// One refusal carries more than a code and a sentence: the flag slots
+    /// `/rss_set_item_state` would not add, thrown as `RssFlagRefusal` so
+    /// the pending queue can act on them.
     private func decodeRss<T: Decodable>(_ type: T.Type, from request: URLRequest) async throws -> T {
         let data: Data
         do {
@@ -168,6 +184,9 @@ extension URLSessionApiClient: RssClient {
         } catch let CabalmailError.http(status, body) {
             if let envelope = try? JSONDecoder().decode(RssErrorEnvelope.self, from: Data(body.utf8)),
                let code = envelope.code, !code.isEmpty {
+                if code == RssFlagRefusal.code, let slots = envelope.flags, !slots.isEmpty {
+                    throw RssFlagRefusal(slots: Set(slots), message: envelope.error ?? body)
+                }
                 throw CabalmailError.server(code: code, message: envelope.error ?? body)
             }
             throw CabalmailError.http(status: status, body: body)

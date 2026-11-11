@@ -218,6 +218,9 @@ public struct ApiAttachmentDescriptor: Sendable, Codable, Hashable {
 /// `folder == nil` triggers cross-folder mode. Date fields use day
 /// granularity (the Lambda parses them as `YYYY-MM-DD`). Booleans send
 /// `1` to satisfy the Lambda's TRUTHY check and are omitted otherwise.
+/// `keyword` is one custom flag's palette slot (`FlagPalette.slots`): only
+/// messages that carry it match, and anything that is not a slot is a 400.
+/// Every criterion given must hold.
 public struct SearchQuery: Sendable, Hashable {
     public let folder: String?
     public let text: String?
@@ -228,6 +231,7 @@ public struct SearchQuery: Sendable, Hashable {
     public let before: Date?
     public let unread: Bool
     public let flagged: Bool
+    public let keyword: String?
     public let hasAttachment: Bool
     public let limit: Int?
     public let cursor: String?
@@ -242,6 +246,7 @@ public struct SearchQuery: Sendable, Hashable {
         before: Date? = nil,
         unread: Bool = false,
         flagged: Bool = false,
+        keyword: String? = nil,
         hasAttachment: Bool = false,
         limit: Int? = nil,
         cursor: String? = nil
@@ -255,6 +260,7 @@ public struct SearchQuery: Sendable, Hashable {
         self.before = before
         self.unread = unread
         self.flagged = flagged
+        self.keyword = keyword
         self.hasAttachment = hasAttachment
         self.limit = limit
         self.cursor = cursor
@@ -275,6 +281,7 @@ public struct SearchQuery: Sendable, Hashable {
             before: before,
             unread: unread,
             flagged: flagged,
+            keyword: keyword,
             hasAttachment: hasAttachment,
             limit: limit,
             cursor: cursor
