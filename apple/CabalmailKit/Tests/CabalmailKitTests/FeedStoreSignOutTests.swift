@@ -1,4 +1,3 @@
-import SQLite3
 import XCTest
 import CabalmailKitTestSupport
 @testable import CabalmailKit
@@ -62,7 +61,7 @@ final class FeedStoreSignOutTests: XCTestCase {
             XCTFail("a clear that cannot run should fail the retire")
         } catch {}
 
-        unlock(lock)
+        lock.release()
         do {
             try await store.upsertSubscription(lateArrival)
             XCTFail("a store whose retire threw still took a write")
@@ -77,7 +76,7 @@ final class FeedStoreSignOutTests: XCTestCase {
     func testTheLockRefusesAnOrdinaryWrite() async throws {
         let store = try RssStore(directory: root)
         let lock = try lockTheStoreFile()
-        defer { unlock(lock) }
+        defer { lock.release() }
 
         do {
             try await store.upsertSubscription(departing)
@@ -85,20 +84,9 @@ final class FeedStoreSignOutTests: XCTestCase {
         } catch {}
     }
 
-    /// Opens a second connection to the store's own file and holds a write
-    /// transaction on it.
-    private func lockTheStoreFile() throws -> OpaquePointer {
-        var opened: OpaquePointer?
-        let path = root.appendingPathComponent("rss.sqlite").path
-        XCTAssertEqual(sqlite3_open_v2(path, &opened, SQLITE_OPEN_READWRITE, nil), SQLITE_OK)
-        let handle = try XCTUnwrap(opened)
-        XCTAssertEqual(sqlite3_exec(handle, "BEGIN IMMEDIATE", nil, nil, nil), SQLITE_OK)
-        return handle
-    }
-
-    private func unlock(_ handle: OpaquePointer) {
-        sqlite3_exec(handle, "ROLLBACK", nil, nil, nil)
-        sqlite3_close_v2(handle)
+    /// A second connection to the store's own file, holding its write lock.
+    private func lockTheStoreFile() throws -> SQLiteWriteLock {
+        try SQLiteWriteLock(path: root.appendingPathComponent("rss.sqlite").path)
     }
 
     // The whole-client tests below run on macOS only. Clearing a client's
