@@ -71,6 +71,37 @@ final class FeedStoreSignOutTests: XCTestCase {
         XCTAssertEqual(left, ["s1"], "the failed clear deleted nothing, which the next sign-in's clear handles")
     }
 
+    #if DEBUG
+    /// A clear is one transaction. Its six deletes used to run one after
+    /// another, so a failure at the fifth left the queue, the cursors, the
+    /// items and the subscriptions gone and the folders still there: a
+    /// store neither the last account's nor empty.
+    func testAClearThatFailsPartWayDeletesNothing() async throws {
+        let store = try RssStore(directory: root)
+        _ = try await store.replaceCatalog(RssCatalog(
+            folders: [RssFolder(folderId: "fo", name: "Tech")],
+            subscriptions: [RssSubscription(subscriptionId: "s1", feedId: "f1", folderId: "fo")]))
+        try await store.upsertItems([RssItem(feedId: "f1", itemId: "a", sortKey: "a")])
+        try await store.setRead(feedId: "f1", sortKey: "a", true)
+        try await store.setSyncProgress(feedId: "f1", sinceCursor: "c1", stateCursor: "", lastSyncedAt: "")
+        let before = try await store.rowCountsForTests()
+        XCTAssertEqual(before, ["pending": 1, "feed_sync": 1, "items": 1, "subscriptions": 1, "folders": 1])
+        await store.failNextWriteForTests(to: "folders")
+
+        do {
+            try await store.clear()
+            XCTFail("the failed delete should fail the clear")
+        } catch {}
+
+        let after = try await store.rowCountsForTests()
+        XCTAssertEqual(after, before, "every table is as it was")
+
+        try await store.clear()
+        let cleared = try await store.rowCountsForTests()
+        XCTAssertEqual(cleared, ["pending": 0, "feed_sync": 0, "items": 0, "subscriptions": 0, "folders": 0])
+    }
+    #endif
+
     /// The control for the arm above: the lock really does stop a write, so
     /// the retire there failed on the injected failure and not on nothing.
     func testTheLockRefusesAnOrdinaryWrite() async throws {
@@ -136,6 +167,24 @@ final class FeedStoreSignOutTests: XCTestCase {
             httpTransport: ScriptedHTTPTransport { _ in throw CabalmailError.network("offline") },
             cacheDirectory: root
         )
+    }
+    #endif
+}
+
+private extension RssStore {
+    /// How many rows each table `clear()` empties holds.
+    func rowCountsForTests() throws -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for table in ["pending", "feed_sync", "items", "subscriptions", "folders"] {
+            counts[table] = try database.rows("SELECT COUNT(*) FROM \(table)").first?.int(0) ?? 0
+        }
+        return counts
+    }
+
+    #if DEBUG
+    /// Arms this store's connection to fail its next write to `table`.
+    func failNextWriteForTests(to table: String) {
+        database.faults.arm(table: table)
     }
     #endif
 }

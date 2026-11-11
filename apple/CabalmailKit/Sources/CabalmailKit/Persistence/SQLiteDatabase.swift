@@ -65,9 +65,11 @@ final class SQLiteDatabase {
     let faults = SQLiteFaultProbe()
     #endif
 
-    init(path: String) throws {
+    /// Opens the file at `path`, creating it unless `existing` says it must
+    /// already be there.
+    init(path: String, existing: Bool = false) throws {
         var opened: OpaquePointer?
-        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
+        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | (existing ? 0 : SQLITE_OPEN_CREATE)
         let status = sqlite3_open_v2(path, &opened, flags, nil)
         guard status == SQLITE_OK, let opened else {
             let message = opened.map { String(cString: sqlite3_errmsg($0)) } ?? "cannot open"
@@ -223,6 +225,9 @@ final class SQLiteDatabase {
     private func refusal(_ code: Int32, _ message: String) -> CabalmailError {
         #if DEBUG
         if let table = faults.takeTripped() {
+            // Said in the log as well: a caller may drop the error, and a
+            // soak reads the Debug Log to see that the switch fired.
+            CabalmailLog.warn("SQLiteDatabase", "injected fault: failed a write to \(table)")
             return .storage("injected fault: a write to \(table) was failed (\(SQLiteFaultSwitch.launchArgument))")
         }
         #endif
