@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Not started (2026-11-08); follows the unified flags plan |
+| 2 -- Custom flags on feed items | Server merged and accepted on stage (2026-11-11): #2399 and #2400; not in prod yet. Kit and clients not started |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -450,8 +450,14 @@ The motivating feature. It follows the unified flags plan, which puts
 and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
-**Status:** Not started (2026-11-08). The unified flags plan has not
-started either.
+**Status:** Server merged and accepted on stage (2026-11-11). The
+unified flags plan shipped on Apple in 1.47.0 and on Android in 1.48.0.
+The two server PRs are merged: #2399 (items 1, 2 and 4 of 2a, with
+their tests) and #2400 (item 3, with its tests). Both passed their
+checks against the stage API; `flags-and-cross-media.md`, Session 2,
+has what was run. Neither is in prod yet: they merged after 1.48.0 was
+cut and ride the next release. The Kit and the clients (2b) have not
+started; `flags-and-cross-media.md` gates them.
 
 ### 2a. Server
 

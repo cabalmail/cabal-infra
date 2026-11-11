@@ -78,8 +78,8 @@ Metrics are CloudWatch EMF under `Cabal/Rss` (`FeedsDue`, `FeedsClaimed`,
 
 Flat endpoints on the existing gateway, Cognito-authorized like the rest.
 Reads are `GET` with query parameters; writes carry a JSON body. Errors
-are `{"Error": "<message>", "code": "<token>"}`; the codes below are the
-stable part. Every response field listed here is part of the
+are `{"Error": "<message>", "code": "<token>"}`, with a further field
+where a code below names one; the codes below are the stable part. Every response field listed here is part of the
 compatibility contract ([`compatibility.md`](./compatibility.md)); new
 fields may appear and clients must ignore unknown ones.
 
@@ -116,10 +116,18 @@ key; opaque, pass it back), `guid`, `title`, `author`, `url`,
 cursor), `summary_html`, `content_html` (spilled bodies inlined),
 `is_read`, `is_read_explicit` (whether `is_read` is the user's own mark
 rather than the watermark rule; a client applying its own watermark must
-exempt explicit marks), `is_favorite`.
+exempt explicit marks), `is_favorite`, `flags`.
 
 **state** (state sync only): `feed_id`, `sort_key`, `item_id`,
-`is_read`, `is_read_explicit`, `is_favorite`, `updated_at`.
+`is_read`, `is_read_explicit`, `is_favorite`, `flags`, `updated_at`.
+
+`flags` is the item's custom flags: a sorted list of the keyword slots
+of the user's flag palette (`cabal-flag-01` .. `cabal-flag-20`, the
+`flag_palette` synced preference), empty when it has none. It is the
+same vocabulary mail keywords use, so one palette entry names and
+colours a flag on both. The system flag is never in the list: on a feed
+item it is `is_favorite`. A slot stays in the list when its palette
+entry is disabled or deleted; clients hide it, as they do for mail.
 
 Display preferences on a subscription or folder are stored by the
 server and applied by the client; the server never reorders or filters
@@ -144,7 +152,7 @@ all-feeds list has no row of its own, so its sticky pill is the
 | `/rss_list_items` (sync) | GET | `subscription_id`, `since=<fetched_key or empty>`, `limit` | `{items, next_since, has_more}`: items ingested after `since`, oldest-ingested first. This is the cursor client caches sync on; it is keyed on ingest time, so backdated items are never missed. |
 | `/rss_list_items` (state sync) | GET | `subscription_id`, `state_since=<opaque or empty>`, `limit` | `{states, next_state_since, has_more}`: the caller's state rows for the feed changed since the cursor. An empty cursor first pulls the whole partition in `sort_key` order (a fresh or pre-existing cache catching up), then the cursor moves to the `by_updated` index and each call returns only what changed. The cursor trails "now" by a few seconds so a late commit is not stepped past; a row on a boundary is delivered twice, and applying state is idempotent. |
 | `/rss_get_item` | GET | `feed_id`, `sort_key` | `{item}` with the body inlined. Codes: `not_subscribed`, `unknown_item`. |
-| `/rss_set_item_state` | POST | `{items: [{feed_id, sort_key, is_read?, is_favorite?}]}` (≤100) | `{updated}`. An explicit `is_read` overrides the watermark in either direction. |
+| `/rss_set_item_state` | POST | `{items: [{feed_id, sort_key, is_read?, is_favorite?, add_flags?, remove_flags?}]}` (≤100) | `{updated}`: how many entries changed something. An explicit `is_read` overrides the watermark in either direction. `add_flags` and `remove_flags` are lists of palette slots, added to and removed from the item's `flags` one slot at a time, so two devices changing different flags of one item both take effect; an empty or absent list changes nothing. Adding needs a slot that is enabled in the caller's palette. Removing needs only a well-formed slot, so a flag whose entry is disabled or gone can still be cleared. Every entry's flags are checked before anything is written, so a call refused with one of the flag codes has changed nothing. Codes: `invalid_flags` (not a list of slots; the system flag is `is_favorite`, not a slot), `flag_conflict` (a slot in both lists of one entry), `flag_not_in_palette` (adding a slot the palette does not enable); the last two carry `flags`, the sorted slots refused. `palette_unavailable` (500) when the palette cannot be read while adding. Also `missing_items`, `too_many_items`, `invalid_item`, `not_subscribed` (404), which stop the call at that entry with the earlier entries already written. |
 | `/rss_mark_all_read` | POST | `{subscription_id}` \| `{folder_id}` \| `{}`, each with an optional `watermark` (ISO 8601) | `{subscriptions, flipped, read_watermark}`. Writes the watermark (the client's tap time when sent, clamped to now; otherwise now; never moved backwards) and flips items published up to it that were explicitly marked unread. A client replaying a queued mark-all-read sends the tap time so items that arrived in between stay unread. Code: `invalid_watermark`. |
 | `/rss_opml_import` | POST | `{opml: "<xml>", folder_id?}` | `{created, existing, folders_created, failed: [{url, code, Error}]}`. Additive: folders from the outline tree (reusing same-named folders under the same parent, rooted at `folder_id` when given); unknown feeds are created from the OPML's title without a probe and handed to the fetcher, so bad entries surface as feed health. Codes: `invalid_opml`, `unknown_folder` (404). 2 MB, 1000 feeds. |
 | `/rss_opml_export` | GET | | `{opml, filename}`: OPML 2.0 with the folder tree as nested outlines and one `type="rss"` outline per subscription, titled with the custom title when set. |
