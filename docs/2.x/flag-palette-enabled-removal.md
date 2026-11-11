@@ -29,8 +29,9 @@ decision 10). The removal runs in the 1.x series as three PRs:
   `compile-user-rules.py` stop reading `enabled`: a slot is in the
   palette or it is not. `set_preferences` still accepts the field and
   stores it as sent. The field is announced as deprecated.
-- **E2, Apple** and **E3, Android.** The switch goes, the client model
-  loses the field, and a palette is written without it.
+- **E2, Apple (#2413)** and **E3, Android (#2414).** The switch goes,
+  the client model loses the field, and a palette is written without
+  it.
 
 What 1.x cannot do is stop *accepting* the field. Every Apple and
 Android build from 1.8.0 until E2 and E3 writes `enabled` on every
