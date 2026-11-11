@@ -119,9 +119,9 @@ moved most of the code this plan names. The facts a phase depends on:
   window in front.
 - The chrome kit (`Shared/Chrome/`) is shared by both media, but has no
   unread dot or flag mark yet; the unified flags plan adds them.
-- `RssStore` is at schema 6, and `openRecovering` deletes a file written
-  by a newer schema. Android's `RoomRssStore` is at version 1 with a
-  destructive fallback.
+- `RssStore` is at schema 6. From 1.50.0 (#2404) `openRecovering` sets
+  aside a file written by a newer schema; 1.49.0 and earlier delete it.
+  Android's `RoomRssStore` is at version 1 with a destructive fallback.
 
 ### Where the two media already align
 
@@ -709,12 +709,12 @@ app; signing out removes the feed entries from Spotlight.
   or loses a feed rule. Shipped app versions keep working across each
   server deploy.
 - Local schema migrations (`RssStore` schema 7, the next Room version)
-  are forward-only, but a downgrade is not yet safe: `RssStore` deletes a
-  file written by a newer schema, and with it any unsent feed marks.
-  The SQLite mail store plan's PR 0.2 sets such a file aside and
-  imports its pending rows when a newer build returns; by default
-  schema 7 ships after that. Room must not move past version 1 without
-  a real migration.
+  are forward-only, and a downgrade is safe only to a build that has
+  the SQLite mail store plan's PR 0.2 (#2404, released in 1.50.0): it
+  sets a newer file aside, and a newer build imports its pending rows
+  when it returns. 1.49.0 and earlier delete the file, and with it any
+  unsent feed marks, so schema 7 ships after 1.50.0. Room must not move
+  past version 1 without a real migration.
 - Each phase's acceptance line above is written to be a tester sweep
   item.
 
