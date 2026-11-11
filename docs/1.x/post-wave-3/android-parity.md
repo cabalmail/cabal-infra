@@ -31,7 +31,7 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 | PR 8 (only if decision 3 is Yes). The feed store ends with the session | Not started (2026-10-15) |
 | PR 9. Room version 2 | Not started (2026-10-15) |
 | PR 10. Folder and All Feeds order stick | Not started (2026-10-15) |
-| Later legs L1 to L6 | Not started (2026-10-15) |
+| Later legs L1 to L6 | L1 (unified flags) started (2026-11-10): the kit model is in review. L2 to L6 not started |
 
 ## Decisions for the maintainer
 
@@ -184,7 +184,16 @@ Order: the reader-mode fix first, then bugs, then the Room work. PRs 2, 3 and 4 
 
 ### Later legs (one short session each, decision 6)
 
-**Status:** Not started (2026-10-15). None of the Apple legs they follow has started.
+**Status:** L1 started (2026-11-10), after its Apple leg was promoted as 1.47.0 (2026-11-11 UTC). L2 to L6 not started; none of the Apple legs they follow has started.
+
+L1's PRs, each based on `stage`, in order:
+
+| PR | What the maintainer sees | Status |
+| --- | --- | --- |
+| Kit model | Nothing. `FlagPalette.kt` learns the built-in flag's entry and the cap of 21 | In review (2026-11-10) |
+| Rendering and Settings > Flags | "Flagged" is first in Settings > Flags, with Reset to default and no Enabled switch; a flagged message shows a dot on its row and a named chip in the reader, in list order, where the star was | Not started |
+| Controls | The Default mark and Make default; the flag swipe, the reader's button, Ctrl+Shift+L, the selection bar, the row menu and the search long-press act on the default flag under its name; the pills take the built-in flag's name; the rule editor lists it with the others | Not started |
+| Acceptance record (docs) | The four palette states on an Android emulator against stage, and a palette edited on each platform read on the other, recorded under Phase 4 of `unified-flags-plan.md` | Not started |
 
 Each leg starts when its Apple leg is promoted, writes a short scope doc against the merged Apple PRs, and ships in one release with a soak.
 
