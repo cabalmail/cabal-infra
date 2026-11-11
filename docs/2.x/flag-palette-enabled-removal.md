@@ -25,7 +25,7 @@ The maintainer decided on 2026-11-11 that the switch does not earn its
 complexity ([flags-and-cross-media.md](../1.x/post-wave-3/flags-and-cross-media.md),
 decision 10). The removal runs in the 1.x series as three PRs:
 
-- **E1, server.** `set_flag`, `rss_set_item_state` and
+- **E1, server (#2412).** `set_flag`, `rss_set_item_state` and
   `compile-user-rules.py` stop reading `enabled`: a slot is in the
   palette or it is not. `set_preferences` still accepts the field and
   stores it as sent. The field is announced as deprecated.
