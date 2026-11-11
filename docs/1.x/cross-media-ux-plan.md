@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit and clients not started |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit: no PR yet, its gate clear since 1.50.0 (2026-11-11). Clients not started |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -455,9 +455,10 @@ shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
 are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
 API; `flags-and-cross-media.md`, Session 2, has what was run. Both
-merged after 1.48.0 was cut and shipped in 1.49.0 the same day. The Kit
-and the clients (2b) have not started; `flags-and-cross-media.md` gates
-them.
+merged after 1.48.0 was cut and shipped in 1.49.0 the same day. The
+Kit (B2.3) has no PR yet; its gate cleared on 2026-11-11 with 1.50.0.
+The clients (2b) have not started and merge after the Kit;
+`flags-and-cross-media.md` has the gates.
 
 ### 2a. Server
 
@@ -709,12 +710,14 @@ app; signing out removes the feed entries from Spotlight.
   or loses a feed rule. Shipped app versions keep working across each
   server deploy.
 - Local schema migrations (`RssStore` schema 7, the next Room version)
-  are forward-only, and a downgrade is safe only to a build that has
-  the SQLite mail store plan's PR 0.2 (#2404, released in 1.50.0): it
-  sets a newer file aside, and a newer build imports its pending rows
-  when it returns. 1.49.0 and earlier delete the file, and with it any
-  unsent feed marks, so schema 7 ships after 1.50.0. Room must not move
-  past version 1 without a real migration.
+  are forward-only. On Apple, a downgrade keeps unsent feed marks only
+  when the older build is 1.50.0 or later, which has the SQLite mail
+  store plan's PR 0.2 (#2404): the older build sets the newer file
+  aside, without sending or showing its marks, and the newer build
+  imports that file's pending rows when it is installed again. Signing
+  out in between deletes the set-aside file. 1.49.0 and earlier delete
+  the file, and with it any unsent feed marks, so schema 7 ships after
+  1.50.0. Room must not move past version 1 without a real migration.
 - Each phase's acceptance line above is written to be a tester sweep
   item.
 
