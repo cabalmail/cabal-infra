@@ -20,7 +20,7 @@ final class RssStoreRecoveryTests: XCTestCase {
             try database.exec(Schema.version3)
             try database.exec("ALTER TABLE subscriptions ADD COLUMN default_filter TEXT NOT NULL DEFAULT 'unread'")
             try database.run("INSERT INTO subscriptions (subscription_id, feed_id) VALUES ('old', 'f0')", [])
-            database.userVersion = 3
+            try database.setUserVersion(3)
         }
         XCTAssertThrowsError(try RssStore(directory: dir))
         let recovered = try XCTUnwrap(RssStore.openRecovering(directory: dir))
@@ -32,7 +32,7 @@ final class RssStoreRecoveryTests: XCTestCase {
         let folder = try await recovered.folder(id: "fo")
         XCTAssertEqual(folder?.defaultFilter, .all, "v4 is fully applied")
         let reopened = try SQLiteDatabase(path: dir.appendingPathComponent("rss.sqlite").path)
-        XCTAssertEqual(reopened.userVersion, RssStore.schemaVersion)
+        XCTAssertEqual(try reopened.userVersion(), RssStore.schemaVersion)
     }
 
     /// A file that is not a database at all is replaced, not fatal.
@@ -58,11 +58,11 @@ final class RssStoreRecoveryTests: XCTestCase {
         _ = try RssStore(directory: dir)
         do {
             let database = try SQLiteDatabase(path: dir.appendingPathComponent("rss.sqlite").path)
-            database.userVersion = RssStore.schemaVersion + 1
+            try database.setUserVersion(RssStore.schemaVersion + 1)
         }
         XCTAssertThrowsError(try RssStore(directory: dir))
         XCTAssertNotNil(RssStore.openRecovering(directory: dir))
         let reopened = try SQLiteDatabase(path: dir.appendingPathComponent("rss.sqlite").path)
-        XCTAssertEqual(reopened.userVersion, RssStore.schemaVersion)
+        XCTAssertEqual(try reopened.userVersion(), RssStore.schemaVersion)
     }
 }

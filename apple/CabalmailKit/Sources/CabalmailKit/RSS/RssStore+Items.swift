@@ -55,8 +55,7 @@ extension RssStore {
             try database.rows("SELECT feed_id, sort_key FROM pending WHERE kind IN ('read', 'favorite')")
                 .map { "\($0.string(0))#\($0.string(1))" }
         )
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             for item in items {
                 let keepLocalState = pendingKeys.contains(item.id)
                 try database.run("""
@@ -85,10 +84,6 @@ extension RssStore {
                         .init(keepLocalState), .init(keepLocalState), .init(keepLocalState),
                     ])
             }
-            try database.exec("COMMIT")
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
         emit(.feeds(Set(items.map(\.feedId))))
     }

@@ -34,13 +34,22 @@ public actor RssStore {
 
     static let schemaVersion = 6
 
+    /// The schema, one step per version. A file from a newer build (a
+    /// downgrade) is refused, and `openRecovering` deletes and repopulates
+    /// it, rather than read with columns this build does not know.
+    static let migrator = SchemaMigrator(name: "rss.sqlite", steps: [
+        .sql(Schema.version1), .sql(Schema.version2), .sql(Schema.version3), .sql(Schema.version4),
+        .sql(Schema.version5), .sql(Schema.version6),
+    ])
+
     public init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         self.directory = directory
         database = try SQLiteDatabase(path: directory.appendingPathComponent("rss.sqlite").path)
         try database.exec("PRAGMA journal_mode = WAL")
         try database.exec("PRAGMA synchronous = NORMAL")
-        try Self.migrate(database)
+        assert(Self.migrator.version == Self.schemaVersion)
+        try Self.migrator.migrate(database, newerSchema: .refuse)
     }
 
     // MARK: - Changes
@@ -93,36 +102,6 @@ public actor RssStore {
         }
     }
 
-    /// The file's `user_version` is past what this build knows.
-    struct NewerSchemaError: Error, CustomStringConvertible {
-        let found: Int
-        var description: String { "rss.sqlite schema \(found) is newer than \(RssStore.schemaVersion)" }
-    }
-
-    /// Forward-only migrations keyed on `user_version`, each step and its
-    /// `user_version` write in one transaction (SQLite DDL is transactional),
-    /// so a crash mid-step leaves the previous version intact rather than a
-    /// half-applied one that fails on every rerun. A downgrade (a file from
-    /// a newer build) throws, and `openRecovering` deletes and repopulates.
-    private static func migrate(_ database: SQLiteDatabase) throws {
-        let steps = [Schema.version1, Schema.version2, Schema.version3, Schema.version4, Schema.version5,
-                     Schema.version6]
-        assert(steps.count == schemaVersion)
-        let current = database.userVersion
-        guard current <= schemaVersion else { throw NewerSchemaError(found: current) }
-        for (index, sql) in steps.enumerated() where index >= current {
-            try database.exec("BEGIN")
-            do {
-                try database.exec(sql)
-                try database.exec("PRAGMA user_version = \(index + 1)")
-                try database.exec("COMMIT")
-            } catch {
-                try? database.exec("ROLLBACK")
-                throw error
-            }
-        }
-    }
-
     /// Drops every row (sign-out, or a corrupt-cache recovery). Read
     /// `allDataStoreUuids()` first if the web storage must go too.
     public func clear() throws {
@@ -167,15 +146,10 @@ public actor RssStore {
     /// drop the storage after any sync path - the poller's `syncAll`
     /// included - not just the ones that kept the `CatalogDiff`.
     public func takeDepartedDataStoreUuids() throws -> [String] {
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             let uuids = try database.rows("SELECT uuid FROM departed_data_stores ORDER BY uuid").map { $0.string(0) }
             try database.exec("DELETE FROM departed_data_stores")
-            try database.exec("COMMIT")
             return uuids
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
     }
 
@@ -198,8 +172,7 @@ public actor RssStore {
         let keep = Set(catalog.subscriptions.map(\.subscriptionId))
         let removed = existing.filter { !keep.contains($0.subscriptionId) }
         let keptFeeds = Set(catalog.subscriptions.map(\.feedId))
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             for sub in removed {
                 try database.run("DELETE FROM subscriptions WHERE subscription_id = ?", [.init(sub.subscriptionId)])
                 if !sub.dataStoreUuid.isEmpty {
@@ -220,10 +193,6 @@ public actor RssStore {
             for folder in catalog.folders {
                 try writeFolder(folder)
             }
-            try database.exec("COMMIT")
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
         let diff = CatalogDiff(
             removedSubscriptionIds: removed.map(\.subscriptionId),

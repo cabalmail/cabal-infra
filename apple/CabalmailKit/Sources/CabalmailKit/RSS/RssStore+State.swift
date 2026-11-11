@@ -47,15 +47,10 @@ extension RssStore {
     /// server, and the state sync only delivers rows the server changed,
     /// so nothing reconciles it (#1956).
     public func setRead(feedId: String, sortKey: String, _ isRead: Bool) throws {
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             try database.run("UPDATE items SET is_read = ?, state_is_explicit = 1 WHERE feed_id = ? AND sort_key = ?",
                        [.init(isRead), .init(feedId), .init(sortKey)])
             try enqueue(kind: .read, feedId: feedId, sortKey: sortKey, value: isRead)
-            try database.exec("COMMIT")
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
         emit(.items(["\(feedId)#\(sortKey)"]))
     }
@@ -63,15 +58,10 @@ extension RssStore {
     /// Favorites or unfavorites an item locally and queues the change, in
     /// one transaction for the same reason `setRead` is (#1956).
     public func setFavorite(feedId: String, sortKey: String, _ isFavorite: Bool) throws {
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             try database.run("UPDATE items SET is_favorite = ? WHERE feed_id = ? AND sort_key = ?",
                        [.init(isFavorite), .init(feedId), .init(sortKey)])
             try enqueue(kind: .favorite, feedId: feedId, sortKey: sortKey, value: isFavorite)
-            try database.exec("COMMIT")
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
         emit(.items(["\(feedId)#\(sortKey)"]))
     }
@@ -84,8 +74,7 @@ extension RssStore {
     public func markAllRead(subscriptionId: String, watermark: String? = nil) throws {
         let watermark = watermark ?? Self.isoNow()
         guard let sub = try subscription(id: subscriptionId) else { return }
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             try database.run(
                 "UPDATE subscriptions SET read_watermark = MAX(read_watermark, ?) WHERE subscription_id = ?",
                 [.init(watermark), .init(subscriptionId)])
@@ -99,10 +88,6 @@ extension RssStore {
             try database.run(
                 "INSERT INTO pending (kind, subscription_id, feed_id, created_at) VALUES ('mark_all_read', ?, ?, ?)",
                 [.init(subscriptionId), .init(sub.feedId), .init(watermark)])
-            try database.exec("COMMIT")
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
         emit(.feeds([sub.feedId]))
     }
@@ -114,8 +99,7 @@ extension RssStore {
     /// here is skipped; it arrives with its state when it is listed.
     public func applyServerStates(_ states: [RssItemState]) throws {
         guard !states.isEmpty else { return }
-        try database.exec("BEGIN")
-        do {
+        try database.transaction {
             for state in states {
                 try database.run("""
                     UPDATE items SET is_read = ?, state_is_explicit = ?
@@ -130,10 +114,6 @@ extension RssStore {
                         AND sort_key = items.sort_key)
                     """, [.init(state.isFavorite), .init(state.feedId), .init(state.sortKey)])
             }
-            try database.exec("COMMIT")
-        } catch {
-            try? database.exec("ROLLBACK")
-            throw error
         }
         emit(.feeds(Set(states.map(\.feedId))))
     }
