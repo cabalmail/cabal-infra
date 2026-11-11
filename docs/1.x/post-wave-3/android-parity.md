@@ -31,7 +31,7 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 | PR 8 (only if decision 3 is Yes). The feed store ends with the session | Not started (2026-10-15) |
 | PR 9. Room version 2 | Not started (2026-10-15) |
 | PR 10. Folder and All Feeds order stick | Not started (2026-10-15) |
-| Later legs L1 to L6 | Not started (2026-10-15) |
+| Later legs L1 to L6 | L1 (unified flags) merged (2026-11-10), not promoted: #2389, #2390, #2391, with its acceptance run recorded under Phase 4 of `unified-flags-plan.md`. L2 to L6 not started |
 
 ## Decisions for the maintainer
 
@@ -184,7 +184,27 @@ Order: the reader-mode fix first, then bugs, then the Room work. PRs 2, 3 and 4 
 
 ### Later legs (one short session each, decision 6)
 
-**Status:** Not started (2026-10-15). None of the Apple legs they follow has started.
+**Status:** L1 merged (2026-11-10), not promoted; it started after its Apple leg was promoted as 1.47.0 (2026-11-11 UTC). Its acceptance run passed on stage the same day (Phase 4 of `unified-flags-plan.md` has the record). Promotion is the maintainer's call and comes after a soak; nothing in L1 changed the feed database, so its release needs no upgrade check. L2 to L6 not started; none of the Apple legs they follow has started.
+
+L1's PRs, each based on `stage`, in order:
+
+| PR | What the maintainer sees | Status |
+| --- | --- | --- |
+| Kit model | Nothing. `FlagPalette.kt` learns the built-in flag's entry and the cap of 21 | Merged (2026-11-10): #2389 |
+| Rendering and Settings > Flags | "Flagged" is first in Settings > Flags, with Reset to default and no Enabled switch; a flagged message shows a dot on its row and a named chip in the reader, in list order, where the star was; a flagged feed item shows the same dot beside its date; search results draw the dots too | Merged (2026-11-10): #2390. Checked in the running app on the Mac mini's Pixel 8 emulator against stage |
+| Controls | The Default mark and Make default; the flag swipe, the reader's button, Ctrl+Shift+L, the selection bar, the row menu and the search long-press act on the default flag under its name; the pills take the built-in flag's name; the rule editor lists it with the others; the feed's swipe, reader button and pill take the built-in flag's name and color | Merged (2026-11-10): #2391. Checked in the running app on the same emulator, in the four palette states, each press read back from the server |
+| Acceptance record (docs) | The four palette states on an Android emulator against stage, and a palette edited on each platform read on the other, recorded under Phase 4 of `unified-flags-plan.md` | Run on 2026-11-10 against stage at 3129933cb: pass. One older defect filed, #2392 |
+
+L1's scope questions, put to the maintainer in one batch:
+
+1. **Feeds in this leg?** Phase 4 of `unified-flags-plan.md` lists Android's mail surfaces and does not name the feed ones, while its decision 4 puts feed items in scope.
+   - **Answered 2026-11-10: Yes.** The feed row's dot and the feed controls' name and color follow the built-in flag's entry, as on Apple.
+2. **The glyph on the controls that set a flag: star or flag?** The star leaves the rows either way.
+   - **Answered 2026-11-10: Star.** The reader's button, the selection bar's button and the swipe keep the star, filled in the flag's color when the flag is set. No source-scan test changes.
+3. **The Mac mini for the acceptance run.**
+   - **Answered 2026-11-10: Yes**, for its Android emulator and its iPhone 17 simulator, driven over SSH with no console, as the first stage test account, with the account restored afterwards.
+
+Android-only choices, taken without asking and listed for review in the PR that makes each: Make default is a button in the flag's edit dialog, since these rows have no context menu; the row's long-press menu stays flat and lists every enabled flag in list order; the selection bar keeps its two items (set in the bar, remove in the overflow menu), both for the default flag.
 
 Each leg starts when its Apple leg is promoted, writes a short scope doc against the merged Apple PRs, and ships in one release with a soak.
 

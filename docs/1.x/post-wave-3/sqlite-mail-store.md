@@ -18,6 +18,7 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 
 | Work item | Status |
 |---|---|
+| Decisions 1 to 10 | 4 and 5 answered 2026-11-10, each with its default: outbox and drafts stay; downgrades are supported. No answer is recorded for the others. |
 | Phase 0: Standalone fixes and the SQLite foundation (PRs 0.1 to 0.4) | Partly done (2026-10-21), as standalone fixes, not as PRs 0.1 to 0.4: #1871 in #2092, #1956 in #2117, #1957 in #2118, the not-deleted count in #2161. Not started: PR 0.1 (the SQLite foundation) and the rest of PR 0.2 |
 | Phase 1: The account directory (PRs 1.1 and 1.2) | Not started (2026-10-15) |
 | Phase 2: Envelopes into SQLite (PRs 2.1 to 2.5) | Not started (2026-11-09), except PR 2.5 (#1836), done ahead on the JSON cache (2026-10-21): #2161, #2162, #2174, #2178 |
@@ -43,7 +44,9 @@ Answer 1 and 2 from this plan now. Answer 3 to 7 when the project opens, togethe
 
 3. **Data on disk: one directory per account, or one shared directory as today?** **Per account (recommended)**: a late write from a signed-out session cannot land in the next account's files (#1937's shape), and sign-out removes one directory. Shared: sign-out keeps emptying each store in turn. Your 2.1 answer, one `MailSessionStore` reset in place, stands either way. Default: Per account.
 4. **Outbox and drafts: Stay or Move?** **Stay (recommended)**: unsent mail and draft buffers never move in this project, so no migration can lose them; sign-out still wipes them, as today. Move: they join the account directory in a later release with a copy, verify and remove step. Default: Stay.
+   - **Answered 2026-11-10: Stay.**
 5. **Downgrades: Supported or Unsupported?** **Supported (recommended)**: a tester can install an older TestFlight build and come back without losing unsent mail, drafts or queued changes; saved lists may refetch. It costs migrations that re-run safely at every launch. Default: Supported.
+   - **Answered 2026-11-10: Supported.**
 6. **What the shared offline queue carries.** **(a) Mail and feeds (recommended)**: mail flag, read, move, delete and Mark All as Read, plus feed marks and the feed order and filter settings; the outbox stays separate and shares only the retry timing and the reconnect trigger. (b) Also fold in the outbox. (c) Mail only; feeds keep their own queue. Under (a), hardening-web-and-writes.md's outbox fix (its PR 5) is permanent; its note that this plan "later replaces this queue" holds only under (b). Default: (a).
 
    > **Erratum (2026-10-16):** hardening-web-and-writes.md has no note saying this plan "later replaces this queue". It says instead (PR 5's Risk line) that under 6(a) the outbox stays separate, so its fix is permanent. The choice between (a), (b) and (c) is unchanged.

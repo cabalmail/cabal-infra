@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,10 +67,16 @@ import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.mail.ForegroundPolling
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.FlagDot
+import com.cabalmail.android.ui.theme.FlagDotMark
+import com.cabalmail.android.ui.theme.FlagToggle
+import com.cabalmail.android.ui.theme.LocalFlagPalette
 import com.cabalmail.android.ui.theme.LocalSwipeBindings
+import com.cabalmail.android.ui.theme.SwipeReveal
 import com.cabalmail.android.ui.theme.color
 import com.cabalmail.android.ui.theme.feedSwipeReveal
 import com.cabalmail.android.ui.theme.painter
+import com.cabalmail.android.ui.theme.text
 import com.cabalmail.kit.compose.HtmlText
 import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemFilter
@@ -181,7 +186,12 @@ fun FeedItemListScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                RssItemFilter.PILLS.forEach { filter ->
+                // The Flagged pill filters on the built-in flag. While that
+                // flag's entry is disabled the pill is hidden unless lit, so
+                // a filter that is on can still be turned off.
+                val showFlagPill =
+                    FlagToggle.systemFlag(LocalFlagPalette.current) != null || state.filter == RssItemFilter.FAVORITE
+                RssItemFilter.PILLS.filter { it != RssItemFilter.FAVORITE || showFlagPill }.forEach { filter ->
                     FilterChip(
                         selected = state.filter == filter,
                         onClick = { viewModel.setFilter(state.filter.toggling(filter)) },
@@ -469,8 +479,15 @@ private fun FeedSwipeRow(
     content: @Composable () -> Unit,
 ) {
     val bindings = LocalSwipeBindings.current
+    // A feed item's one flag is the built-in flag, so its swipe takes that
+    // flag's name and color from Settings > Flags. While that entry is
+    // disabled the edge bound to the flag does not drag.
+    val flag = FlagToggle.systemFlag(LocalFlagPalette.current)
     val currentToggleRead by rememberUpdatedState(onToggleRead)
     val currentToggleFavorite by rememberUpdatedState(onToggleFavorite)
+    val reveal: (FeedSwipeAction) -> SwipeReveal? = { action ->
+        feedSwipeReveal(action = action, isRead = isRead, flag = flag, isFavorite = isFavorite)
+    }
     val perform: (FeedSwipeAction) -> Unit = { action ->
         when (action) {
             FeedSwipeAction.TOGGLE_READ -> currentToggleRead()
@@ -509,22 +526,17 @@ private fun FeedSwipeRow(
         }
     SwipeToDismissBox(
         state = swipeState,
-        enableDismissFromStartToEnd = bindings.feedLeading != FeedSwipeAction.NONE,
-        enableDismissFromEndToStart = bindings.feedTrailing != FeedSwipeAction.NONE,
+        enableDismissFromStartToEnd = reveal(bindings.feedLeading) != null,
+        enableDismissFromEndToStart = reveal(bindings.feedTrailing) != null,
         backgroundContent = {
             val leading = swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-            val reveal =
-                feedSwipeReveal(
-                    action = if (leading) bindings.feedLeading else bindings.feedTrailing,
-                    isRead = isRead,
-                    isFavorite = isFavorite,
-                )
-            if (reveal != null) {
+            val revealed = reveal(if (leading) bindings.feedLeading else bindings.feedTrailing)
+            if (revealed != null) {
                 Box(
                     contentAlignment = if (leading) Alignment.CenterStart else Alignment.CenterEnd,
-                    modifier = Modifier.fillMaxSize().background(reveal.color()).padding(horizontal = 24.dp),
+                    modifier = Modifier.fillMaxSize().background(revealed.color()).padding(horizontal = 24.dp),
                 ) {
-                    Icon(reveal.painter(), contentDescription = stringResource(reveal.label))
+                    Icon(revealed.painter(), contentDescription = revealed.label.text())
                 }
             }
         },
@@ -552,16 +564,17 @@ internal fun FeedItemRow(
     val snippet = remember(item.bodyHtml) { HtmlText.firstLine(item.bodyHtml) }
     val unreadText = stringResource(R.string.unread)
     val queuedText = stringResource(R.string.feed_change_queued)
-    val flaggedText = stringResource(R.string.flagged)
-    // The row reads as one thing to a screen reader (and the tester's UI
-    // dump), in the Apple rows' form: "Unread, <title>, <snippet>, <date>".
+    // A feed item's one flag is the built-in flag, so its mark takes that
+    // flag's name and color from Settings > Flags, as a message's does.
+    val flagMarks = FlagDotMark.feedMarks(item.isFavorite, LocalFlagPalette.current)
     val rowDescription =
-        listOfNotNull(
-            unreadText.takeIf { !item.isRead },
-            title,
-            snippet.ifEmpty { null },
-            date.ifEmpty { null },
-        ).joinToString(", ")
+        feedRowDescription(
+            unread = unreadText.takeIf { !item.isRead },
+            title = title,
+            snippet = snippet,
+            date = date,
+            flags = flagMarks.map { it.label },
+        )
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
@@ -608,6 +621,11 @@ internal fun FeedItemRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                // The flag's dot sits beside the date, as on a mail row; it
+                // used to be a star at the row's trailing edge.
+                flagMarks.forEach { mark ->
+                    FlagDot(mark, modifier = Modifier.padding(start = 6.dp))
+                }
                 if (pending) {
                     Icon(
                         Icons.Default.Refresh,
@@ -618,13 +636,18 @@ internal fun FeedItemRow(
                 }
             }
         }
-        if (item.isFavorite) {
-            Icon(
-                Icons.Default.Star,
-                contentDescription = flaggedText,
-                tint = ColorTokens.flaggedFg(),
-                modifier = Modifier.padding(start = 8.dp).size(18.dp),
-            )
-        }
     }
 }
+
+/**
+ * What a feed row says to a screen reader (and the tester's UI dump), in the
+ * Apple rows' form: "Unread, <title>, <snippet>, <date>", then the name of
+ * each flag the item carries. Pure, so it unit-tests without Compose.
+ */
+internal fun feedRowDescription(
+    unread: String?,
+    title: String,
+    snippet: String,
+    date: String,
+    flags: List<String>,
+): String = (listOf(unread.orEmpty(), title, snippet, date) + flags).filter { it.isNotEmpty() }.joinToString(", ")

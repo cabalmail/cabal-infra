@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -48,14 +47,19 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cabalmail.android.R
-import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.FlagDot
+import com.cabalmail.android.ui.theme.FlagDotMark
+import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.ui.theme.LocalDisposeToTrash
+import com.cabalmail.android.ui.theme.LocalFlagPalette
 import com.cabalmail.android.ui.theme.LocalRowPadding
 import com.cabalmail.android.ui.theme.LocalSwipeBindings
+import com.cabalmail.android.ui.theme.SwipeReveal
 import com.cabalmail.android.ui.theme.color
 import com.cabalmail.android.ui.theme.mailSwipeReveal
 import com.cabalmail.android.ui.theme.painter
+import com.cabalmail.android.ui.theme.text
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.deliveredToAddress
 import com.cabalmail.kit.models.hasAuthFailure
@@ -63,7 +67,6 @@ import com.cabalmail.kit.models.mailboxAddress
 import com.cabalmail.kit.models.mailboxDisplayName
 import com.cabalmail.kit.models.sentInstant
 import com.cabalmail.kit.settings.DisposeAction
-import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import com.cabalmail.kit.settings.MailSwipeAction
 import java.time.Instant
@@ -88,8 +91,8 @@ fun EnvelopeRow(
     folderLabel: String? = null,
     bimiLookup: (suspend (String) -> String?)? = null,
     mailDomains: List<String> = emptyList(),
-    /** The custom-flag palette, for the keyword dots (Phase 4). */
-    palette: List<FlagPaletteEntry> = emptyList(),
+    /** The stored flag palette, for the flag dots; the app's own unless a caller passes one. */
+    palette: List<FlagPaletteEntry> = LocalFlagPalette.current,
 ) {
     val emphasis = if (envelope.isSeen) FontWeight.Normal else FontWeight.Bold
     Row(
@@ -173,29 +176,13 @@ fun EnvelopeRow(
                     )
                     Spacer(Modifier.width(4.dp))
                 }
-                if (envelope.isFlagged) {
-                    Icon(
-                        Icons.Default.Star,
-                        contentDescription = stringResource(R.string.flagged),
-                        tint = ColorTokens.flaggedFg(),
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                }
-                // Custom-flag dots (Phase 4): one color dot per tagged
-                // palette slot, capped so the fixed-height indicator run
-                // never overflows. A tag whose palette entry was deleted
-                // renders gray.
-                FlagPalette.slotsIn(envelope.flags).take(4).forEach { slot ->
-                    val entry = palette.firstOrNull { it.slot == slot }
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(flagColor(entry?.color ?: ""))
-                                .semantics { contentDescription = entry?.label ?: slot },
-                    )
+                // Flag dots: one color dot per flag the message carries, the
+                // built-in flag included, in the order of Settings > Flags
+                // and capped so the fixed-height indicator run never
+                // overflows. A tag whose palette entry was deleted renders
+                // gray.
+                FlagDotMark.marks(envelope.flags, palette).forEach { mark ->
+                    FlagDot(mark)
                     Spacer(Modifier.width(4.dp))
                 }
                 Text(
@@ -337,9 +324,11 @@ internal fun Modifier.animateRowRemoval(scope: LazyItemScope): Modifier =
 @Composable
 internal fun SwipeRow(
     isSeen: Boolean,
-    isFlagged: Boolean,
+    /** The message's flags, from which the flag swipe reads whether the default flag is set. */
+    flags: List<String>,
     onToggleSeen: () -> Unit,
-    onToggleFlag: () -> Unit,
+    /** Sets (true) or clears one flag by its slot; the flag swipe passes the default flag's. */
+    onSetFlag: (slot: String, value: Boolean) -> Unit,
     onDispose: () -> Unit,
     /**
      * What the dispose swipe does in the row's folder (purge inside Trash,
@@ -354,9 +343,18 @@ internal fun SwipeRow(
     val dispose =
         disposeIntent
             ?: DisposeIntent.Move(if (LocalDisposeToTrash.current) DisposeAction.TRASH else DisposeAction.ARCHIVE)
+    // The flag swipe toggles the default flag, the first enabled entry of
+    // Settings > Flags. With none (every entry disabled) the edge bound to
+    // it does not drag, as an edge bound to NONE does not.
+    val defaultFlag = FlagToggle.defaultFlag(LocalFlagPalette.current)
+    val isFlagSet = defaultFlag?.isSetIn(flags) == true
     val currentToggleSeen by rememberUpdatedState(onToggleSeen)
-    val currentToggleFlag by rememberUpdatedState(onToggleFlag)
+    val toggleFlag: () -> Unit = { if (defaultFlag != null) onSetFlag(defaultFlag.slot, !isFlagSet) }
+    val currentToggleFlag by rememberUpdatedState(toggleFlag)
     val currentDispose by rememberUpdatedState(onDispose)
+    val reveal: (MailSwipeAction) -> SwipeReveal? = { action ->
+        mailSwipeReveal(action = action, isSeen = isSeen, flag = defaultFlag, isFlagSet = isFlagSet, dispose = dispose)
+    }
     val perform: (MailSwipeAction) -> Unit = { action ->
         when (action) {
             MailSwipeAction.TOGGLE_READ -> currentToggleSeen()
@@ -399,23 +397,17 @@ internal fun SwipeRow(
     }
     SwipeToDismissBox(
         state = swipeState,
-        enableDismissFromStartToEnd = bindings.mailLeading != MailSwipeAction.NONE,
-        enableDismissFromEndToStart = bindings.mailTrailing != MailSwipeAction.NONE,
+        enableDismissFromStartToEnd = reveal(bindings.mailLeading) != null,
+        enableDismissFromEndToStart = reveal(bindings.mailTrailing) != null,
         backgroundContent = {
             val leading = swipeState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-            val reveal =
-                mailSwipeReveal(
-                    action = if (leading) bindings.mailLeading else bindings.mailTrailing,
-                    isSeen = isSeen,
-                    isFlagged = isFlagged,
-                    dispose = dispose,
-                )
-            if (reveal != null) {
+            val revealed = reveal(if (leading) bindings.mailLeading else bindings.mailTrailing)
+            if (revealed != null) {
                 Box(
                     contentAlignment = if (leading) Alignment.CenterStart else Alignment.CenterEnd,
-                    modifier = Modifier.fillMaxSize().background(reveal.color()).padding(horizontal = 24.dp),
+                    modifier = Modifier.fillMaxSize().background(revealed.color()).padding(horizontal = 24.dp),
                 ) {
-                    Icon(reveal.painter(), contentDescription = stringResource(reveal.label))
+                    Icon(revealed.painter(), contentDescription = revealed.label.text())
                 }
             }
         },

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -71,8 +70,12 @@ import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
 import com.cabalmail.android.ui.settings.SortDirection
-import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.settings.labelRes
+import com.cabalmail.android.ui.theme.FlagMenu
+import com.cabalmail.android.ui.theme.FlagToggle
+import com.cabalmail.android.ui.theme.LocalFlagPalette
+import com.cabalmail.android.ui.theme.UiLabel
+import com.cabalmail.android.ui.theme.text
 import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -149,7 +152,14 @@ fun MessageListScreen(
             val envelope = envelopeAt(cursor) ?: return@collect
             when (shortcut) {
                 Shortcut.TOGGLE_READ -> viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen)
-                Shortcut.TOGGLE_FLAG -> viewModel.setFlag(setOf(envelope.id), "\\Flagged", !envelope.isFlagged)
+                // The default flag, read live like the envelope; with none
+                // (every flag disabled) the chord does nothing.
+                Shortcut.TOGGLE_FLAG ->
+                    FlagToggle
+                        .defaultFlag(container.preferences.preferences.value.flagPalette)
+                        ?.let { flag ->
+                            viewModel.setFlag(setOf(envelope.id), flag.slot, !flag.isSetIn(envelope.flags))
+                        }
                 else -> Unit
             }
         }
@@ -487,6 +497,10 @@ private fun SelectionTopBar(
     onMove: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    // The bar's star sets the default flag on the selection and the
+    // overflow item clears it, each under the flag's name. With no default
+    // flag the star is dimmed and the overflow item is absent.
+    val defaultFlag = FlagToggle.defaultFlag(LocalFlagPalette.current)
     TopAppBar(
         title = {
             Text(
@@ -506,10 +520,13 @@ private fun SelectionTopBar(
                 Icon(Icons.Default.MailOutline, contentDescription = stringResource(R.string.mark_read))
             }
             IconButton(
-                onClick = { viewModel.setFlag(state.selected, "\\Flagged", true) },
-                enabled = state.selected.isNotEmpty(),
+                onClick = { defaultFlag?.let { viewModel.setFlag(state.selected, it.slot, true) } },
+                enabled = state.selected.isNotEmpty() && defaultFlag != null,
             ) {
-                Icon(Icons.Default.Star, contentDescription = stringResource(R.string.add_flag))
+                Icon(
+                    Icons.Default.Star,
+                    contentDescription = (defaultFlag?.title(isSet = false) ?: UiLabel.Fixed(R.string.add_flag)).text(),
+                )
             }
             IconButton(
                 onClick = onDispose,
@@ -532,13 +549,15 @@ private fun SelectionTopBar(
                         viewModel.setFlag(state.selected, "\\Seen", false)
                     },
                 )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.remove_flag)) },
-                    onClick = {
-                        menuOpen = false
-                        viewModel.setFlag(state.selected, "\\Flagged", false)
-                    },
-                )
+                if (defaultFlag != null) {
+                    DropdownMenuItem(
+                        text = { Text(defaultFlag.title(isSet = true).text()) },
+                        onClick = {
+                            menuOpen = false
+                            viewModel.setFlag(state.selected, defaultFlag.slot, false)
+                        },
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.move_to)) },
                     onClick = {
@@ -645,15 +664,26 @@ private fun FilterPills(
     state: MessageListUiState,
     onFilter: (MessageFilter) -> Unit,
 ) {
+    // The Flagged pill filters on the built-in flag, the one flag the
+    // server can filter on, so it carries that flag's name from Settings >
+    // Flags. While that flag's entry is disabled the pill is hidden unless
+    // lit, so a filter that is on can still be turned off.
+    val palette = LocalFlagPalette.current
+    val showFlagPill = FlagToggle.systemFlag(palette) != null || state.filter == MessageFilter.FLAGGED
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        MessageFilter.PILLS.forEach { filter ->
+        MessageFilter.PILLS.filter { it != MessageFilter.FLAGGED || showFlagPill }.forEach { filter ->
             val count =
                 when (filter) {
                     MessageFilter.ALL -> state.counts?.all
                     MessageFilter.UNREAD -> state.counts?.unseen
                     MessageFilter.FLAGGED -> state.counts?.flagged
                 }
-            val label = stringResource(filter.labelRes())
+            val label =
+                when (filter) {
+                    MessageFilter.ALL -> stringResource(R.string.filter_all)
+                    MessageFilter.UNREAD -> stringResource(R.string.filter_unread)
+                    MessageFilter.FLAGGED -> FlagToggle.systemFlagName(palette)
+                }
             FilterChip(
                 selected = state.filter == filter,
                 onClick = { onFilter(state.filter.toggling(filter)) },
@@ -663,13 +693,6 @@ private fun FilterPills(
         }
     }
 }
-
-private fun MessageFilter.labelRes(): Int =
-    when (this) {
-        MessageFilter.ALL -> R.string.filter_all
-        MessageFilter.UNREAD -> R.string.filter_unread
-        MessageFilter.FLAGGED -> R.string.filter_flagged
-    }
 
 // --------------------------------------------------------------------- rows
 
@@ -728,9 +751,9 @@ private fun InteractiveRow(
         } else {
             SwipeRow(
                 isSeen = envelope.isSeen,
-                isFlagged = envelope.isFlagged,
+                flags = envelope.flags,
                 onToggleSeen = { viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen) },
-                onToggleFlag = { viewModel.setFlag(setOf(envelope.id), "\\Flagged", !envelope.isFlagged) },
+                onSetFlag = { slot, value -> viewModel.setFlag(setOf(envelope.id), slot, value) },
                 onDispose = onDispose,
                 disposeIntent = disposeIntent,
                 containerColor = rowColor,
@@ -759,44 +782,30 @@ private fun InteractiveRow(
                     viewModel.setFlag(setOf(envelope.id), "\\Seen", !envelope.isSeen)
                 },
             )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            if (envelope.isFlagged) R.string.remove_flag else R.string.add_flag,
-                        ),
-                    )
-                },
-                onClick = {
-                    onMenuChange(false)
-                    viewModel.setFlag(setOf(envelope.id), "\\Flagged", !envelope.isFlagged)
-                },
-            )
-            // Custom flags (Phase 4): one check-marked item per enabled
-            // palette entry; a tagged item taps off, an untagged one taps
-            // on. Hidden entirely while the palette is empty.
-            palette.filter { it.enabled }.forEach { entry ->
-                val tagged = entry.slot in envelope.flags
+            // Flags: one run of every enabled flag in the order of
+            // Settings > Flags, the built-in one included, each check-marked
+            // when the message carries it, then any flag it carries whose
+            // entry is disabled or deleted (FlagMenu.rows). When the default
+            // flag is all there is, the run is the one plain item it always
+            // was: "Flag" / "Remove flag", or the flag's own name.
+            val flagRows = FlagMenu.rows(palette, envelope.flags)
+            if (FlagMenu.isOnlyTheDefault(flagRows, palette)) {
+                val flag = FlagToggle(flagRows.single().slot, flagRows.single().label, flagRows.single().color)
+                val isSet = flagRows.single().isOn
                 DropdownMenuItem(
-                    text = { Text(entry.label) },
-                    leadingIcon = {
-                        if (tagged) {
-                            Icon(Icons.Default.Check, contentDescription = null)
-                        } else {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(flagColor(entry.color)),
-                            )
-                        }
-                    },
+                    text = { Text(flag.title(isSet).text()) },
                     onClick = {
                         onMenuChange(false)
-                        viewModel.setFlag(setOf(envelope.id), entry.slot, !tagged)
+                        viewModel.setFlag(setOf(envelope.id), flag.slot, !isSet)
                     },
                 )
+            } else {
+                flagRows.forEach { row ->
+                    FlagMenuItem(row) {
+                        onMenuChange(false)
+                        viewModel.setFlag(setOf(envelope.id), row.slot, !row.isOn)
+                    }
+                }
             }
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.move_to)) },

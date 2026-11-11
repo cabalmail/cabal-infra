@@ -12,6 +12,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +42,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -63,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
@@ -70,6 +74,13 @@ import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
 import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.FlagDot
+import com.cabalmail.android.ui.theme.FlagDotMark
+import com.cabalmail.android.ui.theme.FlagMenu
+import com.cabalmail.android.ui.theme.FlagMenuRow
+import com.cabalmail.android.ui.theme.FlagToggle
+import com.cabalmail.android.ui.theme.UiLabel
+import com.cabalmail.android.ui.theme.text
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
 import com.cabalmail.kit.models.AuthResults
@@ -80,7 +91,6 @@ import com.cabalmail.kit.models.sentInstant
 import com.cabalmail.kit.models.upgradeInsecureRequests
 import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.DisposeAdvance
-import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import kotlinx.coroutines.launch
 import java.time.ZoneId
@@ -157,7 +167,13 @@ fun MessageDetailScreen(
                 Shortcut.REPLY -> viewModel.startReply(ReplyBuilder.Mode.REPLY)
                 Shortcut.REPLY_ALL -> viewModel.startReply(ReplyBuilder.Mode.REPLY_ALL)
                 Shortcut.TOGGLE_READ -> viewModel.setFlag("\\Seen", !envelope.isSeen)
-                Shortcut.TOGGLE_FLAG -> viewModel.setFlag("\\Flagged", !envelope.isFlagged)
+                // The default flag, read live for the same reason; with none
+                // (every flag disabled) the chord does nothing.
+                Shortcut.TOGGLE_FLAG ->
+                    FlagToggle
+                        .defaultFlag(
+                            viewModel.container.preferences.preferences.value.flagPalette,
+                        )?.let { flag -> viewModel.setFlag(flag.slot, !flag.isSetIn(envelope.flags)) }
                 Shortcut.COMPOSE -> Unit
             }
         }
@@ -225,22 +241,33 @@ fun MessageDetailScreen(
                             contentDescription = stringResource(readerReadToggleLabel(state.envelope?.isSeen == true)),
                         )
                     }
+                    // The star button sets and clears the default flag, the
+                    // first enabled entry of Settings > Flags, under its name
+                    // and in its color. With no default flag it is dimmed.
+                    val defaultFlag = FlagToggle.defaultFlag(preferences.flagPalette)
+                    val flagIsSet = defaultFlag?.isSetIn(state.envelope?.flags.orEmpty()) == true
                     IconButton(
-                        onClick = { viewModel.setFlag("\\Flagged", state.envelope?.isFlagged != true) },
-                        enabled = !state.busy,
+                        onClick = { defaultFlag?.let { viewModel.setFlag(it.slot, !flagIsSet) } },
+                        enabled = !state.busy && defaultFlag != null,
                     ) {
-                        val flagToggle = readerFlagToggle(state.envelope?.isFlagged == true)
+                        val flagToggle = readerFlagToggle(defaultFlag, flagIsSet)
                         if (flagToggle.filledStar) {
                             Icon(
                                 Icons.Default.Star,
-                                contentDescription = stringResource(flagToggle.label),
-                                tint = ColorTokens.flaggedFg(),
+                                contentDescription = flagToggle.label.text(),
+                                tint = flagColor(flagToggle.color),
                             )
                         } else {
                             Icon(
                                 painterResource(R.drawable.ic_star_border),
-                                contentDescription = stringResource(flagToggle.label),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                contentDescription = flagToggle.label.text(),
+                                // Inside a disabled button the content color is the dimmed one.
+                                tint =
+                                    if (defaultFlag == null) {
+                                        LocalContentColor.current
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
                             )
                         }
                     }
@@ -255,40 +282,21 @@ fun MessageDetailScreen(
                         Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_actions))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        // Custom flags (Phase 4): one check-marked item per
-                        // enabled palette entry, plus any slot the message
-                        // carries whose entry is disabled or deleted — those
-                        // still need an untag affordance (the palette
-                        // editor's delete confirmation promises tags stay
-                        // removable). Hidden while there is nothing to show.
-                        readerFlagSlots(preferences.flagPalette, state.envelope?.flags.orEmpty())
-                            .forEach { (slot, label, tagged) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    leadingIcon = {
-                                        if (tagged) {
-                                            Icon(Icons.Default.Check, contentDescription = null)
-                                        } else {
-                                            Box(
-                                                modifier =
-                                                    Modifier
-                                                        .size(10.dp)
-                                                        .clip(CircleShape)
-                                                        .background(
-                                                            flagColor(
-                                                                preferences.flagPalette
-                                                                    .firstOrNull { it.slot == slot }
-                                                                    ?.color ?: "",
-                                                            ),
-                                                        ),
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        menuOpen = false
-                                        viewModel.setFlag(slot, !tagged)
-                                    },
-                                )
+                        // Flags: one check-marked item per enabled flag in
+                        // the order of Settings > Flags, the built-in one
+                        // included, plus any flag the message carries whose
+                        // entry is disabled or deleted (FlagMenu.rows). Not
+                        // shown when the default flag is all there is: the
+                        // star button beside the menu already toggles it.
+                        FlagMenu
+                            .rows(preferences.flagPalette, state.envelope?.flags.orEmpty())
+                            .takeUnless { FlagMenu.isOnlyTheDefault(it, preferences.flagPalette) }
+                            .orEmpty()
+                            .forEach { row ->
+                                FlagMenuItem(row) {
+                                    menuOpen = false
+                                    viewModel.setFlag(row.slot, !row.isOn)
+                                }
                             }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.move_to)) },
@@ -534,44 +542,43 @@ private fun MessageHeader(
             )
         }
         HeaderChips(envelope = envelope)
-        KeywordChips(envelope = envelope, palette = palette)
+        FlagChips(envelope = envelope, palette = palette)
     }
 }
 
 /**
- * Custom-flag chips (Phase 4): color dot + label per tagged palette slot.
- * A deleted slot's surviving tag shows its slot id in gray, per the
- * palette editor's delete-confirmation copy.
+ * Flag chips: color dot + label per flag the message carries, the built-in
+ * flag included, in the order of Settings > Flags. A deleted slot's
+ * surviving tag shows its slot id in gray, per the palette editor's
+ * delete-confirmation copy.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun KeywordChips(
+private fun FlagChips(
     envelope: Envelope,
     palette: List<FlagPaletteEntry>,
 ) {
-    val slots = FlagPalette.slotsIn(envelope.flags)
-    if (slots.isEmpty()) {
+    val marks = FlagDotMark.marks(envelope.flags, palette, limit = Int.MAX_VALUE)
+    if (marks.isEmpty()) {
         return
     }
-    Row(
+    // A message can carry every flag in the palette, so the chips wrap
+    // rather than run off the header's edge.
+    FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.padding(top = 6.dp),
     ) {
-        slots.forEach { slot ->
-            val entry = palette.firstOrNull { it.slot == slot }
+        marks.forEach { mark ->
             Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(flagColor(entry?.color ?: "")),
-                    )
+                    // The chip's text names the flag; the dot is decoration.
+                    FlagDot(mark, modifier = Modifier.clearAndSetSemantics {})
                     Spacer(Modifier.width(4.dp))
-                    Text(text = entry?.label ?: slot, style = MaterialTheme.typography.labelSmall)
+                    Text(text = mark.label, style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
@@ -579,47 +586,65 @@ private fun KeywordChips(
 }
 
 /**
- * The (slot, label, tagged) triples the reader's flag menu renders: enabled
- * palette entries first, then stray tagged slots whose entry is disabled or
- * deleted (labelled from the palette when present, else by slot id). Pure,
- * so it unit-tests without Compose.
+ * One row of a flag menu (the reader's, and the list row's): a check mark
+ * when the message carries the flag, else a dot in the flag's color, then
+ * the flag's name. A tap toggles it.
  */
-internal fun readerFlagSlots(
-    palette: List<FlagPaletteEntry>,
-    flags: List<String>,
-): List<Triple<String, String, Boolean>> {
-    val offered = palette.filter { it.enabled }
-    val tagged = FlagPalette.slotsIn(flags).toSet()
-    val stray =
-        FlagPalette.SLOTS.filter { slot ->
-            slot in tagged && offered.none { it.slot == slot }
-        }
-    return offered.map { Triple(it.slot, it.label, it.slot in tagged) } +
-        stray.map { slot ->
-            Triple(slot, palette.firstOrNull { it.slot == slot }?.label ?: slot, true)
-        }
+@Composable
+internal fun FlagMenuItem(
+    row: FlagMenuRow,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(row.label) },
+        leadingIcon = {
+            if (row.isOn) {
+                Icon(Icons.Default.Check, contentDescription = null)
+            } else {
+                Box(
+                    modifier =
+                        Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(flagColor(row.color)),
+                )
+            }
+        },
+        onClick = onClick,
+    )
 }
 
 /**
  * What the reader's flag toggle says and draws for the message's state
  * (#1607). It was labelled "Flagged" and drew the same solid star either
  * way, so TalkBack announced "Flagged" on an unflagged message and sighted
- * users had only a 1.47:1 tint difference to go on. The label now names what
- * a tap does, as the message list's own menu item does (`add_flag` /
- * `remove_flag`), and the unflagged state draws a hollow star. Pure, so it
- * unit-tests without Compose.
+ * users had only a 1.47:1 tint difference to go on. The label names what a
+ * tap does, in the default flag's words ([FlagToggle.title]: "Flag" /
+ * "Remove flag" for the built-in flag under its own name, "Urgent" /
+ * "Remove Urgent" for any other), and the unset state draws a hollow star.
+ * The filled star takes the flag's palette color. Pure, so it unit-tests
+ * without Compose.
  */
 internal data class ReaderFlagToggle(
-    @StringRes val label: Int,
+    val label: UiLabel,
     val filledStar: Boolean,
+    /** The palette color name the filled star is drawn in. */
+    val color: String,
 )
 
-internal fun readerFlagToggle(isFlagged: Boolean): ReaderFlagToggle =
-    if (isFlagged) {
-        ReaderFlagToggle(label = R.string.remove_flag, filledStar = true)
-    } else {
-        ReaderFlagToggle(label = R.string.add_flag, filledStar = false)
-    }
+/**
+ * [flag] is the default flag, null when every flag is disabled: the button
+ * is then dimmed, hollow, and keeps the plain "Flag" label.
+ */
+internal fun readerFlagToggle(
+    flag: FlagToggle?,
+    isSet: Boolean,
+): ReaderFlagToggle =
+    ReaderFlagToggle(
+        label = flag?.title(isSet) ?: UiLabel.Fixed(R.string.add_flag),
+        filledStar = flag != null && isSet,
+        color = flag?.color.orEmpty(),
+    )
 
 /**
  * What the reader's read toggle says for the message's state (#2171). Its

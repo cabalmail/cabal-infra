@@ -5,6 +5,7 @@ import com.cabalmail.android.ui.mail.DisposeIntent
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.DisposeAction
 import com.cabalmail.kit.settings.FeedSwipeAction
+import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.MailSwipeAction
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -17,6 +18,10 @@ import org.junit.jupiter.api.Test
  */
 class SwipeRevealTest {
     private val archive = DisposeIntent.Move(DisposeAction.ARCHIVE)
+
+    /** The default flag of an untouched palette: the built-in flag under its own name. */
+    private val builtIn = FlagToggle.defaultFlag(emptyList())!!
+    private val todo = FlagToggle(slot = "cabal-flag-01", label = "Todo", color = "blue")
 
     @Test
     fun `an untouched preference keeps the historical arrangement`() {
@@ -31,19 +36,58 @@ class SwipeRevealTest {
     fun `read and flag reveals name what the gesture will do`() {
         assertEquals(
             SwipeReveal(R.string.mark_read, SwipeGlyph.EMAIL, SwipeTone.READ),
-            mailSwipeReveal(MailSwipeAction.TOGGLE_READ, isSeen = false, isFlagged = false, archive),
+            mailSwipeReveal(MailSwipeAction.TOGGLE_READ, isSeen = false, flag = builtIn, isFlagSet = false, archive),
         )
         assertEquals(
             SwipeReveal(R.string.mark_unread, SwipeGlyph.EMAIL, SwipeTone.READ),
-            mailSwipeReveal(MailSwipeAction.TOGGLE_READ, isSeen = true, isFlagged = false, archive),
+            mailSwipeReveal(MailSwipeAction.TOGGLE_READ, isSeen = true, flag = builtIn, isFlagSet = false, archive),
+        )
+        // An untouched palette keeps the words the flag swipe always had,
+        // washed in the built-in flag's color.
+        assertEquals(
+            SwipeReveal(UiLabel.Fixed(R.string.add_flag), SwipeGlyph.STAR_HOLLOW, SwipeTone.FLAG, flagColor = "yellow"),
+            mailSwipeReveal(MailSwipeAction.TOGGLE_FLAG, isSeen = true, flag = builtIn, isFlagSet = false, archive),
         )
         assertEquals(
-            SwipeReveal(R.string.add_flag, SwipeGlyph.STAR_HOLLOW, SwipeTone.FLAG),
-            mailSwipeReveal(MailSwipeAction.TOGGLE_FLAG, isSeen = true, isFlagged = false, archive),
+            SwipeReveal(
+                UiLabel.Fixed(R.string.remove_flag),
+                SwipeGlyph.STAR_FILLED,
+                SwipeTone.FLAG,
+                flagColor = "yellow",
+            ),
+            mailSwipeReveal(MailSwipeAction.TOGGLE_FLAG, isSeen = true, flag = builtIn, isFlagSet = true, archive),
+        )
+    }
+
+    @Test
+    fun `the flag swipe takes the default flag's name and color`() {
+        assertEquals(
+            SwipeReveal(UiLabel.Verbatim("Todo"), SwipeGlyph.STAR_HOLLOW, SwipeTone.FLAG, flagColor = "blue"),
+            mailSwipeReveal(MailSwipeAction.TOGGLE_FLAG, isSeen = true, flag = todo, isFlagSet = false, archive),
         )
         assertEquals(
-            SwipeReveal(R.string.remove_flag, SwipeGlyph.STAR_FILLED, SwipeTone.FLAG),
-            mailSwipeReveal(MailSwipeAction.TOGGLE_FLAG, isSeen = true, isFlagged = true, archive),
+            SwipeReveal(
+                UiLabel.Formatted(R.string.remove_named_flag, "Todo"),
+                SwipeGlyph.STAR_FILLED,
+                SwipeTone.FLAG,
+                flagColor = "blue",
+            ),
+            mailSwipeReveal(MailSwipeAction.TOGGLE_FLAG, isSeen = true, flag = todo, isFlagSet = true, archive),
+        )
+    }
+
+    @Test
+    fun `with no default flag the flag edge reveals nothing, and so does not drag`() {
+        assertNull(mailSwipeReveal(MailSwipeAction.TOGGLE_FLAG, isSeen = true, flag = null, isFlagSet = false, archive))
+        // The other bindings do not depend on it.
+        assertEquals(
+            SwipeReveal(R.string.mark_unread, SwipeGlyph.EMAIL, SwipeTone.READ),
+            mailSwipeReveal(MailSwipeAction.TOGGLE_READ, isSeen = true, flag = null, isFlagSet = false, archive),
+        )
+        assertNull(feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = null, isFavorite = false))
+        assertEquals(
+            SwipeReveal(R.string.mark_read, SwipeGlyph.EMAIL, SwipeTone.READ),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_READ, isRead = false, flag = null, isFavorite = false),
         )
     }
 
@@ -54,19 +98,27 @@ class SwipeRevealTest {
             mailSwipeReveal(
                 MailSwipeAction.DISPOSE,
                 true,
+                builtIn,
                 false,
                 DisposeIntent.standard(DisposeAction.ARCHIVE, "INBOX"),
             ),
         )
         assertEquals(
             SwipeReveal(R.string.dispose_to_trash, SwipeGlyph.TRASH, SwipeTone.DISPOSE),
-            mailSwipeReveal(MailSwipeAction.DISPOSE, true, false, DisposeIntent.standard(DisposeAction.TRASH, "INBOX")),
+            mailSwipeReveal(
+                MailSwipeAction.DISPOSE,
+                true,
+                builtIn,
+                false,
+                DisposeIntent.standard(DisposeAction.TRASH, "INBOX"),
+            ),
         )
         assertEquals(
             SwipeReveal(R.string.purge, SwipeGlyph.TRASH, SwipeTone.DISPOSE),
             mailSwipeReveal(
                 MailSwipeAction.DISPOSE,
                 true,
+                builtIn,
                 false,
                 DisposeIntent.standard(DisposeAction.ARCHIVE, "Trash"),
             ),
@@ -82,6 +134,7 @@ class SwipeRevealTest {
             mailSwipeReveal(
                 MailSwipeAction.DISPOSE,
                 true,
+                builtIn,
                 false,
                 DisposeIntent.standard(DisposeAction.ARCHIVE, "Archive"),
             ),
@@ -91,6 +144,7 @@ class SwipeRevealTest {
             mailSwipeReveal(
                 MailSwipeAction.DISPOSE,
                 true,
+                builtIn,
                 false,
                 DisposeIntent.standard(DisposeAction.TRASH, "Archive"),
             ),
@@ -99,23 +153,39 @@ class SwipeRevealTest {
 
     @Test
     fun `none reveals nothing on either list`() {
-        assertNull(mailSwipeReveal(MailSwipeAction.NONE, false, false, archive))
-        assertNull(feedSwipeReveal(FeedSwipeAction.NONE, isRead = false, isFavorite = false))
+        assertNull(mailSwipeReveal(MailSwipeAction.NONE, false, builtIn, false, archive))
+        assertNull(feedSwipeReveal(FeedSwipeAction.NONE, isRead = false, flag = builtIn, isFavorite = false))
     }
 
     @Test
-    fun `feed reveals mirror the mail ones with favorite in place of flag`() {
+    fun `feed reveals mirror the mail ones, on the built-in flag's entry`() {
         assertEquals(
             SwipeReveal(R.string.mark_unread, SwipeGlyph.EMAIL, SwipeTone.READ),
-            feedSwipeReveal(FeedSwipeAction.TOGGLE_READ, isRead = true, isFavorite = false),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_READ, isRead = true, flag = builtIn, isFavorite = false),
         )
         assertEquals(
-            SwipeReveal(R.string.feed_favorite, SwipeGlyph.STAR_HOLLOW, SwipeTone.FLAG),
-            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, isFavorite = false),
+            SwipeReveal(UiLabel.Fixed(R.string.add_flag), SwipeGlyph.STAR_HOLLOW, SwipeTone.FLAG, flagColor = "yellow"),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = builtIn, isFavorite = false),
         )
         assertEquals(
-            SwipeReveal(R.string.feed_unfavorite, SwipeGlyph.STAR_FILLED, SwipeTone.FLAG),
-            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, isFavorite = true),
+            SwipeReveal(
+                UiLabel.Fixed(R.string.remove_flag),
+                SwipeGlyph.STAR_FILLED,
+                SwipeTone.FLAG,
+                flagColor = "yellow",
+            ),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = builtIn, isFavorite = true),
+        )
+        // Renamed and recolored in Settings > Flags: the feed's swipe follows.
+        val urgent = FlagToggle(slot = FlagPalette.SYSTEM_SLOT, label = "Urgent", color = "red")
+        assertEquals(
+            SwipeReveal(
+                UiLabel.Formatted(R.string.remove_named_flag, "Urgent"),
+                SwipeGlyph.STAR_FILLED,
+                SwipeTone.FLAG,
+                "red",
+            ),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = urgent, isFavorite = true),
         )
     }
 }
