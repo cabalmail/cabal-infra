@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -42,8 +43,12 @@ import com.cabalmail.android.R
 import com.cabalmail.android.ui.mail.HtmlBody
 import com.cabalmail.android.ui.mail.LinkMenuSheet
 import com.cabalmail.android.ui.mail.LinkMenuTarget
-import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.FlagToggle
+import com.cabalmail.android.ui.theme.LocalFlagPalette
+import com.cabalmail.android.ui.theme.UiLabel
 import com.cabalmail.android.ui.theme.starTogglePainter
+import com.cabalmail.android.ui.theme.text
+import com.cabalmail.android.ui.theme.tint
 import com.cabalmail.kit.models.readerModeHtml
 import com.cabalmail.kit.models.upgradeInsecureRequests
 
@@ -88,8 +93,22 @@ fun FeedItemDetailScreen(
                 },
                 actions = {
                     if (item != null) {
+                        // A feed item's one flag is the built-in flag, so the
+                        // button takes that flag's name and color from
+                        // Settings > Flags. While its entry is disabled the
+                        // button is dimmed rather than removed, so the bar
+                        // keeps its shape.
+                        val flag = FlagToggle.systemFlag(LocalFlagPalette.current)
                         val favoriteTint =
-                            if (item.isFavorite) ColorTokens.flaggedFg() else MaterialTheme.colorScheme.onSurface
+                            when {
+                                // Inside a disabled button this is the dimmed color.
+                                flag == null -> LocalContentColor.current
+                                item.isFavorite -> flag.tint()
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                        val favoriteLabel =
+                            flag?.title(item.isFavorite)
+                                ?: UiLabel.Fixed(if (item.isFavorite) R.string.remove_flag else R.string.add_flag)
                         IconButton(onClick = { viewModel.setRead(!item.isRead) }) {
                             Icon(
                                 Icons.Default.Email,
@@ -99,13 +118,10 @@ fun FeedItemDetailScreen(
                                     ),
                             )
                         }
-                        IconButton(onClick = { viewModel.setFavorite(!item.isFavorite) }) {
+                        IconButton(onClick = { viewModel.setFavorite(!item.isFavorite) }, enabled = flag != null) {
                             Icon(
                                 starTogglePainter(item.isFavorite),
-                                contentDescription =
-                                    stringResource(
-                                        if (item.isFavorite) R.string.feed_remove_favorite else R.string.feed_favorite,
-                                    ),
+                                contentDescription = favoriteLabel.text(),
                                 tint = favoriteTint,
                             )
                         }

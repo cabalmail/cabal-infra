@@ -90,6 +90,38 @@ class FlagPaletteEditsTest {
     }
 
     @Test
+    fun `the default flag is the first enabled one`() {
+        assertTrue(FlagPaletteEdits.isDefault(emptyList(), FlagPalette.SYSTEM_SLOT))
+        assertTrue(FlagPaletteEdits.isDefault(listOf(urgent), FlagPalette.SYSTEM_SLOT))
+        assertFalse(FlagPaletteEdits.isDefault(listOf(urgent), urgent.slot))
+        assertTrue(FlagPaletteEdits.isDefault(listOf(urgent, system), urgent.slot))
+        // A disabled first entry is passed over.
+        assertTrue(FlagPaletteEdits.isDefault(listOf(urgent.copy(enabled = false), system), FlagPalette.SYSTEM_SLOT))
+    }
+
+    @Test
+    fun `make default moves a flag to the top, and the order is what is stored`() {
+        val stored = listOf(urgent, waiting)
+        assertTrue(FlagPaletteEdits.canMakeDefault(stored, waiting.slot))
+        assertEquals(listOf(waiting, system, urgent), FlagPaletteEdits.madeDefault(stored, waiting.slot))
+        // The built-in flag made the default again, from below.
+        val reordered = listOf(waiting, system, urgent)
+        assertTrue(FlagPaletteEdits.canMakeDefault(reordered, FlagPalette.SYSTEM_SLOT))
+        assertEquals(listOf(system, waiting, urgent), FlagPaletteEdits.madeDefault(reordered, FlagPalette.SYSTEM_SLOT))
+    }
+
+    @Test
+    fun `make default is not offered for the default, a disabled flag, or a flag that is gone`() {
+        val stored = listOf(urgent, waiting.copy(enabled = false))
+        assertFalse(FlagPaletteEdits.canMakeDefault(stored, FlagPalette.SYSTEM_SLOT))
+        assertFalse(FlagPaletteEdits.canMakeDefault(stored, waiting.slot))
+        assertFalse(FlagPaletteEdits.canMakeDefault(stored, "cabal-flag-09"))
+        assertEquals(stored, FlagPaletteEdits.madeDefault(stored, FlagPalette.SYSTEM_SLOT))
+        assertEquals(stored, FlagPaletteEdits.madeDefault(stored, waiting.slot))
+        assertEquals(stored, FlagPaletteEdits.madeDefault(stored, "cabal-flag-09"))
+    }
+
+    @Test
     fun `reset drops the stored entry and is offered only when there is one`() {
         assertFalse(FlagPaletteEdits.canReset(listOf(urgent)))
         val stored = listOf(urgent, system.copy(label = "Later", color = "teal", enabled = false))

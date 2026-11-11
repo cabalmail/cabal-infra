@@ -7,7 +7,7 @@
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` merged (2026-11-10), #2389, the first PR of android-parity.md leg L1 |
 | 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass in five poses; the flag button's hold menu passes closed and is not settled in the open poses. Soak run (2026-11-10) on the Mini, four platforms: no regression found, five older defects filed (#2381 to #2385). Promoted to prod as 1.47.0 (2026-11-11), with the iOS, macOS and visionOS builds uploaded from `main`. The physical-Duo check waits for the device (duo-support.md, Decision 7) |
-| 4 -- Android client | Started (2026-11-10) as android-parity.md leg L1: rendering and Settings > Flags in review; the controls follow |
+| 4 -- Android client | Started (2026-11-10) as android-parity.md leg L1: rendering and Settings > Flags merged, #2390; the controls in review. The acceptance run follows the merge |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
 This plan is run by Session 1 of
@@ -517,9 +517,9 @@ removed.
 **Status:** Started (2026-11-10), as android-parity.md leg L1, after
 the Apple release was promoted as 1.47.0, on Phase 2's `android/kit`
 half (#2389). The app takes two PRs, as Apple's did. The first,
-rendering and Settings > Flags, is in review (2026-11-10); the second
-moves the controls to the default flag. The acceptance below runs after
-both merge. What the first one settled:
+rendering and Settings > Flags, merged (2026-11-10), #2390; the second, which moves the
+controls to the default flag, is in review (2026-11-10). The acceptance
+below runs after both merge. What the first one settled:
 
 - The star leaves every row. A flagged message shows a dot in the
   built-in entry's color on its row, with the custom-flag dots, in the
@@ -538,6 +538,47 @@ both merge. What the first one settled:
   the rule editor offer keyword entries only: the control beside each of
   them already sets the built-in flag, and `set_rules` refuses its atom
   in a rule's `flags`.
+
+What the second one settled, all from one value the controls read
+(`FlagToggle`, as on Apple):
+
+- **Words and color.** "Flag" / "Remove flag" stay while the default
+  flag is the built-in one still called "Flagged"; any other default
+  flag reads "<label>" / "Remove <label>". The swipe's wash and the
+  reader's filled star take the flag's palette color.
+- **Which controls.** The flag swipe, the reader's star button,
+  Ctrl+Shift+L in the list and the reader, the selection bar's two items
+  (set in the bar, remove in its overflow menu) and a search result's
+  long-press act on the default flag.
+- **Flag menus** (the reader's overflow menu and the row's long-press
+  menu, one rule: `FlagMenu.rows`) list every enabled entry in palette
+  order, the built-in one included, then any flag the message carries
+  whose entry is disabled or gone. Android's row menu is flat, so there
+  the list replaces the "Flag" item instead of sitting in a submenu
+  beside it. When the default flag would be the only row, the reader
+  shows no flag rows and the row menu keeps its one plain item.
+- **Settings > Flags.** The first enabled row says "Default" under its
+  name once the list has a second flag, and the footer says what that
+  means. "Make default" is a button in each flag's dialog, since these
+  rows have no context menu; it is a move to the top, and is dimmed on
+  the default flag and on a disabled one. The swipe picker's option
+  reads "Toggle default flag".
+- **No default flag** (reachable only from a stored palette whose
+  built-in entry is disabled): the swipe edge does not drag, the
+  selection bar's star and the reader's star are dimmed, the overflow
+  item is absent, and the shortcut and the search long-press do nothing.
+  A flag the message already carries is still listed in the menus, for
+  removal.
+- **Filters.** The Flagged pills (mail and feeds) and the search sheet's
+  checkbox take the built-in entry's label. With that entry disabled
+  they are hidden unless lit.
+- **Rule editor.** One list in palette order; the built-in entry's
+  toggle is the rule's `flag`, offered even when the entry is disabled,
+  and its atom is never written to the rule's `flags`.
+- **Feeds.** The swipe, the reader's star button and the pill take the
+  built-in entry's name and color whatever its position. With the entry
+  disabled the swipe edge does not drag and the reader's button is
+  dimmed, not removed.
 
 The same items as Phase 3 against the Android surfaces:
 `FlagPaletteSettings` (up/down reorder gains "Make default"; Reset in

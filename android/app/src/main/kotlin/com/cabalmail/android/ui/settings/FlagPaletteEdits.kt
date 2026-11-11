@@ -85,6 +85,41 @@ internal object FlagPaletteEdits {
      */
     fun reset(stored: List<FlagPaletteEntry>): List<FlagPaletteEntry> = FlagPalette.resettingSystemEntry(stored)
 
+    /**
+     * Whether [slot] is the default flag, the one the swipe, the star
+     * button and the flag shortcut set: the first enabled entry.
+     */
+    fun isDefault(
+        stored: List<FlagPaletteEntry>,
+        slot: String,
+    ): Boolean = FlagPalette.defaultEntry(stored)?.slot == slot
+
+    /**
+     * Whether [madeDefault] would change anything: the entry is there,
+     * enabled, and not the default already. A disabled flag is offered
+     * nowhere, so it cannot be the one the gestures set.
+     */
+    fun canMakeDefault(
+        stored: List<FlagPaletteEntry>,
+        slot: String,
+    ): Boolean = FlagPalette.effective(stored).any { it.slot == slot && it.enabled } && !isDefault(stored, slot)
+
+    /**
+     * Makes the entry the default flag by moving it to the top of the
+     * list: the default is a position, not a field, so every shipped build
+     * and the other platforms read it the same way. Unchanged when
+     * [canMakeDefault] is false.
+     */
+    fun madeDefault(
+        stored: List<FlagPaletteEntry>,
+        slot: String,
+    ): List<FlagPaletteEntry> {
+        if (!canMakeDefault(stored, slot)) return stored
+        return edit(stored) { palette ->
+            palette.add(0, palette.removeAt(palette.indexOfFirst { it.slot == slot }))
+        }
+    }
+
     private fun edit(
         stored: List<FlagPaletteEntry>,
         mutate: (MutableList<FlagPaletteEntry>) -> Unit,

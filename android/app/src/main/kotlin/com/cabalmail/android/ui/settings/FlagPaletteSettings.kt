@@ -56,6 +56,11 @@ import com.cabalmail.kit.settings.FlagPaletteEntry
  * renames, recolors and moves like the others, resets where they delete,
  * and cannot be disabled. Every edit goes through [FlagPaletteEdits].
  *
+ * The first enabled entry is the default flag, the one the swipe, the star
+ * button and the flag shortcut set (`FlagToggle`). Its row says so once
+ * there is a second flag to tell it from, and every other flag's dialog
+ * offers Make default, which moves that flag to the top.
+ *
  * Reordering uses per-row up/down buttons (disabled at the ends, never
  * hidden — rows keep a stable footprint), matching the rules list.
  */
@@ -65,6 +70,8 @@ internal fun FlagPaletteSettings(
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
 ) {
     val palette = FlagPalette.effective(preferences.flagPalette)
+    // The Default mark needs a second flag to mean anything.
+    val defaultSlot = FlagPalette.defaultEntry(preferences.flagPalette)?.slot.takeIf { palette.size > 1 }
     var editingSlot by rememberSaveable { mutableStateOf<String?>(null) }
 
     palette.forEachIndexed { index, entry ->
@@ -80,10 +87,14 @@ internal fun FlagPaletteSettings(
             },
             headlineContent = { Text(entry.label) },
             supportingContent =
-                if (entry.enabled) {
-                    null
-                } else {
-                    { Text(stringResource(R.string.flags_disabled)) }
+                when {
+                    !entry.enabled -> {
+                        { Text(stringResource(R.string.flags_disabled)) }
+                    }
+                    entry.slot == defaultSlot -> {
+                        { Text(stringResource(R.string.flags_default)) }
+                    }
+                    else -> null
                 },
             trailingContent = {
                 Row {
@@ -137,6 +148,11 @@ internal fun FlagPaletteSettings(
         FlagEditorDialog(
             entry = editing,
             canReset = FlagPaletteEdits.canReset(preferences.flagPalette),
+            canMakeDefault = FlagPaletteEdits.canMakeDefault(preferences.flagPalette, editing.slot),
+            onMakeDefault = {
+                val slot = editing.slot
+                onUpdate { it.copy(flagPalette = FlagPaletteEdits.madeDefault(it.flagPalette, slot)) }
+            },
             onChange = { changed ->
                 onUpdate { it.copy(flagPalette = FlagPaletteEdits.changed(it.flagPalette, changed)) }
             },
@@ -166,6 +182,8 @@ internal fun FlagPaletteSettings(
 private fun FlagEditorDialog(
     entry: FlagPaletteEntry,
     canReset: Boolean,
+    canMakeDefault: Boolean,
+    onMakeDefault: () -> Unit,
     onChange: (FlagPaletteEntry) -> Unit,
     onDelete: () -> Unit,
     onReset: () -> Unit,
@@ -189,6 +207,12 @@ private fun FlagEditorDialog(
                 )
                 Text(stringResource(R.string.flags_color), style = MaterialTheme.typography.titleSmall)
                 ColorSwatches(selectedColor = entry.color, onSelect = { onChange(entry.copy(color = it)) })
+                // Disabled, never hidden, on the flag that is the default
+                // already and on one that is switched off: the dialog keeps
+                // its shape whichever flag it opens on.
+                TextButton(onClick = onMakeDefault, enabled = canMakeDefault) {
+                    Text(stringResource(R.string.flags_make_default))
+                }
                 if (isSystemEntry) {
                     TextButton(onClick = onReset, enabled = canReset) {
                         Text(stringResource(R.string.flags_reset))

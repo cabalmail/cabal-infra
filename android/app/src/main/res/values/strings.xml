@@ -15,7 +15,6 @@
     <string name="mfa_submit">Verify</string>
     <string name="back">Back</string>
     <string name="no_subject">(no subject)</string>
-    <string name="flagged">Flagged</string>
     <string name="auth_warning">Authentication failed</string>
     <string name="archive">Archive</string>
     <string name="dispose_to_trash">Move to Trash</string>
@@ -43,13 +42,13 @@
     <string name="opt_sort_descending">Descending</string>
     <string name="filter_all">All</string>
     <string name="filter_unread">Unread</string>
-    <string name="filter_flagged">Flagged</string>
     <string name="filter_no_matches">No matching messages</string>
     <string name="unread">Unread</string>
     <string name="mark_read">Mark read</string>
     <string name="mark_unread">Mark unread</string>
     <string name="add_flag">Flag</string>
     <string name="remove_flag">Remove flag</string>
+    <string name="remove_named_flag">Remove %1$s</string>
     <string name="move_to">Move to…</string>
     <string name="purge_confirm_title">Delete permanently?</string>
     <plurals name="selected_count">
@@ -264,7 +263,6 @@
     <string name="feeds_select_item">No item selected</string>
     <string name="feed_title_fallback">Feed</string>
     <string name="feed_folder_fallback">Folder</string>
-    <string name="feed_filter_favorites">Flagged</string>
     <string name="feed_search_hint">Search this feed</string>
     <string name="feed_order">Order</string>
     <string name="feed_order_newest_first">Newest first</string>
@@ -276,9 +274,6 @@
     <string name="feed_mark_all_read_title">Mark all items in %1$s as read?</string>
     <string name="feed_mark_all_read_body">Items you have not opened will be marked read too.</string>
     <string name="feed_mark_all_read_confirm">Mark All as Read</string>
-    <string name="feed_favorite">Flag</string>
-    <string name="feed_unfavorite">Remove flag</string>
-    <string name="feed_remove_favorite">Remove flag</string>
     <string name="feed_mark_as_read">Mark as read</string>
     <string name="feed_mark_as_unread">Mark as unread</string>
     <string name="feed_open_in_browser">Open in browser</string>
@@ -427,7 +422,7 @@
     <string name="settings_swipe_trailing">Trailing swipe</string>
     <string name="settings_swipe_footer">Leading is a swipe that starts at the leading edge (the left in left-to-right languages); trailing starts at the other edge. The same action may be bound to both.</string>
     <string name="opt_swipe_toggle_read">Toggle read</string>
-    <string name="opt_swipe_toggle_flag">Toggle flag</string>
+    <string name="opt_swipe_toggle_flag">Toggle default flag</string>
     <string name="opt_swipe_toggle_favorite">Toggle flag</string>
     <string name="opt_swipe_dispose">Dispose (per Dispose action)</string>
     <string name="opt_swipe_none">None</string>
@@ -499,7 +494,6 @@
     <string name="rules_create_archive">Create Archive folder</string>
     <string name="rules_extras">Also</string>
     <string name="rules_extras_delete_hint">These don\'t apply when the rule deletes the message.</string>
-    <string name="rules_flag">Flag</string>
     <string name="rules_mark_read">Mark as read</string>
     <string name="rules_forward_hint">Forward to address…</string>
     <string name="rules_forward_add">Add</string>
@@ -525,7 +519,9 @@
     <string name="flags_add">Add flag</string>
     <string name="flags_new_label">New flag</string>
     <string name="flags_empty_hint">Flags you add here can be put on any message from any of your devices. Up to twenty of your own.</string>
-    <string name="flags_footer">The order here is the order pickers use. Up to twenty flags of your own.</string>
+    <string name="flags_footer">The order here is the order pickers use. A swipe, the star button and the flag shortcut set the first enabled flag, marked Default; open another flag to make it the default. Up to twenty flags of your own.</string>
+    <string name="flags_default">Default</string>
+    <string name="flags_make_default">Make default</string>
     <string name="flags_reset">Reset to default</string>
     <string name="flags_reset_hint">The built-in flag cannot be deleted or disabled. Reset gives it back its original name, color and first place.</string>
     <string name="flags_name">Name</string>

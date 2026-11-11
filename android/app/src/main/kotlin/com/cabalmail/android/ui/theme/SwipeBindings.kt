@@ -55,20 +55,49 @@ internal enum class SwipeTone { READ, FLAG, DISPOSE, RESTORE }
 /**
  * What a swipe edge shows once revealed: the label (also the icon's
  * content description, naming what the gesture will do — never the
- * current state), its glyph, and its wash. Pure, so it unit-tests without
- * Compose; the composable mapping lives in [painter] / [color].
+ * current state), its glyph, and its wash. A flag swipe also carries the
+ * palette color of the flag it sets, which its wash is drawn in. Pure, so
+ * it unit-tests without Compose; the composable mapping lives in [painter]
+ * / [color].
  */
 internal data class SwipeReveal(
-    @StringRes val label: Int,
+    val label: UiLabel,
     val glyph: SwipeGlyph,
     val tone: SwipeTone,
-)
+    /** The palette color name of the flag a [SwipeTone.FLAG] reveal sets; unused by the other tones. */
+    val flagColor: String = "",
+) {
+    constructor(
+        @StringRes label: Int,
+        glyph: SwipeGlyph,
+        tone: SwipeTone,
+    ) : this(UiLabel.Fixed(label), glyph, tone)
+}
 
-/** The reveal for a mail row's edge, or null for [MailSwipeAction.NONE] (the edge does not drag). */
+/** The reveal for one flag's toggle: named and colored for [flag], its star filled once the flag is set. */
+private fun flagSwipeReveal(
+    flag: FlagToggle,
+    isSet: Boolean,
+): SwipeReveal =
+    SwipeReveal(
+        label = flag.title(isSet),
+        glyph = if (isSet) SwipeGlyph.STAR_FILLED else SwipeGlyph.STAR_HOLLOW,
+        tone = SwipeTone.FLAG,
+        flagColor = flag.color,
+    )
+
+/**
+ * The reveal for a mail row's edge, or null when the edge does not drag:
+ * for [MailSwipeAction.NONE], and for [MailSwipeAction.TOGGLE_FLAG] while
+ * the palette has no default flag to toggle.
+ */
 internal fun mailSwipeReveal(
     action: MailSwipeAction,
     isSeen: Boolean,
-    isFlagged: Boolean,
+    /** The default flag ([FlagToggle.defaultFlag]), or null when every flag is disabled. */
+    flag: FlagToggle?,
+    /** Whether the row's message carries [flag]. */
+    isFlagSet: Boolean,
     /** What the dispose does in this row's folder: move, restore, or purge. */
     dispose: DisposeIntent,
 ): SwipeReveal? =
@@ -79,12 +108,7 @@ internal fun mailSwipeReveal(
                 glyph = SwipeGlyph.EMAIL,
                 tone = SwipeTone.READ,
             )
-        MailSwipeAction.TOGGLE_FLAG ->
-            SwipeReveal(
-                label = if (isFlagged) R.string.remove_flag else R.string.add_flag,
-                glyph = if (isFlagged) SwipeGlyph.STAR_FILLED else SwipeGlyph.STAR_HOLLOW,
-                tone = SwipeTone.FLAG,
-            )
+        MailSwipeAction.TOGGLE_FLAG -> flag?.let { flagSwipeReveal(it, isFlagSet) }
         MailSwipeAction.DISPOSE ->
             SwipeReveal(
                 label = disposeVerbRes(dispose),
@@ -101,10 +125,17 @@ internal fun mailSwipeReveal(
         MailSwipeAction.NONE -> null
     }
 
-/** The reveal for a feed item row's edge, or null for [FeedSwipeAction.NONE]. */
+/**
+ * The reveal for a feed item row's edge, or null when the edge does not
+ * drag: for [FeedSwipeAction.NONE], and for
+ * [FeedSwipeAction.TOGGLE_FAVORITE] while the built-in flag's entry is
+ * disabled.
+ */
 internal fun feedSwipeReveal(
     action: FeedSwipeAction,
     isRead: Boolean,
+    /** The built-in flag's entry ([FlagToggle.systemFlag]), the one flag a feed item has. */
+    flag: FlagToggle?,
     isFavorite: Boolean,
 ): SwipeReveal? =
     when (action) {
@@ -114,12 +145,7 @@ internal fun feedSwipeReveal(
                 glyph = SwipeGlyph.EMAIL,
                 tone = SwipeTone.READ,
             )
-        FeedSwipeAction.TOGGLE_FAVORITE ->
-            SwipeReveal(
-                label = if (isFavorite) R.string.feed_unfavorite else R.string.feed_favorite,
-                glyph = if (isFavorite) SwipeGlyph.STAR_FILLED else SwipeGlyph.STAR_HOLLOW,
-                tone = SwipeTone.FLAG,
-            )
+        FeedSwipeAction.TOGGLE_FAVORITE -> flag?.let { flagSwipeReveal(it, isFavorite) }
         FeedSwipeAction.NONE -> null
     }
 
@@ -138,7 +164,8 @@ internal fun SwipeReveal.painter(): Painter =
 internal fun SwipeReveal.color(): Color =
     when (tone) {
         SwipeTone.READ -> MaterialTheme.colorScheme.secondaryContainer
-        SwipeTone.FLAG -> ColorTokens.flaggedWash()
+        // The flag's own palette color, at the opacity the wash token sets.
+        SwipeTone.FLAG -> ColorTokens.flag(flagColor).copy(alpha = ColorTokens.flaggedWash().alpha)
         SwipeTone.DISPOSE -> MaterialTheme.colorScheme.errorContainer
         SwipeTone.RESTORE -> MaterialTheme.colorScheme.tertiaryContainer
     }
