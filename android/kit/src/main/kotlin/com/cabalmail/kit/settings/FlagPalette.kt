@@ -4,14 +4,17 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * One entry in the user's custom-flag palette
+ * One entry in the user's flag palette
  * (`docs/1.x/rules-composition-and-custom-flags-plan.md`, Phase 3), the
  * Kotlin sibling of the Apple kit's `FlagPaletteEntry`.
  *
  * [slot] is one of the fixed IMAP keyword atoms `cabal-flag-01` ...
  * `cabal-flag-20` (decision 4): the mailstore only ever sees slot atoms,
  * and everything user-visible — label, color, order, enabled — is palette
- * metadata riding synced preferences. [color] stays a raw string rather
+ * metadata riding synced preferences. One entry is not a keyword:
+ * [FlagPalette.SYSTEM_SLOT] stands for the system `\Flagged` flag
+ * (`docs/1.x/unified-flags-plan.md`), which every mailbox has and no
+ * palette edit can remove. [color] stays a raw string rather
  * than an enum on purpose: the server enforces the fixed color set, and a
  * color this build doesn't know (from a newer client) must round-trip
  * unchanged instead of being coerced and re-pushed.
@@ -33,11 +36,34 @@ data class FlagPaletteEntry(
  * `lambda/api/set_preferences/function.py`, the sole enforcement point.
  */
 object FlagPalette {
-    const val MAX_ENTRIES = 20
+    /** The keyword slots a user can fill. */
+    private const val KEYWORD_SLOT_COUNT = 20
+
+    /** The 20 keyword slots plus the system flag's entry. */
+    const val MAX_ENTRIES = KEYWORD_SLOT_COUNT + 1
     const val MAX_LABEL_LENGTH = 32
 
-    /** Every assignable slot atom, in order. */
-    val SLOTS: List<String> = (1..MAX_ENTRIES).map { "cabal-flag-%02d".format(it) }
+    /**
+     * Every assignable keyword slot atom, in order. [SYSTEM_SLOT] is not
+     * one of them: it is never handed out and never runs out.
+     */
+    val SLOTS: List<String> = (1..KEYWORD_SLOT_COUNT).map { "cabal-flag-%02d".format(it) }
+
+    /**
+     * The palette slot of the system `\Flagged` flag: the IMAP atom itself
+     * rather than a made-up id, so an entry's slot is the flag `set_flag`
+     * sets whichever entry it is, and a build that predates the entry sets
+     * the system flag when the user picks it
+     * (`docs/1.x/unified-flags-plan.md`, decision 1).
+     */
+    const val SYSTEM_SLOT = "\\Flagged"
+
+    /**
+     * The system flag's entry for a palette that stores none (decision 2).
+     * Yellow shares its hue with the `flagged.fg` token, so the flag keeps
+     * the color it had before it had an entry.
+     */
+    val DEFAULT_SYSTEM_ENTRY = FlagPaletteEntry(slot = SYSTEM_SLOT, label = "Flagged", color = "yellow")
 
     /** The fixed color vocabulary `set_preferences` accepts, in picker order. */
     val COLORS =
@@ -56,14 +82,95 @@ object FlagPalette {
     /** Encodes for the wire; `enabled` always rides, like the Apple kit. */
     fun encode(entries: List<FlagPaletteEntry>): String = encoder.encodeToString(entries)
 
-    /** The lowest slot atom not yet used, or null at the 20-entry cap. */
+    /** The lowest keyword slot not yet used, or null once all 20 are. */
     fun firstFreeSlot(entries: List<FlagPaletteEntry>): String? =
         SLOTS.firstOrNull { slot -> entries.none { it.slot == slot } }
 
     /**
-     * The slot atoms present in a message's flag list, in fixed slot order
-     * — what chips and pickers render (Phase 4). System flags and foreign
-     * keywords never leak through.
+     * The keyword slots present in a message's flag list, in fixed slot
+     * order. The system flag is not among them, and foreign keywords never
+     * leak through; the two-argument [slotsIn] is the form that includes
+     * the system flag and follows the palette's order.
      */
     fun slotsIn(flags: List<String>): List<String> = SLOTS.filter { it in flags }
+
+    // ------------------------------------------------ the system flag's entry
+    //
+    // Two palettes are in play (`docs/1.x/unified-flags-plan.md`). The
+    // *stored* palette is what [AppPreferences.flagPalette] holds and what
+    // rides the wire. The *effective* palette is what the user sees: the
+    // stored one, with the system flag's entry supplied when the stored one
+    // has none. The entry is only stored once the user has changed it, so
+    // the palette of a user who never touches it stays as it was on every
+    // device and on the server.
+
+    /**
+     * The palette as the user sees it: [stored], led by
+     * [DEFAULT_SYSTEM_ENTRY] when it has no entry for the system flag.
+     */
+    fun effective(stored: List<FlagPaletteEntry>): List<FlagPaletteEntry> =
+        if (stored.any { it.slot == SYSTEM_SLOT }) stored else listOf(DEFAULT_SYSTEM_ENTRY) + stored
+
+    /**
+     * The keyword entries alone, in palette order: what a picker offers
+     * beside a control that already toggles the system flag, and the only
+     * slots a rule's `flags` list may name.
+     */
+    fun keywordEntries(stored: List<FlagPaletteEntry>): List<FlagPaletteEntry> = stored.filter { it.slot != SYSTEM_SLOT }
+
+    /**
+     * The flag the one-gesture toggles act on (the swipe, the shortcut, the
+     * reader's button): the first enabled entry of the effective palette
+     * (decision 3). Null when every entry is disabled; there is then no
+     * default, and nothing falls back to `\Flagged`.
+     */
+    fun defaultEntry(stored: List<FlagPaletteEntry>): FlagPaletteEntry? = effective(stored).firstOrNull { it.enabled }
+
+    /**
+     * What to store after the user edits the effective palette.
+     *
+     * The system entry is left out when it is still exactly what
+     * [effective] would supply — the default entry, in first place — and
+     * [previous], the stored palette the edit started from, had none. Once
+     * stored it stays, even if a later edit puts it back to the default:
+     * only [resettingSystemEntry] removes it. So saving an edit to some
+     * other flag never adds the entry, and a user who has arranged the
+     * palette keeps the arrangement.
+     */
+    fun storedAfterEditing(
+        edited: List<FlagPaletteEntry>,
+        previous: List<FlagPaletteEntry>,
+    ): List<FlagPaletteEntry> {
+        val wasStored = previous.any { it.slot == SYSTEM_SLOT }
+        return if (!wasStored && edited.firstOrNull() == DEFAULT_SYSTEM_ENTRY) edited.drop(1) else edited
+    }
+
+    /**
+     * "Reset to default" for the system entry, which cannot be deleted:
+     * drops the stored entry so [effective] supplies the default again, in
+     * first place.
+     */
+    fun resettingSystemEntry(stored: List<FlagPaletteEntry>): List<FlagPaletteEntry> = stored.filter { it.slot != SYSTEM_SLOT }
+
+    /**
+     * The palette slots a message carries, in the order dots and chips draw
+     * them: the effective palette's order, the system flag included,
+     * whether or not an entry is enabled. A keyword slot the message
+     * carries but the palette no longer lists comes last, in slot order, so
+     * its tag can still be shown and removed. The system flag's atom is
+     * matched without regard to case, as [com.cabalmail.kit.models.Envelope.isFlagged]
+     * matches it, and reported as [SYSTEM_SLOT].
+     */
+    fun slotsIn(
+        flags: List<String>,
+        stored: List<FlagPaletteEntry>,
+    ): List<String> {
+        val listed = effective(stored).map { it.slot }.filter { carries(flags, it) }
+        return listed + slotsIn(flags).filter { it !in listed }
+    }
+
+    private fun carries(
+        flags: List<String>,
+        slot: String,
+    ): Boolean = if (slot == SYSTEM_SLOT) flags.any { it.equals(SYSTEM_SLOT, ignoreCase = true) } else slot in flags
 }
