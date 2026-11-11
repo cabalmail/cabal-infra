@@ -32,7 +32,7 @@ public struct RssItem: Sendable, Codable, Hashable, Identifiable {
     /// The item's custom flags: keyword slots of the flag palette
     /// (`FlagPalette.slots`), the vocabulary mail keywords use. The system
     /// flag is never among them; on a feed item it is `isFavorite`. A slot
-    /// whose palette entry is disabled or gone stays here.
+    /// whose palette entry is gone stays here.
     public var flags: Set<String>
 
     /// Stable across feeds: two feeds could carry the same sort key.

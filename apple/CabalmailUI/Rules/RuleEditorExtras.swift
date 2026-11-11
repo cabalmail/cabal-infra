@@ -46,11 +46,10 @@ struct RuleExtrasSection: View {
         }
     }
 
-    /// One toggle per enabled palette entry, in palette order, plus any slot
-    /// this rule already sets whose entry is disabled or deleted — the
-    /// compiler skips the rule while such a slot remains
-    /// (`flag_not_in_palette`), so the stray toggle is the affordance for
-    /// clearing it, labelled by slot id when the entry is gone.
+    /// One toggle per palette entry, in palette order, plus any slot this
+    /// rule already sets whose entry was deleted — the compiler skips the
+    /// rule while such a slot remains (`flag_not_in_palette`), so the stray
+    /// toggle is the affordance for clearing it, labelled by slot id.
     @ViewBuilder
     private var paletteToggles: some View {
         ForEach(pickerSlots, id: \.self) { slot in
@@ -66,11 +65,11 @@ struct RuleExtrasSection: View {
         }
     }
 
-    /// The built-in flag is offered whatever its entry says: a rule can
-    /// always set the server's flag, and the compiler never skips one for
-    /// it (decision 7).
+    /// The palette's slots, the built-in flag's among them (its toggle is
+    /// the rule's `flag`), then the slots of deleted flags this rule still
+    /// sets.
     private var pickerSlots: [String] {
-        let offered = palette.filter { $0.enabled || $0.slot == FlagPalette.systemSlot }.map(\.slot)
+        let offered = palette.map(\.slot)
         let stray = FlagPalette.slots
             .filter { rule.flags.contains($0) && !offered.contains($0) }
         return offered + stray

@@ -38,8 +38,8 @@ final class FeedItemDetailViewModel {
     private let preferences: Preferences
 
     /// The flag the reader's button sets and clears, as the item list has
-    /// it (`FeedItemListView.feedFlag`). Nil while its entry is disabled.
-    var flagToggle: FlagToggle? { FlagToggle.systemFlag(in: preferences.flagPalette) }
+    /// it (`FeedItemListView.feedFlag`).
+    var flagToggle: FlagToggle { FlagToggle.systemFlag(in: preferences.flagPalette) }
 
     init(
         item: RssItem,

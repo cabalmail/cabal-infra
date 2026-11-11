@@ -84,16 +84,12 @@ struct FeedReaderBarItem: View {
         case .favorite:
             // The mail reader's flag control, word for word and glyph for
             // glyph, for the flag a feed item has (`FlagToggle`); the
-            // identifier keeps the wire name for the probes. Dimmed, not
-            // removed, while that flag's entry is disabled: the bar keeps
-            // its shape.
+            // identifier keeps the wire name for the probes.
             Button {
                 Task { await model.setFavorite(!model.item.isFavorite) }
             } label: {
-                (model.flagToggle?.face(isSet: model.item.isFavorite)
-                    ?? ReaderToggleFace.flag(isFlagged: false)).label
+                model.flagToggle.face(isSet: model.item.isFavorite).label
             }
-            .disabled(model.flagToggle == nil)
             .accessibilityIdentifier(action.identifier)
         case .readerMode:
             readerModeButton

@@ -30,14 +30,13 @@ struct FlagMenuRow: Equatable, Hashable, Identifiable {
 /// individual rows is not enough (measured: it changes nothing); the
 /// `Menu` itself is what has to be replaced.
 enum FlagMenuPolicy {
-    /// The rows the menu offers: every enabled entry of the effective
-    /// palette in its order, the built-in flag's included, plus any flag
-    /// the message already carries whose entry is disabled or deleted —
-    /// those still need an untag affordance (the palette editor's delete
-    /// confirmation promises tags stay removable). A deleted slot's
-    /// surviving tag is labelled by slot id, having no palette entry to
-    /// name it. `taggedSlots` are wire slots, the built-in flag's atom
-    /// among them (`FlagPalette.slots(in:palette:)`).
+    /// The rows the menu offers: every entry of the effective palette in
+    /// its order, the built-in flag's included, plus any flag the message
+    /// already carries whose entry was deleted — that one still needs an
+    /// untag affordance (the palette editor's delete confirmation promises
+    /// tags stay removable), and is labelled by slot id, having no palette
+    /// entry to name it. `taggedSlots` are wire slots, the built-in flag's
+    /// atom among them (`FlagPalette.slots(in:palette:)`).
     ///
     /// No rows when the default flag is all there is to offer: the control
     /// the menu hangs from toggles that flag as its primary action, so the
@@ -47,22 +46,19 @@ enum FlagMenuPolicy {
         palette: [FlagPaletteEntry],
         taggedSlots: Set<String>
     ) -> [FlagMenuRow] {
-        let effective = FlagPalette.effective(palette)
-        let offered = effective.filter(\.enabled)
+        let offered = FlagPalette.effective(palette)
         let offeredSlots = Set(offered.map(\.slot))
-        let stray = ([FlagPalette.systemSlot] + FlagPalette.slots).filter {
+        // The built-in flag is always offered, so only a keyword slot can
+        // be carried without an entry.
+        let stray = FlagPalette.slots.filter {
             taggedSlots.contains($0) && !offeredSlots.contains($0)
         }
         let rows = offered.map {
             FlagMenuRow(slot: $0.slot, label: $0.label, isOn: taggedSlots.contains($0.slot))
         } + stray.map { slot in
-            FlagMenuRow(
-                slot: slot,
-                label: effective.first { $0.slot == slot }?.label ?? slot,
-                isOn: true
-            )
+            FlagMenuRow(slot: slot, label: slot, isOn: true)
         }
-        if rows.count == 1, rows.first?.slot == offered.first?.slot {
+        if rows.count == 1 {
             return []
         }
         return rows

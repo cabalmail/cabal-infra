@@ -17,18 +17,15 @@ extension MessageListViewModel {
         await setFlag(.seen, add: add, envelope: envelope)
     }
 
-    /// The flag the one-press controls set and clear: the first enabled
-    /// entry of Settings > Flags, or nil when the palette has none (see
-    /// `FlagToggle`). Read on every row build, like `disposeAction`, so a
-    /// reorder or a rename takes effect at once.
-    var defaultFlag: FlagToggle? { FlagToggle.defaultFlag(in: flagPalette) }
+    /// The flag the one-press controls set and clear: the first entry of
+    /// Settings > Flags (see `FlagToggle`). Read on every row build, like
+    /// `disposeAction`, so a reorder or a rename takes effect at once.
+    var defaultFlag: FlagToggle { FlagToggle.defaultFlag(in: flagPalette) }
 
     /// Flip the default flag: the swipe action and the row menu's first
-    /// item. Nothing to do while there is no default flag; the controls
-    /// that call this are hidden then.
+    /// item.
     func toggleDefaultFlag(_ envelope: Envelope) async {
-        guard let flag = defaultFlag?.flag else { return }
-        await toggle(flag, on: envelope)
+        await toggle(defaultFlag.flag, on: envelope)
     }
 
     /// Flip one palette flag, the built-in one or a custom slot. Rides the

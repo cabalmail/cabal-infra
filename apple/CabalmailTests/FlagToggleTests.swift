@@ -5,20 +5,27 @@ import CabalmailKit
 /// `FlagToggle`: which flag the one-press controls act on, and what they
 /// call it (unified-flags plan, decisions 3, 5 and 6).
 final class FlagToggleTests: XCTestCase {
-    private func entry(
-        _ slot: String, _ label: String, color: String = "blue", enabled: Bool = true
-    ) -> FlagPaletteEntry {
-        FlagPaletteEntry(slot: slot, label: label, color: color, enabled: enabled)
+    private func entry(_ slot: String, _ label: String, color: String = "blue") -> FlagPaletteEntry {
+        FlagPaletteEntry(slot: slot, label: label, color: color)
     }
 
     private var system: String { FlagPalette.systemSlot }
+
+    /// A palette as a build from before the Enabled switch was removed
+    /// stored it: `enabled` on every entry, false on both.
+    private func storedAsSwitchedOff() throws -> [FlagPaletteEntry] {
+        try XCTUnwrap(FlagPalette.decode(
+            #"[{"color":"red","enabled":false,"label":"Todo","slot":"cabal-flag-03"},"#
+                + #"{"color":"yellow","enabled":false,"label":"Urgent","slot":"\\Flagged"}]"#
+        ))
+    }
 
     // MARK: - The default flag
 
     /// Goal 3: someone who never opened Settings > Flags keeps the flag,
     /// the words and the color they had.
-    func testAnUntouchedPaletteTogglesTheBuiltInFlagInItsOldWords() throws {
-        let toggle = try XCTUnwrap(FlagToggle.defaultFlag(in: []))
+    func testAnUntouchedPaletteTogglesTheBuiltInFlagInItsOldWords() {
+        let toggle = FlagToggle.defaultFlag(in: [])
         XCTAssertEqual(toggle.flag, .flagged)
         XCTAssertEqual(toggle.color, "yellow")
         XCTAssertEqual(toggle.title(isSet: false), "Flag")
@@ -29,12 +36,12 @@ final class FlagToggleTests: XCTestCase {
     /// Custom flags after the built-in one change nothing: it is still first.
     func testFlagsAddedBelowLeaveTheBuiltInFlagTheDefault() {
         let toggle = FlagToggle.defaultFlag(in: [entry("cabal-flag-01", "Todo")])
-        XCTAssertEqual(toggle?.flag, .flagged)
+        XCTAssertEqual(toggle.flag, .flagged)
     }
 
-    func testAFlagMovedToTheTopBecomesTheDefault() throws {
+    func testAFlagMovedToTheTopBecomesTheDefault() {
         let palette = [entry("cabal-flag-03", "Todo", color: "red"), entry(system, "Flagged", color: "yellow")]
-        let toggle = try XCTUnwrap(FlagToggle.defaultFlag(in: palette))
+        let toggle = FlagToggle.defaultFlag(in: palette)
         XCTAssertEqual(toggle.flag, .keyword("cabal-flag-03"))
         XCTAssertEqual(toggle.color, "red")
         XCTAssertEqual(toggle.title(isSet: false), "Todo")
@@ -42,47 +49,39 @@ final class FlagToggleTests: XCTestCase {
         XCTAssertEqual(toggle.commandTitle, "Todo/Remove Todo")
     }
 
-    func testADisabledFlagIsPassedOverForTheNextOne() {
-        let palette = [
-            entry("cabal-flag-03", "Todo", enabled: false),
-            entry("cabal-flag-01", "Later"),
-            entry(system, "Flagged"),
-        ]
-        XCTAssertEqual(FlagToggle.defaultFlag(in: palette)?.flag, .keyword("cabal-flag-01"))
-    }
-
-    /// Decision 3's degenerate case: no fallback to a flag the palette
-    /// says is off.
-    func testThereIsNoDefaultFlagWhenEveryEntryIsDisabled() {
-        let palette = [entry(system, "Flagged", enabled: false), entry("cabal-flag-01", "Todo", enabled: false)]
-        XCTAssertNil(FlagToggle.defaultFlag(in: palette))
+    /// The first flag is the default whatever an older build stored about
+    /// it: a flag cannot be switched off, so nothing is passed over.
+    func testAFlagStoredAsSwitchedOffIsStillTheDefaultWhenFirst() throws {
+        let toggle = FlagToggle.defaultFlag(in: try storedAsSwitchedOff())
+        XCTAssertEqual(toggle.flag, .keyword("cabal-flag-03"))
+        XCTAssertEqual(toggle.title(isSet: false), "Todo")
     }
 
     // MARK: - Words
 
     /// A renamed built-in flag is named like any other; only the label
     /// decides, so a recolor alone keeps "Flag" and "Unflag".
-    func testTheBuiltInFlagTakesItsNewNameOnceRenamed() throws {
-        let renamed = try XCTUnwrap(FlagToggle.defaultFlag(in: [entry(system, "Urgent", color: "red")]))
+    func testTheBuiltInFlagTakesItsNewNameOnceRenamed() {
+        let renamed = FlagToggle.defaultFlag(in: [entry(system, "Urgent", color: "red")])
         XCTAssertEqual(renamed.title(isSet: false), "Urgent")
         XCTAssertEqual(renamed.title(isSet: true), "Remove Urgent")
 
-        let recolored = try XCTUnwrap(FlagToggle.defaultFlag(in: [entry(system, "Flagged", color: "red")]))
+        let recolored = FlagToggle.defaultFlag(in: [entry(system, "Flagged", color: "red")])
         XCTAssertEqual(recolored.title(isSet: false), "Flag")
         XCTAssertEqual(recolored.title(isSet: true), "Unflag")
     }
 
     /// A custom flag that happens to be called "Flagged" is still named:
     /// "Flag" and "Unflag" are the built-in flag's words.
-    func testACustomFlagNamedFlaggedIsStillNamed() throws {
+    func testACustomFlagNamedFlaggedIsStillNamed() {
         let palette = [entry("cabal-flag-01", "Flagged"), entry(system, "Starred")]
-        let toggle = try XCTUnwrap(FlagToggle.defaultFlag(in: palette))
+        let toggle = FlagToggle.defaultFlag(in: palette)
         XCTAssertEqual(toggle.title(isSet: false), "Flagged")
         XCTAssertEqual(toggle.title(isSet: true), "Remove Flagged")
     }
 
-    func testTheGlyphShowsTheAction() throws {
-        let toggle = try XCTUnwrap(FlagToggle.defaultFlag(in: []))
+    func testTheGlyphShowsTheAction() {
+        let toggle = FlagToggle.defaultFlag(in: [])
         XCTAssertEqual(toggle.systemImage(isSet: false), "flag")
         XCTAssertEqual(toggle.systemImage(isSet: true), "flag.slash")
         XCTAssertEqual(toggle.face(isSet: true), ReaderToggleFace.flag(isFlagged: true))
@@ -93,29 +92,31 @@ final class FlagToggleTests: XCTestCase {
 
     /// A feed item has the server's flag and no other, so the feed's
     /// controls follow that entry wherever it sits in the palette.
-    func testTheFeedFlagIsTheBuiltInEntryWhateverItsPosition() throws {
+    func testTheFeedFlagIsTheBuiltInEntryWhateverItsPosition() {
         let palette = [entry("cabal-flag-03", "Todo"), entry(system, "Urgent", color: "red")]
-        let toggle = try XCTUnwrap(FlagToggle.systemFlag(in: palette))
+        let toggle = FlagToggle.systemFlag(in: palette)
         XCTAssertEqual(toggle.flag, .flagged)
         XCTAssertEqual(toggle.color, "red")
         XCTAssertEqual(toggle.title(isSet: false), "Urgent")
-        XCTAssertEqual(FlagToggle.systemFlag(in: [])?.title(isSet: true), "Unflag")
+        XCTAssertEqual(FlagToggle.systemFlag(in: []).title(isSet: true), "Unflag")
     }
 
-    func testTheFeedFlagIsGoneWhileItsEntryIsDisabled() {
-        let palette = [entry(system, "Flagged", enabled: false), entry("cabal-flag-01", "Todo")]
-        XCTAssertNil(FlagToggle.systemFlag(in: palette))
+    /// The feed's controls never lose their flag: a built-in entry stored
+    /// as switched off is the feed's flag all the same.
+    func testTheFeedFlagIsThereForABuiltInEntryStoredAsSwitchedOff() throws {
+        let toggle = FlagToggle.systemFlag(in: try storedAsSwitchedOff())
+        XCTAssertEqual(toggle.flag, .flagged)
+        XCTAssertEqual(toggle.title(isSet: false), "Urgent")
     }
 
-    /// The pills and the search toggle name the state, and keep the name
-    /// even for a disabled entry (a lit pill still has to say what it is).
-    func testTheFilterNameFollowsTheBuiltInEntrysLabel() {
+    /// The pills and the search toggle name the state.
+    func testTheFilterNameFollowsTheBuiltInEntrysLabel() throws {
         XCTAssertEqual(FlagToggle.systemFlagName(in: []), "Flagged")
         XCTAssertEqual(FlagToggle.systemFlagName(in: [entry("cabal-flag-01", "Todo")]), "Flagged")
         XCTAssertEqual(
             FlagToggle.systemFlagName(in: [entry("cabal-flag-01", "Todo"), entry(system, "Urgent")]), "Urgent"
         )
-        XCTAssertEqual(FlagToggle.systemFlagName(in: [entry(system, "Urgent", enabled: false)]), "Urgent")
+        XCTAssertEqual(FlagToggle.systemFlagName(in: try storedAsSwitchedOff()), "Urgent")
     }
 
     // MARK: - Filter pills
@@ -126,16 +127,5 @@ final class FlagToggleTests: XCTestCase {
         XCTAssertEqual(MessageFilter.flagged.label(palette: []), "Flagged")
         XCTAssertEqual(MessageFilter.unread.label(palette: palette), "Unread")
         XCTAssertEqual(MessageFilter.all.label(palette: palette), "All")
-    }
-
-    func testTheFlaggedPillLeavesWithADisabledEntryUnlessItIsLit() {
-        let disabled = [entry(system, "Flagged", enabled: false)]
-        XCTAssertEqual(MessageFilter.pills(palette: [], lit: .all), [.unread, .flagged])
-        XCTAssertEqual(MessageFilter.pills(palette: disabled, lit: .all), [.unread])
-        XCTAssertEqual(MessageFilter.pills(palette: disabled, lit: .unread), [.unread])
-        XCTAssertEqual(
-            MessageFilter.pills(palette: disabled, lit: .flagged), [.unread, .flagged],
-            "a lit pill stays, so it can be switched off"
-        )
     }
 }

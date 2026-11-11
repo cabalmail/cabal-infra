@@ -26,10 +26,9 @@ extension MessageListView {
 
     /// Swipe spec: flip the default flag (`MessageListViewModel.defaultFlag`),
     /// in its name and color. Same single toggle gesture as the read one,
-    /// with the context menu's words and symbols. Nil, so the edge has no
-    /// swipe, while the palette has no default flag.
-    func toggleFlagSwipe(for envelope: Envelope, model: MessageListViewModel) -> SwipeActionSpec? {
-        guard let toggle = model.defaultFlag else { return nil }
+    /// with the context menu's words and symbols.
+    func toggleFlagSwipe(for envelope: Envelope, model: MessageListViewModel) -> SwipeActionSpec {
+        let toggle = model.defaultFlag
         let isSet = envelope.flags.contains(toggle.flag)
         return SwipeActionSpec(
             systemImage: toggle.systemImage(isSet: isSet),

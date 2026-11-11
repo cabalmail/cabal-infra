@@ -18,13 +18,6 @@ extension MessageFilter {
         }
     }
 
-    /// The pills the bar draws. Flagged leaves while its flag's entry is
-    /// disabled, unless it is the pill that is lit: that one stays, so it
-    /// can be switched off.
-    static func pills(palette: [FlagPaletteEntry], lit: MessageFilter) -> [MessageFilter] {
-        pills.filter { $0 != .flagged || $0 == lit || FlagToggle.systemFlag(in: palette) != nil }
-    }
-
     /// True when the envelope passes this filter.
     public func includes(_ envelope: Envelope) -> Bool {
         switch self {
@@ -51,7 +44,7 @@ extension MessageListView {
     func filterTabsBar(model: MessageListViewModel, searchActive: Bool) -> some View {
         HStack(spacing: 6) {
             FilterPillStrip {
-                ForEach(MessageFilter.pills(palette: model.flagPalette, lit: model.filterTab)) { filter in
+                ForEach(MessageFilter.pills) { filter in
                     FilterPill(
                         label: filter.label(palette: model.flagPalette),
                         isOn: filter == model.filterTab,

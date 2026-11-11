@@ -259,21 +259,19 @@ extension MessageListView {
 
     /// The menu's flag block: the default flag's toggle, named for the
     /// flag (`FlagToggle`), plus a Flags submenu of every flag the palette
-    /// offers whenever that is more than the default flag alone. No toggle
-    /// while the palette has no default flag. Extracted so `rowContextMenu`
-    /// stays under SwiftLint's function-body cap.
+    /// offers whenever that is more than the default flag alone. Extracted
+    /// so `rowContextMenu` stays under SwiftLint's function-body cap.
     @ViewBuilder
     private func flagMenuSection(
         for envelope: Envelope,
         model: MessageListViewModel
     ) -> some View {
-        if let toggle = model.defaultFlag {
-            let isSet = envelope.flags.contains(toggle.flag)
-            Button {
-                Task { await model.toggleDefaultFlag(envelope) }
-            } label: {
-                Label(toggle.title(isSet: isSet), systemImage: toggle.systemImage(isSet: isSet))
-            }
+        let toggle = model.defaultFlag
+        let isSet = envelope.flags.contains(toggle.flag)
+        Button {
+            Task { await model.toggleDefaultFlag(envelope) }
+        } label: {
+            Label(toggle.title(isSet: isSet), systemImage: toggle.systemImage(isSet: isSet))
         }
         let rows = FlagMenuPolicy.rows(
             palette: model.flagPalette,
@@ -291,8 +289,8 @@ extension MessageListView {
     /// The Flags submenu body: menu toggles so a set flag carries the
     /// native checkmark (same construct as the reader's mark-read option
     /// menu). The rows are the reader's (`FlagMenuPolicy.rows`): every
-    /// enabled entry in palette order, then any flag the message carries
-    /// whose entry is disabled or deleted, so it can still be cleared.
+    /// entry in palette order, then any flag the message carries whose
+    /// entry was deleted, so it can still be cleared.
     @ViewBuilder
     func flagMenuItems(
         _ rows: [FlagMenuRow],

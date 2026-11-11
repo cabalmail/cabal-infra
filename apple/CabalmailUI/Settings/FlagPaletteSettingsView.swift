@@ -10,10 +10,10 @@ import CabalmailKit
 ///
 /// The list is the effective palette (`FlagPalette.effective`), so the
 /// system entry is always a row, whether or not it has been stored yet.
-/// It renames, recolors and moves like the others, resets where they
-/// delete, and cannot be disabled.
+/// It renames, recolors and moves like the others, and resets where they
+/// delete. No entry can be switched off: a flag is in the list or deleted.
 ///
-/// The first enabled entry is the default flag, the one the swipe, the flag
+/// The first entry is the default flag, the one the swipe, the flag
 /// button and the flag shortcuts set (`FlagToggle`). Its row says so once
 /// there is a second flag to tell it from, and every other row's context
 /// menu offers Make Default, which moves that row to the top.
@@ -28,7 +28,7 @@ struct FlagPaletteSettingsView: View {
         SettingsForm(title: "Flags") {
             Section {
                 let palette = FlagPalette.effective(preferences.flagPalette)
-                let defaultSlot = FlagPalette.defaultEntry(in: preferences.flagPalette)?.slot
+                let defaultSlot = FlagPalette.defaultEntry(in: preferences.flagPalette).slot
                 ForEach(palette) { entry in
                     // The whole row is one NavigationLink hit target — no
                     // nested controls, so the macOS single-target folding
@@ -92,7 +92,7 @@ struct FlagPaletteSettingsView: View {
             ? "touch and hold another flag to make it the default"
             : "right-click another flag to make it the default"
         return reorder + "; the order here is the order pickers use. "
-            + "A swipe, the flag button and the flag shortcut set the first enabled flag, marked Default; "
+            + "A swipe, the flag button and the flag shortcut set the first flag, marked Default; "
             + makeDefault + ". "
             + "Up to \(FlagPalette.slots.count) flags of your own."
     }
@@ -150,10 +150,9 @@ struct FlagPaletteRowLabel: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: entry.enabled ? "flag.fill" : "flag.slash")
+            Image(systemName: "flag.fill")
                 .foregroundStyle(FlagPaletteColor.color(for: entry.color))
             Text(entry.label)
-                .foregroundStyle(entry.enabled ? .primary : .secondary)
             if isDefault {
                 Spacer(minLength: 8)
                 Text("Default")
@@ -174,13 +173,12 @@ enum FlagPaletteColor {
     }
 }
 
-/// Detail editor for one palette entry: label, color, enabled, and the only
-/// route to deletion — which needs a confirmation, because per-message tags
-/// on a retired slot outlive the palette entry. The system flag's entry has
-/// no deletion: it offers Reset to Default in its place, which needs no
+/// Detail editor for one palette entry: label, color, and the only route
+/// to deletion — which needs a confirmation, because per-message tags on a
+/// retired slot outlive the palette entry. The system flag's entry has no
+/// deletion: it offers Reset to Default in its place, which needs no
 /// confirmation, because it changes a name, a color and a position and
-/// touches no message. It has no Enabled toggle either: every mailbox has
-/// the flag, and switching a built-in flag off has nothing to mean.
+/// touches no message.
 private struct FlagPaletteEntryEditor: View {
     let preferences: Preferences
     let slot: String
@@ -207,16 +205,6 @@ private struct FlagPaletteEntryEditor: View {
             Section {
                 TextField("Name", text: bindings.label)
                     .autocorrectionDisabled()
-                if !bindings.isSystemEntry {
-                    Toggle("Enabled", isOn: bindings.value(\.enabled, or: false))
-                }
-            } footer: {
-                FormSectionFooter {
-                    if !bindings.isSystemEntry {
-                        Text("A disabled flag keeps its tags but is offered nowhere.")
-                            .sectionFooter()
-                    }
-                }
             }
             Section(formHeader: "Color") {
                 colorGrid(selected: entry.color)

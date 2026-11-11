@@ -252,11 +252,8 @@ struct SearchFiltersSheet: View {
     private var flagToggles: some View {
         Toggle("Unread", isOn: $draft.unread)
         // The server's flag, under the name its entry has in Settings >
-        // Flags. Hidden while that entry is disabled, unless the toggle is
-        // on and needs a way off.
-        if draft.flagged || FlagToggle.systemFlag(in: preferences.flagPalette) != nil {
-            Toggle(FlagToggle.systemFlagName(in: preferences.flagPalette), isOn: $draft.flagged)
-        }
+        // Flags.
+        Toggle(FlagToggle.systemFlagName(in: preferences.flagPalette), isOn: $draft.flagged)
         Toggle("Has attachment", isOn: $draft.hasAttachment)
     }
 

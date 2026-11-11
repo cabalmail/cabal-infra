@@ -9,10 +9,8 @@ import CabalmailKit
 /// last one, taking the app down and losing the delete).
 @MainActor
 final class FlagPaletteEntryBindingsTests: XCTestCase {
-    private func entry(
-        _ slot: String, _ label: String, color: String = "blue", enabled: Bool = true
-    ) -> FlagPaletteEntry {
-        FlagPaletteEntry(slot: slot, label: label, color: color, enabled: enabled)
+    private func entry(_ slot: String, _ label: String, color: String = "blue") -> FlagPaletteEntry {
+        FlagPaletteEntry(slot: slot, label: label, color: color)
     }
 
     private func preferences(_ palette: [FlagPaletteEntry]) -> Preferences {
@@ -26,12 +24,12 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
     func testReadsTheAddressedEntryRegardlessOfItsPosition() {
         let prefs = preferences([
             entry("cabal-flag-01", "Alpha"),
-            entry("cabal-flag-02", "Beta", enabled: false),
+            entry("cabal-flag-02", "Beta", color: "teal"),
         ])
         let second = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-02")
         XCTAssertEqual(second.entry?.label, "Beta")
         XCTAssertEqual(second.label.wrappedValue, "Beta")
-        XCTAssertFalse(second.value(\.enabled, or: true).wrappedValue)
+        XCTAssertEqual(second.entry?.color, "teal")
     }
 
     func testWritesReachTheAddressedEntryAndLeaveSiblingsAlone() {
@@ -41,11 +39,9 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
         ])
         let bindings = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-02")
         bindings.label.wrappedValue = "Renamed"
-        bindings.value(\.enabled, or: true).wrappedValue = false
         bindings.set(\.color, to: "teal")
 
         XCTAssertEqual(prefs.flagPalette.map(\.label), ["Alpha", "Renamed"])
-        XCTAssertEqual(prefs.flagPalette.map(\.enabled), [true, false])
         XCTAssertEqual(prefs.flagPalette.map(\.color), ["blue", "teal"])
     }
 
@@ -69,8 +65,6 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
         XCTAssertTrue(prefs.flagPalette.isEmpty)
         XCTAssertNil(bindings.entry)
         XCTAssertEqual(bindings.label.wrappedValue, "")
-        XCTAssertTrue(bindings.value(\.enabled, or: true).wrappedValue)
-        XCTAssertEqual(bindings.value(\.color, or: "gray").wrappedValue, "gray")
     }
 
     /// The verifier's narrowing (#1340, 2026-08-30): deleting the *last*
@@ -131,12 +125,10 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
         bindings.delete()
 
         bindings.label.wrappedValue = "Ghost"
-        bindings.value(\.enabled, or: true).wrappedValue = false
         bindings.set(\.color, to: "pink")
 
         XCTAssertEqual(prefs.flagPalette.count, 1)
         XCTAssertEqual(prefs.flagPalette[0].label, "Alpha")
-        XCTAssertTrue(prefs.flagPalette[0].enabled)
         XCTAssertEqual(prefs.flagPalette[0].color, "blue")
     }
 
@@ -220,7 +212,7 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
         let prefs = preferences([entry("cabal-flag-01", "Alpha"), entry("cabal-flag-02", "Beta")])
         let alpha = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
         alpha.label.wrappedValue = "Renamed"
-        alpha.value(\.enabled, or: true).wrappedValue = false
+        alpha.set(\.color, to: "teal")
         FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-02").move(by: 1)
 
         XCTAssertEqual(prefs.flagPalette.map(\.slot), ["cabal-flag-01", "cabal-flag-02"])
@@ -252,7 +244,7 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
     func testResetDropsTheStoredSystemEntryAndWritesOnce() {
         let prefs = preferences([
             entry("cabal-flag-01", "Alpha"),
-            entry(FlagPalette.systemSlot, "Urgent", color: "red", enabled: false),
+            entry(FlagPalette.systemSlot, "Urgent", color: "red"),
         ])
         let bindings = systemBindings(prefs)
         var localChanges = 0

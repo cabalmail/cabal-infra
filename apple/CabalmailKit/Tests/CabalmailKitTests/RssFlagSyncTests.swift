@@ -170,11 +170,11 @@ final class RssFlagSyncTests: XCTestCase {
 
     // MARK: - A refused add
 
-    /// The flag was disabled or deleted on another device after the change
+    /// The flag was deleted on another device after the change
     /// was queued. The server refuses the whole call for it, every time, so
     /// keeping it would hold every other change behind it for good.
     func testAnAddTheServerRefusesIsDroppedAndTheRestOfTheBatchGoes() async throws {
-        await client.set(enabledSlots: [slot3])
+        await client.set(paletteSlots: [slot3])
         try await phone.store.upsertItems([item(3, flags: [slot5])])
         try await phone.store.setRead(feedId: "f1", sortKey: key(1), true)
         try await offline(phone, item: 1, slot5, true)
@@ -233,7 +233,7 @@ final class RssFlagSyncTests: XCTestCase {
     /// and goes with the next pass.
     func testAChangeMadeWhileTheRefusalWasOnItsWayStands() async throws {
         let (client, engine) = (self.client!, phone.engine)
-        await client.set(enabledSlots: [])
+        await client.set(paletteSlots: [])
         try await phone.store.upsertItems([item(1, flags: [slot3])])
         try await offline(phone, item: 1, slot3, true)
         await client.holdNext(.push)
