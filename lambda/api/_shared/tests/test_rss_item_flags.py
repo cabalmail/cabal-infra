@@ -22,6 +22,7 @@ FEED = 'f1'
 SK1 = '2024-01-01T00:00:00+00:00#i1'
 SK2 = '2024-01-02T00:00:00+00:00#i2'
 LATER, WORK, OFF, GONE = 'cabal-flag-03', 'cabal-flag-05', 'cabal-flag-07', 'cabal-flag-19'
+NEVER = 'cabal-flag-11'
 # What a call with no flag fields has always sent for is_read + is_favorite.
 LEGACY_EXPRESSION = ('SET item_id = if_not_exists(item_id, :item_id), updated_at = :now, '
                      'updated_key = :ukey, is_read = :read, is_favorite = :fav, favorite_key = :fkey')
@@ -29,7 +30,8 @@ LEGACY_EXPRESSION = ('SET item_id = if_not_exists(item_id, :item_id), updated_at
 
 def seed(tables, palette=None):
     '''One subscription to FEED with two items, and the caller's palette:
-    LATER and WORK enabled (LATER by leaving `enabled` out), OFF disabled.'''
+    LATER, WORK and OFF. OFF is stored as disabled, which nothing reads;
+    GONE and NEVER are not in the palette.'''
     tables['cabal-rss-subscription'].rows[(USER, 'sub-f1')] = {
         'user': USER, 'subscription_id': 'sub-f1', 'feed_id': FEED, 'folder_id': '~root'}
     for sort_key in (SK1, SK2):
@@ -157,8 +159,8 @@ class SetFlags(unittest.TestCase):
         self.assertEqual(rss_api.serialize_state(self.row(), {})['flags'], [])
 
     def test_remove_never_needs_the_palette(self):
-        # A flag whose palette entry is disabled or gone can still be cleared,
-        # even while the palette cannot be read.
+        # A flag whose palette entry is gone can still be cleared, even while
+        # the palette cannot be read.
         self.state.rows[(f'{USER}#{FEED}', SK1)] = {
             'user_feed': f'{USER}#{FEED}', 'sort_key': SK1, 'flags': {OFF, GONE, LATER}}
         unreadable = _NoPalette()
@@ -222,14 +224,20 @@ class SetFlags(unittest.TestCase):
         self.assertEqual((self.state.rows, self.state.updates), ({}, []), flagged)
         self.assertTrue(body['Error'])
 
-    def test_a_slot_the_palette_does_not_enable_is_refused(self):
-        self.refused(entry(add_flags=[OFF]), 400, 'flag_not_in_palette', [OFF])
+    def test_a_slot_not_in_the_palette_is_refused(self):
         self.refused(entry(add_flags=[GONE]), 400, 'flag_not_in_palette', [GONE])
         # Every refused slot of the call is named, sorted, and only those.
         got, body = call(self.mod, body={'items': [
-            entry(add_flags=[GONE, LATER]), entry(SK2, add_flags=[WORK, OFF])]})
-        self.assertEqual((got, body['code'], body['flags']), (400, 'flag_not_in_palette', [OFF, GONE]))
+            entry(add_flags=[GONE, LATER]), entry(SK2, add_flags=[WORK, NEVER])]})
+        self.assertEqual((got, body['code'], body['flags']), (400, 'flag_not_in_palette', [NEVER, GONE]))
         self.assertEqual(self.state.rows, {})
+
+    def test_an_entry_stored_as_disabled_can_be_added(self):
+        # `enabled` is deprecated and read by nothing: a slot is in the
+        # palette or it is not (docs/2.x/flag-palette-enabled-removal.md).
+        status, body = call(self.mod, body={'items': [entry(add_flags=[OFF, LATER])]})
+        self.assertEqual((status, body), (200, {'updated': 1}))
+        self.assertEqual(self.row()['flags'], {OFF, LATER})
 
     def test_a_slot_in_both_lists_is_refused(self):
         self.refused(entry(add_flags=[LATER, WORK], remove_flags=[WORK]), 400, 'flag_conflict', [WORK])
