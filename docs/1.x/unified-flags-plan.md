@@ -5,9 +5,9 @@
 | Phase | Status |
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
-| 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
+| 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` in review (2026-11-10), the first PR of android-parity.md leg L1 |
 | 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass in five poses; the flag button's hold menu passes closed and is not settled in the open poses. Soak run (2026-11-10) on the Mini, four platforms: no regression found, five older defects filed (#2381 to #2385). Promoted to prod as 1.47.0 (2026-11-11), with the iOS, macOS and visionOS builds uploaded from `main`. The physical-Duo check waits for the device (duo-support.md, Decision 7) |
-| 4 -- Android client | Not started; runs as android-parity.md leg L1 |
+| 4 -- Android client | Started (2026-11-10) as android-parity.md leg L1: the kit model is in review, the app PRs follow it |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
 This plan is run by Session 1 of
@@ -295,7 +295,12 @@ returns it canonically; a 22-entry palette 400s; `set_flag` with
 **Status:** The `CabalmailKit` half merged (2026-11-09), #2371, once
 Phase 1 was live on stage; it adds the model and no way to edit the
 system entry, so it did not need Phase 1 in prod. The `android/kit`
-half has not started. As built, the encode rule is `FlagPalette.stored(afterEditing:from:)`
+half is in review (2026-11-10), as the first PR of android-parity.md leg
+L1: the same model under Kotlin names (`SYSTEM_SLOT`,
+`DEFAULT_SYSTEM_ENTRY`, `effective`, `defaultEntry`, `keywordEntries`,
+`storedAfterEditing`, `resettingSystemEntry` and a two-argument
+`slotsIn`), with `MAX_ENTRIES` 21 and the one-argument `slotsIn` left
+keyword-only until the app moves its rows and reader over. As built on Apple, the encode rule is `FlagPalette.stored(afterEditing:from:)`
 with `resettingSystemEntry(in:)` for reset, and palette-ordered slots
 are a second form, `slots(in:palette:)`: the existing `slots(in:)`
 keeps its keyword-only result until Phase 3 moves the row and the
@@ -509,8 +514,11 @@ removed.
 
 ## Phase 4 -- Android client
 
-**Status:** Not started. Runs as android-parity.md leg L1, with Phase
-2's `android/kit` half, after the Apple release is promoted.
+**Status:** Started (2026-11-10), as android-parity.md leg L1, after
+the Apple release was promoted as 1.47.0. Phase 2's `android/kit` half
+is in review; the app follows in two PRs, as Apple's did (rendering and
+Settings > Flags, then the controls), and the acceptance below runs
+after they merge.
 
 The same items as Phase 3 against the Android surfaces:
 `FlagPaletteSettings` (up/down reorder gains "Make default"; Reset in
