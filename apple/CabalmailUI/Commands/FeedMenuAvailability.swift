@@ -58,6 +58,24 @@ public enum SharedChordPolicy {
         activeSection == .mail && mailbox.canMarkAllRead
     }
 
+    /// ⌘⇧8 for the flag item of `section`'s menu: the chord while that
+    /// section is in front, nil while the other is.
+    ///
+    /// The live rules above are not enough for this chord. Its two items are
+    /// retitled as the palette changes (each names the flag it sets,
+    /// `FlagToggle.commandTitle`), and SwiftUI does not give a menu item it
+    /// is updating a key equivalent that another item already holds: with
+    /// both menus declaring ⌘⇧8, the Message item came out of its first
+    /// retitle with no key, and the chord did nothing for anyone whose
+    /// default flag has a name. So one item declares it at a time, the one
+    /// whose section the live rules would let fire. ⌘T and ⌥⌘T sit on items
+    /// whose titles never change, and stay declared on both.
+    static func flagChord(
+        for section: ResumeSession.Section, activeSection: ResumeSession.Section
+    ) -> KeyboardShortcut? {
+        section == activeSection ? KeyboardShortcut("8", modifiers: [.command, .shift]) : nil
+    }
+
     /// Feeds ▸ Mark All as Read.
     static func feedMarkAllReadLive(_ feeds: FeedMenuAvailability, activeSection: ResumeSession.Section) -> Bool {
         activeSection == .feeds && feeds.canMarkAllRead

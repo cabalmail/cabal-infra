@@ -13,7 +13,7 @@ extension MessageListViewModel {
     /// moves the unread count when `.seen` flips (in cross-folder search,
     /// the row's own folder's). If the server refuses, the row goes back to
     /// what it was and the service takes back the rest. Selections take
-    /// their own path (`setSeen(_:refs:)` and `setFlagged(_:refs:)` in the
+    /// their own path (`setSeen(_:refs:)` and `setDefaultFlag(_:refs:)` in the
     /// bulk extension).
     func setFlag(_ flag: Flag, add: Bool, envelope: Envelope) async {
         let ref = rowRef(for: envelope)

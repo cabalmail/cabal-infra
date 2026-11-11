@@ -4,11 +4,11 @@
 
 | Phase | Status |
 | --- | --- |
-| 1 -- Palette accepts the `\Flagged` slot | Merged (2026-11-09), #2370; accepted on stage; not yet in prod |
+| 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
 | 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` waits for android-parity.md leg L1 |
-| 3 -- Apple client | Not started |
+| 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass in five poses; the flag button's hold menu passes closed and is not settled in the open poses. Soak run (2026-11-10) on the Mini, four platforms: no regression found, five older defects filed (#2381 to #2385). Not promoted. The physical-Duo check waits for the device and does not hold the promotion until it arrives (duo-support.md, Decision 7) |
 | 4 -- Android client | Not started; runs as android-parity.md leg L1 |
-| 5 -- Documentation | Not started |
+| 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
 This plan is run by Session 1 of
 [post-wave-3/flags-and-cross-media.md](post-wave-3/flags-and-cross-media.md),
@@ -66,8 +66,8 @@ consequences shape this plan:
 
 1. One flags interface across the native clients: the palette is *the*
    list of flags, and `\Flagged` is an entry in it.
-2. Users can rename, recolour, reorder, and disable the `\Flagged`
-   entry exactly like any other.
+2. Users can rename, recolour and reorder the `\Flagged` entry exactly
+   like any other. It cannot be deleted or disabled (decision 2).
 3. Users who have never touched the palette see no change beyond
    rendering: a flag labelled "Flagged" in the same gold, first in the
    list, toggled by the same gestures.
@@ -133,15 +133,22 @@ palette:
   shift. The synthesized entry is not pushed to the server until the
   user edits it -- the wire palette stays byte-identical for users who
   never touch it.
-- Any edit (rename, recolour, reorder, disable) materializes the entry
-  in the pushed palette at its position.
+- Any edit (rename, recolour, reorder) materializes the entry in the
+  pushed palette at its position.
 - **The entry cannot be deleted, only reset.** Unlike a keyword slot,
   `\Flagged` cannot be un-minted: rules with `flag: true`, the
   `?flagged=1` search, `folder_status`, older builds, and the React app
   all still set or read it. Where other entries offer Delete, this one
   offers "Reset to default", which removes the wire entry so the
-  synthesized default takes over again. Disable remains available for
-  users who want it hidden from pickers and rendering.
+  synthesized default takes over again.
+- **The entry cannot be disabled** (decided 2026-11-10, with Phase 3's
+  first PR). This plan first kept an Enabled toggle on it "for users
+  who want it hidden from pickers and rendering"; the maintainer saw
+  nothing a disabled built-in flag could mean, so its editor has no
+  toggle. The wire format is unchanged and still carries `enabled`, so
+  an entry that arrives disabled (written through the API, or by a
+  client that offers the toggle) is honoured as data: it is passed over
+  as the default flag, and "Reset to default" clears it.
 
 ### 3. The default flag is positional: first enabled entry
 
@@ -164,7 +171,9 @@ Degenerate case: if every entry is disabled there is no default. The
 toggle affordances then behave as a `none` swipe binding does today --
 the swipe action is hidden and the shortcut and reader button are
 disabled -- rather than silently falling back to `\Flagged`. The
-palette itself can never be empty under decision 2.
+palette itself can never be empty under decision 2. Since the system
+entry cannot be disabled in the app, this case needs a palette that
+carries it disabled already; the handling stays, for that data.
 
 ### 4. One rendering for every slot
 
@@ -264,8 +273,9 @@ day. The acceptance below was run against the stage API then and
 passed: the palette was stored and returned canonically, a 22-entry
 palette and `cabal-flag-00` each got a 400 and left the stored palette
 alone, and `set_flag` set and cleared `\Flagged` on a message as before.
-It reaches prod with the next promotion; Phase 3 waits for that
-(decision 8).
+It reached prod with 1.46.0 (2026-11-10): prod's `set_preferences` runs
+the same build that passed on stage. Phase 3's wait for it (decision 8)
+is over.
 
 `lambda/api/set_preferences/function.py`: add `\Flagged` to
 `FLAG_PALETTE_SLOTS`; raise the entry cap from 20 to 21 with a comment
@@ -316,7 +326,63 @@ the entry encodes back byte-identical after a no-op edit.
 
 ## Phase 3 -- Apple client
 
-**Status:** Not started.
+**Status:** In two PRs, as flags-and-cross-media.md splits it. The
+first, rendering and Settings > Flags, merged (2026-11-10), #2375; the
+second, the affordances with the "Default" badge and "Make default",
+merged (2026-11-10), #2376. Both are on stage. The acceptance at the
+end of this phase was run on 2026-11-10 and found one defect, fixed in
+#2378 (merged 2026-11-10); its results are under the acceptance text. What the
+first one settled:
+
+- The reader's flag button is not recoloured. It was never gold: since
+  `ReaderToggleFace` it draws the action ("Flag" / "Unflag"), not the
+  state, so there is no state colour to take from the palette. Its
+  title follows the default flag's label (second PR).
+- The system entry's editor has no Enabled toggle (decision 2). A
+  custom flag whose entry is disabled is still drawn on the messages
+  that carry it, as it always was: "disabled" means offered nowhere,
+  not hidden.
+- Feed rows draw the system entry's dot beside the date, from
+  `is_favorite`.
+
+What the second one settled, all in one value the controls read
+(`FlagToggle`):
+
+- **Words.** The built-in flag under its original name keeps "Flag" /
+  "Unflag", so goal 3 holds for the labels too; decision 5's
+  "<label>" / "Remove <label>" applies to every other default flag,
+  including the built-in one once renamed. A recolour alone keeps the
+  old words. The menu bar item reads both ways ("Urgent/Remove
+  Urgent"), as "Flag/Unflag" did.
+- **Colour.** The swipe's fill is the flag's palette colour, so the
+  `flagged.fill` token has no user left on Apple mail or feed surfaces.
+- **Flag menus** (the reader button's, and the row menu's Flags
+  submenu, now one rule: `FlagMenuPolicy.rows`) list every enabled
+  entry in palette order, the built-in one included, then any flag the
+  message carries whose entry is disabled or gone. When the default
+  flag would be the only row there is no menu, so an untouched palette
+  keeps the plain button. The selection menu keeps its one item, the
+  default flag's toggle; it never had a Flags submenu.
+- **Settings > Flags.** The "Default" badge appears once the list has
+  a second flag, and the footer carries the caption. "Make Default" is
+  in each row's context menu, above Move Up / Move Down, and is a move
+  to the top; a disabled flag cannot be made the default.
+- **No default flag** (reachable only from a stored palette whose
+  built-in entry is disabled, decision 3): the swipe, the row and
+  selection menu items and the bulk bar's button are absent, and the
+  reader button, both shortcuts and the menu bar item are dimmed.
+- **Filters** (decision 6). The Flagged pills and the search sheet's
+  toggle take the built-in entry's label. With that entry disabled they
+  are hidden unless lit, so a filter that is on can be turned off.
+- **Rule editor** (decision 7). One list in palette order; the built-in
+  entry's toggle is the rule's `flag`, and it is offered even when the
+  entry is disabled, since a rule can always set the server's flag.
+- **Feeds** (decision 4). The swipe, the row menu item, the reader
+  button, the pill and the Feeds menu item take the built-in entry's
+  name and colour whatever its position, because a feed item has that
+  flag and no other. With the entry disabled the swipe and the menu
+  item go and the reader button is dimmed, not removed, so its bar
+  keeps its shape.
 
 - Settings > Flags: the effective palette; "Default" badge and caption
   on the first enabled row; "Make default" in row menus; "Reset to
@@ -347,6 +413,100 @@ it red updates the swipe label, the shortcut target, the pill, and the
 rule editor; moving another flag to the top retargets the swipe;
 disabling every flag hides the swipe and disables the shortcut.
 
+**Acceptance run (2026-11-10)**, against stage at 6538066c5 as the first
+stage test account, on the Mini's simulators and its Mac. The palette
+was put in four states (untouched; the entry renamed "Urgent" and red;
+another flag, "Todo", first; every entry disabled, which only data can
+do now), and each press was checked against the flags the server then
+held. The rename was done in the Settings editor on the iPhone and
+through the API elsewhere.
+
+| Platform | Result |
+| --- | --- |
+| iPhone simulator | Pass: swipe, pill, bulk bar, rule editor, the editor itself |
+| iPad simulator | Pass: swipe, pill, reader flag button |
+| visionOS simulator | Pass: reader flag button and pill in all four states, swipe with "Todo" first |
+| macOS | Pill, toolbar button, Message menu item, ⌘⇧L and the no-default case pass. **⌘⇧8 failed** once the default flag had a name |
+| iPhone Duo simulator (stage at cbe028f1c, with #2378) | Pass. Closed: swipe and pill in all four states. Open landscape, book pose, open portrait and laptop pose, with "Todo" first: the reader's chips in list order, and its flag button sets and clears "Todo", from the side strip in the first two and from the bottom bar in the last two (below the fold in laptop pose). The flag button's touch-and-hold menu (checked during the soak): closed, it lists the flags in list order and sets and clears one that is not the default; not settled in the open poses |
+| Old build (2026-11-06, before Phase 2) | Pass: the entry lists as an ordinary flag, survives an edit made from the old build, and picking it sets `\Flagged` |
+
+The macOS failure: the Message and Feeds menus both declared ⌘⇧8, and
+#2376 made their two items take the flag's name. SwiftUI does not give
+a menu item it is updating a key equivalent another item already holds,
+so the Message item lost its key on its first retitle; the item, ⌘⇧L
+and the toolbar button still worked. #2378 declares the chord on one
+menu at a time, the one for the section in front
+(`SharedChordPolicy.flagChord`), and `FlagChordTests` counts the items
+on the chord in the menu bar the app built. Checked in the running Mac
+app with the fix: ⌘⇧8 sets and clears "Todo" on a message, the key
+moves to the Feeds item when a feed is in front and back again, a
+rename arriving while the app runs keeps it, and with a feed in front
+it sets and clears the feed item's flag.
+
+The Duo pass ran on the Mini's simulator, not the Studio's. The flag
+button's touch-and-hold menu is, on a wide window, the reader's one way
+to a flag other than the default (the Message menu of the bottom bar
+has no Flags row). The pass itself could not open it. The soak found
+the press that does (a held press of 1.5 s through the driver's `drag`
+verb), and with it the menu passes on the Duo closed and on the iPad's
+wide layout, which is the layout the open Duo uses: it lists the flags
+in list order, sets one that is not the default, marks it, and clears
+it, each checked against the server. In the Duo's open poses the
+driver's coordinate presses do not land at all (a held press on a list
+row opens no menu either), so there the reading says nothing about the
+app; a person holding the button in Device Hub, or on the device,
+settles it. Not run: the physical-Duo check, a trackpad swipe on
+macOS. "New build, old server" can no longer be run: Phase 1 is in
+prod.
+
+**Soak (2026-11-10)**, stage at cbe028f1c (the same code as a3f5ed023),
+on the Mini with the first stage test account. The acceptance run
+above checked what Stage A set out to change; the soak looked for
+anything nearby that it broke. Everything stage holds that prod does
+not is this change (#2375, #2376, #2378), so the lanes worked through
+what it touched: list rows, swipes, filter pills, row menus, bulk
+actions, the reader's header and bar, reply, move, search and its
+filter sheet, the feed list and reader, Settings > Flags, the rule
+editor's flag list, the menu commands, relaunch and background. Each
+lane had eight seeded messages of its own; every action was checked
+against the server's flags. The flag list was the built-in flag first
+under its original name, then two custom flags; a short second pass
+made a custom flag the default (the iPhone's row menu and the Duo's
+hold menu).
+
+| Lane | Result |
+| --- | --- |
+| iPhone 17 simulator | No regression. Every check passes but the search for the lane's tag, which is the server defect below. Among them: the settings writes (add, rename, recolor, move and delete a flag; the swipe set to the default flag; add and delete a rule), largest text and landscape. Dark mode (list dots and reader chips) was run after the lanes, because the account's theme is a synced setting, and passes |
+| iPad Pro 11-inch simulator | No regression. Every check passes but the same search. Among them: the hardware-keyboard chords (⌘⇧8, ⌘⇧L, ⌘⇧U, ⌘T), the menu bar's Message menu, a 375 pt window, portrait, largest text and the flag button's hold menu. Dark mode not run there |
+| Apple Vision Pro simulator | No regression. Every check the driver could deliver passes. Not run: the row's hold menu, trailing swipes in the narrow lists and hover, none of which it can deliver there |
+| macOS (the app on the Mini) | No regression. Rows, the reader's bar and flag menu, ⌘⇧8 in mail and in feeds, the Message and Feeds menus with a compose window in front and without, reply, move there and back, a three-message selection (bulk flag, bulk read, ⌘⇧8), the pills, Settings > Flags (add, recolor, delete; the built-in flag's editor) and the rule editor |
+
+Each defect a lane reported was run again on a build of `main` at
+af998ca22 (1.46.0), or asked of the server directly. All five are older
+than Stage A and are filed:
+
+- #2381, macOS: after a visit to Feeds, the reader's Flag, reader view
+  and Move buttons stay in the toolbar's overflow in a narrow window.
+- #2382, server: a search for a hyphenated word finds only some of the
+  messages that contain it.
+- #2383, iOS: the reader's sender avatar falls back to initials after
+  the first message opened in a launch.
+- #2384, visionOS: the reader pane is blank, or says "1 Message
+  Selected", after a folder switch with a message open.
+- #2385, Apple: under the Flagged pill, an unflagged row can come back
+  for about a minute when a list refresh lands after the unflag. The
+  iPad lane saw it twice in six tries; forced with a held reply, stage
+  and `main` behave alike.
+
+Seen and left as they are: on iPhone and visionOS, rows in Select mode
+run to both edges of the list (the same on `main`); the flag dots take
+room from the sender's name, about 16 pt each; on the iPad the flag
+button's hold menu, opening upward from the bar, lists the flags
+bottom-up. The test account is back as it was: no soak mail, an empty
+flag list, the swipes, filters and theme as before. One disabled rule
+named "New rule", left by the acceptance run's rule-editor check, was
+removed.
+
 ## Phase 4 -- Android client
 
 **Status:** Not started. Runs as android-parity.md leg L1, with Phase
@@ -368,7 +528,10 @@ platform reads identically on the other.
 
 ## Phase 5 -- Documentation
 
-**Status:** Not started.
+**Status:** Merged (2026-11-10), #2376, with Phase 3's second PR.
+The manual had no flags section, so it gains a Flags entry under Mail;
+the rules doc's Flag extra says the editor lists the flags as Settings
+> Flags does.
 
 - `docs/user_manual.md`: the flags section describes one list, the
   default flag, and reset-vs-delete.

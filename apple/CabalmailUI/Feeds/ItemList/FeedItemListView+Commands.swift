@@ -19,7 +19,7 @@ extension FeedItemListView {
             guard let item = selection else { return }
             Task { await model.setRead(item, !item.isRead) }
         case .toggleFlag:
-            guard let item = selection else { return }
+            guard let item = selection, feedFlag != nil else { return }
             Task { await model.setFavorite(item, !item.isFavorite) }
         case .markAllRead:
             confirmMarkAllRead = true

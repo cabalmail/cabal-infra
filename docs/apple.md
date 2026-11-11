@@ -1128,7 +1128,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Admin/` | Administrator screens, listed in Settings only when the session's token names the `admin` group (`SessionManager.isAdmin`): the Users list, each account's page (confirm, enable or disable, delete, domain access) and `UsersViewModel`. The server refuses every admin call to anyone else; a 403 shows as "Administrators only" |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
-| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), the faces of the toggles both readers share (`ReaderToggleFace`: read, flag, reader view, remote content, and mail's plain text, each glyph naming the action its label names), branding |
+| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the item rows' marks (`UnreadDot`, and `FlagDots` with `FlagDotMark`, which works out the flags a mail row, a feed row and the reader's chips draw: the system flag as one more palette entry, in palette order), the flag the one-press controls act on (`FlagToggle`: mail's swipe, shortcuts, bulk bar, reader button and the first item of its menus set the palette's default flag, the first enabled entry; the feed's set the system flag's entry; either way in the entry's name and color, and absent or dimmed when there is none), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), the faces of the toggles both readers share (`ReaderToggleFace`: read, flag, reader view, remote content, and mail's plain text, each glyph naming the action its label names), branding |
 | `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout, a list's selection (`SelectionModel`: the rows picked, Select mode, and the anchor and cursor a range selection works from) |
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
@@ -2097,7 +2097,8 @@ spinning up the full view model.
   a change mid-session takes effect immediately, and the swipe label +
   icon follow the preference too — the two advance pickers, and
   `Leading swipe` / `Trailing swipe`, which bind each edge of a message
-  row to Toggle read, Toggle flag, Dispose (which follows `Dispose
+  row to Toggle read, Toggle default flag (the first enabled flag in
+  Settings › Flags; `FlagToggle`), Dispose (which follows `Dispose
   action` and the in-Trash / in-Archive overrides), or None. Feed items:
   `Leading swipe` / `Trailing swipe` for feed item rows (Toggle read,
   Toggle flag, None). The same action may be bound to both edges.
@@ -2202,10 +2203,20 @@ keep every tab they have shown mounted (`FrontSurfacePolicy`). The feed
 catalog and sidebar trees, one handler a window, answer from a tab
 behind (`whileBehind`). `SharedChordPolicy` gives each chord the Feeds
 menu shares with the Message or Mailbox menu (⌘T, ⌘⇧8, ⌥⌘T) to the
-section in front.
+section in front. ⌘T and ⌥⌘T are declared on both menus and only one
+item is enabled. ⌘⇧8 is declared on one menu at a time, the one for the
+section in front (`SharedChordPolicy.flagChord`), so the other menu's
+flag item shows no shortcut: its two items are retitled when the palette
+changes, and SwiftUI does not give a menu item it is updating a key
+equivalent another item already holds. A chord on an item whose title
+can change must have one declaring item; `FlagChordTests` counts them in
+the menu bar the app built.
 
 The shared Message menu (`MessageMenuCommands`) carries Reply ⌘R, Reply
-All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T, Flag/Unflag ⌘⇧8 and Move
+All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T, Flag/Unflag ⌘⇧8 (the
+default flag, and titled for it once it is not the built-in flag under
+its own name; the window's root view reports the palette to
+`WindowCommands` for that) and Move
 to Folder ⌘M, which deliberately shadows Window → Minimize (custom menus
 match first). Dispose (⌘⌫) is NOT a menu item: menu equivalents fire
 app-wide, so it would steal delete-to-line-start in a draft. A hidden

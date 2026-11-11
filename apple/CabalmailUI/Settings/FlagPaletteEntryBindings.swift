@@ -5,6 +5,13 @@ import CabalmailKit
 /// `FlagPaletteEntryEditor` is editing (#1340), or the one a row's Move Up /
 /// Move Down items move.
 ///
+/// They read and edit the *effective* palette, the list Settings > Flags
+/// shows: the stored palette with the system flag's entry supplied when it
+/// has none. Every write goes back through
+/// `FlagPalette.stored(afterEditing:from:)`, so the system entry reaches
+/// `Preferences.flagPalette`, and the wire, only once the user has changed
+/// it or moved something above it.
+///
 /// The editor is pushed on a `slot`, but every `Binding` it hands to a
 /// live `TextField` or `Toggle` outlives the entry: confirming the delete
 /// shrinks `Preferences.flagPalette` while those children are still
@@ -26,9 +33,38 @@ struct FlagPaletteEntryBindings {
     let preferences: Preferences
     let slot: String
 
-    /// The entry being edited, or nil once it is gone.
+    /// The entry being edited, or nil once it is gone. The system flag's
+    /// entry is never gone.
     var entry: FlagPaletteEntry? {
-        preferences.flagPalette.first { $0.slot == slot }
+        palette.first { $0.slot == slot }
+    }
+
+    /// Whether this is the system flag's entry, which resets where the
+    /// others delete.
+    var isSystemEntry: Bool { slot == FlagPalette.systemSlot }
+
+    /// Whether `reset()` would change anything: the system entry is stored,
+    /// so it is not, or not only, the default one in first place.
+    var canReset: Bool {
+        isSystemEntry && preferences.flagPalette.contains { $0.slot == slot }
+    }
+
+    /// Whether this entry is the default flag, the one the swipe, the flag
+    /// button and the flag shortcuts set: the first enabled entry.
+    var isDefault: Bool {
+        FlagPalette.defaultEntry(in: preferences.flagPalette)?.slot == slot
+    }
+
+    /// Whether `makeDefault()` would change anything: the entry is there,
+    /// enabled, and not the default already. A disabled flag is offered
+    /// nowhere, so it cannot be the one the gestures set.
+    var canMakeDefault: Bool {
+        entry?.enabled == true && !isDefault
+    }
+
+    /// The palette as the list shows it.
+    private var palette: [FlagPaletteEntry] {
+        FlagPalette.effective(preferences.flagPalette)
     }
 
     /// Label writes are capped to the server's length limit as they are
@@ -63,18 +99,29 @@ struct FlagPaletteEntryBindings {
     }
 
     /// Removes the entry. `Preferences` keeps syncing an emptied palette,
-    /// so the deletion reaches the server like any other edit.
+    /// so the deletion reaches the server like any other edit. The system
+    /// flag cannot be deleted, so for its entry this is `reset()`.
     func delete() {
+        guard !isSystemEntry else { return reset() }
         preferences.flagPalette.removeAll { $0.slot == slot }
+    }
+
+    /// Puts the system flag's entry back to its default name, color and
+    /// first place, by dropping the stored entry. Nothing is written when
+    /// there is none to drop, or for any other entry.
+    func reset() {
+        guard canReset else { return }
+        preferences.flagPalette = FlagPalette.resettingSystemEntry(in: preferences.flagPalette)
     }
 
     /// Whether `move(by:)` would move the entry: false past either end of
     /// the palette, and once the entry is gone.
     func canMove(by offset: Int) -> Bool {
+        let palette = self.palette
         guard offset != 0,
-              let index = preferences.flagPalette.firstIndex(where: { $0.slot == slot })
+              let index = palette.firstIndex(where: { $0.slot == slot })
         else { return false }
-        return preferences.flagPalette.indices.contains(index + offset)
+        return palette.indices.contains(index + offset)
     }
 
     /// Moves the entry `offset` places through the palette (-1 is Move Up,
@@ -82,18 +129,34 @@ struct FlagPaletteEntryBindings {
     /// once the entry is gone, nothing is written, so nothing is pushed.
     func move(by offset: Int) {
         guard canMove(by: offset) else { return }
-        var palette = preferences.flagPalette
+        var palette = self.palette
         guard let index = palette.firstIndex(where: { $0.slot == slot }) else { return }
         palette.insert(palette.remove(at: index), at: index + offset)
-        preferences.flagPalette = palette
+        store(palette)
+    }
+
+    /// Makes the entry the default flag by moving it to the top of the
+    /// palette: the default is a position, not a field, so every shipped
+    /// build and the other platforms read it the same way. Nothing is
+    /// written when `canMakeDefault` is false.
+    func makeDefault() {
+        guard canMakeDefault else { return }
+        var palette = self.palette
+        guard let index = palette.firstIndex(where: { $0.slot == slot }) else { return }
+        palette.insert(palette.remove(at: index), at: 0)
+        store(palette)
     }
 
     /// Mutates the entry in place, or does nothing when it is gone. The
     /// index is looked up and spent inside one call, never captured.
     private func write(_ mutate: (inout FlagPaletteEntry) -> Void) {
-        var palette = preferences.flagPalette
+        var palette = self.palette
         guard let index = palette.firstIndex(where: { $0.slot == slot }) else { return }
         mutate(&palette[index])
-        preferences.flagPalette = palette
+        store(palette)
+    }
+
+    private func store(_ edited: [FlagPaletteEntry]) {
+        preferences.flagPalette = FlagPalette.stored(afterEditing: edited, from: preferences.flagPalette)
     }
 }

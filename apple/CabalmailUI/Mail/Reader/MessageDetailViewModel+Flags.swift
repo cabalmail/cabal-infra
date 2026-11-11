@@ -38,6 +38,44 @@ extension MessageDetailViewModel {
         }
     }
 
+    /// The palette flags the reader shows on the message: the system flag
+    /// and the custom slots, from the optimistic state the toggles write,
+    /// so a chip follows a toggle without waiting for the server.
+    var shownFlags: Set<Flag> {
+        var flags = Set(keywordSlots.map(Flag.keyword))
+        if isFlagged { flags.insert(.flagged) }
+        return flags
+    }
+
+    /// The flag the reader's button and Cmd+Shift+L set and clear: the
+    /// first enabled entry of Settings > Flags, or nil when the palette
+    /// has none (see `FlagToggle`).
+    var defaultFlag: FlagToggle? { FlagToggle.defaultFlag(in: preferences.flagPalette) }
+
+    /// Whether the open message carries the default flag, from the same
+    /// optimistic state the chips draw.
+    var isDefaultFlagSet: Bool {
+        guard let flag = defaultFlag?.flag else { return false }
+        return shownFlags.contains(flag)
+    }
+
+    /// Flip the default flag. Nothing to do while there is none; the
+    /// button is dimmed then, and the chord goes through here too.
+    func toggleDefaultFlag() async {
+        guard let flag = defaultFlag?.flag else { return }
+        await toggle(flag)
+    }
+
+    /// Flip one palette flag, the built-in one or a custom slot: the flag
+    /// menu's rows. Anything else is not a palette flag and is left alone.
+    func toggle(_ flag: Flag) async {
+        switch flag {
+        case .flagged: await toggleFlagged()
+        case .keyword(let slot): await toggleKeyword(slot)
+        default: break
+        }
+    }
+
     /// Flip the server's `\Flagged` bit. Optimistic update with revert-on-
     /// failure mirrors `setSeen(_:)`; the change reaches every list, so the
     /// row's flag indicator appears or disappears without a refresh.

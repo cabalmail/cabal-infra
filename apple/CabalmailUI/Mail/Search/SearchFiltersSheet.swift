@@ -31,6 +31,9 @@ struct SearchFiltersSheet: View {
     /// Fires when the user dismisses the sheet without applying.
     let onCancel: () -> Void
 
+    /// For the Flagged toggle's name, which is the built-in flag's in
+    /// Settings > Flags.
+    @Environment(Preferences.self) private var preferences
     @State private var draft: MessageSearchFilters
     @State private var sinceEnabled: Bool
     @State private var beforeEnabled: Bool
@@ -248,7 +251,12 @@ struct SearchFiltersSheet: View {
     @ViewBuilder
     private var flagToggles: some View {
         Toggle("Unread", isOn: $draft.unread)
-        Toggle("Flagged", isOn: $draft.flagged)
+        // The server's flag, under the name its entry has in Settings >
+        // Flags. Hidden while that entry is disabled, unless the toggle is
+        // on and needs a way off.
+        if draft.flagged || FlagToggle.systemFlag(in: preferences.flagPalette) != nil {
+            Toggle(FlagToggle.systemFlagName(in: preferences.flagPalette), isOn: $draft.flagged)
+        }
         Toggle("Has attachment", isOn: $draft.hasAttachment)
     }
 

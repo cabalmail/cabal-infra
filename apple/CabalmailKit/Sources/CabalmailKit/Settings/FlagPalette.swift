@@ -132,6 +132,13 @@ extension FlagPalette {
         stored.contains { $0.slot == systemSlot } ? stored : [defaultSystemEntry] + stored
     }
 
+    /// The keyword entries alone, in palette order: what a picker offers
+    /// beside a control that already toggles the system flag, and the only
+    /// slots a rule's `flags` list may name.
+    public static func keywordEntries(in stored: [FlagPaletteEntry]) -> [FlagPaletteEntry] {
+        stored.filter { $0.slot != systemSlot }
+    }
+
     /// The flag the one-gesture toggles act on (the swipe, the shortcut,
     /// the reader's button): the first enabled entry of the effective
     /// palette (decision 3). Nil when every entry is disabled; there is

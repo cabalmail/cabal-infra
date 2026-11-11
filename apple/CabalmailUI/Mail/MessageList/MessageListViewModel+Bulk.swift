@@ -3,7 +3,7 @@ import CabalmailKit
 
 // Multi-select / ref-set action plumbing. Lives in a sibling extension
 // so the main view-model file stays under SwiftLint's 400-line cap.
-// The ref-set primitives (`setSeen(_:refs:)`, `setFlagged(_:refs:)`,
+// The ref-set primitives (`setSeen(_:refs:)`, `setDefaultFlag(_:refs:)`,
 // `moveMessages(refs:to:)`, `disposeMessages(refs:action:)`) serve the
 // bulk-action bar, the selection context menu, and the keyboard
 // shortcuts; each makes its optimistic in-memory updates, mirroring the
@@ -101,8 +101,8 @@ extension MessageListViewModel {
         await setSeen(shouldBeSeen, refs: selectedRefs)
     }
 
-    func bulkSetFlagged(_ shouldBeFlagged: Bool) async {
-        await setFlagged(shouldBeFlagged, refs: selectedRefs)
+    func bulkSetDefaultFlag(_ shouldBeSet: Bool) async {
+        await setDefaultFlag(shouldBeSet, refs: selectedRefs)
     }
 
     /// \Seen / unset-\Seen for an explicit ref set. Optimistically updates
@@ -117,10 +117,20 @@ extension MessageListViewModel {
         await setFlag(.seen, to: shouldBeSeen, refs: refs)
     }
 
-    /// Flag toggle for an explicit ref set. The same as `setSeen`, minus the
-    /// unread count.
-    func setFlagged(_ shouldBeFlagged: Bool, refs: Set<MessageRef>) async {
-        await setFlag(.flagged, to: shouldBeFlagged, refs: refs)
+    /// The default flag (`defaultFlag`) for an explicit ref set. The same
+    /// as `setSeen`, minus the unread count; a no-op while the palette has
+    /// no default flag.
+    func setDefaultFlag(_ shouldBeSet: Bool, refs: Set<MessageRef>) async {
+        guard let flag = defaultFlag?.flag else { return }
+        await setFlag(flag, to: shouldBeSet, refs: refs)
+    }
+
+    /// Whether a press on a default-flag control sets the flag on `refs`
+    /// (some loaded row lacks it) or clears it (every one has it). False
+    /// while there is no default flag.
+    func defaultFlagIsMissing(from refs: Set<MessageRef>) -> Bool {
+        guard let flag = defaultFlag?.flag else { return false }
+        return loadedRows(refs).contains { !$0.flags.contains(flag) }
     }
 
     private func setFlag(_ flag: Flag, to target: Bool, refs: Set<MessageRef>) async {
