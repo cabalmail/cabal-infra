@@ -63,13 +63,16 @@ s3 = boto3.client('s3')
 
 class ApiError(Exception):
     '''A client-visible failure. `code` is a stable machine-readable token
-    (documented in docs/rss.md); `message` is for humans.'''
+    (documented in docs/rss.md); `message` is for humans. `detail` is any
+    further machine-readable fields the error body carries beside the two
+    (documented with the code that sends them).'''
 
-    def __init__(self, status, code, message):
+    def __init__(self, status, code, message, **detail):
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
+        self.detail = detail
 
 
 # -- Envelope --------------------------------------------------------------
@@ -102,10 +105,11 @@ def ok(payload):
 
 
 def error(err):
-    '''The error envelope: {"Error": message, "code": token}. `Error` is the
-    key every other endpoint in this API uses.'''
+    '''The error envelope: {"Error": message, "code": token}, plus the
+    error's detail fields when it has any. `Error` is the key every other
+    endpoint in this API uses.'''
     return {'statusCode': err.status,
-            'body': json.dumps({'Error': err.message, 'code': err.code})}
+            'body': json.dumps({**err.detail, 'Error': err.message, 'code': err.code})}
 
 
 def guarded(handler):
@@ -307,6 +311,14 @@ def updated_key(now, sort_key):
     return f'{now}#{sort_key.split("#", 1)[-1]}'
 
 
+def flag_list(state_row):
+    '''The custom flags on a state row as a sorted list of palette slots
+    (cabal-flag-01..20); empty for no row or no flags. Stored as a string
+    set, which DynamoDB drops when its last member goes, and which has no
+    order of its own. The system flag is not here: it is is_favorite.'''
+    return sorted(state_row.get('flags') or ()) if state_row else []
+
+
 def serialize_item(row, subscription, state_row, inline_body=True):
     '''Wire form of one item with the caller's state folded in.'''
     out = {
@@ -328,6 +340,7 @@ def serialize_item(row, subscription, state_row, inline_body=True):
                            subscription.get('read_watermark')),
         'is_read_explicit': read_is_explicit(state_row),
         'is_favorite': bool(state_row.get('is_favorite')) if state_row else False,
+        'flags': flag_list(state_row),
     }
     if inline_body and not out['content_html'] and row.get('content_s3_key'):
         out['content_html'] = spilled_body(row['content_s3_key'])
@@ -336,8 +349,8 @@ def serialize_item(row, subscription, state_row, inline_body=True):
 
 def serialize_state(row, subscription):
     '''Wire form of one state row (the state-sync form of /rss_list_items):
-    the same is_read / is_read_explicit / is_favorite an item carries, keyed
-    by feed and sort key so the client can apply it to a cached item.'''
+    the same is_read / is_read_explicit / is_favorite / flags an item carries,
+    keyed by feed and sort key so the client can apply it to a cached item.'''
     return {
         'feed_id': row['user_feed'].split('#', 1)[-1],
         'sort_key': row['sort_key'],
@@ -346,6 +359,7 @@ def serialize_state(row, subscription):
                            subscription.get('read_watermark')),
         'is_read_explicit': read_is_explicit(row),
         'is_favorite': bool(row.get('is_favorite')),
+        'flags': flag_list(row),
         'updated_at': row.get('updated_at', ''),
     }
 

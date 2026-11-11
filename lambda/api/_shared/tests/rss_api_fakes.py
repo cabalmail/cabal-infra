@@ -114,11 +114,13 @@ class FakeTable:
         names = ExpressionAttributeNames or {}
         if not _exists_holds(self.rows.get(key), ConditionExpression, names):
             raise _conditional_failed('UpdateItem')
+        actions = [(clause, part.strip()) for clause, body in _clauses(UpdateExpression)
+                   for part in _split_top(body)]
+        _refuse_overlap(actions, names)
         row = self.rows.setdefault(key, dict(Key))
         values = ExpressionAttributeValues or {}
-        for clause, body in _clauses(UpdateExpression):
-            for part in _split_top(body):
-                _apply(row, clause, part.strip(), values, names)
+        for clause, part in actions:
+            _apply(row, clause, part, values, names)
         return {'Attributes': dict(row)}
 
     def query(self, IndexName=None, KeyConditionExpression=None, FilterExpression=None,  # pylint: disable=invalid-name,too-many-arguments
@@ -187,13 +189,44 @@ def _apply(row, clause, part, values, names):
         row.pop(names.get(part, part), None)
     elif clause == 'ADD':
         name, val = part.split()
-        row[name] = row.get(name, 0) + values[val]
+        if isinstance(values[val], (set, frozenset)):
+            row[name] = set(row.get(name, ())) | values[val]
+        else:
+            row[name] = row.get(name, 0) + values[val]
+    elif clause == 'DELETE':
+        # From a set; one left empty goes, since DynamoDB keeps no empty set.
+        name, val = part.split()
+        left = set(row.get(name, ())) - values[val]
+        if left:
+            row[name] = left
+        else:
+            row.pop(name, None)
+
+
+def _target(clause, part, names):
+    '''The attribute one action of an update expression writes.'''
+    name = part.split('=', 1)[0] if clause == 'SET' else part.split()[0]
+    return names.get(name.strip(), name.strip())
+
+
+def _refuse_overlap(actions, names):
+    '''DynamoDB refuses an expression that writes one attribute in two
+    actions, whichever clauses they are in ("Two document paths overlap
+    with each other"); nothing is written.'''
+    seen = set()
+    for clause, part in actions:
+        target = _target(clause, part, names)
+        if target in seen:
+            raise ClientError({'Error': {'Code': 'ValidationException',
+                                         'Message': f'Two document paths overlap: [{target}]'}},
+                              'UpdateItem')
+        seen.add(target)
 
 
 def _clauses(expression):
     out, current, buf = [], None, []
     for token in expression.replace(',', ' , ').split():
-        if token in ('SET', 'REMOVE', 'ADD'):
+        if token in ('SET', 'REMOVE', 'ADD', 'DELETE'):
             if current:
                 out.append((current, ' '.join(buf)))
             current, buf = token, []
@@ -231,6 +264,7 @@ SCHEMAS = {
     'cabal-rss-user-item-state': (['user_feed', 'sort_key'],
                                   {'favorite_by_feed': ('user_feed', 'favorite_key'),
                                    'by_updated': ('user_feed', 'updated_key')}),
+    'cabal-user-preferences': (['user'], {}),
 }
 TABLES = {}
 

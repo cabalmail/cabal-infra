@@ -127,7 +127,7 @@ the transport sends a second copy; "Once" means it doesn't.
 | `POST /rss_new_folder` | `newFolder` | Makes a second folder with the same name and a new id. | Once | `rss_new_folder/function.py:25`, `:33` |
 | `PUT /rss_update_folder` | `updateFolder` | The same SET and REMOVE on the same row. | Again | `rss_update_folder/function.py:15-56` |
 | `POST /rss_delete_folder` | `deleteFolder` | The folder is gone: 404 `unknown_folder`. | Once | `rss_delete_folder/function.py:22` |
-| `POST /rss_set_item_state` | `setItemState` | Writes the same flags. | Again | `rss_set_item_state/function.py:20-40` |
+| `POST /rss_set_item_state` | `setItemState` | Writes the same marks, and adds or removes the same flags: a slot already added or already removed stays as it is. | Again | `rss_set_item_state/function.py` (`handler`, `build_updates`) |
 | `POST /rss_mark_all_read` | `markAllRead` | Carries the tap-time watermark, so it writes nothing new. | Again | `rss_mark_all_read/function.py` (`handler`) |
 | `POST /rss_opml_import` | `importOpml` | Finds everything the first copy imported and reports "0 created", and a copy that overlaps the first can duplicate folders and feeds. | Once | `rss_opml_import/function.py:41-93` |
 
