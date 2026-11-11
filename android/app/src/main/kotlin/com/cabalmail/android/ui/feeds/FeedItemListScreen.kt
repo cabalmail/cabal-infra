@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,6 +67,9 @@ import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.mail.ForegroundPolling
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.FlagDot
+import com.cabalmail.android.ui.theme.FlagDotMark
+import com.cabalmail.android.ui.theme.LocalFlagPalette
 import com.cabalmail.android.ui.theme.LocalSwipeBindings
 import com.cabalmail.android.ui.theme.color
 import com.cabalmail.android.ui.theme.feedSwipeReveal
@@ -552,16 +554,17 @@ internal fun FeedItemRow(
     val snippet = remember(item.bodyHtml) { HtmlText.firstLine(item.bodyHtml) }
     val unreadText = stringResource(R.string.unread)
     val queuedText = stringResource(R.string.feed_change_queued)
-    val flaggedText = stringResource(R.string.flagged)
-    // The row reads as one thing to a screen reader (and the tester's UI
-    // dump), in the Apple rows' form: "Unread, <title>, <snippet>, <date>".
+    // A feed item's one flag is the built-in flag, so its mark takes that
+    // flag's name and color from Settings > Flags, as a message's does.
+    val flagMarks = FlagDotMark.feedMarks(item.isFavorite, LocalFlagPalette.current)
     val rowDescription =
-        listOfNotNull(
-            unreadText.takeIf { !item.isRead },
-            title,
-            snippet.ifEmpty { null },
-            date.ifEmpty { null },
-        ).joinToString(", ")
+        feedRowDescription(
+            unread = unreadText.takeIf { !item.isRead },
+            title = title,
+            snippet = snippet,
+            date = date,
+            flags = flagMarks.map { it.label },
+        )
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
@@ -608,6 +611,11 @@ internal fun FeedItemRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                // The flag's dot sits beside the date, as on a mail row; it
+                // used to be a star at the row's trailing edge.
+                flagMarks.forEach { mark ->
+                    FlagDot(mark, modifier = Modifier.padding(start = 6.dp))
+                }
                 if (pending) {
                     Icon(
                         Icons.Default.Refresh,
@@ -618,13 +626,18 @@ internal fun FeedItemRow(
                 }
             }
         }
-        if (item.isFavorite) {
-            Icon(
-                Icons.Default.Star,
-                contentDescription = flaggedText,
-                tint = ColorTokens.flaggedFg(),
-                modifier = Modifier.padding(start = 8.dp).size(18.dp),
-            )
-        }
     }
 }
+
+/**
+ * What a feed row says to a screen reader (and the tester's UI dump), in the
+ * Apple rows' form: "Unread, <title>, <snippet>, <date>", then the name of
+ * each flag the item carries. Pure, so it unit-tests without Compose.
+ */
+internal fun feedRowDescription(
+    unread: String?,
+    title: String,
+    snippet: String,
+    date: String,
+    flags: List<String>,
+): String = (listOf(unread.orEmpty(), title, snippet, date) + flags).filter { it.isNotEmpty() }.joinToString(", ")

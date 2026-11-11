@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -48,9 +47,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.cabalmail.android.R
-import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.android.ui.theme.FlagDot
+import com.cabalmail.android.ui.theme.FlagDotMark
 import com.cabalmail.android.ui.theme.LocalDisposeToTrash
+import com.cabalmail.android.ui.theme.LocalFlagPalette
 import com.cabalmail.android.ui.theme.LocalRowPadding
 import com.cabalmail.android.ui.theme.LocalSwipeBindings
 import com.cabalmail.android.ui.theme.color
@@ -63,7 +64,6 @@ import com.cabalmail.kit.models.mailboxAddress
 import com.cabalmail.kit.models.mailboxDisplayName
 import com.cabalmail.kit.models.sentInstant
 import com.cabalmail.kit.settings.DisposeAction
-import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import com.cabalmail.kit.settings.MailSwipeAction
 import java.time.Instant
@@ -88,8 +88,8 @@ fun EnvelopeRow(
     folderLabel: String? = null,
     bimiLookup: (suspend (String) -> String?)? = null,
     mailDomains: List<String> = emptyList(),
-    /** The custom-flag palette, for the keyword dots (Phase 4). */
-    palette: List<FlagPaletteEntry> = emptyList(),
+    /** The stored flag palette, for the flag dots; the app's own unless a caller passes one. */
+    palette: List<FlagPaletteEntry> = LocalFlagPalette.current,
 ) {
     val emphasis = if (envelope.isSeen) FontWeight.Normal else FontWeight.Bold
     Row(
@@ -173,29 +173,13 @@ fun EnvelopeRow(
                     )
                     Spacer(Modifier.width(4.dp))
                 }
-                if (envelope.isFlagged) {
-                    Icon(
-                        Icons.Default.Star,
-                        contentDescription = stringResource(R.string.flagged),
-                        tint = ColorTokens.flaggedFg(),
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                }
-                // Custom-flag dots (Phase 4): one color dot per tagged
-                // palette slot, capped so the fixed-height indicator run
-                // never overflows. A tag whose palette entry was deleted
-                // renders gray.
-                FlagPalette.slotsIn(envelope.flags).take(4).forEach { slot ->
-                    val entry = palette.firstOrNull { it.slot == slot }
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(flagColor(entry?.color ?: ""))
-                                .semantics { contentDescription = entry?.label ?: slot },
-                    )
+                // Flag dots: one color dot per flag the message carries, the
+                // built-in flag included, in the order of Settings > Flags
+                // and capped so the fixed-height indicator run never
+                // overflows. A tag whose palette entry was deleted renders
+                // gray.
+                FlagDotMark.marks(envelope.flags, palette).forEach { mark ->
+                    FlagDot(mark)
                     Spacer(Modifier.width(4.dp))
                 }
                 Text(

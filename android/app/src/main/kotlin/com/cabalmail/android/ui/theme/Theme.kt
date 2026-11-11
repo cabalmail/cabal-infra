@@ -150,6 +150,7 @@ fun CabalmailTheme(
         LocalRowPadding provides preferences.density.rowPadding(),
         LocalDisposeToTrash provides (preferences.disposeAction == DisposeAction.TRASH),
         LocalSwipeBindings provides SwipeBindings.of(preferences),
+        LocalFlagPalette provides preferences.flagPalette,
         LocalLogoTint provides colorResource(if (darkTheme) R.color.logo_mint else R.color.logo_forest),
         LocalDarkTheme provides darkTheme,
     ) {

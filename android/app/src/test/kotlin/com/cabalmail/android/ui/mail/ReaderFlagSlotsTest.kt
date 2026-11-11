@@ -1,5 +1,6 @@
 package com.cabalmail.android.ui.mail
 
+import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -50,6 +51,28 @@ class ReaderFlagSlotsTest {
                 Triple("cabal-flag-09", "cabal-flag-09", true),
             ),
             items,
+        )
+    }
+
+    @Test
+    fun `the built-in flag's entry is never a menu row`() {
+        // The star button beside the menu toggles that flag; a stored
+        // entry for it must not appear a second time in the menu, flagged
+        // or not, enabled or not.
+        val stored =
+            listOf(FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = "Later", color = "teal")) + palette
+        assertEquals(
+            listOf(Triple("cabal-flag-01", "Urgent", false)),
+            readerFlagSlots(stored, flags = listOf("\\Flagged")),
+        )
+        assertEquals(
+            listOf(Triple("cabal-flag-01", "Urgent", false)),
+            readerFlagSlots(
+                stored.map {
+                    it.copy(enabled = it.slot != FlagPalette.SYSTEM_SLOT && it.enabled)
+                },
+                listOf("\\Flagged"),
+            ),
         )
     }
 

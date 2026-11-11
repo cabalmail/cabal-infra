@@ -74,6 +74,7 @@ import com.cabalmail.android.ui.settings.SortDirection
 import com.cabalmail.android.ui.settings.flagColor
 import com.cabalmail.android.ui.settings.labelRes
 import com.cabalmail.kit.models.Envelope
+import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -773,9 +774,10 @@ private fun InteractiveRow(
                 },
             )
             // Custom flags (Phase 4): one check-marked item per enabled
-            // palette entry; a tagged item taps off, an untagged one taps
-            // on. Hidden entirely while the palette is empty.
-            palette.filter { it.enabled }.forEach { entry ->
+            // keyword entry; a tagged item taps off, an untagged one taps
+            // on. Hidden entirely while the user has added no flag. The
+            // built-in flag's entry is the item above, not a row here.
+            FlagPalette.keywordEntries(palette).filter { it.enabled }.forEach { entry ->
                 val tagged = entry.slot in envelope.flags
                 DropdownMenuItem(
                     text = { Text(entry.label) },

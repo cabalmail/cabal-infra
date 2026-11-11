@@ -612,13 +612,15 @@ private fun ToggleRow(
     }
 }
 
-/** The slots the picker offers: enabled palette entries in palette order,
- * then stray already-set slots (see ExtrasSection). Pure, tested. */
+/** The slots the picker offers: enabled keyword entries in palette order,
+ * then stray already-set slots (see ExtrasSection). The built-in flag's
+ * entry is never one of them: a rule sets that flag through its own `flag`
+ * field, and `set_rules` refuses its atom in `flags`. Pure, tested. */
 internal fun pickerSlots(
     palette: List<FlagPaletteEntry>,
     ruleFlags: List<String>,
 ): List<String> {
-    val offered = palette.filter { it.enabled }.map { it.slot }
+    val offered = FlagPalette.keywordEntries(palette).filter { it.enabled }.map { it.slot }
     val stray = FlagPalette.SLOTS.filter { it in ruleFlags && it !in offered }
     return offered + stray
 }

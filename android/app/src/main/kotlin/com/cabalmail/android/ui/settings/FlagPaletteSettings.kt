@@ -45,19 +45,26 @@ import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 
 /**
- * The custom-flag palette manager (rules-composition plan, Phase 3): up to
- * 20 named, colored flags on fixed slot atoms. All edits write through the
- * preference repository like any other setting; renames and recolors are
- * metadata edits that touch zero messages. Reordering uses per-row up/down
- * buttons (disabled at the ends, never hidden — rows keep a stable
- * footprint), matching the rules list.
+ * The flag palette manager: the built-in flag's entry, "Flagged" until the
+ * user renames it, and up to 20 named, colored flags on fixed slot atoms
+ * (rules-composition plan, Phase 3; unified-flags plan). All edits write
+ * through the preference repository like any other setting; renames and
+ * recolors are metadata edits that touch zero messages.
+ *
+ * The list is the effective palette ([FlagPalette.effective]), so the
+ * built-in entry is always a row, whether or not it has been stored yet. It
+ * renames, recolors and moves like the others, resets where they delete,
+ * and cannot be disabled. Every edit goes through [FlagPaletteEdits].
+ *
+ * Reordering uses per-row up/down buttons (disabled at the ends, never
+ * hidden — rows keep a stable footprint), matching the rules list.
  */
 @Composable
 internal fun FlagPaletteSettings(
     preferences: AppPreferences,
     onUpdate: ((AppPreferences) -> AppPreferences) -> Unit,
 ) {
-    val palette = preferences.flagPalette
+    val palette = FlagPalette.effective(preferences.flagPalette)
     var editingSlot by rememberSaveable { mutableStateOf<String?>(null) }
 
     palette.forEachIndexed { index, entry ->
@@ -81,7 +88,9 @@ internal fun FlagPaletteSettings(
             trailingContent = {
                 Row {
                     IconButton(
-                        onClick = { onUpdate { it.copy(flagPalette = it.flagPalette.moved(index, -1)) } },
+                        onClick = {
+                            onUpdate { it.copy(flagPalette = FlagPaletteEdits.moved(it.flagPalette, entry.slot, -1)) }
+                        },
                         enabled = index > 0,
                     ) {
                         Icon(
@@ -90,7 +99,9 @@ internal fun FlagPaletteSettings(
                         )
                     }
                     IconButton(
-                        onClick = { onUpdate { it.copy(flagPalette = it.flagPalette.moved(index, 1)) } },
+                        onClick = {
+                            onUpdate { it.copy(flagPalette = FlagPaletteEdits.moved(it.flagPalette, entry.slot, 1)) }
+                        },
                         enabled = index < palette.size - 1,
                     ) {
                         Icon(
@@ -106,23 +117,15 @@ internal fun FlagPaletteSettings(
     if (FlagPalette.firstFreeSlot(palette) != null) {
         val newLabel = stringResource(R.string.flags_new_label)
         TextButton(
-            onClick = {
-                onUpdate { prefs ->
-                    val slot =
-                        FlagPalette.firstFreeSlot(prefs.flagPalette) ?: return@onUpdate prefs
-                    prefs.copy(
-                        flagPalette =
-                            prefs.flagPalette +
-                                FlagPaletteEntry(slot = slot, label = newLabel, color = FlagPalette.COLORS.first()),
-                    )
-                }
-            },
+            onClick = { onUpdate { it.copy(flagPalette = FlagPaletteEdits.added(it.flagPalette, newLabel)) } },
             modifier = Modifier.padding(horizontal = 8.dp),
         ) { Text(stringResource(R.string.flags_add)) }
     }
     Text(
+        // While the user has added no flag of their own the list holds the
+        // built-in entry alone, and there is no order to explain.
         stringResource(
-            if (palette.isEmpty()) R.string.flags_empty_hint else R.string.flags_footer,
+            if (FlagPalette.keywordEntries(palette).isEmpty()) R.string.flags_empty_hint else R.string.flags_footer,
         ),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -133,35 +136,42 @@ internal fun FlagPaletteSettings(
     if (editing != null) {
         FlagEditorDialog(
             entry = editing,
+            canReset = FlagPaletteEdits.canReset(preferences.flagPalette),
             onChange = { changed ->
-                onUpdate { prefs ->
-                    prefs.copy(
-                        flagPalette = prefs.flagPalette.map { if (it.slot == changed.slot) changed else it },
-                    )
-                }
+                onUpdate { it.copy(flagPalette = FlagPaletteEdits.changed(it.flagPalette, changed)) }
             },
             onDelete = {
                 val slot = editing.slot
                 editingSlot = null
-                onUpdate { prefs ->
-                    prefs.copy(flagPalette = prefs.flagPalette.filterNot { it.slot == slot })
-                }
+                onUpdate { it.copy(flagPalette = FlagPaletteEdits.deleted(it.flagPalette, slot)) }
             },
+            // Reset leaves the dialog open: the entry is still there, back
+            // under its default name and color.
+            onReset = { onUpdate { it.copy(flagPalette = FlagPaletteEdits.reset(it.flagPalette)) } },
             onDismiss = { editingSlot = null },
         )
     }
 }
 
-/** Label, color, enabled, and the only route to deletion — behind a
+/**
+ * Label, color, enabled, and the only route to deletion — behind a
  * confirmation, because per-message tags on a retired slot outlive the
- * palette entry. */
+ * palette entry. The built-in flag's entry has no deletion: it offers Reset
+ * to default in its place, which needs no confirmation, because it changes
+ * a name, a color and a position and touches no message. It has no Enabled
+ * switch either: every mailbox has the flag, and switching a built-in flag
+ * off has nothing to mean.
+ */
 @Composable
 private fun FlagEditorDialog(
     entry: FlagPaletteEntry,
+    canReset: Boolean,
     onChange: (FlagPaletteEntry) -> Unit,
     onDelete: () -> Unit,
+    onReset: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val isSystemEntry = FlagPaletteEdits.isSystemEntry(entry.slot)
     var confirmingDelete by rememberSaveable { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -179,20 +189,31 @@ private fun FlagEditorDialog(
                 )
                 Text(stringResource(R.string.flags_color), style = MaterialTheme.typography.titleSmall)
                 ColorSwatches(selectedColor = entry.color, onSelect = { onChange(entry.copy(color = it)) })
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.flags_enabled), modifier = Modifier.weight(1f))
-                    Switch(checked = entry.enabled, onCheckedChange = { onChange(entry.copy(enabled = it)) })
-                }
-                Text(
-                    stringResource(R.string.flags_enabled_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = { confirmingDelete = true }) {
-                    Text(stringResource(R.string.flags_delete), color = MaterialTheme.colorScheme.error)
+                if (isSystemEntry) {
+                    TextButton(onClick = onReset, enabled = canReset) {
+                        Text(stringResource(R.string.flags_reset))
+                    }
+                    Text(
+                        stringResource(R.string.flags_reset_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.flags_enabled), modifier = Modifier.weight(1f))
+                        Switch(checked = entry.enabled, onCheckedChange = { onChange(entry.copy(enabled = it)) })
+                    }
+                    Text(
+                        stringResource(R.string.flags_enabled_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = { confirmingDelete = true }) {
+                        Text(stringResource(R.string.flags_delete), color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         },
@@ -251,16 +272,6 @@ private fun ColorSwatches(
             }
         }
     }
-}
-
-/** Moves the element at [index] by [delta], clamped no-op at the ends. */
-private fun List<FlagPaletteEntry>.moved(
-    index: Int,
-    delta: Int,
-): List<FlagPaletteEntry> {
-    val target = index + delta
-    if (index !in indices || target !in indices) return this
-    return toMutableList().apply { add(target, removeAt(index)) }
 }
 
 /**
