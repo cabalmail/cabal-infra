@@ -191,9 +191,20 @@ L1's PRs, each based on `stage`, in order:
 | PR | What the maintainer sees | Status |
 | --- | --- | --- |
 | Kit model | Nothing. `FlagPalette.kt` learns the built-in flag's entry and the cap of 21 | In review (2026-11-10) |
-| Rendering and Settings > Flags | "Flagged" is first in Settings > Flags, with Reset to default and no Enabled switch; a flagged message shows a dot on its row and a named chip in the reader, in list order, where the star was | Not started |
-| Controls | The Default mark and Make default; the flag swipe, the reader's button, Ctrl+Shift+L, the selection bar, the row menu and the search long-press act on the default flag under its name; the pills take the built-in flag's name; the rule editor lists it with the others | Not started |
+| Rendering and Settings > Flags | "Flagged" is first in Settings > Flags, with Reset to default and no Enabled switch; a flagged message shows a dot on its row and a named chip in the reader, in list order, where the star was; a flagged feed item shows the same dot beside its date | Not started |
+| Controls | The Default mark and Make default; the flag swipe, the reader's button, Ctrl+Shift+L, the selection bar, the row menu and the search long-press act on the default flag under its name; the pills take the built-in flag's name; the rule editor lists it with the others; the feed's swipe, reader button, pill and menu item take the built-in flag's name and color | Not started |
 | Acceptance record (docs) | The four palette states on an Android emulator against stage, and a palette edited on each platform read on the other, recorded under Phase 4 of `unified-flags-plan.md` | Not started |
+
+L1's scope questions, put to the maintainer in one batch:
+
+1. **Feeds in this leg?** Phase 4 of `unified-flags-plan.md` lists Android's mail surfaces and does not name the feed ones, while its decision 4 puts feed items in scope.
+   - **Answered 2026-11-10: Yes.** The feed row's dot and the feed controls' name and color follow the built-in flag's entry, as on Apple.
+2. **The glyph on the controls that set a flag: star or flag?** The star leaves the rows either way.
+   - **Answered 2026-11-10: Star.** The reader's button, the selection bar's button and the swipe keep the star, filled in the flag's color when the flag is set. No source-scan test changes.
+3. **The Mac mini for the acceptance run.**
+   - **Answered 2026-11-10: Yes**, for its Android emulator and its iPhone 17 simulator, driven over SSH with no console, as the first stage test account, with the account restored afterwards.
+
+Android-only choices, taken without asking and listed for review in the PR that makes each: Make default is a button in the flag's edit dialog, since these rows have no context menu; the row's long-press menu stays flat and lists every enabled flag in list order; the selection bar keeps its two items (set in the bar, remove in the overflow menu), both for the default flag.
 
 Each leg starts when its Apple leg is promoted, writes a short scope doc against the merged Apple PRs, and ships in one release with a soak.
 
