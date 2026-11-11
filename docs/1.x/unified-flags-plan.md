@@ -5,9 +5,9 @@
 | Phase | Status |
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
-| 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` merged (2026-11-10), #2389, the first PR of android-parity.md leg L1 |
+| 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371, in prod with 1.46.0 (2026-11-10); `android/kit` merged (2026-11-10), #2389, the first PR of android-parity.md leg L1, in prod with 1.48.0 (2026-11-11) |
 | 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass in five poses; the flag button's hold menu passes closed and is not settled in the open poses. Soak run (2026-11-10) on the Mini, four platforms: no regression found, five older defects filed (#2381 to #2385). Promoted to prod as 1.47.0 (2026-11-11), with the iOS, macOS and visionOS builds uploaded from `main`. The physical-Duo check waits for the device (duo-support.md, Decision 7) |
-| 4 -- Android client | Merged (2026-11-10) as android-parity.md leg L1: rendering and Settings > Flags, #2390; the controls, #2391. Acceptance run on stage (2026-11-10): pass in the four flag-list states on the Pixel 8 emulator, and a list edited on Android read correctly on the iPhone simulator and the reverse. Not promoted |
+| 4 -- Android client | Merged (2026-11-10) as android-parity.md leg L1: rendering and Settings > Flags, #2390; the controls, #2391. Acceptance run on stage (2026-11-10): pass in the four flag-list states on the Pixel 8 emulator, and a list edited on Android read correctly on the iPhone simulator and the reverse. Promoted to prod as 1.48.0 (2026-11-11), with the build uploaded to the Play Console's internal track from `main` |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
 This plan is run by Session 1 of
@@ -304,7 +304,9 @@ keyword-only until the app moves its rows and reader over. As built on Apple, th
 with `resettingSystemEntry(in:)` for reset, and palette-ordered slots
 are a second form, `slots(in:palette:)`: the existing `slots(in:)`
 keeps its keyword-only result until Phase 3 moves the row and the
-reader over, so that no flag is drawn twice in between.
+reader over, so that no flag is drawn twice in between. The
+`CabalmailKit` half reached prod with 1.46.0 (2026-11-10) and the
+`android/kit` half with 1.48.0 (2026-11-11).
 
 `CabalmailKit` here; `android/kit` mirrors it in android-parity.md leg
 L1:
@@ -334,10 +336,11 @@ the entry encodes back byte-identical after a no-op edit.
 **Status:** In two PRs, as flags-and-cross-media.md splits it. The
 first, rendering and Settings > Flags, merged (2026-11-10), #2375; the
 second, the affordances with the "Default" badge and "Make default",
-merged (2026-11-10), #2376. Both are on stage. The acceptance at the
-end of this phase was run on 2026-11-10 and found one defect, fixed in
-#2378 (merged 2026-11-10); its results are under the acceptance text. What the
-first one settled:
+merged (2026-11-10), #2376. The acceptance at the end of this phase
+was run on 2026-11-10 and found one defect, fixed in #2378 (merged
+2026-11-10); its results are under the acceptance text. All three
+were promoted to prod as 1.47.0 (2026-11-10 local time, 2026-11-11
+UTC). What the first one settled:
 
 - The reader's flag button is not recoloured. It was never gold: since
   `ReaderToggleFace` it draws the action ("Flag" / "Unflag"), not the
@@ -515,10 +518,12 @@ removed.
 ## Phase 4 -- Android client
 
 **Status:** Merged (2026-11-10), as android-parity.md leg L1, after
-the Apple release was promoted as 1.47.0, on Phase 2's `android/kit`
-half (#2389). The app took two PRs, as Apple's did: rendering and
-Settings > Flags, #2390, and the controls moved to the default flag,
-#2391. All three are on stage; none is promoted. The acceptance at the
+the Apple release was promoted as 1.47.0 (2026-11-10 local time,
+2026-11-11 UTC), on Phase 2's `android/kit` half (#2389). The app took
+two PRs, as Apple's did: rendering and Settings > Flags, #2390, and
+the controls moved to the default flag, #2391. All three were
+promoted to prod as 1.48.0 (2026-11-11), with the build uploaded to
+the Play Console's internal track from `main`. The acceptance at the
 end of this phase was run on 2026-11-10 and passed; its results are
 under the acceptance text. What the first PR settled:
 
