@@ -1771,18 +1771,46 @@ a second copy.
   the start (`BEGIN IMMEDIATE`) and rolls back when its body throws. The
   schema is a list of `SchemaMigrator` steps keyed on `user_version`, each
   step atomic with its version write; the caller says what a file from a
-  newer build means, and the feed store refuses one.
+  newer build means, and the feed store refuses one. The feed store is at
+  schema 7.
+- A feed item's custom flags (`RssItem.flags`) are palette slots, the
+  vocabulary mail keywords use, kept as a JSON list in `items.flags`; the
+  system flag is not among them, since on a feed item it is `isFavorite`.
+  A change to one (`RssSyncEngine.setFlag`) is written with a `pending`
+  row of kind `flag` that names its slot, in one transaction. The queue
+  keeps one change per item and slot, the latest, and the drain sends
+  each as an add or a remove of that slot, at most 100 items a call, so
+  two devices that change different flags of one item both take effect.
+  What the server reports for an item, in a listing or the state sync, is
+  laid under the changes still queued, slot by slot (`RssStoredFlags`): a
+  slot with a queued change stays as that change left it, and every
+  other slot is the server's. The schema 7 step also empties each feed's
+  state-sync cursor, so the first sync after the upgrade pulls every
+  state row again: the older build read those rows without their flags
+  and stepped past them, and a flag another device set before this one
+  was upgraded would otherwise never arrive.
+- The server refuses a whole `/rss_set_item_state` call that adds a flag
+  the palette does not enable, which is what a flag disabled or deleted
+  on another device leaves in the queue. It names the slots, the API
+  client throws them as `RssFlagRefusal`, and `RssPendingDrain` drops
+  those queued adds, takes the flags off their items again in the same
+  transaction, and sends the rest of the batch, because the refusal
+  would otherwise hold every later change. Any other failure leaves the
+  queue as it was.
 - A feed store that cannot be opened is set aside, not deleted. The file
   holds a cache of server state and also the queue of read and flag marks
   not yet sent, which nothing can refetch. `RssStore.openRecovering`
   moves a file that is damaged, half-migrated or from a newer build into
   `rss/set-aside/` with its `-wal` and `-shm` files and starts a new one.
   Every open then reads the queue of each set-aside file the build can
-  read, puts it in front of the live queue (for one item and kind the
-  later change stays), shows it on the items, and deletes the file, and
-  the directory with the last one; of the files it cannot read it keeps
-  the newest three. So a tester who installs an older build and comes
-  back keeps unsent feed marks, once both builds have this. Sign-out and
+  read, puts it in front of the live queue (for one item and kind, and
+  one slot when the change is to a custom flag, the later change stays),
+  shows it on the items, and deletes the file, and the directory with the
+  last one; of the files it cannot read it keeps the newest three. A file
+  from before schema 7 has no slot column and is read without one. So a
+  tester who installs an older build and comes back keeps unsent feed
+  marks, once both builds have this: release 1.50.0 is the first that
+  sets a schema 7 file aside, and an earlier one deletes it. Sign-out and
   a sign-in as a different user delete the set-aside files with the rest
   of the feed store, in one transaction for the rows.
 - A debug build launched with `-CabalmailFailNextWrite <table>` (for

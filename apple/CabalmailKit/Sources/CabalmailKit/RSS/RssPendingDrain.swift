@@ -4,7 +4,10 @@ import Foundation
 /// `RssSyncEngine.drainPending()`: replayed in the order the user made the
 /// changes, item marks coalesced into `/rss_set_item_state` batches, each
 /// `/rss_mark_all_read` a fence between batches. A failure leaves the queue
-/// intact for the next attempt.
+/// intact for the next attempt, with one exception: a flag add the server
+/// refuses because the palette no longer enables that flag would be refused
+/// every time, and the whole batch with it, so those adds are dropped and
+/// the rest of the batch is sent again (`push`).
 ///
 /// One pass at a time. A drain asked for before the pass has read the queue
 /// joins it; asked for while it is pushing, it waits for one more pass behind
@@ -68,7 +71,8 @@ actor RssPendingDrain {
 
     /// One server call of a pass, in queue order.
     private enum Step {
-        case itemStates([RssItemStateChange], pendingIds: [Int])
+        /// The queue rows of at most 100 items, sent as one change an item.
+        case itemStates([RssStore.PendingMutation])
         case markAllRead(RssStore.PendingMutation)
     }
 
@@ -78,10 +82,8 @@ actor RssPendingDrain {
         var cleared = 0
         for step in Self.steps(pending) {
             switch step {
-            case .itemStates(let changes, let ids):
-                _ = try await client.setItemState(changes)
-                try await store.deletePending(ids: ids)
-                cleared += ids.count
+            case .itemStates(let rows):
+                cleared += try await push(rows)
             case .markAllRead(let mutation):
                 // The tap-time watermark, not the replay time: items that
                 // arrived while the row sat in the queue stay unread.
@@ -97,24 +99,63 @@ actor RssPendingDrain {
         return cleared
     }
 
+    /// Sends one batch and clears its rows from the queue; returns how many
+    /// rows left it.
+    ///
+    /// The server checks every flag a call adds against the palette before
+    /// it writes anything, and refuses the whole call for one it does not
+    /// enable: the flag was disabled or deleted, here or on another device,
+    /// after the change was queued. Asking again cannot succeed, and the
+    /// refusal would hold every other change in the batch with it. So the
+    /// refused adds are taken back (`dropRefusedFlagAdds`) and what is left
+    /// of the batch is sent again. Each round drops at least one row, so
+    /// this ends.
+    private func push(_ rows: [RssStore.PendingMutation]) async throws -> Int {
+        var rows = rows
+        var cleared = 0
+        while !rows.isEmpty {
+            do {
+                _ = try await client.setItemState(Self.changes(for: rows))
+                break
+            } catch let refusal as RssFlagRefusal {
+                let refused = rows.filter { $0.kind == .flag && $0.value && refusal.slots.contains($0.slot) }
+                // Slots this batch does not add: not something dropping a
+                // row here can answer, so the queue stays as any failure
+                // leaves it.
+                guard !refused.isEmpty else {
+                    throw CabalmailError.server(code: RssFlagRefusal.code, message: refusal.message)
+                }
+                // Fewer than `refused` when the user has changed one of them
+                // again since this pass read the queue: that row is gone
+                // and the newer change waits for the next pass.
+                let dropped = try await store.dropRefusedFlagAdds(ids: refused.map(\.id))
+                CabalmailLog.warn("RssPendingDrain", "dropped \(dropped) queued flag adds the server refused: "
+                    + "\(refusal.slots.sorted().joined(separator: ", ")) not enabled in the palette")
+                rows.removeAll { refused.contains($0) }
+                cleared += dropped
+            }
+        }
+        try await store.deletePending(ids: rows.map(\.id))
+        return cleared + rows.count
+    }
+
     /// The queue as server calls. Item marks between two mark-all-reads
-    /// coalesce (the queue holds one row per item and kind, so read +
-    /// favorite for one item become one change) into batches of at most
-    /// 100; a mark-all-read is a fence. The user's order is what the server
-    /// must see: replaying "mark all read, then mark X unread" the other
-    /// way round lets the server's mark-all-read flip X straight back.
+    /// coalesce (the queue holds one row per item and kind, and per slot
+    /// for a flag change, so every change to one item becomes one entry)
+    /// into batches of at most 100 items; a mark-all-read is a fence. The
+    /// user's order is what the server must see: replaying "mark all read,
+    /// then mark X unread" the other way round lets the server's
+    /// mark-all-read flip X straight back.
     private static func steps(_ pending: [RssStore.PendingMutation]) -> [Step] {
         var steps: [Step] = []
-        var changes: [String: RssItemStateChange] = [:]
-        var changeIds: [String: [Int]] = [:]
+        var rows: [String: [RssStore.PendingMutation]] = [:]
         func closeBatch() {
-            let keys = changes.keys.sorted()
-            for start in stride(from: 0, to: keys.count, by: 100) {
-                let batch = Array(keys[start..<min(start + 100, keys.count)])
-                steps.append(.itemStates(batch.map { changes[$0]! }, pendingIds: batch.flatMap { changeIds[$0] ?? [] }))
+            let keys = rows.keys.sorted()
+            for start in stride(from: 0, to: keys.count, by: Self.itemsPerCall) {
+                let batch = keys[start..<min(start + Self.itemsPerCall, keys.count)]
+                steps.append(.itemStates(batch.flatMap { rows[$0] ?? [] }))
             }
-            changes = [:]
-            changeIds = [:]
+            rows = [:]
         }
         for mutation in pending {
             if mutation.kind == .markAllRead {
@@ -122,13 +163,40 @@ actor RssPendingDrain {
                 steps.append(.markAllRead(mutation))
                 continue
             }
-            let key = "\(mutation.feedId)#\(mutation.sortKey)"
-            var change = changes[key] ?? RssItemStateChange(feedId: mutation.feedId, sortKey: mutation.sortKey)
-            if mutation.kind == .read { change.isRead = mutation.value } else { change.isFavorite = mutation.value }
-            changes[key] = change
-            changeIds[key, default: []].append(mutation.id)
+            rows["\(mutation.feedId)#\(mutation.sortKey)", default: []].append(mutation)
         }
         closeBatch()
         return steps
+    }
+
+    /// The most items `/rss_set_item_state` takes in one call.
+    static let itemsPerCall = 100
+
+    /// One entry an item for a batch's rows, in item order: its read and
+    /// favorite marks and the flags it adds and removes.
+    static func changes(for rows: [RssStore.PendingMutation]) -> [RssItemStateChange] {
+        var changes: [String: RssItemStateChange] = [:]
+        for row in rows {
+            let key = "\(row.feedId)#\(row.sortKey)"
+            var change = changes[key] ?? RssItemStateChange(feedId: row.feedId, sortKey: row.sortKey)
+            switch row.kind {
+            case .read: change.isRead = row.value
+            case .favorite: change.isFavorite = row.value
+            case .flag:
+                // The queue holds one row per item and slot; were there two,
+                // the later one is the intent, and a slot never goes in both
+                // lists, which the server refuses.
+                if row.value {
+                    change.removeFlags.remove(row.slot)
+                    change.addFlags.insert(row.slot)
+                } else {
+                    change.addFlags.remove(row.slot)
+                    change.removeFlags.insert(row.slot)
+                }
+            case .markAllRead: continue
+            }
+            changes[key] = change
+        }
+        return changes.keys.sorted().compactMap { changes[$0] }
     }
 }

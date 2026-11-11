@@ -50,21 +50,39 @@ class RssSetAsideTestCase: XCTestCase {
         }
     }
 
-    /// A set-aside file at the feed schema holding `changes`, named for
-    /// `stamp` so files sort in the order the stamps give.
+    /// A set-aside file holding `changes`, named for `stamp` so files sort
+    /// in the order the stamps give. It is at the feed schema unless
+    /// `schema` names an older one: a file from before version 7 has no
+    /// `slot` column, so its changes are written without one.
     @discardableResult
-    func makeSetAsideFile(stamp: Int, _ changes: [Queued]) throws -> URL {
+    func makeSetAsideFile(stamp: Int, schema: Int = RssStore.schemaVersion, _ changes: [Queued]) throws -> URL {
         try FileManager.default.createDirectory(at: aside.directory, withIntermediateDirectories: true)
         let file = aside.directory.appendingPathComponent(String(format: "rss-%013ld-test0000.sqlite", stamp))
         let database = try SQLiteDatabase(path: file.path)
         defer { database.close() }
-        try RssStore.migrator.migrate(database, newerSchema: .refuse)
+        try SchemaMigrator(name: "rss.sqlite", steps: Array(RssStore.migrator.steps.prefix(schema)))
+            .migrate(database, newerSchema: .refuse)
         for change in changes {
-            try database.run("INSERT INTO pending (\(Queued.columns)) VALUES (?, ?, ?, ?, ?, ?)",
-                             [.init(change.kind), .init(change.feedId), .init(change.sortKey),
-                              .init(change.subscriptionId), .init(change.value), .init(change.createdAt)])
+            try insert(change, into: database, withSlot: schema >= 7)
         }
         return file
+    }
+
+    /// One queue row, written as a file of that schema holds it.
+    func insert(_ change: Queued, into database: SQLiteDatabase, withSlot: Bool = true) throws {
+        let binds: [SQLiteDatabase.Value] = [
+            .init(change.kind), .init(change.feedId), .init(change.sortKey), .init(change.subscriptionId),
+            .init(change.value), .init(change.createdAt),
+        ]
+        if withSlot {
+            try database.run("INSERT INTO pending (\(Queued.columns)) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                             binds + [.init(change.slot)])
+        } else {
+            try database.run("""
+                INSERT INTO pending (kind, feed_id, sort_key, subscription_id, value, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """, binds)
+        }
     }
 
     func read(_ item: String, _ value: Bool, at time: String) -> Queued {
@@ -79,6 +97,10 @@ class RssSetAsideTestCase: XCTestCase {
         Queued(kind: "mark_all_read", feedId: "f1", subscriptionId: "s1", createdAt: watermark)
     }
 
+    /// A change to one custom flag of an item: an add, or a remove.
+    func flag(_ item: String, _ slot: String, _ isSet: Bool, at time: String) -> Queued {
+        Queued(kind: "flag", feedId: "f1", sortKey: item, value: isSet ? 1 : 0, createdAt: time, slot: slot)
+    }
 }
 
 /// A feed store that cannot be opened is set aside, not deleted, because the
@@ -344,8 +366,7 @@ final class RssStoreSetAsideUpkeepTests: RssSetAsideTestCase {
         defer { database.close() }
         try RssStore.migrator.migrate(database, newerSchema: .refuse)
         let kept = read("c", true, at: "2026-02-03T00:00:00Z")
-        try database.run("INSERT INTO pending (\(Queued.columns)) VALUES ('read', 'f1', 'c', '', 1, ?)",
-                         [.init(kept.createdAt)])
+        try insert(kept, into: database)
         let comingBack = [read("a", true, at: "2026-02-01T00:00:00Z")]
         try makeSetAsideFile(stamp: 1, comingBack)
         database.faults.arm(table: "pending")
