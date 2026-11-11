@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit: #2411, a draft; its gate is clear since 1.50.0 (2026-11-11). Clients not started |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit in review as #2411 (2026-11-11), its gate clear since 1.50.0. Clients not started |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -119,8 +119,9 @@ moved most of the code this plan names. The facts a phase depends on:
   window in front.
 - The chrome kit (`Shared/Chrome/`) is shared by both media, but has no
   unread dot or flag mark yet; the unified flags plan adds them.
-- `RssStore` is at schema 6. From 1.50.0 (#2404) `openRecovering` sets
-  aside a file written by a newer schema; 1.49.0 and earlier delete it.
+- `RssStore` is at schema 7 with #2411 (schema 6 before it). From 1.50.0
+  (#2404) `openRecovering` sets aside a file written by a newer schema;
+  1.49.0 and earlier delete it.
   Android's `RoomRssStore` is at version 1 with a destructive fallback.
 
 ### Where the two media already align
@@ -456,9 +457,12 @@ are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
 API; `flags-and-cross-media.md`, Session 2, has what was run. Both
 merged after 1.48.0 was cut and shipped in 1.49.0 the same day. The
-Kit's PR (B2.3) is #2411, a draft; its gate cleared on 2026-11-11 with
-1.50.0. The clients (2b) have not started and merge after the Kit;
-`flags-and-cross-media.md` has the gates.
+Kit (B2.3) is in review as #2411 (2026-11-11): items 1 and 2 of 2b on
+Apple, with the Kit's half of item 5 (`keyword` on its search query).
+Its gate cleared on 2026-11-11 with 1.50.0, and its downgrade drill ran
+on a simulator against stage; `flags-and-cross-media.md` has what was
+built and run. The clients (the rest of 2b) have not started and merge
+after the Kit; `flags-and-cross-media.md` has the gates.
 
 ### 2a. Server
 
@@ -482,7 +486,12 @@ Kit's PR (B2.3) is #2411, a draft; its gate cleared on 2026-11-11 with
    `removeFlags`. Apple: `RssStore` schema 7, on the migration runner
    from the SQLite mail store plan's PR 0.1, adds an `items.flags`
    column (a JSON list) and a slot column on `pending`, with a flag
-   kind whose value means add or remove. Android: the feed store is at
+   kind whose value means add or remove. The step also empties each
+   feed's state-sync cursor, so the first sync after the upgrade pulls
+   every state row again: the older build read those rows without
+   their flags and stepped past them, and a flag another device set
+   before this one was upgraded would otherwise never arrive. Android's
+   migration needs the same. Android: the feed store is at
    Room version 1 with a destructive fallback, so its first bump needs
    a real migration or an upgrade drops queued marks. `android-parity.md`
    PR 9 plans that bump (version 2, for folder and All Feeds order); if
@@ -494,7 +503,13 @@ Kit's PR (B2.3) is #2411, a draft; its gate cleared on 2026-11-11 with
    not nothing), and a state page never overwrites a slot that has a
    queued change. The drain sends at most 100 items a call, and every
    write shares a transaction with its queue row, as #1956 made the
-   read and flag writes do.
+   read and flag writes do. The server refuses a whole call that adds
+   a slot the palette does not enable (`flag_not_in_palette`, naming
+   the slots), which is what a flag disabled or deleted on another
+   device leaves in the queue. The drain drops those queued adds, takes
+   the flags off their items again, and sends the rest, because such a
+   call can never succeed and would hold every later change behind it
+   (decided 2026-11-11).
 1. **Menus.** The mail flag menu's builder (`FlagMenuPolicy`, now in
    `Mail/Reader/` beside `MessageDetailView+FlagOptions`) moves to
    `Shared/` over a small "flaggable" value (the current slots, add,
