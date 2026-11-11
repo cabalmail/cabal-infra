@@ -1772,10 +1772,26 @@ a second copy.
   schema is a list of `SchemaMigrator` steps keyed on `user_version`, each
   step atomic with its version write; the caller says what a file from a
   newer build means, and the feed store refuses one.
+- A feed store that cannot be opened is set aside, not deleted. The file
+  holds a cache of server state and also the queue of read and flag marks
+  not yet sent, which nothing can refetch. `RssStore.openRecovering`
+  moves a file that is damaged, half-migrated or from a newer build into
+  `rss/set-aside/` with its `-wal` and `-shm` files and starts a new one.
+  Every open then reads the queue of each set-aside file the build can
+  read, puts it in front of the live queue (for one item and kind the
+  later change stays), shows it on the items, and deletes the file, and
+  the directory with the last one; of the files it cannot read it keeps
+  the newest three. So a tester who installs an older build and comes
+  back keeps unsent feed marks, once both builds have this. Sign-out and
+  a sign-in as a different user delete the set-aside files with the rest
+  of the feed store, in one transaction for the rows.
 - A debug build launched with `-CabalmailFailNextWrite <table>` (for
   example `pending`, the feed store's queue of unsent marks) fails the
   next write to that table, once for the process, so a failed write can
-  be shown live. Release builds do not contain the switch
+  be shown live. Settings > Diagnostics > Debug Log says that the switch
+  is armed and, when it fires, which table's write it failed: the feed
+  list drops a failed mark's error, so the row staying as it was is all
+  the screen shows. Release builds do not contain the switch
   (`Persistence/SQLiteFaultSwitch.swift`).
 
 ### New-mail polling: `AsyncThrowingStream` over folder status

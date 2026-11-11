@@ -2,11 +2,12 @@ import XCTest
 @testable import CabalmailKit
 
 /// `RssStore.openRecovering`: a feed cache that cannot be opened or
-/// migrated is rebuilt, never fatal to the client that owns it.
+/// migrated is rebuilt, never fatal to the client that owns it. What becomes
+/// of the file it could not open is `RssStoreSetAsideTests`'.
 final class RssStoreRecoveryTests: XCTestCase {
     /// A store an older build left half-way through v4 (the first ALTER
     /// applied, `user_version` still 3) fails to migrate - the rerun hits
-    /// "duplicate column" - so `openRecovering` deletes it and opens a
+    /// "duplicate column" - so `openRecovering` sets it aside and opens a
     /// fresh, fully migrated one instead of failing the client.
     func testHalfAppliedV4MigrationIsRecreated() async throws {
         let dir = FileManager.default.temporaryDirectory
