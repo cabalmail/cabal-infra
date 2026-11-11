@@ -37,6 +37,18 @@ The only route to `main` is promoting `stage`. The promotion is a formal release
 
 Never open a PR to `main` from any other branch. An earlier "direct-to-prod scaffolding" carve-out allowed purely additive feature-branch -> `main` PRs to skip stage; it was retired 2026-08-15 — the automated release flow made promotion cheap enough that skipping stage no longer pays for the risk. Shipped-era planning docs that relied on it carry errata.
 
+### Deprecations
+
+A stable surface ([docs/compatibility.md](docs/compatibility.md)) is removed only after a deprecation period, so deprecating something and removing it are two changes in two releases. `docs/compatibility.md` keeps a **Current deprecations** table, and it has to stay true in both directions.
+
+The PR that deprecates something:
+
+- adds a row to that table: what is deprecated, since when, the release it stops working in, and what to do instead;
+- carries a `deprecated` changelog fragment, which names something that still works and *will* be removed; and
+- writes the plan for the removal under the docs directory of the major version that removes it (for example `docs/2.x/`), and links it from the row.
+
+The PR that removes it, no earlier than the next major release, takes the row out of the table and carries a `removed` fragment. A deprecation with no row is unannounced; a row left behind after the removal promises something that is already gone.
+
 ### No PII in public artifacts
 
 This repository is public. Never put PII — real names, production email addresses, phone numbers, or anything else identifying a real person — in code comments, commit messages, issue titles/descriptions, PR titles/descriptions/comments, changelog fragments, docs, test fixtures, or anywhere else that is or might be publicly exposed. When a live example is required, use a stage-environment address instead of a production one.
@@ -293,6 +305,8 @@ Shared infrastructure:
 Use semantic versioning. Record changelog entries as **fragments**, not by editing `CHANGELOG.md` directly: add a file `changelog.d/<slug>.<category>.md` whose body is the entry exactly as it should appear (leading `- `, hard-wrapped, two-space continuation indent). `<category>` is one of `added`/`changed`/`deprecated`/`removed`/`fixed`/`security`. Do not create an `## [Unreleased]` section and do not pre-assign a version - the release collator (`scripts/collate-changelog.sh`, run by `promote.sh` / `make promote`) folds every pending fragment into a dated section at release time. **Every PR needs a fragment unless it changes only documentation** (Markdown files, `docs/`, LICENSE) - the changelog records engineering history (refactors, test/CI work, infra), not just user-facing notes - enforced by the `changelog-fragment` check (`changelog.yml`; release PRs and dependabot are exempt). Iterate on an unreleased change by editing its existing fragment in place, never by adding a second file, and don't narrate churn: a bug introduced and fixed within the same unreleased cycle nets no entry. See [`changelog.d/README.md`](changelog.d/README.md) and [`docs/releasing.md`](docs/releasing.md).
 
 Don't repeat the category subheading word (or a close synonym) in the fragment text - the collator already prints it as an `### Added:`/`### Removed:`/etc. heading, so "Added a new UI element for X" reads as redundant under `### Added:`. Instead, lead with a bold noun-phrase summary followed by details: `- **New UI element for X.** <details>`. Same for `Removed`, `Deprecated`, `Changed`, `Fixed`, `Security`.
+
+`deprecated` and `removed` are different events and never the same fragment. A `deprecated` fragment names something that still works and will be removed in a later release; the removal itself gets a `removed` fragment in the release that removes it. A `deprecated` fragment also needs its row in the Current deprecations table (see "Deprecations" under Development Process).
 
 Any fragment describing a change to the **Apple clients** (`apple/Cabalmail`, `apple/CabalmailMac`, `apple/CabalmailWatch`, the notification-service and web-extension target directories, `apple/CabalmailKit/Sources`) **must** prefix its entry with `Apple:` - right after the leading `- ` and before the bold summary: `- Apple: **Threaded reader.** <details>`. This prefix scopes the entry into the TestFlight "What to Test" notes: `set-testflight-notes.py` keeps only `Apple:`-prefixed entries (stripping the prefix, since it's redundant in an Apple app) and drops the rest, so an Apple change without the prefix silently vanishes from the notes testers read. A PR that touches the Apple client sources fails the `apple-changelog.yml` gate unless it adds such a fragment; for non-user-facing Apple work (refactors, test-only, CI) the `no-changelog` PR label waives only the `Apple:` prefix, keeping the entry out of the TestFlight notes - the PR still needs an unprefixed fragment for the `changelog-fragment` check.
 
