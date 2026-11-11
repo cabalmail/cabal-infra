@@ -566,9 +566,10 @@ What the second one settled, all from one value the controls read
 
   > **Erratum (2026-11-11):** the menus list every entry. The Enabled
   > switch left custom flags (`post-wave-3/flags-and-cross-media.md`,
-  > decision 10), so no entry is disabled: a flag an older build stored
-  > as switched off is offered like any other, and the extra rows are
-  > only for a flag the message carries whose entry was deleted.
+  > decision 10; on Android in #2414), so no entry is disabled: a flag
+  > an older build stored as switched off is offered like any other,
+  > and the extra rows are only for a flag the message carries whose
+  > entry was deleted.
 - **Settings > Flags.** The first enabled row says "Default" under its
   name once the list has a second flag, and the footer says what that
   means. "Make default" is a button in each flag's dialog, since these
