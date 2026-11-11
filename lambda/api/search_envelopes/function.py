@@ -27,6 +27,7 @@ and every client reaches search through here.
 import base64
 import datetime
 import json
+import re
 from imapclient.exceptions import IMAPClientError # pylint: disable=import-error
 from helper import ( # pylint: disable=import-error
     ENVELOPE_FETCH_KEYS,
@@ -53,6 +54,11 @@ TRUTHY = {'1', 'true', 'True', 'yes', 'YES'}
 # exclude list (fts_autoindex_exclude = \Trash in 90-fts.conf).
 CROSS_FOLDER_EXCLUDES = {'trash'}
 
+# What `keyword` may name: a keyword slot of the flag palette, as set_flag
+# and set_rules spell it. Those slots are the only keywords the API ever
+# stores on a message.
+KEYWORD_SLOT_RE = re.compile(r'cabal-flag-(0[1-9]|1[0-9]|20)')
+
 
 @maintenance_guard
 def handler(event, _context):
@@ -60,8 +66,10 @@ def handler(event, _context):
 
     Required query params: `host`. Optional: `folder` (omit for cross-folder
     search), `text`, `from`, `to`, `subject`, `since` (YYYY-MM-DD), `before`
-    (YYYY-MM-DD), `unread`, `flagged`, `has_attachment`, `limit` (default 50,
-    max 200), `cursor`.
+    (YYYY-MM-DD), `unread`, `flagged`, `keyword` (a custom flag's palette
+    slot, `cabal-flag-01` to `cabal-flag-20`; only messages carrying it),
+    `has_attachment`, `limit` (default 50, max 200), `cursor`. Every filter
+    given must hold. A `keyword` that is not a slot is a 400.
 
     Response shape:
 
@@ -175,6 +183,9 @@ def build_criteria(qs, cursor):
         criteria.append('UNSEEN')
     if qs.get('flagged') in TRUTHY:
         criteria.append('FLAGGED')
+    keyword = (qs.get('keyword') or '').strip()
+    if keyword:
+        criteria.extend(['KEYWORD', validate_keyword(keyword)])
 
     # IMAP BEFORE is day-granular, so cursor pruning adds
     # `BEFORE (cursor_date + 1)` to constrain to same-day-or-older messages.
@@ -187,6 +198,21 @@ def build_criteria(qs, cursor):
         criteria.extend(['BEFORE', cur_d + datetime.timedelta(days=1)])
 
     return criteria or ['ALL']
+
+
+def validate_keyword(value):
+    '''The palette slot a `keyword` filter names; raises ValueError for
+    anything else.
+
+    The system flag is `flagged`, not a keyword. The palette is not read:
+    a search changes nothing, a disabled or deleted flag's messages are
+    still the caller's to find, and a slot no message carries matches
+    nothing. fullmatch, so a trailing newline cannot ride into the SEARCH.
+    '''
+    if not KEYWORD_SLOT_RE.fullmatch(value):
+        raise ValueError(
+            f'invalid keyword: {value!r} (expected cabal-flag-01 to cabal-flag-20)')
+    return value
 
 
 def enumerate_cross_folder(client):
