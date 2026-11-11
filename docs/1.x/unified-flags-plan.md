@@ -5,9 +5,9 @@
 | Phase | Status |
 | --- | --- |
 | 1 -- Palette accepts the `\Flagged` slot | Done: #2370, in prod with 1.46.0 (2026-11-10) |
-| 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` in review (2026-11-10), the first PR of android-parity.md leg L1 |
+| 2 -- Kit model: synthesis, default resolution | Apple Kit merged (2026-11-09), #2371; `android/kit` merged (2026-11-10), #2389, the first PR of android-parity.md leg L1 |
 | 3 -- Apple client | Merged (2026-11-10): rendering and Settings > Flags, #2375; affordances, #2376. Acceptance run on stage (2026-11-10): iPhone, iPad and visionOS pass, macOS failed ⌘⇧8 with a named default flag, fixed in #2378 (merged 2026-11-10). Duo simulator pass run (2026-11-10): pass in five poses; the flag button's hold menu passes closed and is not settled in the open poses. Soak run (2026-11-10) on the Mini, four platforms: no regression found, five older defects filed (#2381 to #2385). Promoted to prod as 1.47.0 (2026-11-11), with the iOS, macOS and visionOS builds uploaded from `main`. The physical-Duo check waits for the device (duo-support.md, Decision 7) |
-| 4 -- Android client | Started (2026-11-10) as android-parity.md leg L1: the kit model is in review, the app PRs follow it |
+| 4 -- Android client | Started (2026-11-10) as android-parity.md leg L1: rendering and Settings > Flags in review; the controls follow |
 | 5 -- Documentation | Merged (2026-11-10), with Phase 3's second PR, #2376 |
 
 This plan is run by Session 1 of
@@ -295,8 +295,8 @@ returns it canonically; a 22-entry palette 400s; `set_flag` with
 **Status:** The `CabalmailKit` half merged (2026-11-09), #2371, once
 Phase 1 was live on stage; it adds the model and no way to edit the
 system entry, so it did not need Phase 1 in prod. The `android/kit`
-half is in review (2026-11-10), as the first PR of android-parity.md leg
-L1: the same model under Kotlin names (`SYSTEM_SLOT`,
+half merged (2026-11-10), #2389, as the first PR of android-parity.md
+leg L1: the same model under Kotlin names (`SYSTEM_SLOT`,
 `DEFAULT_SYSTEM_ENTRY`, `effective`, `defaultEntry`, `keywordEntries`,
 `storedAfterEditing`, `resettingSystemEntry` and a two-argument
 `slotsIn`), with `MAX_ENTRIES` 21 and the one-argument `slotsIn` left
@@ -515,10 +515,29 @@ removed.
 ## Phase 4 -- Android client
 
 **Status:** Started (2026-11-10), as android-parity.md leg L1, after
-the Apple release was promoted as 1.47.0. Phase 2's `android/kit` half
-is in review; the app follows in two PRs, as Apple's did (rendering and
-Settings > Flags, then the controls), and the acceptance below runs
-after they merge.
+the Apple release was promoted as 1.47.0, on Phase 2's `android/kit`
+half (#2389). The app takes two PRs, as Apple's did. The first,
+rendering and Settings > Flags, is in review (2026-11-10); the second
+moves the controls to the default flag. The acceptance below runs after
+both merge. What the first one settled:
+
+- The star leaves every row. A flagged message shows a dot in the
+  built-in entry's color on its row, with the custom-flag dots, in the
+  order of Settings > Flags and counted in the four-dot cap, and a named
+  chip in the reader. Search results draw the dots too; before, they
+  showed the star and no custom flag. A flagged feed item shows the same
+  dot beside its date in place of the star at the row's edge, and the
+  row's spoken description names the flag.
+- Settings > Flags lists the effective palette. The built-in entry's
+  dialog has Reset to default where the others have Delete flag, and no
+  Enabled switch (decision 2).
+- The star stays on the controls that set a flag (the maintainer's
+  answer of 2026-11-10, recorded in android-parity.md), so the reader's
+  button, the selection bar and the swipe keep it.
+- Until the second PR, the reader's menu, the row's long-press menu and
+  the rule editor offer keyword entries only: the control beside each of
+  them already sets the built-in flag, and `set_rules` refuses its atom
+  in a rule's `flags`.
 
 The same items as Phase 3 against the Android surfaces:
 `FlagPaletteSettings` (up/down reorder gains "Make default"; Reset in
