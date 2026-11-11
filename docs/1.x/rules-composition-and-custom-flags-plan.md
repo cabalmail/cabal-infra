@@ -222,6 +222,14 @@ custom flags ride a `PENDING_KW` variable under the same rules as
 decision 3; slot atoms are fixed safe strings, so the argv surface
 stays trivial.
 
+> **Erratum (2026-11-11):** the compiler no longer skips a rule for a
+> disabled slot. The Enabled switch is being removed from custom flags
+> (`post-wave-3/flags-and-cross-media.md`, decision 10), so an entry's
+> `enabled` is read by nothing on the server: a rule is skipped only
+> when its slot is not in the palette at all. The field is deprecated
+> and stops being accepted in 2.0
+> (`../2.x/flag-palette-enabled-removal.md`).
+
 ## Phase 1 -- Truthful Continue
 
 **Status:** Complete (2026-08-28). Both editors gate the destination on
@@ -368,6 +376,12 @@ there would cost a per-fetch round trip for data the envelopes already
 provide — deliberately not done; and the S3 cache stores body bytes
 only with flags always served live, so the cache-invalidation item is
 a verified no-op. Client chips/pickers follow in a second PR.
+
+> **Erratum (2026-11-11):** `set_flag` no longer needs the entry to be
+> enabled. A set needs the slot to be in the palette, and a slot whose
+> entry is stored as disabled sets like any other
+> (`post-wave-3/flags-and-cross-media.md`, decision 10;
+> `../2.x/flag-palette-enabled-removal.md`).
 
 Make custom flags visible and settable on messages; rules still cannot
 set them until Phase 5.

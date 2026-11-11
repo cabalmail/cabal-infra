@@ -315,7 +315,7 @@ First scope doc: the design rules plus Phase 1. Rigs: the Mac mini for soaks and
 - **Main-thread cost.** Rows come from an actor; the main-thread table keeps rendering synchronous. Check scroll and open times on the 700-row fold case.
 - **Disk growth.** Set a row cap in Phase 2; the body cap stays 200 MB.
 - **Scans and pins.** The stream inventory (decision 8), `LaunchRestoreSequencingSourceScanTests` (Phase 3) and the sign-in pin (Phase 1) are asked up front, never edited to pass.
-- **Feed schema 7.** If flags-and-cross-media.md's B2.3 lands first, it must keep PR 0.2's set-aside import working for slot rows, and PR 4.5 must move them. B2.3 is #2411 (in review, 2026-11-11): its import keys on item, kind and slot and still reads a schema 6 file. PR 4.5 has the `flag` rows and their slots to move, and the drain's drop of an add the server refuses.
+- **Feed schema 7.** If flags-and-cross-media.md's B2.3 lands first, it must keep PR 0.2's set-aside import working for slot rows, and PR 4.5 must move them. B2.3 is #2411 (merged 2026-11-11): its import keys on item, kind and slot and still reads a schema 6 file. PR 4.5 has the `flag` rows and their slots to move, and the drain's drop of an add the server refuses.
 - **File protection.** Keep today's protection class so a notification action can write the queue while the device is locked *(inferred check)*.
 
 ## Not in this plan

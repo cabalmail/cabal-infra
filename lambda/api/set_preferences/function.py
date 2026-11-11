@@ -154,6 +154,11 @@ def _validate_flag_palette(value):
     control-free; colors come from the fixed set. Whole-palette
     last-writer-wins is accepted - palette edits are rare and single-device
     in practice.
+
+    `enabled` is deprecated: nothing on the server reads it, and it is
+    accepted and stored only because builds in the field write it on every
+    entry and one refused entry refuses the whole app map. It stops being
+    accepted in 2.0 (docs/2.x/flag-palette-enabled-removal.md).
     '''
     if not isinstance(value, str) or len(value) > MAX_FLAG_PALETTE_RAW_LENGTH:
         return None

@@ -33,7 +33,10 @@ _preferences_table = boto3.resource('dynamodb').Table(
 
 
 def _palette_slots(user):
-    '''The user's palette as {slot: enabled}. Raises on a read failure —
+    '''The slots in the user's palette. An entry's `enabled` is not read: a
+    flag is in the palette or it is not, and the field is only still
+    accepted for builds that write it
+    (docs/2.x/flag-palette-enabled-removal.md). Raises on a read failure —
     unlike compose.py's display-name lookup this must fail closed: a
     transient error must not let an unvetted keyword through.'''
     item = _preferences_table.get_item(Key={'user': user}).get('Item', {})
@@ -41,11 +44,10 @@ def _palette_slots(user):
     try:
         entries = json.loads(raw)
     except ValueError:
-        return {}
+        return set()
     if not isinstance(entries, list):
-        return {}
-    return {entry.get('slot'): entry.get('enabled', True)
-            for entry in entries if isinstance(entry, dict)}
+        return set()
+    return {entry.get('slot') for entry in entries if isinstance(entry, dict)}
 
 
 def _check_keyword(user, flag, setting):
@@ -56,7 +58,7 @@ def _check_keyword(user, flag, setting):
         return f'unknown keyword: {flag!r}'
     if not setting:
         return None  # untagging a retired slot must stay possible
-    if not _palette_slots(user).get(flag, False):
+    if flag not in _palette_slots(user):
         return f'flag not in palette: {flag!r}'
     return None
 
