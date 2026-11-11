@@ -96,8 +96,8 @@ def sync_since(user, sub, since, limit):
 def sync_state(user, sub, cursor, limit):
     '''The caller's state rows for one feed, changed since `cursor`.
 
-    Per-item state (an explicit read/unread, a favorite) lives in its own
-    table, so a change made on another device never moves an item's
+    Per-item state (an explicit read/unread, a favorite, custom flags) lives
+    in its own table, so a change made on another device never moves an item's
     fetched_key and the since-sync above never re-delivers it. This is the
     channel that carries it. Two phases behind one opaque cursor:
 
