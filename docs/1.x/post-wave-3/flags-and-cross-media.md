@@ -18,7 +18,7 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 
 | Work item | Status |
 |---|---|
-| Decisions 1 to 9 | 1 to 3 answered 2026-11-09, each with its default: sessions; the feed's Flag button follows the palette; Android legs in android-parity.md. 4 to 9 are asked in their phases. |
+| Decisions 1 to 9 | 1 to 3 answered 2026-11-09, each with its default: sessions; the feed's Flag button follows the palette; Android legs in android-parity.md. 4 and 5 answered 2026-11-10, each with its default: a per-flag filter on both lists, per visit; schema 7 ships before the shared queue. 6 to 9 are asked in their phases. |
 | Session 1: Stage A, unified flags (A0 to A4) | Done: A0 to A4 merged (2026-11-10) and promoted to prod as 1.47.0 (2026-11-11). Before the promotion: the acceptance run (2026-11-10) found one macOS defect, fixed in #2378 (merged 2026-11-10); the Duo simulator pass ran on 2026-11-10 and passes in five poses; the soak ran on 2026-11-10 on four platforms and found no regression, with five older defects filed (#2381 to #2385). The physical-Duo row waits for the device. |
 | A0: docs and decisions 1 to 3 | Merged (2026-11-09), in #2370 with A1. |
 | A1: server, the palette accepts `\Flagged` | Done: #2370, accepted on stage 2026-11-09, in prod with 1.46.0 (2026-11-10). |
@@ -49,7 +49,9 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 ### Due later (each asked again in its phase's scope doc)
 
 4. **(Phase 2) Per-flag filtering.** The cross-media plan assumes a per-flag mail filter that does not exist (`MessageFilter.swift:8-11`). **(a) Both lists, per visit (recommended)**: an optional `keyword` on the server's message search, a device query for feeds, and one flag picker inside the Flagged pill rather than a pill per flag (#2014 shows the pill row already wraps at 322 pt); the pick resets when you leave the list. (b) Both lists, sticky: also new filter values on `set_preferences` and the feed's `default_filter`, promoted before the client, since an unknown value rejects the whole settings push (`set_preferences/function.py:61-75, 222-235`). (c) Feeds only. (d) Neither yet. Default: (a).
+   - **Answered 2026-11-10: (a), both lists, per visit.**
 5. **(Phase 2) When the feed store's schema 7 ships: Before the shared queue or After?** Schema 7 is the next version of the feed store's database on the device (`rss.sqlite`, at schema 6 today, `RssStore.swift:35`): the migration B2.3 adds so a feed item can hold custom flags and a flag change made offline can wait in the queue. The number matters because a build that opens a file with a higher schema number than its own treats it as a newer build's file, which is what happens when a tester installs an older build. **Before (recommended)**: after sqlite-mail-store.md's PR 0.2 (the #1956 and #1957 feed-store fix, in its Phase 0 session) and before its Phase 4 reaches the feed store. That plan accepts this window (in its design rules, after the downgrade-drill table): an older build that has PR 0.2 sets a schema 7 file aside, the newer build recovers its unsent feed marks when it returns, and its PR 4.5 later moves the flag rows into the shared queue. Only a build from before PR 0.2 (1.31.0 and earlier) still deletes the file and its unsent marks. After: Phase 2 waits for sqlite Phase 4's second release, several releases later, and flag changes go straight into the shared queue. Default: Before.
+   - **Answered 2026-11-10: Before.** No build has the set-aside yet (the rest of sqlite-mail-store.md's PR 0.2 is not started), so gate G1 still holds B2.3.
 
    > **Erratum (2026-10-15):** 1.31.1 and 1.31.2 have shipped since this was written, and neither carries sqlite-mail-store.md's PR 0.2 (not started), so every build through 1.31.2 still deletes a schema 7 file and its unsent marks.
 
@@ -196,7 +198,7 @@ Verify: Mini lanes on all four platforms; a Studio Duo pass for the Flagged entr
 | Gate | Before | Needs |
 |---|---|---|
 | G0 (the sibling-plan conditions waived 2026-11-10) | A3 merges | Decisions 1 to 3; A1 in prod; feed-bulk-actions.md finished (it holds `Feeds/ItemList/*`, `FlagPaletteSettingsView.swift` and the shared bulk bar); ipad-layout-and-keyboard.md PRs A, C and F merged (rows, menu commands, `FilterPill.swift`); docs-and-bookkeeping.md PRs 1 and 2 merged (soft) |
-| G1 | B2.3 merges | Stage A promoted; sqlite-mail-store.md PRs 0.1 and 0.2 merged and its Phase 4 not yet in `RSS/` (decision 5); decisions 4 and 5 |
+| G1 | B2.3 merges | Stage A promoted; sqlite-mail-store.md PRs 0.1 and 0.2 merged and its Phase 4 not yet in `RSS/` (decision 5); decisions 4 and 5 (answered 2026-11-10) |
 | G2 | B2.4 merges | B2.1 and B2.2 in prod; multi-window-and-restore.md W4 merged, or B2.4 takes the feed stand-in |
 | G3 | B4.3 merges | Phase 2 promoted; B4.1 and B4.2 in prod; decision 6; shared-load-error-state.md A3 (#1903) merged, since otherwise a garbled save reply turns the next edit into a false "Rules updated on another device"; platform-conditionals.md's Rules PRs (#2031, #2040) merged |
 | G4 | B5.1 | mail-navigation-refactors.md PR 1 merged (`SceneNavigator.swift` is 728 lines); multi-window-and-restore.md session 1 not open in `AppRoute.swift`, `StoredRoute.swift` or `DeepLinkRouter.swift`; scan answers |
