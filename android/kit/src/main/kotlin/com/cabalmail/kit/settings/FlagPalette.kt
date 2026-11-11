@@ -116,7 +116,8 @@ object FlagPalette {
      * beside a control that already toggles the system flag, and the only
      * slots a rule's `flags` list may name.
      */
-    fun keywordEntries(stored: List<FlagPaletteEntry>): List<FlagPaletteEntry> = stored.filter { it.slot != SYSTEM_SLOT }
+    fun keywordEntries(stored: List<FlagPaletteEntry>): List<FlagPaletteEntry> =
+        stored.filter { it.slot != SYSTEM_SLOT }
 
     /**
      * The flag the one-gesture toggles act on (the swipe, the shortcut, the
@@ -150,7 +151,7 @@ object FlagPalette {
      * drops the stored entry so [effective] supplies the default again, in
      * first place.
      */
-    fun resettingSystemEntry(stored: List<FlagPaletteEntry>): List<FlagPaletteEntry> = stored.filter { it.slot != SYSTEM_SLOT }
+    fun resettingSystemEntry(stored: List<FlagPaletteEntry>): List<FlagPaletteEntry> = keywordEntries(stored)
 
     /**
      * The palette slots a message carries, in the order dots and chips draw
