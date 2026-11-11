@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit: no PR yet, its gate clear since 1.50.0 (2026-11-11). Clients not started |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit: #2411, a draft; its gate is clear since 1.50.0 (2026-11-11). Clients not started |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -456,8 +456,8 @@ are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
 API; `flags-and-cross-media.md`, Session 2, has what was run. Both
 merged after 1.48.0 was cut and shipped in 1.49.0 the same day. The
-Kit (B2.3) has no PR yet; its gate cleared on 2026-11-11 with 1.50.0.
-The clients (2b) have not started and merge after the Kit;
+Kit's PR (B2.3) is #2411, a draft; its gate cleared on 2026-11-11 with
+1.50.0. The clients (2b) have not started and merge after the Kit;
 `flags-and-cross-media.md` has the gates.
 
 ### 2a. Server
