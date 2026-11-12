@@ -59,6 +59,11 @@ CROSS_FOLDER_EXCLUDES = {'trash'}
 # stores on a message.
 KEYWORD_SLOT_RE = re.compile(r'cabal-flag-(0[1-9]|1[0-9]|20)')
 
+# What `any_flag` matches: the system flag, or any keyword slot of the flag
+# palette. One search key each, in the order the OR chain names them.
+ANY_FLAG_KEYS = (('FLAGGED',),) + tuple(
+    ('KEYWORD', f'cabal-flag-{number:02d}') for number in range(1, 21))
+
 
 @maintenance_guard
 def handler(event, _context):
@@ -68,8 +73,12 @@ def handler(event, _context):
     search), `text`, `from`, `to`, `subject`, `since` (YYYY-MM-DD), `before`
     (YYYY-MM-DD), `unread`, `flagged`, `keyword` (a custom flag's palette
     slot, `cabal-flag-01` to `cabal-flag-20`; only messages carrying it),
-    `has_attachment`, `limit` (default 50, max 200), `cursor`. Every filter
-    given must hold. A `keyword` that is not a slot is a 400.
+    `any_flag` (only messages carrying the system flag or any palette
+    slot), `has_attachment`, `limit` (default 50, max 200), `cursor`. Every
+    filter given must hold. A `keyword` that is not a slot is a 400.
+    `unread`, `flagged`, `any_flag` and `has_attachment` are switches: on
+    for `1`, `true`, `True`, `yes` or `YES`, and any other value is no
+    filter.
 
     Response shape:
 
@@ -186,6 +195,8 @@ def build_criteria(qs, cursor):
     keyword = (qs.get('keyword') or '').strip()
     if keyword:
         criteria.extend(['KEYWORD', validate_keyword(keyword)])
+    if qs.get('any_flag') in TRUTHY:
+        criteria.extend(any_flag_criteria())
 
     # IMAP BEFORE is day-granular, so cursor pruning adds
     # `BEFORE (cursor_date + 1)` to constrain to same-day-or-older messages.
@@ -213,6 +224,29 @@ def validate_keyword(value):
         raise ValueError(
             f'invalid keyword: {value!r} (expected cabal-flag-01 to cabal-flag-20)')
     return value
+
+
+def any_flag_criteria():
+    '''One search key that holds for a message carrying any flag: the system
+    flag or any palette slot.
+
+    IMAP's OR takes exactly two search keys (RFC 3501, section 6.4.4), so
+    the twenty-one alternatives are twenty ORs in prefix form, each one's
+    second key being the rest of the chain: `OR FLAGGED OR KEYWORD
+    cabal-flag-01 ... OR KEYWORD cabal-flag-19 KEYWORD cabal-flag-20`.
+    Read as a search key the chain ends where its last KEYWORD does, so it
+    joins the criteria around it like any other filter. Every slot is
+    named, not the palette's: as with `keyword`, the palette is not read,
+    and a message still carrying a deleted flag's slot is the caller's to
+    find. A keyword the API never stores (`$Forwarded`, `NonJunk`) is not
+    a flag here.
+    '''
+    criteria = []
+    for key in ANY_FLAG_KEYS[:-1]:
+        criteria.append('OR')
+        criteria.extend(key)
+    criteria.extend(ANY_FLAG_KEYS[-1])
+    return criteria
 
 
 def enumerate_cross_folder(client):
