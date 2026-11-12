@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.51.0] - 2026-11-11
+
+### Added
+- **CabalmailKit: custom flags on feed items.** A feed item now carries
+  the custom flags the server holds for it (`RssItem.flags`, palette
+  slots as on mail), and `RssSyncEngine.setFlag` sets or clears one. The
+  feed store moves to schema 7 for them, and the first sync after the
+  upgrade pulls each feed's state rows again, so a flag another device
+  set earlier arrives. A change made offline waits in the queue per item
+  and slot, the latest for each, and is sent as an add or a remove of
+  that one slot, so two devices that change different flags of one item
+  both take effect, and what the server reports never overwrites a slot
+  whose change is still queued. An add the server refuses, because the
+  flag was disabled or deleted on another device, is dropped and taken
+  off the item instead of holding every later change behind it. A build
+  from 1.50.0 on that meets a schema 7 file sets it aside, and its unsent
+  flag changes come back when a newer build returns. `SearchQuery` gains
+  `keyword`, one custom flag to narrow a mail search to. No screen uses
+  either yet. Kit half of cross-media Phase 2
+  (`docs/1.x/cross-media-ux-plan.md`).
+
+### Changed
+- **A flag is in the palette or it is not.** `/set_flag`,
+  `/rss_set_item_state` and the mail-rules compiler no longer read an
+  entry's `enabled`. A custom flag whose entry is stored as disabled can
+  be added to a message or a feed item, and a rule that sets it runs
+  instead of being skipped. A slot that is not in the palette is refused
+  as before (`flag_not_in_palette`), so a deleted flag still cannot be
+  added and still skips its rules. This is the server's part of taking
+  the Enabled switch off custom flags; the clients follow.
+
+### Deprecated
+- **`enabled` on a flag palette entry.** `/set_preferences` still accepts
+  and stores the field on an entry of the `flag_palette` preference, and
+  nothing reads it any more. It stops being accepted in 2.0.0: from then
+  an entry that carries it is refused, and the settings push with it.
+  Clients should send entries as `{slot, label, color}`.
+  `docs/compatibility.md` lists it under "Current deprecations", and
+  `docs/2.x/flag-palette-enabled-removal.md` is the plan for the removal.
+
 ## [1.50.0] - 2026-11-11
 
 ### Changed
