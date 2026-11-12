@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.52.0] - 2026-11-12
+
+### Added
+- Apple: **Custom flags on feed items.** Any flag in Settings > Flags can
+  now be set on a feed item: from the Flags menu on the item's row, and
+  from the reader's Flag button (its arrow on the Mac; touch and hold it
+  elsewhere). A feed row shows a dot for each of the item's flags and the
+  reader names them under the title, as for a message. The feed swipe,
+  Shift-Command-8 and the reader's Flag button now set and clear the
+  default flag, the first flag in the list, as mail's do. A flag set
+  offline is sent when the connection returns, and flags follow the item
+  to your other devices. The Flagged pill still finds the built-in flag
+  only.
+- **Search by any flag.** `/search_envelopes` takes an optional
+  `any_flag`: only messages that carry the system flag or one of the flag
+  palette's twenty keyword slots match. It goes to IMAP as one `OR` over
+  `FLAGGED` and each slot's `KEYWORD`, beside the other filters, in one
+  folder or across all of them. The palette is not consulted, so a
+  message still carrying a deleted flag's slot is found, and a keyword
+  the API never stores (`$Forwarded`, `NonJunk`) is not a flag. No client
+  sends it yet, and a search without it is unchanged. Third server PR of
+  cross-media Phase 2 (`docs/1.x/cross-media-ux-plan.md`), for the "Any
+  flag" row of the per-flag filter on the mail list.
+
+### Changed
+- **Five Apple-client comments now name identifiers that exist.** The Message
+  menu's availability tests cited `shortcutTargetUIDs` at two sites, renamed to
+  `shortcutTargetRefs` when the selection moved to `MessageRef`; the
+  content-column policy tests cited `MailRootView.contentColumn`, deleted when
+  the layout shells replaced that view, instead of `MailContentColumn`; the
+  search filters mirrored a React `this_folder_only` key the webmail has never
+  had, rather than its `thisFolderOnly` state; and the swipe-action row cited a
+  planning-note slug for the virtualized list. Comments only, no code change.
+
+### Removed
+- Android: **Enabled switch on custom flags.** A flag of your own is in
+  the list under Settings > Flags or it is deleted; it can no longer be
+  switched off. A flag that was switched off is back in the flag menus
+  and the rule editor. The first flag in the list is the default flag,
+  the one the swipe, the star button and Ctrl+Shift+L set, and there is
+  always one. To retire a flag, delete it: messages that carry it keep
+  the tag, shown by its slot id, until you remove it. The app no longer
+  writes `enabled` with the flag list, so a flag switched off in an
+  older build comes back on there after the next settings change made
+  in this one.
+- Apple: **Enabled switch on custom flags.** A flag of your own is in
+  Settings > Flags or it is deleted; it can no longer be switched off. A
+  flag that was switched off is offered in the flag menus again, and the
+  default flag is the first flag in the list, whichever that is. To
+  retire a flag, delete it: messages that carry it keep the tag, shown
+  by its slot id, until you take it off. Until the Android app catches
+  up, a flag switched off there comes back on after the next settings
+  change made on an Apple device.
+
 ## [1.51.0] - 2026-11-11
 
 ### Added
