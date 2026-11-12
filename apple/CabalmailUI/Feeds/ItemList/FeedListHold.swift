@@ -3,8 +3,9 @@ import CabalmailKit
 
 /// The split's feed list as it moves between its list column and the panel
 /// below a laptop fold (#1649): the list mounting next for the same scope
-/// takes the one that went away, its model (rows, pages loaded, filter,
-/// search) and the item at its top, instead of reloading the store and
+/// takes the one that went away, its model (rows, pages loaded, filter and
+/// any flag picked under it, search) and the item at its top, instead of
+/// reloading the store and
 /// syncing from scratch; it syncs only a model no sync has finished for.
 ///
 /// The feed twin of `FolderListHold`'s move, and the same claim rule: a list

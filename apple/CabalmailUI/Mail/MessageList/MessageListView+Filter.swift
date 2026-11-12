@@ -4,26 +4,19 @@ import CabalmailKit
 /// The list's filter: All, Unread, or Flagged. The bar draws only the
 /// Unread and Flagged pills, as toggles (`MessageFilter.toggling`); All is
 /// both of them off. The enum itself lives in the kit (`MessageFilter`),
-/// where `Preferences` stores each folder's sticky pill; the labels and the
-/// client-side envelope predicate are the view's.
+/// where `Preferences` stores each folder's sticky pill; the labels are the
+/// view's, and the rule for which rows pass is `MessageListNarrowing`.
 extension MessageFilter {
-    /// The pill's word. Flagged filters on the server's flag, the only one
-    /// it can filter on, so it carries that flag's name from Settings >
-    /// Flags: rename the entry "Urgent" and the pill reads "Urgent".
+    /// The pill's word. The Flagged filter a folder remembers is the
+    /// built-in flag's, so the plain pill carries that flag's name from
+    /// Settings > Flags: rename the entry "Urgent" and the pill reads
+    /// "Urgent". With a flag of the user's own in the palette the pill is a
+    /// menu, and takes its word from `FlagFilterMenuPolicy`.
     public func label(palette: [FlagPaletteEntry]) -> String {
         switch self {
         case .all:     return "All"
         case .unread:  return "Unread"
         case .flagged: return FlagToggle.systemFlagName(in: palette)
-        }
-    }
-
-    /// True when the envelope passes this filter.
-    public func includes(_ envelope: Envelope) -> Bool {
-        switch self {
-        case .all:     return true
-        case .unread:  return !envelope.flags.contains(.seen)
-        case .flagged: return envelope.flags.contains(.flagged)
         }
     }
 }
@@ -45,13 +38,22 @@ extension MessageListView {
         HStack(spacing: 6) {
             FilterPillStrip {
                 ForEach(MessageFilter.pills) { filter in
-                    FilterPill(
-                        label: filter.label(palette: model.flagPalette),
-                        isOn: filter == model.filterTab,
-                        count: pillCount(filter, model: model),
-                        identifier: "filter.pill.\(filter.rawValue)"
-                    ) {
-                        Task { await model.selectFilter(model.filterTab.toggling(filter)) }
+                    let identifier = "filter.pill.\(filter.rawValue)"
+                    // Flagged is a menu once Settings > Flags holds a flag
+                    // of the user's own (`FlagFilterMenuPolicy`).
+                    if filter == .flagged, let pill = model.flagFilterPill {
+                        FlagFilterPill(pill: pill, identifier: identifier) { choice in
+                            Task { await model.chooseFlagFilter(choice) }
+                        }
+                    } else {
+                        FilterPill(
+                            label: filter.label(palette: model.flagPalette),
+                            isOn: filter == model.filterTab,
+                            count: pillCount(filter, model: model),
+                            identifier: identifier
+                        ) {
+                            Task { await model.selectFilter(model.filterTab.toggling(filter)) }
+                        }
                     }
                 }
             }
@@ -78,7 +80,7 @@ extension MessageListView {
         // server-sourced folder totals, so e.g. tapping Flagged doesn't make
         // the Unread pill collapse to the flagged-result count.
         if model.isSearchActive, model.filterTab == .all {
-            return model.envelopes.filter { filter.includes($0) }.count
+            return model.envelopes.filter(MessageListNarrowing(tab: filter).includes).count
         }
         switch filter {
         case .all:     return model.allCount

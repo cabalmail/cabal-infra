@@ -71,6 +71,15 @@ final class MailSearchSession {
     var rows: [Envelope] = []
     /// Search-banner metadata. All zero when no search is active.
     private(set) var totalEstimate = 0
+    /// How many messages the search on screen matched, as its first page
+    /// said: the query's whole count. `totalEstimate` moves with every later
+    /// page, each of which counts only from its cursor's day on, so a pill
+    /// that names this search's flag reads this one (`matchCount`). Nil from
+    /// the moment a new search is sent until it answers.
+    private(set) var matchTotal: Int?
+    /// How many rows this search has put in `rows`; with `matchTotal`, what
+    /// `matchCount` works from.
+    @ObservationIgnored private var delivered = 0
     private(set) var truncated = false
     private(set) var foldersSearched: [String] = []
     /// Opaque next-page cursor; nil = every match loaded (or no search
@@ -115,6 +124,9 @@ final class MailSearchSession {
         // set.
         let priorCursor = nextCursor
         nextCursor = nil
+        // A new search has no count yet; a re-run keeps the one on screen
+        // until its own lands, so a refresh does not blank the number.
+        if !rerun { matchTotal = nil }
         runsOut += 1
         isLoading = true
         defer {
@@ -133,8 +145,10 @@ final class MailSearchSession {
             guard submittedQuery == text, self.filters == filters else { return }
             host?.searchWillShowResults()
             rows = distinctRows(result.envelopes, after: [])
+            delivered = rows.count
             showsResults = true
             totalEstimate = result.totalEstimate
+            matchTotal = result.totalEstimate
             truncated = result.truncated
             foldersSearched = result.foldersSearched
             nextCursor = result.nextCursor
@@ -201,10 +215,29 @@ final class MailSearchSession {
         isActive = false
         showsResults = false
         totalEstimate = 0
+        matchTotal = nil
         truncated = false
         foldersSearched = []
         nextCursor = nil
+        dropRows()
+    }
+
+    /// Empties the rows ahead of a run that fetches them again from the top
+    /// (a hard reload); the search stays the one on screen.
+    func dropRows() {
         rows.removeAll()
+        delivered = 0
+    }
+
+    /// The number for a pill showing this search: the count its first page
+    /// gave, less the rows it delivered that the list no longer shows.
+    /// `stillMatching` is how many of `rows` still pass the list's filter. A
+    /// row archived or moved away has left `rows`, and one whose flag was
+    /// taken off no longer passes, so the number follows the list at once
+    /// rather than at the next re-run; a write that fails puts its row back,
+    /// and the number with it. Nil until the search answers.
+    func matchCount(stillMatching: Int) -> Int? {
+        matchTotal.map { max(0, $0 - (delivered - stillMatching)) }
     }
 
     /// The list's loading, which a next page waits for (a refresh or a reset
@@ -217,7 +250,9 @@ final class MailSearchSession {
     /// re-deliver a row from the previous page, and a duplicate would draw as
     /// a repeated row.
     private func appendPage(_ page: SearchResult) {
-        rows.append(contentsOf: distinctRows(page.envelopes, after: rows))
+        let fresh = distinctRows(page.envelopes, after: rows)
+        rows.append(contentsOf: fresh)
+        delivered += fresh.count
         totalEstimate = page.totalEstimate
         truncated = truncated || page.truncated
         nextCursor = page.nextCursor
@@ -242,7 +277,12 @@ final class MailSearchSession {
             since: filters.since,
             before: filters.before,
             unread: filters.unread,
-            flagged: filters.flagged,
+            // A picked flag in the server's words: the built-in flag is
+            // `flagged`, a flag of the user's own is its slot, and any flag
+            // is its own switch.
+            flagged: filters.flagged || filters.flag?.isSystemFlag == true,
+            keyword: filters.flag?.keywordSlot,
+            anyFlag: filters.flag == .any,
             hasAttachment: filters.hasAttachment
             // `limit` and `cursor` are owned by the fetch paths: `run`'s
             // chunked walk and `loadMore`'s single page both fill them per

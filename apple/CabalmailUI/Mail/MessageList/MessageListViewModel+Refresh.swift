@@ -22,12 +22,24 @@ extension MessageListViewModel {
     func loadInitial() async {
         guard envelopes.isEmpty else { return }
         let sticky = folder.map { preferences.mailFolderFilter(for: $0.path) } ?? .all
-        filterTab = sticky
+        // A flag the window holds for this visit to the folder (taken as
+        // the model was built) comes before the folder's sticky pill.
+        let pick = flagPick
+        if pick == nil { filterTab = sticky }
+        let opened = (tab: filterTab, filters: search.filters)
         await Task {
             await self.window?.hydrateFromCache()
             await self.window?.seedSavedCounts()
             await self.refresh()
-            if sticky != .all { await self.applyFilter(sticky) }
+            // The pill is live from the first paint. One chosen while the
+            // first load was out is the user's, and replaying over it would
+            // put the list back on a filter they had just left.
+            guard self.filterTab == opened.tab, self.search.filters == opened.filters else { return }
+            if let pick {
+                await self.narrow(to: pick)
+            } else if sticky != .all {
+                await self.applyFilter(sticky)
+            }
         }.value
         window?.scheduleBottomPrefetch()
     }
@@ -96,7 +108,7 @@ extension MessageListViewModel {
         // The reset wiped only the folder window's rows. A pill's results
         // live in the search, so they go here, and the re-run below walks one
         // page, as a fresh pill does.
-        if search.showsResults { search.rows.removeAll() }
+        if search.showsResults { search.dropRows() }
         await refresh(prefetched: probe, startingOver: true)
     }
 }

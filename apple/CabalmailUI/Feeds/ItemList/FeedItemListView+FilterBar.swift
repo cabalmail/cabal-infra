@@ -1,7 +1,7 @@
 import SwiftUI
 import CabalmailKit
 
-// The bar above the feed item list: the Unread / Flagged toggles, the
+// The bar above the feed item list: the Unread / Flagged pills, the
 // ordering menu, the search field for a single feed, and the status lines. A
 // sibling extension so the primary FeedItemListView body stays under
 // SwiftLint's `type_body_length` cap, like `+Footer`.
@@ -15,16 +15,7 @@ extension FeedItemListView {
                 // mail's count the folder's. Toggles, like mail's: All is
                 // neither lit (`RssItemFilter.toggling`).
                 FilterPillStrip {
-                    ForEach(RssItemFilter.pills) { filter in
-                        FilterPill(
-                            label: filterLabel(filter),
-                            isOn: model.filter == filter,
-                            count: model.filterCounts?.count(for: filter),
-                            identifier: "feed.filter.\(filter.rawValue)"
-                        ) {
-                            model.selectFilter(model.filter.toggling(filter))
-                        }
-                    }
+                    ForEach(RssItemFilter.pills) { filterPill($0, model: model) }
                 }
                 Spacer()
                 // Every scope keeps its own order (`selectOrdering`): a feed, a
@@ -85,6 +76,25 @@ extension FeedItemListView {
                 .foregroundStyle(stopped ? ColorTokens.dangerFg : ColorTokens.warningFg)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityIdentifier("feed.health.headline")
+        }
+    }
+
+    /// One pill of the bar. Flagged is a menu once Settings > Flags holds a
+    /// flag of the user's own (`FlagFilterMenuPolicy`), as mail's is.
+    @ViewBuilder
+    private func filterPill(_ filter: RssItemFilter, model: FeedItemListViewModel) -> some View {
+        let identifier = "feed.filter.\(filter.rawValue)"
+        if filter == .favorite, let pill = model.flagFilterPill {
+            FlagFilterPill(pill: pill, identifier: identifier) { model.chooseFlagFilter($0) }
+        } else {
+            FilterPill(
+                label: filterLabel(filter),
+                isOn: model.filter == filter,
+                count: model.filterCounts?.count(for: filter),
+                identifier: identifier
+            ) {
+                model.selectFilter(model.filter.toggling(filter))
+            }
         }
     }
 

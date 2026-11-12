@@ -3,15 +3,18 @@ import Observation
 import CabalmailKit
 
 /// Backs `FeedItemListView`: one page of items for a scope from the local
-/// store, the all / unread / favorite filter, the subscription's ordering,
-/// and per-feed search. The rows themselves and the marks on them (read,
-/// the flags) are `FeedListRows`.
+/// store, the all / unread / favorite filter and the flag picked under it
+/// (`FeedListNarrowing`), the subscription's ordering, and per-feed search.
+/// The rows themselves and the marks on them (read, the flags) are
+/// `FeedListRows`.
 ///
 /// The filter pill is sticky per scope: the list opens on the pill the user
 /// last chose for this feed (`RssSubscription.defaultFilter`), folder
 /// (`RssFolder.defaultFilter`), or the all-feeds list
 /// (`Preferences.rssAllFeedsFilter`) -- Unread until then -- and a tap
-/// writes the pill back there (`selectFilter`). The order is sticky the
+/// writes the pill back there (`selectFilter`). A flag picked from the
+/// Flagged pill's menu is not: it lasts for the visit (`chooseFlagFilter`),
+/// held by the window for this scope's next list. The order is sticky the
 /// same way, per feed (`RssSubscription.orderingMode`), per folder
 /// (`RssFolder.orderingMode`) and for all feeds
 /// (`Preferences.rssAllFeedsOrdering`), newest first until then
@@ -31,11 +34,20 @@ final class FeedItemListViewModel {
     /// else, and the queued mark.
     let rows: FeedListRows
     var items: [RssItem] { rows.items }
-    /// The active pill. Set through `selectFilter` from the UI; a direct
-    /// assignment reloads without recording the choice.
-    var filter: RssItemFilter {
-        didSet { Task { await reload() } }
+    /// What the list is narrowed to: the lit pill, and a flag picked under
+    /// Flagged. Set through `selectFilter` and `chooseFlagFilter`; every
+    /// change reloads, and tells the window what the pick now is.
+    private(set) var narrowing: FeedListNarrowing {
+        didSet {
+            flagPicks?.set(narrowing.pick, for: scope)
+            Task { await reload() }
+        }
     }
+    /// The active pill.
+    var filter: RssItemFilter { narrowing.filter }
+    /// The flag picked from the Flagged pill's menu for this visit: a flag
+    /// of the user's own, or any flag. Nil under the pills' own filters.
+    var flagPick: FlagCriterion? { narrowing.pick }
     /// The active order. Set through `selectOrdering` from the Order menu;
     /// the view reloads when it changes.
     var ordering: RssOrderingMode
@@ -58,9 +70,12 @@ final class FeedItemListViewModel {
     var stepPlace: ListStepPolicy.Place<String>?
     /// Items with a queued (not yet pushed) state change, for the row mark.
     var pendingIds: Set<String> { rows.pendingIds }
+    /// The pills' numbers, which this model has read again after every
+    /// reload, mark and store change (`FeedListCounts`).
+    let counts: FeedListCounts
     /// What the All / Unread / Flagged pills count for this scope, over the
     /// items the device holds; nil until the first read.
-    var filterCounts: RssStore.FilterCounts?
+    var filterCounts: RssStore.FilterCounts? { counts.filter }
     /// Subscription id → display title, for the feed label on rows in
     /// multi-feed scopes. Read with the page; empty in single-feed scope.
     var subscriptionTitles: [String: String] = [:]
@@ -71,6 +86,8 @@ final class FeedItemListViewModel {
     private let engine: RssSyncEngine?
     private let preferences: Preferences
     private let defaults: FeedDefaultsPersisting?
+    /// Where the window keeps this scope's per-visit pick (`FlagPickHold`).
+    private let flagPicks: FlagPickHold<RssItemScope>?
     private let pageSize = 100
     /// The feeds this scope covers as of the last read: a sync of one of
     /// them reloads the list, and a catalog change that moves a feed in or
@@ -84,9 +101,12 @@ final class FeedItemListViewModel {
     /// The folder this list shows, in folder scope; same optimistic role.
     private(set) var folder: RssFolder?
 
+    /// - Parameter flagPicks: the window's hold on this scope's per-visit
+    ///   pick. A list for the scope the window's last list was on opens
+    ///   narrowed to the flag that one was.
     init(scope: RssItemScope, subscription: RssSubscription?, folder: RssFolder? = nil,
          client: CabalmailClient, preferences: Preferences, defaults: FeedDefaultsPersisting? = nil,
-         store: RssStore? = nil, engine: RssSyncEngine? = nil) {
+         store: RssStore? = nil, engine: RssSyncEngine? = nil, flagPicks: FlagPickHold<RssItemScope>? = nil) {
         self.scope = scope
         self.subscription = subscription
         self.folder = folder
@@ -95,12 +115,15 @@ final class FeedItemListViewModel {
         self.store = store
         self.engine = engine
         self.rows = FeedListRows(store: store, engine: engine)
+        self.counts = FeedListCounts(store: store, scope: scope)
         self.preferences = preferences
         self.defaults = defaults ?? engine
         self.ordering = FeedListOrderingPolicy.initial(scope: scope, subscription: subscription, folder: folder,
                                                        allFeedsOrdering: preferences.rssAllFeedsOrdering)
-        self.filter = FeedListFilterPolicy.initial(scope: scope, subscription: subscription, folder: folder,
-                                                   allFeedsFilter: preferences.rssAllFeedsFilter)
+        self.flagPicks = flagPicks
+        let sticky = FeedListFilterPolicy.initial(scope: scope, subscription: subscription, folder: folder,
+                                                  allFeedsFilter: preferences.rssAllFeedsFilter)
+        self.narrowing = FeedListNarrowing(filter: sticky, pick: flagPicks?.take(for: scope))
     }
 
     /// A pill tap: applies the filter, then makes it the pill this scope's
@@ -108,11 +131,32 @@ final class FeedItemListViewModel {
     /// held here changes at once, the store and server follow, and a failure
     /// leaves the next catalog refresh to reconcile.
     func selectFilter(_ filter: RssItemFilter) {
-        guard filter != self.filter else { return }
-        self.filter = filter
-        persistSticky(allFeeds: { $0.rssAllFeedsFilter = filter },
+        // Compared whole: the pill a pick lit is not the Flagged filter, so
+        // choosing that filter, or Unread, over a pick is a change.
+        let next = FeedListNarrowing(filter: filter)
+        guard next != narrowing else { return }
+        narrowing = next
+        persistSticky(allFeeds: { if $0.rssAllFeedsFilter != filter { $0.rssAllFeedsFilter = filter } },
                       subscription: { FeedListFilterPolicy.stickyUpdate(for: $0, filter: filter) },
                       folder: { FeedListFilterPolicy.stickyUpdate(for: $0, filter: filter) })
+    }
+
+    /// A row of the Flagged pill's menu (`FeedListNarrowing.choosing`): the
+    /// built-in flag's row and Clear filter are pills, recorded as a tap
+    /// is; a flag of the user's own and Any flag narrow the list for the
+    /// visit and record nothing.
+    func chooseFlagFilter(_ choice: FlagFilterChoice) {
+        let outcome = narrowing.choosing(choice)
+        if let recorded = outcome.recorded { return selectFilter(recorded) }
+        if outcome.narrowing != narrowing { narrowing = outcome.narrowing }
+    }
+
+    /// The Flagged pill as a menu, or nil while the bar draws the plain
+    /// toggle (`FlagFilterMenuPolicy`). Under a pick its number is that
+    /// flag's, and absent until the store has counted for it.
+    var flagFilterPill: FlagFilterPillModel? {
+        FlagFilterMenuPolicy.pill(palette: preferences.flagPalette, current: narrowing.current,
+                                  builtInCount: filterCounts?.favorite, pickCount: counts.count(for: flagPick))
     }
 
     /// An Order menu pick: applies the order, then makes it the order this
@@ -200,13 +244,8 @@ final class FeedItemListViewModel {
             if !batch.items.isEmpty { await rows.patch(batch.items) }
             // A paged list keeps its rows, but its pills still count what
             // the store now holds.
-            await readCounts()
+            await counts.read(pick: flagPick)
         }
-    }
-
-    private func readCounts() async {
-        guard let store else { return }
-        filterCounts = (try? await store.filterCounts(in: scope)) ?? filterCounts
     }
 
     /// What the catalog decides for this list: its subscription or folder
@@ -265,13 +304,17 @@ final class FeedItemListViewModel {
                 subscriptionTitles = Self.titles(of: try await store.subscriptions())
             }
             scopeFeedIds = Set(try await store.feedIds(in: scope))
-            filterCounts = try await store.filterCounts(in: scope)
+            await counts.read(pick: flagPick)
             if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty, let subscription {
                 rows.items = try await store.search(feedId: subscription.feedId, query: searchQuery)
                 hasMoreLocal = false
             } else {
-                rows.items = try await store.items(.init(scope: scope, filter: filter, ordering: ordering,
-                                                         limit: pageSize))
+                let query = narrowing.query(scope: scope, ordering: ordering, limit: pageSize)
+                let page = try await store.items(query)
+                // A pill or a flag chosen while this read was out reloads
+                // for itself; these rows are the old filter's.
+                guard query == narrowing.query(scope: scope, ordering: ordering, limit: pageSize) else { return }
+                rows.items = page
                 hasMoreLocal = items.count == pageSize
             }
             await rows.refreshPendingMarks()
@@ -289,8 +332,11 @@ final class FeedItemListViewModel {
     func loadMore() async {
         guard hasMoreLocal, let store, searchQuery.isEmpty, let last = items.last else { return }
         do {
-            let page = try await store.items(.init(scope: scope, filter: filter, ordering: ordering,
-                                                   limit: pageSize, after: .init(after: last)))
+            let page = try await store.items(narrowing.query(scope: scope, ordering: ordering, limit: pageSize,
+                                                             after: last))
+            // The rows this page follows are still the rows on screen: a
+            // reload meanwhile (another filter, another order) starts over.
+            guard items.last?.id == last.id else { return }
             let shown = Set(items.map(\.id))
             rows.items += page.filter { !shown.contains($0.id) }
             hasMoreLocal = page.count == pageSize
@@ -343,7 +389,7 @@ final class FeedItemListViewModel {
 
     func setRead(_ item: RssItem, _ isRead: Bool) async {
         await rows.mark(item, .read(isRead))
-        await readCounts()
+        await counts.read(pick: flagPick)
     }
 
     /// The flag the list's one-press controls set and clear (the swipe,
@@ -360,7 +406,7 @@ final class FeedItemListViewModel {
     /// user's own go the same way (`FeedItemMark`).
     func toggleFlag(slot: String, on item: RssItem) async {
         await rows.toggleFlag(slot: slot, on: item)
-        await readCounts()
+        await counts.read(pick: flagPick)
     }
 
     /// The swipe bindings, exposed so the row picks the button each edge

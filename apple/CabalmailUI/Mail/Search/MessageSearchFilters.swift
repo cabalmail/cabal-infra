@@ -1,4 +1,5 @@
 import Foundation
+import CabalmailKit
 
 /// Structured filter form state for the message-list search.
 ///
@@ -21,6 +22,14 @@ struct MessageSearchFilters: Sendable, Equatable {
     var unread: Bool = false
     var flagged: Bool = false
     var hasAttachment: Bool = false
+    /// The flag a folder list is narrowed to for the visit, from its
+    /// Flagged pill's menu (`MessageListViewModel.chooseFlagFilter`): one
+    /// flag of the user's own, or any flag. Part of the filters so that
+    /// every run and re-run sends it, a run answering for an earlier pick
+    /// is told from the one on screen, and whatever replaces the filters
+    /// ends it. The filter sheet has no control for it and the search
+    /// surface never sets it.
+    var flag: FlagCriterion?
     var thisFolderOnly: Bool = false
 
     /// `true` when nothing here can narrow a result set — every text field
@@ -41,6 +50,7 @@ struct MessageSearchFilters: Sendable, Equatable {
             && !unread
             && !flagged
             && !hasAttachment
+            && flag == nil
     }
 
     /// Number of non-default filter values. Drives the "Filters · 3"
@@ -57,6 +67,7 @@ struct MessageSearchFilters: Sendable, Equatable {
         if unread { count += 1 }
         if flagged { count += 1 }
         if hasAttachment { count += 1 }
+        if flag != nil { count += 1 }
         if thisFolderOnly { count += 1 }
         return count
     }

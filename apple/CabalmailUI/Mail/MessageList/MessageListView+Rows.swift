@@ -377,9 +377,8 @@ extension MessageListView {
     var restoreSymbol: String { "tray.and.arrow.up" }
 
     func filteredEnvelopes(_ envelopes: [Envelope]) -> [Envelope] {
-        let tab = model?.filterTab ?? .all
-        guard tab != .all else { return envelopes }
-        return envelopes.filter { tab.includes($0) }
+        guard let narrowing = model?.narrowing, narrowing.narrows else { return envelopes }
+        return envelopes.filter(narrowing.includes)
     }
 }
 
