@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, is in review as #2425 (2026-11-12). The third server PR it waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12) and ships in the release after. The third server PR it waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -455,7 +455,9 @@ The motivating feature. It follows the unified flags plan, which puts
 and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
-**Status:** Server in prod (2026-11-11). The unified flags plan
+**Status:** Server in prod (2026-11-11); Apple merged (2026-11-12),
+the per-flag filter waiting for its release; Android not started. The
+unified flags plan
 shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
 are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
@@ -467,11 +469,12 @@ Its gate cleared on 2026-11-11 with 1.50.0, and its downgrade drill ran
 on a simulator against stage; `flags-and-cross-media.md` has what was
 built and run. On Apple the rest of 2b is two PRs: #2420 (items 3, 4
 and 6: the menus, the rows and the toggle; merged 2026-11-12), and
-the per-flag filter (item 5), in review as #2425 (2026-11-12). Its
-shape was answered again on 2026-11-12, and its Any flag row needed a
-third server PR in prod before it merged: #2424 (item 6 of 2a), merged
-on 2026-11-12, passed against the stage API, and in prod the same day
-with 1.52.0, the release that also carried #2420.
+the per-flag filter (item 5), merged as #2425 (2026-11-12) and on
+`stage` for the release after 1.52.0. Its shape was answered again on
+2026-11-12, and its Any flag row needed a third server PR in prod
+before it merged: #2424 (item 6 of 2a), merged on 2026-11-12, passed
+against the stage API, and in prod the same day with 1.52.0, the
+release that also carried #2420.
 Android has not started (`android-parity.md`, leg L2).
 `flags-and-cross-media.md` has the gates, the answers that settled the
 open points below (its decisions 4 and 11), and what was built.
