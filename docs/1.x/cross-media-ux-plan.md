@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 (2026-11-12); the second, the per-flag filter, is in review as #2425 (2026-11-12) and waits for a third server PR, `any_flag` on `search_envelopes` (#2424, merged 2026-11-12 and accepted on stage), to reach prod. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, is in review as #2425 (2026-11-12). The third server PR it waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -381,8 +381,8 @@ Filtering either half by a custom flag needed one server change:
 `keyword` (#2400, in prod with 1.49.0), checked against the slot
 pattern and mapped to IMAP `KEYWORD`. The same parameter serves the
 per-flag filter on the mail list (Phase 2). That filter's Any flag row,
-decided on 2026-11-12, needed a second: `any_flag` (#2424, merged
-2026-11-12), the system flag or any slot, as one IMAP `OR`.
+decided on 2026-11-12, needed a second: `any_flag` (#2424, in prod
+with 1.52.0), the system flag or any slot, as one IMAP `OR`.
 
 Rows in a mixed list need one identity for either medium: a two-case
 `ItemRef` in the Kit (`.mail(MessageRef)` and a feed case keyed by feed
@@ -468,10 +468,10 @@ on a simulator against stage; `flags-and-cross-media.md` has what was
 built and run. On Apple the rest of 2b is two PRs: #2420 (items 3, 4
 and 6: the menus, the rows and the toggle; merged 2026-11-12), and
 the per-flag filter (item 5), in review as #2425 (2026-11-12). Its
-shape was answered again on 2026-11-12, and its Any flag row needs a
-third server PR in prod before it merges: #2424 (item 6 of 2a), merged
-on 2026-11-12 and passed against the stage API the same day, not yet
-promoted.
+shape was answered again on 2026-11-12, and its Any flag row needed a
+third server PR in prod before it merged: #2424 (item 6 of 2a), merged
+on 2026-11-12, passed against the stage API, and in prod the same day
+with 1.52.0, the release that also carried #2420.
 Android has not started (`android-parity.md`, leg L2).
 `flags-and-cross-media.md` has the gates, the answers that settled the
 open points below (its decisions 4 and 11), and what was built.
