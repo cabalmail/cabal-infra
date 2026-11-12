@@ -118,18 +118,15 @@ extension MessageListViewModel {
     }
 
     /// The default flag (`defaultFlag`) for an explicit ref set. The same
-    /// as `setSeen`, minus the unread count; a no-op while the palette has
-    /// no default flag.
+    /// as `setSeen`, minus the unread count.
     func setDefaultFlag(_ shouldBeSet: Bool, refs: Set<MessageRef>) async {
-        guard let flag = defaultFlag?.flag else { return }
-        await setFlag(flag, to: shouldBeSet, refs: refs)
+        await setFlag(defaultFlag.flag, to: shouldBeSet, refs: refs)
     }
 
     /// Whether a press on a default-flag control sets the flag on `refs`
-    /// (some loaded row lacks it) or clears it (every one has it). False
-    /// while there is no default flag.
+    /// (some loaded row lacks it) or clears it (every one has it).
     func defaultFlagIsMissing(from refs: Set<MessageRef>) -> Bool {
-        guard let flag = defaultFlag?.flag else { return false }
+        let flag = defaultFlag.flag
         return loadedRows(refs).contains { !$0.flags.contains(flag) }
     }
 

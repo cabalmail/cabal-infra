@@ -7,10 +7,8 @@ import CabalmailKit
 /// palette order, under the palette's names and colors
 /// (`docs/1.x/unified-flags-plan.md`, decision 4).
 final class FlagDotMarkTests: XCTestCase {
-    private func entry(
-        _ slot: String, _ label: String, _ color: String, enabled: Bool = true
-    ) -> FlagPaletteEntry {
-        FlagPaletteEntry(slot: slot, label: label, color: color, enabled: enabled)
+    private func entry(_ slot: String, _ label: String, _ color: String) -> FlagPaletteEntry {
+        FlagPaletteEntry(slot: slot, label: label, color: color)
     }
 
     private var palette: [FlagPaletteEntry] {
@@ -66,19 +64,6 @@ final class FlagDotMarkTests: XCTestCase {
         )
         // The reader's chips take every flag.
         XCTAssertEqual(FlagDotMark.marks(for: flags, palette: stored, limit: .max).count, 7)
-    }
-
-    func testADisabledEntrysFlagIsStillDrawn() {
-        // A tag outlives being offered, for the system flag as for a
-        // custom one.
-        let stored = [
-            entry(FlagPalette.systemSlot, "Flagged", "yellow", enabled: false),
-            entry("cabal-flag-01", "Later", "teal", enabled: false),
-        ]
-        XCTAssertEqual(
-            FlagDotMark.marks(for: [.flagged, .keyword("cabal-flag-01")], palette: stored).map(\.label),
-            ["Flagged", "Later"]
-        )
     }
 
     func testATagWhoseEntryWasDeletedIsNamedByItsSlotAndDrawnLast() {

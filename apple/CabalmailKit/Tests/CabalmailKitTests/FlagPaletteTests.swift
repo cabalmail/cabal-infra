@@ -17,7 +17,7 @@ final class FlagPaletteTests: XCTestCase {
     private func samplePalette() -> [FlagPaletteEntry] {
         [
             FlagPaletteEntry(slot: "cabal-flag-01", label: "Urgent", color: "red"),
-            FlagPaletteEntry(slot: "cabal-flag-02", label: "Waiting", color: "blue", enabled: false),
+            FlagPaletteEntry(slot: "cabal-flag-02", label: "Waiting", color: "blue"),
         ]
     }
 
@@ -31,25 +31,26 @@ final class FlagPaletteTests: XCTestCase {
 
     func testEncodeMatchesServerCanonicalShape() {
         // Compact, object keys sorted, array order preserved — the same
-        // canonical form `set_preferences` re-serializes to.
+        // canonical form `set_preferences` re-serializes to. Three keys an
+        // entry: no `enabled`, which the server deprecated and stops
+        // accepting in 2.0.
         let wire = FlagPalette.encode([
             FlagPaletteEntry(slot: "cabal-flag-02", label: "B", color: "blue"),
-            FlagPaletteEntry(slot: "cabal-flag-01", label: "A", color: "red", enabled: false),
+            FlagPaletteEntry(slot: "cabal-flag-01", label: "A", color: "red"),
         ])
         XCTAssertEqual(
             wire,
-            #"[{"color":"blue","enabled":true,"label":"B","slot":"cabal-flag-02"},"#
-                + #"{"color":"red","enabled":false,"label":"A","slot":"cabal-flag-01"}]"#
+            #"[{"color":"blue","label":"B","slot":"cabal-flag-02"},"#
+                + #"{"color":"red","label":"A","slot":"cabal-flag-01"}]"#
         )
     }
 
-    func testDecodeToleratesMissingEnabledAndUnknownColor() throws {
-        // `enabled` defaults true like the server; an unknown color (a
-        // newer server's vocabulary) is carried, not coerced.
+    func testDecodeCarriesAnUnknownColor() throws {
+        // An unknown color (a newer server's vocabulary) is carried, not
+        // coerced.
         let wire = #"[{"slot":"cabal-flag-03","label":"New","color":"chartreuse"}]"#
         let decoded = try XCTUnwrap(FlagPalette.decode(wire))
         XCTAssertEqual(decoded.count, 1)
-        XCTAssertTrue(decoded[0].enabled)
         XCTAssertEqual(decoded[0].color, "chartreuse")
         // ...and the unknown color round-trips back out unchanged.
         XCTAssertTrue(FlagPalette.encode(decoded).contains("chartreuse"))
@@ -98,10 +99,8 @@ final class FlagPaletteTests: XCTestCase {
 
     // MARK: - The system flag's entry
 
-    private func system(
-        label: String = "Flagged", color: String = "yellow", enabled: Bool = true
-    ) -> FlagPaletteEntry {
-        FlagPaletteEntry(slot: FlagPalette.systemSlot, label: label, color: color, enabled: enabled)
+    private func system(label: String = "Flagged", color: String = "yellow") -> FlagPaletteEntry {
+        FlagPaletteEntry(slot: FlagPalette.systemSlot, label: label, color: color)
     }
 
     func testSystemSlotIsTheFlaggedAtom() {
@@ -140,29 +139,17 @@ final class FlagPaletteTests: XCTestCase {
         )
     }
 
-    func testDefaultEntryIsTheFirstEnabledOne() {
+    func testDefaultEntryIsTheFirstEntry() {
         // Untouched palette: the system flag, as before the palette had it.
         XCTAssertEqual(FlagPalette.defaultEntry(in: []), system())
         XCTAssertEqual(FlagPalette.defaultEntry(in: samplePalette()), system())
         // Another flag moved to the top takes over.
         let reordered = [samplePalette()[0], system()]
-        XCTAssertEqual(FlagPalette.defaultEntry(in: reordered)?.slot, "cabal-flag-01")
-        // A disabled entry is passed over, wherever it sits.
+        XCTAssertEqual(FlagPalette.defaultEntry(in: reordered).slot, "cabal-flag-01")
         XCTAssertEqual(
-            FlagPalette.defaultEntry(in: [system(enabled: false)] + samplePalette())?.slot,
-            "cabal-flag-01"
+            FlagPalette.defaultEntry(in: [samplePalette()[1], system()]).slot,
+            "cabal-flag-02"
         )
-        XCTAssertEqual(
-            FlagPalette.defaultEntry(in: [samplePalette()[1], system()]),
-            system()
-        )
-    }
-
-    func testNoDefaultEntryWhenEveryFlagIsDisabled() {
-        // No silent fallback to the system flag: the toggles have nothing
-        // to act on.
-        XCTAssertNil(FlagPalette.defaultEntry(in: [system(enabled: false)]))
-        XCTAssertNil(FlagPalette.defaultEntry(in: [system(enabled: false), samplePalette()[1]]))
     }
 
     func testEditingAnotherFlagDoesNotStoreTheSystemEntry() throws {
@@ -189,8 +176,8 @@ final class FlagPaletteTests: XCTestCase {
 
     func testEditingTheSystemEntryStoresItInPlace() {
         let stored = samplePalette()
-        // Renamed, recoloured or disabled: stored first, where it sat.
-        for changed in [system(label: "Urgent"), system(color: "red"), system(enabled: false)] {
+        // Renamed or recoloured: stored first, where it sat.
+        for changed in [system(label: "Urgent"), system(color: "red")] {
             var edited = FlagPalette.effective(stored)
             edited[0] = changed
             XCTAssertEqual(
@@ -213,8 +200,7 @@ final class FlagPaletteTests: XCTestCase {
     }
 
     func testResetRemovesTheStoredSystemEntry() {
-        let stored = [samplePalette()[0], system(label: "Urgent", color: "red", enabled: false),
-                      samplePalette()[1]]
+        let stored = [samplePalette()[0], system(label: "Urgent", color: "red"), samplePalette()[1]]
         let reset = FlagPalette.resettingSystemEntry(in: stored)
         XCTAssertEqual(reset, samplePalette())
         // ...so the default takes over again, in first place.
@@ -227,7 +213,7 @@ final class FlagPaletteTests: XCTestCase {
         let wire = FlagPalette.encode(palette)
         // One backslash in the atom, escaped once by JSON.
         XCTAssertTrue(wire.hasPrefix(
-            #"[{"color":"red","enabled":true,"label":"Urgent","slot":"\\Flagged"}"#
+            #"[{"color":"red","label":"Urgent","slot":"\\Flagged"}"#
         ))
         XCTAssertEqual(try XCTUnwrap(FlagPalette.decode(wire)), palette)
     }
@@ -242,8 +228,8 @@ final class FlagPaletteTests: XCTestCase {
             FlagPalette.slots(in: flags, palette: samplePalette()),
             [FlagPalette.systemSlot, "cabal-flag-01", "cabal-flag-02"]
         )
-        // Palette order, not slot order; a disabled entry still counts.
-        let reordered = [samplePalette()[1], system(enabled: false), samplePalette()[0]]
+        // Palette order, not slot order.
+        let reordered = [samplePalette()[1], system(), samplePalette()[0]]
         XCTAssertEqual(
             FlagPalette.slots(in: flags, palette: reordered),
             ["cabal-flag-02", FlagPalette.systemSlot, "cabal-flag-01"]
@@ -325,7 +311,7 @@ final class FlagPaletteTests: XCTestCase {
         let other = makeActivated()
         other.applyRemote(["flag_palette": FlagPalette.encode(edited)])
         XCTAssertEqual(other.flagPalette, edited)
-        XCTAssertEqual(FlagPalette.defaultEntry(in: other.flagPalette)?.label, "Urgent")
+        XCTAssertEqual(FlagPalette.defaultEntry(in: other.flagPalette).label, "Urgent")
     }
 
     func testPalettePersistsAndReloads() {

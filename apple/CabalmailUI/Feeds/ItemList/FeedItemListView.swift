@@ -303,10 +303,8 @@ struct FeedItemListView: View {
                         Button(item.isRead ? "Mark as unread" : "Mark as read") {
                             Task { await model.setRead(item, !item.isRead) }
                         }
-                        if let toggle = feedFlag {
-                            Button(toggle.title(isSet: item.isFavorite)) {
-                                Task { await model.setFavorite(item, !item.isFavorite) }
-                            }
+                        Button(feedFlag.title(isSet: item.isFavorite)) {
+                            Task { await model.setFavorite(item, !item.isFavorite) }
                         }
                         if let url = URL(string: item.url) {
                             Link("Open in browser", destination: url)
@@ -318,9 +316,8 @@ struct FeedItemListView: View {
 extension FeedItemListView {
     /// The flag the feed's controls set and clear: the server's flag, which
     /// is the only mark a feed item has, in the name and color its entry
-    /// has in Settings > Flags. Nil while that entry is disabled; the swipe
-    /// and the menu item go then, and the menu bar's item is dimmed.
-    var feedFlag: FlagToggle? { FlagToggle.systemFlag(in: preferences.flagPalette) }
+    /// has in Settings > Flags.
+    var feedFlag: FlagToggle { FlagToggle.systemFlag(in: preferences.flagPalette) }
 
     /// That flag's name as a state, for the filter pill (`filterLabel`).
     var feedFlagName: String { FlagToggle.systemFlagName(in: preferences.flagPalette) }
@@ -344,16 +341,15 @@ extension FeedItemListView {
             // Same words, glyphs and tint as the mail list's flag swipe
             // makes for this flag (`FlagToggle`): one mark, one vocabulary
             // across media. The identifier keeps the wire name for the probes.
-            if let toggle = feedFlag {
-                Button {
-                    Task { await model.setFavorite(item, !item.isFavorite) }
-                } label: {
-                    Label(toggle.title(isSet: item.isFavorite),
-                          systemImage: toggle.systemImage(isSet: item.isFavorite))
-                }
-                .tint(toggle.tint)
-                .accessibilityIdentifier("feed.swipe.toggleFavorite")
+            let toggle = feedFlag
+            Button {
+                Task { await model.setFavorite(item, !item.isFavorite) }
+            } label: {
+                Label(toggle.title(isSet: item.isFavorite),
+                      systemImage: toggle.systemImage(isSet: item.isFavorite))
             }
+            .tint(toggle.tint)
+            .accessibilityIdentifier("feed.swipe.toggleFavorite")
         case .disabled:
             EmptyView()
         }

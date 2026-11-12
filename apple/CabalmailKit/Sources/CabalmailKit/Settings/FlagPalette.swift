@@ -5,7 +5,7 @@ import Foundation
 ///
 /// `slot` is one of the fixed IMAP keyword atoms `cabal-flag-01` ...
 /// `cabal-flag-20` (decision 4): the mailstore only ever sees slot atoms,
-/// and everything user-visible — label, color, order, enabled — is palette
+/// and everything user-visible — label, color, order — is palette
 /// metadata riding synced preferences. Renaming a flag touches zero
 /// messages; deleting and re-creating reuses the slot and never mints a
 /// new keyword.
@@ -19,30 +19,23 @@ import Foundation
 /// a newer client against a newer server) must round-trip unchanged
 /// instead of being coerced and re-pushed. `FlagPalette.colors` is the set
 /// the UI offers.
+///
+/// An entry is in the palette or it is not: there is no way to switch one
+/// off. Older builds wrote an `enabled` key on every entry, and a stored
+/// palette may still carry it. It is skipped on decode, like any key this
+/// type has no field for, and never written; the server stops accepting it
+/// in 2.0 (`docs/2.x/flag-palette-enabled-removal.md`).
 public struct FlagPaletteEntry: Codable, Hashable, Sendable, Identifiable {
     public var slot: String
     public var label: String
     public var color: String
-    public var enabled: Bool
 
     public var id: String { slot }
 
-    public init(slot: String, label: String, color: String, enabled: Bool = true) {
+    public init(slot: String, label: String, color: String) {
         self.slot = slot
         self.label = label
         self.color = color
-        self.enabled = enabled
-    }
-
-    private enum CodingKeys: String, CodingKey { case slot, label, color, enabled }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        slot = try container.decode(String.self, forKey: .slot)
-        label = try container.decode(String.self, forKey: .label)
-        color = try container.decode(String.self, forKey: .color)
-        // The server treats a missing `enabled` as true; so do we.
-        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
     }
 }
 
@@ -140,11 +133,11 @@ extension FlagPalette {
     }
 
     /// The flag the one-gesture toggles act on (the swipe, the shortcut,
-    /// the reader's button): the first enabled entry of the effective
-    /// palette (decision 3). Nil when every entry is disabled; there is
-    /// then no default, and nothing falls back to `\Flagged`.
-    public static func defaultEntry(in stored: [FlagPaletteEntry]) -> FlagPaletteEntry? {
-        effective(stored).first(where: \.enabled)
+    /// the reader's button): the first entry of the effective palette.
+    /// There always is one, since the effective palette always holds the
+    /// system flag's entry.
+    public static func defaultEntry(in stored: [FlagPaletteEntry]) -> FlagPaletteEntry {
+        effective(stored).first ?? defaultSystemEntry
     }
 
     /// What to store after the user edits the effective palette.
@@ -173,9 +166,9 @@ extension FlagPalette {
     }
 
     /// The palette slots a message carries, in the order dots and chips
-    /// draw them: the effective palette's order, the system flag included,
-    /// whether or not an entry is enabled. A keyword slot the message
-    /// carries but the palette no longer lists comes last, in slot order,
+    /// draw them: the effective palette's order, the system flag included.
+    /// A keyword slot the message carries but the palette no longer lists
+    /// (a deleted flag's) comes last, in slot order,
     /// so its tag can still be shown and removed.
     public static func slots(in flags: Set<Flag>, palette stored: [FlagPaletteEntry]) -> [String] {
         let listed = effective(stored).map(\.slot).filter { flags.contains(Flag(wireValue: $0)) }

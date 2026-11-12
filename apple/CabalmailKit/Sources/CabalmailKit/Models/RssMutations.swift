@@ -158,10 +158,10 @@ public struct RssItemStateChange: Sendable, Hashable {
 }
 
 /// `/rss_set_item_state` refused a whole call because an entry adds a flag
-/// the palette does not enable (400 `flag_not_in_palette`): the flag was
-/// disabled or deleted, on this device or another, after the change was
-/// made. The server checks every entry before it writes, so nothing in the
-/// call was applied. `slots` are the ones it refused, which is what lets
+/// the palette does not hold (400 `flag_not_in_palette`): the flag was
+/// deleted, on this device or another, after the change was made. The
+/// server checks every entry before it writes, so nothing in the call
+/// was applied. `slots` are the ones it refused, which is what lets
 /// the pending queue drop those changes and send the rest
 /// (`RssPendingDrain`); `CabalmailError.server` could not carry them.
 public struct RssFlagRefusal: Error, Equatable, Sendable, LocalizedError {

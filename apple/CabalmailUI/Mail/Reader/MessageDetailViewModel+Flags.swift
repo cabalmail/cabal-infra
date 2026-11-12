@@ -48,22 +48,18 @@ extension MessageDetailViewModel {
     }
 
     /// The flag the reader's button and Cmd+Shift+L set and clear: the
-    /// first enabled entry of Settings > Flags, or nil when the palette
-    /// has none (see `FlagToggle`).
-    var defaultFlag: FlagToggle? { FlagToggle.defaultFlag(in: preferences.flagPalette) }
+    /// first entry of Settings > Flags (see `FlagToggle`).
+    var defaultFlag: FlagToggle { FlagToggle.defaultFlag(in: preferences.flagPalette) }
 
     /// Whether the open message carries the default flag, from the same
     /// optimistic state the chips draw.
     var isDefaultFlagSet: Bool {
-        guard let flag = defaultFlag?.flag else { return false }
-        return shownFlags.contains(flag)
+        shownFlags.contains(defaultFlag.flag)
     }
 
-    /// Flip the default flag. Nothing to do while there is none; the
-    /// button is dimmed then, and the chord goes through here too.
+    /// Flip the default flag: the button's press, and the chord's.
     func toggleDefaultFlag() async {
-        guard let flag = defaultFlag?.flag else { return }
-        await toggle(flag)
+        await toggle(defaultFlag.flag)
     }
 
     /// Flip one palette flag, the built-in one or a custom slot: the flag

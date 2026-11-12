@@ -58,13 +58,12 @@ extension MessageListView {
     ) -> some View {
         if !refs.isEmpty {
             let hasUnread = model.loadedRows(refs).contains { !$0.flags.contains(.seen) }
-            if let toggle = model.defaultFlag {
-                let sets = model.defaultFlagIsMissing(from: refs)
-                Button {
-                    Task { await model.setDefaultFlag(sets, refs: refs) }
-                } label: {
-                    Label(toggle.title(isSet: !sets), systemImage: toggle.systemImage(isSet: !sets))
-                }
+            let toggle = model.defaultFlag
+            let sets = model.defaultFlagIsMissing(from: refs)
+            Button {
+                Task { await model.setDefaultFlag(sets, refs: refs) }
+            } label: {
+                Label(toggle.title(isSet: !sets), systemImage: toggle.systemImage(isSet: !sets))
             }
             Button {
                 Task { await model.setSeen(hasUnread, refs: refs) }
@@ -166,11 +165,10 @@ extension MessageListView {
     }
 
     /// Cmd+Shift+8 (Cmd+*), on the default flag. Any message without it
-    /// means "set it on all", otherwise "clear it from all". Does nothing
-    /// while the palette has no default flag; the menu item is dimmed then.
+    /// means "set it on all", otherwise "clear it from all".
     func toggleFlaggedOnSelection(model: MessageListViewModel) {
         let refs = shortcutTargetRefs(model: model)
-        guard !refs.isEmpty, model.defaultFlag != nil else { return }
+        guard !refs.isEmpty else { return }
         let sets = model.defaultFlagIsMissing(from: refs)
         Task { await model.setDefaultFlag(sets, refs: refs) }
     }

@@ -135,26 +135,24 @@ extension MessageListView {
     }
 
     /// The default flag for the whole selection, in the flag's own words
-    /// (`FlagToggle`). Absent while the palette has no default flag. Split
-    /// out to keep `bulkActionButtons` under SwiftLint's body-length cap.
-    @ViewBuilder
+    /// (`FlagToggle`). Split out to keep `bulkActionButtons` under
+    /// SwiftLint's body-length cap.
     private func bulkFlagButton(
         model: MessageListViewModel,
         count: Int,
         showsCaptions: Bool
     ) -> some View {
-        if let toggle = model.defaultFlag {
-            let sets = model.defaultFlagIsMissing(from: model.selectedRefs)
-            let title = toggle.title(isSet: !sets)
-            bulkActionButton(
-                systemImage: toggle.systemImage(isSet: !sets),
-                label: title,
-                accessibilityLabel: "\(title) \(messageCount(count))",
-                identifier: "bulk.toggleFlag",
-                showsCaption: showsCaptions
-            ) {
-                Task { await model.bulkSetDefaultFlag(sets) }
-            }
+        let toggle = model.defaultFlag
+        let sets = model.defaultFlagIsMissing(from: model.selectedRefs)
+        let title = toggle.title(isSet: !sets)
+        return bulkActionButton(
+            systemImage: toggle.systemImage(isSet: !sets),
+            label: title,
+            accessibilityLabel: "\(title) \(messageCount(count))",
+            identifier: "bulk.toggleFlag",
+            showsCaption: showsCaptions
+        ) {
+            Task { await model.bulkSetDefaultFlag(sets) }
         }
     }
 

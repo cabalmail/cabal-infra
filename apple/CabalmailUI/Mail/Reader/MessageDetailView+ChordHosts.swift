@@ -29,7 +29,6 @@ extension MessageDetailView {
                 // Cmd+Shift+L — Mail.app's flag chord, on the default flag.
                 Button("") { Task { await model.toggleDefaultFlag() } }
                     .keyboardShortcut("l", modifiers: [.command, .shift])
-                    .disabled(model.defaultFlag == nil)
                 Button("") { model.toggleRemoteContent() }
                     .keyboardShortcut("i", modifiers: [.command, .shift])
                     .disabled(model.htmlBody == nil)

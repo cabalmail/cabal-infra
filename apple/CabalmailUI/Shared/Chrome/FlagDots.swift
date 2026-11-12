@@ -23,7 +23,7 @@ struct FlagDotMark: Equatable, Identifiable {
 
     /// A message's marks: every palette flag it carries, the system flag
     /// included, in palette order (`FlagPalette.slots(in:palette:)`) and
-    /// capped at `limit`. A flag whose entry is disabled is still drawn,
+    /// capped at `limit`. A flag whose entry was deleted is still drawn,
     /// like every tag that outlives being offered.
     static func marks(
         for flags: Set<Flag>,
