@@ -54,7 +54,8 @@ extension FeedItemListView {
         switch model.filter {
         case .all: return model.isSyncing ? "Fetching…" : "No items yet"
         case .unread: return "All caught up"
-        case .favorite: return "No flagged items"
+        case .favorite:
+            return FeedListNarrowing.emptyTitle(pick: model.flagPick, name: flagPickName(model))
         }
     }
 
@@ -64,13 +65,27 @@ extension FeedItemListView {
         case .all: return "New items appear here as the feed is fetched."
         case .unread: return "Every item here has been read."
         case .favorite:
-            return Self.flaggedEmptyDescription(
-                defaultFlagIsBuiltIn: model.defaultFlag.slot == FlagPalette.systemSlot, flagName: feedFlagName
+            guard let pick = model.flagPick else {
+                return Self.flaggedEmptyDescription(
+                    defaultFlagIsBuiltIn: model.defaultFlag.slot == FlagPalette.systemSlot, flagName: feedFlagName
+                )
+            }
+            return FeedListNarrowing.emptyDescription(
+                pick: pick, name: flagPickName(model),
+                swipeSetsIt: model.defaultFlag.slot == pick.keywordSlot,
+                isInPalette: flagPalette.contains { $0.slot == pick.keywordSlot }
             )
         }
     }
 
-    /// Under the Flagged pill with nothing to show. The pill filters on the
+    /// The picked flag's name, as the lit pill has it in full.
+    private func flagPickName(_ model: FeedItemListViewModel) -> String {
+        FlagFilterMenuPolicy.name(of: model.flagPick, palette: flagPalette)
+    }
+
+    /// Under the Flagged pill with nothing to show and no flag picked from
+    /// its menu (a pick's words are `FeedListNarrowing.emptyDescription`).
+    /// The pill then filters on the
     /// built-in flag; the swipe and the menu's first item set the default
     /// flag, which is that flag only until another is made the default.
     /// After that the Flags menu is the way to set the one this pill shows.

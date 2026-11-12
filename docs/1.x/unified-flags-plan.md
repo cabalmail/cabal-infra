@@ -82,6 +82,15 @@ consequences shape this plan:
   `\Flagged`-only in this plan; per-slot filtering is a clean additive
   follow-up (`?keyword=<slot>` mapped to an IMAP `KEYWORD` search) and
   is recorded below as such, not built here.
+
+  > **Erratum (2026-11-12):** built since, by cross-media Phase 2.
+  > `search_envelopes` takes `keyword` (#2400) and `any_flag` (#2424),
+  > and on Apple the Flagged pill of a folder's or a feed's list is a
+  > menu of every flag, Any flag and Clear filter once the palette holds
+  > a flag of the user's own (#2425;
+  > `post-wave-3/flags-and-cross-media.md`, decision 4). The search
+  > sheet's toggle, the web app and Android still filter on `\Flagged`
+  > alone.
 - **Removing the system-flag semantics of `\Flagged`.** Rules'
   `flag: true`, `folder_status`'s flagged count, and the React admin
   app's Flag/Unflag button all keep meaning `\Flagged`. The palette
@@ -224,6 +233,13 @@ Nothing changes on the server for this.
 > set and clear the default flag, as mail's do (that plan's decision
 > 2). Android follows in android-parity.md leg L2.
 
+> **Erratum (2026-11-12):** since the second Apple PR (#2425), nor for
+> the pill while it is lit on a flag picked from its menu, which it has
+> once the palette holds a flag of the user's own. The pick narrows the
+> list to the items carrying that flag (`items.flags`) or any flag
+> (`is_favorite` or `items.flags`). Unlit, and lit on the built-in
+> flag, the pill follows that entry as before (that plan's decision 4).
+
 ### 5. Toggle affordances retarget to the default flag
 
 Every `\Flagged` toggle becomes a *default flag* toggle:
@@ -253,6 +269,15 @@ who renamed it "Urgent" sees an "Urgent" pill), and they are hidden
 when the entry is disabled. The feed list's Flagged pill follows the
 same entry. Per-slot filtering is the natural next
 step once this ships and is not part of this plan.
+
+> **Erratum (2026-11-12):** that step is built on Apple (#2425;
+> `post-wave-3/flags-and-cross-media.md`, decision 4). The server can
+> filter on any slot (`keyword`, #2400) and on any flag (`any_flag`,
+> #2424), and with a flag of the user's own in the palette the two list
+> bars' Flagged pill is a menu of every flag. Unlit, and lit on the
+> built-in flag, the pill still takes that entry's label; lit on a flag
+> picked from the menu it takes the picked flag's. The search sheet's
+> toggle is as this decision left it.
 
 ### 7. Rules are unchanged on the wire
 
@@ -422,6 +447,10 @@ What the second one settled, all in one value the controls read
 - **Filters** (decision 6). The Flagged pills and the search sheet's
   toggle take the built-in entry's label. With that entry disabled they
   are hidden unless lit, so a filter that is on can be turned off.
+
+  > **Erratum (2026-11-12):** a list bar's pill lit on a flag picked
+  > from its menu takes the picked flag's name, or "Any flag" (#2425;
+  > decision 6's erratum).
 - **Rule editor** (decision 7). One list in palette order; the built-in
   entry's toggle is the rule's `flag`, and it is offered even when the
   entry is disabled, since a rule can always set the server's flag.
@@ -445,6 +474,10 @@ What the second one settled, all in one value the controls read
   > feed item carries the user's own flags as well; only the pill still
   > takes the built-in entry's name
   > (`post-wave-3/flags-and-cross-media.md`, decision 2 and B2.4).
+
+  > **Erratum (2026-11-12):** since the second Apple PR (#2425), the
+  > pill takes it only while it is not lit on a flag picked from its
+  > menu (that plan's decision 4).
 
 - Settings > Flags: the effective palette; "Default" badge and caption
   on the first enabled row; "Make default" in row menus; "Reset to
@@ -751,6 +784,11 @@ the rules doc's Flag extra says the editor lists the flags as Settings
 - **Per-slot filtering.** `search_envelopes` and the list pills could
   accept `?keyword=<slot>` (IMAP `KEYWORD`), making every palette entry
   filterable and retiring the `\Flagged` asymmetry left by decision 6.
+
+  > **Erratum (2026-11-12):** done, as cross-media Phase 2: the server
+  > in #2400 and #2424, the Apple list pills in #2425
+  > (`post-wave-3/flags-and-cross-media.md`, decision 4). Android's pills
+  > are android-parity.md leg L2.
 - **Address favourites** keep the gold star and the `flagged.fg`
   token; if the glyph's disappearance from mail makes that read as
   inconsistent, the token note in `design/color-tokens.json` should be

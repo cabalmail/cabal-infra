@@ -217,8 +217,12 @@ struct FeedItemListView: View {
         }
         folders = (try? await client.rssStore?.folders()) ?? []
         switchSubscriptions = (try? await client.rssStore?.subscriptions()) ?? []
+        // The window's hold gives the scope's new list the flag its last
+        // one was picked on: this runs again on every appearance, a reader
+        // popped on iPhone among them.
         let model = FeedItemListViewModel(scope: scope, subscription: subscription, folder: folder,
-                                          client: client, preferences: preferences)
+                                          client: client, preferences: preferences,
+                                          flagPicks: navigator?.flagPicks.feed)
         self.model = model
         await model.reload()
     }
@@ -304,11 +308,16 @@ struct FeedItemListView: View {
 }
 
 extension FeedItemListView {
-    /// The built-in flag's name as a state, for the filter pill
-    /// (`filterLabel`), which filters on that flag whatever the default
-    /// flag is. The one-press controls act on the default flag
-    /// (`FeedItemListViewModel.defaultFlag`).
+    /// The built-in flag's name as a state, for the plain filter pill
+    /// (`filterLabel`), whose own filter is that flag whatever the default
+    /// flag is; the pill as a menu takes its words from
+    /// `FlagFilterMenuPolicy`. The one-press controls act on the default
+    /// flag (`FeedItemListViewModel.defaultFlag`).
     var feedFlagName: String { FlagToggle.systemFlagName(in: preferences.flagPalette) }
+
+    /// The palette, for the sibling files' flag words (`+Footer`); the
+    /// view's preferences are private to this file.
+    var flagPalette: [FlagPaletteEntry] { preferences.flagPalette }
 
     /// The row's menu: read, the default flag's toggle named for the flag,
     /// a Flags submenu of every flag the palette offers whenever that is

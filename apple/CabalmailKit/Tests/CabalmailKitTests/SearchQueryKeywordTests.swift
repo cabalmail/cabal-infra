@@ -4,7 +4,8 @@ import CabalmailKitTestSupport
 
 /// `SearchQuery.keyword`, the custom flag a mail search is narrowed to:
 /// `/search_envelopes` takes one palette slot and returns only the messages
-/// that carry it, in one folder or across all of them.
+/// that carry it, in one folder or across all of them. And `anyFlag`, which
+/// narrows it to the messages carrying any flag at all.
 final class SearchQueryKeywordTests: XCTestCase {
     private let emptyReply = """
         {"envelopes": [], "total_estimate": 0, "next_cursor": null, "folders_searched": [], "truncated": false}
@@ -50,5 +51,28 @@ final class SearchQueryKeywordTests: XCTestCase {
         let query = SearchQuery(keyword: "cabal-flag-03")
 
         XCTAssertEqual(query.page(limit: 50, cursor: "next").keyword, "cabal-flag-03")
+    }
+
+    func testAnyFlagIsSentAsASwitchBesideTheFolder() async throws {
+        let sent = try await queryItems(sentFor: SearchQuery(folder: "INBOX", anyFlag: true))
+
+        XCTAssertEqual(sent["any_flag"], "1")
+        XCTAssertEqual(sent["folder"], "INBOX")
+        XCTAssertNil(sent["flagged"], "any flag is its own criterion, not the system flag's")
+        XCTAssertNil(sent["keyword"])
+    }
+
+    func testASearchWithoutAnyFlagSendsNone() async throws {
+        let sent = try await queryItems(sentFor: SearchQuery(folder: "INBOX", flagged: true, keyword: "cabal-flag-03"))
+
+        XCTAssertEqual(sent["flagged"], "1")
+        XCTAssertNil(sent["any_flag"], "a server reads the parameter's presence with a yes as the filter")
+    }
+
+    /// The same copy that must keep the keyword: a page that lost the switch
+    /// would page through every message of the folder.
+    func testEveryPageOfASearchKeepsAnyFlag() {
+        XCTAssertTrue(SearchQuery(anyFlag: true).page(limit: 50, cursor: "next").anyFlag)
+        XCTAssertFalse(SearchQuery(flagged: true).page(limit: 50, cursor: "next").anyFlag)
     }
 }

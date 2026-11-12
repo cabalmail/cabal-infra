@@ -220,7 +220,9 @@ public struct ApiAttachmentDescriptor: Sendable, Codable, Hashable {
 /// `1` to satisfy the Lambda's TRUTHY check and are omitted otherwise.
 /// `keyword` is one custom flag's palette slot (`FlagPalette.slots`): only
 /// messages that carry it match, and anything that is not a slot is a 400.
-/// Every criterion given must hold.
+/// `anyFlag` matches a message carrying the system flag or any palette slot
+/// (`any_flag`, which a server older than the parameter ignores, answering
+/// as if it were not there). Every criterion given must hold.
 public struct SearchQuery: Sendable, Hashable {
     public let folder: String?
     public let text: String?
@@ -232,6 +234,7 @@ public struct SearchQuery: Sendable, Hashable {
     public let unread: Bool
     public let flagged: Bool
     public let keyword: String?
+    public let anyFlag: Bool
     public let hasAttachment: Bool
     public let limit: Int?
     public let cursor: String?
@@ -247,6 +250,7 @@ public struct SearchQuery: Sendable, Hashable {
         unread: Bool = false,
         flagged: Bool = false,
         keyword: String? = nil,
+        anyFlag: Bool = false,
         hasAttachment: Bool = false,
         limit: Int? = nil,
         cursor: String? = nil
@@ -261,6 +265,7 @@ public struct SearchQuery: Sendable, Hashable {
         self.unread = unread
         self.flagged = flagged
         self.keyword = keyword
+        self.anyFlag = anyFlag
         self.hasAttachment = hasAttachment
         self.limit = limit
         self.cursor = cursor
@@ -282,6 +287,7 @@ public struct SearchQuery: Sendable, Hashable {
             unread: unread,
             flagged: flagged,
             keyword: keyword,
+            anyFlag: anyFlag,
             hasAttachment: hasAttachment,
             limit: limit,
             cursor: cursor

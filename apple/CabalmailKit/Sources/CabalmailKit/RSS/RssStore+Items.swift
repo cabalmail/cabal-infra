@@ -4,20 +4,24 @@ import Foundation
 
 extension RssStore {
     /// How a listing is ordered and filtered; `after` pages through it.
+    /// `flag` narrows it further, to the items carrying one flag or any
+    /// flag; an item must pass `filter` as well.
     public struct ItemQuery: Sendable, Hashable {
         public var scope: RssItemScope
         public var filter: RssItemFilter
+        public var flag: FlagCriterion?
         public var ordering: RssOrderingMode
         public var limit: Int
         /// The last row of the previous page; nil for the first page.
         public var after: ItemCursor?
 
         public init(
-            scope: RssItemScope, filter: RssItemFilter = .all, ordering: RssOrderingMode = .newestFirst,
-            limit: Int = 50, after: ItemCursor? = nil
+            scope: RssItemScope, filter: RssItemFilter = .all, flag: FlagCriterion? = nil,
+            ordering: RssOrderingMode = .newestFirst, limit: Int = 50, after: ItemCursor? = nil
         ) {
             self.scope = scope
             self.filter = filter
+            self.flag = flag
             self.ordering = ordering
             self.limit = limit
             self.after = after
@@ -103,6 +107,11 @@ extension RssStore {
         case .unread: clauses.append("NOT (\(Schema.readExpression))")
         case .favorite: clauses.append("i.is_favorite = 1")
         }
+        if let criterion = query.flag {
+            let flag = Self.flagClause(criterion)
+            clauses.append(flag.sql)
+            binds += flag.binds
+        }
         if let after = query.after {
             let (clause, keyBinds) = Self.afterClause(query.ordering, after)
             clauses.append(clause)
@@ -166,6 +175,51 @@ extension RssStore {
             FROM items i WHERE i.feed_id IN (\(Self.placeholders(feedIds.count)))
             """, feedIds.map(SQLiteDatabase.Value.init(_:))).first
         return FilterCounts(all: row?.int(0) ?? 0, unread: row?.int(1) ?? 0, favorite: row?.int(2) ?? 0)
+    }
+
+    /// How many of a scope's cached items pass a flag criterion: the number
+    /// on a list's pill while the list is narrowed to that flag, counted by
+    /// the clause `items(_:)` lists them with.
+    public func flagCount(in scope: RssItemScope, matching criterion: FlagCriterion) throws -> Int {
+        let feedIds = try feedIds(in: scope)
+        guard !feedIds.isEmpty else { return 0 }
+        let flag = Self.flagClause(criterion)
+        let row = try database.rows("""
+            SELECT COUNT(*) FROM items i
+            WHERE i.feed_id IN (\(Self.placeholders(feedIds.count))) AND \(flag.sql)
+            """, feedIds.map(SQLiteDatabase.Value.init(_:)) + flag.binds).first
+        return row?.int(0) ?? 0
+    }
+
+    /// A flag criterion as a condition on `items i`, with what it binds.
+    ///
+    /// The built-in flag is the favorite bit. A custom flag is looked for
+    /// in `flags`, the compact sorted JSON list `RssStoredFlags.encode`
+    /// writes: slots are fixed-width atoms, so a slot between its quotes
+    /// cannot match inside another, and a string that is no slot is not
+    /// looked for at all. An empty list is exactly `[]`, two bytes, which
+    /// is how "any flag" tells that a custom one is set.
+    ///
+    /// `flags` is the last column of a row whose bodies come before it, so
+    /// reading it means reading the pages a long item overflows onto, for
+    /// every item in the scope. `octet_length` answers from the row's
+    /// header: with it (`byteLength`) only the items that carry a custom
+    /// flag are read that far. The `CASE` is what orders the two tests;
+    /// SQLite promises no order for the sides of an `AND`.
+    static func flagClause(
+        _ criterion: FlagCriterion, byteLength: Bool = SQLiteDatabase.hasOctetLength
+    ) -> (sql: String, binds: [SQLiteDatabase.Value]) {
+        if criterion.isSystemFlag { return ("i.is_favorite = 1", []) }
+        let carriesCustom = byteLength ? "octet_length(i.flags) > 2" : "i.flags != '[]'"
+        switch criterion {
+        case .any:
+            return ("(i.is_favorite = 1 OR \(carriesCustom))", [])
+        case .slot:
+            guard let slot = criterion.keywordSlot else { return ("0", []) }
+            let found = "instr(i.flags, ?) > 0"
+            return (byteLength ? "CASE WHEN \(carriesCustom) THEN \(found) ELSE 0 END" : found,
+                    [.init("\"\(slot)\"")])
+        }
     }
 
     /// Cached item counts keyed by subscription id (absent = zero): the

@@ -83,7 +83,8 @@ extension MessageListViewModel {
         await runSearch(resetFilterTab: false, preserveDepth: true, rerun: true)
     }
 
-    /// Drive a filter pill. Unread / Flagged run a fresh folder-scoped server
+    /// Drive a filter pill (a row of the Flagged pill's menu goes through
+    /// `chooseFlagFilter`). Unread / Flagged run a fresh folder-scoped server
     /// search so every match in the folder is reachable -- the first page
     /// loads here and scrolling pages in the rest via
     /// `MailSearchSession.loadMore` -- while All returns to folder mode. A pill
@@ -118,6 +119,7 @@ extension MessageListViewModel {
             flagged: filter == .flagged,
             thisFolderOnly: true
         )
+        holdFlagPick()
         await runSearch(resetFilterTab: false)
     }
 
@@ -137,6 +139,7 @@ extension MessageListViewModel {
         // can't strand a highlighted pill over a plain folder view.
         filterTab = .all
         search.clear()
+        holdFlagPick()
         // Folder scope drops back to the folder view; the global search
         // surface has no folder to return to, so it just lands on the empty
         // "type to search" state.

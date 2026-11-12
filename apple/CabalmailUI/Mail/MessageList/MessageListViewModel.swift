@@ -44,6 +44,11 @@ final class MessageListViewModel {
     /// a text search in a pill's place, the filter sheet -- records All for
     /// the folder, as tapping All does (#1826). Tapping a pill records the
     /// pill itself (`selectFilter`).
+    ///
+    /// One state is lit and not recorded: Flagged over a pick from its menu
+    /// (`flagPick`: a flag of the user's own, or any flag), which lasts for
+    /// the visit. The folder then reopens on the pill it had before the
+    /// pick, which is why this setter records only a move to All.
     var filterTab: MessageFilter = .all {
         didSet {
             guard oldValue != .all, filterTab == .all, let folder else { return }
@@ -168,14 +173,23 @@ final class MessageListViewModel {
     /// view to apply (`receive(_:)`, `MailEventSelectionPolicy`).
     let selectionReactions = ListSelectionReactions()
 
+    /// This list's turn at the window's hold on the flag its folder list is
+    /// narrowed to for the visit (`FlagPickHold`); nil on the search surface
+    /// and wherever no window holds one.
+    let flagVisit: FlagPickHold<String>.Visit?
+
     /// - Parameter selection: the selection to read and write; a new one
     ///   when nil. A folder list passes its window's.
+    /// - Parameter flagPicks: the window's hold on this folder's per-visit
+    ///   flag pick. A list for the folder the window's last list was on
+    ///   opens narrowed to the flag that one was.
     init(
         scope: MessageListScope, client: CabalmailClient, preferences: Preferences, mailStore: MailSessionStore,
-        selection: SelectionModel<MessageRef>? = nil
+        selection: SelectionModel<MessageRef>? = nil, flagPicks: FlagPickHold<String>? = nil
     ) {
         self.scope = scope
         self.selection = selection ?? SelectionModel()
+        self.flagVisit = scope.folder.flatMap { flagPicks?.take(for: $0.path) }
         self.client = client
         self.preferences = preferences
         self.mailStore = mailStore
@@ -183,6 +197,12 @@ final class MessageListViewModel {
         self.search = MailSearchSession(client: client, listFolder: scope.folder)
         window?.host = self
         search.host = self
+        // The visit's pick lights Flagged and narrows the cached rows from
+        // the first paint; `loadInitial` sends its search.
+        if let pick = flagVisit?.pick {
+            filterTab = .flagged
+            search.filters = MessageSearchFilters(flag: pick, thisFolderOnly: true)
+        }
         // For the model's whole life, not the view's: a list under a pushed
         // reader has had `.onDisappear` and still has to hear its archive.
         mailStore.events.subscribe(self)

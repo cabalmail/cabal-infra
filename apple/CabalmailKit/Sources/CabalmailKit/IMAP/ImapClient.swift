@@ -180,8 +180,9 @@ public extension ImapClient {
     /// oversized request -- Layer 3.2 of
     /// `docs/0.10.x/large-mailbox-hardening-plan.md`.
     ///
-    /// `totalEstimate` and `foldersSearched` come from the first page (the
-    /// Lambda reports the same values on every page of one query).
+    /// `totalEstimate` and `foldersSearched` come from the first page, whose
+    /// total is the query's: a later page's counts only the matches on or
+    /// before its cursor's day, since the Lambda counts after pruning to it.
     /// `truncated` is the union of every page's flag -- i.e. the server's
     /// "match count is a lower bound" signal, unchanged. The returned
     /// `nextCursor` is the cursor the next unfetched page would use, or nil

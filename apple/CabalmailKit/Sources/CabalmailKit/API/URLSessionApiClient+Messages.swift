@@ -112,6 +112,7 @@ private func searchEnvelopesQueryItems(host: String, query: SearchQuery) -> [URL
     if query.unread { items.append(URLQueryItem(name: "unread", value: "1")) }
     if query.flagged { items.append(URLQueryItem(name: "flagged", value: "1")) }
     appendIfPresent("keyword", query.keyword)
+    if query.anyFlag { items.append(URLQueryItem(name: "any_flag", value: "1")) }
     if query.hasAttachment { items.append(URLQueryItem(name: "has_attachment", value: "1")) }
     if let limit = query.limit { items.append(URLQueryItem(name: "limit", value: String(limit))) }
     appendIfPresent("cursor", query.cursor)
