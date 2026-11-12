@@ -224,9 +224,46 @@ final class RssStoreFlagFilterTests: XCTestCase {
         }
     }
 
-    func testThisSQLiteCanReadALengthFromTheRowHeader() {
-        // Every OS the Kit builds for ships SQLite 3.43 or later; were one
-        // not to, the plain spelling above is what its queries would use.
+    /// `flags` is the last column of a row whose bodies come before it, so
+    /// reading it costs the row's overflow pages. With `octet_length`, which
+    /// SQLite answers from the row's header, the clause reads the text only
+    /// of an item that carries a custom flag, and the `CASE` is what makes
+    /// the length the first of the two tests. No test here can count page
+    /// reads, so the spelling itself is pinned: results are the same without
+    /// it, and only the cost of every flag-narrowed read would say so.
+    func testTheClauseTestsTheLengthBeforeItReadsTheText() {
+        let any = RssStore.flagClause(.any, byteLength: true)
+        let slot = RssStore.flagClause(.slot(slot3), byteLength: true)
+
+        XCTAssertEqual(any.sql, "(i.is_favorite = 1 OR octet_length(i.flags) > 2)")
+        XCTAssertTrue(any.binds.isEmpty)
+        XCTAssertEqual(slot.sql, "CASE WHEN octet_length(i.flags) > 2 THEN instr(i.flags, ?) > 0 ELSE 0 END")
+        XCTAssertEqual(slot.binds, [.text("\"cabal-flag-03\"")], "the slot between its quotes")
+        XCTAssertEqual(RssStore.flagClause(.slot(FlagPalette.systemSlot), byteLength: true).sql, "i.is_favorite = 1",
+                       "the built-in flag never reads the column at all")
+    }
+
+    func testEveryOSTheKitBuildsForHasOctetLength() {
+        // SQLite 3.43 or later. Were one not to, the plain spelling is what
+        // its queries would use (`flagClause`'s `byteLength`).
         XCTAssertTrue(SQLiteDatabase.hasOctetLength)
+    }
+
+    /// The store keeps whatever strings the server lists. One that is no
+    /// palette slot is never looked for: asked for by name, it lists nothing,
+    /// in either spelling of the clause.
+    func testAStringThatIsNoSlotIsNotLookedFor() async throws {
+        try await store.upsertItems([item("odd", feed: "f1", day: 1, flags: ["$Forwarded"])])
+
+        let rows = try await listed(.slot("$Forwarded"))
+        let count = try await store.flagCount(in: .all, matching: .slot("$Forwarded"))
+
+        XCTAssertEqual(rows, [])
+        XCTAssertEqual(count, 0)
+        for byteLength in [false, true] {
+            let clause = RssStore.flagClause(.slot("$Forwarded"), byteLength: byteLength)
+            XCTAssertEqual(clause.sql, "0")
+            XCTAssertTrue(clause.binds.isEmpty)
+        }
     }
 }

@@ -73,9 +73,10 @@ final class MailSearchSession {
     private(set) var totalEstimate = 0
     /// How many messages the search on screen matched, as its first page
     /// said: the query's whole count. `totalEstimate` moves with every later
-    /// page, each of which counts only from its cursor's day on, so a pill
-    /// that names this search's flag reads this one (`matchCount`). Nil from
-    /// the moment a new search is sent until it answers.
+    /// page, each of which counts only the matches on or before its cursor's
+    /// day, so a pill that names this search's flag reads this one
+    /// (`matchCount`). Nil from the moment a new search is sent until it
+    /// answers.
     private(set) var matchTotal: Int?
     /// How many rows this search has put in `rows`; with `matchTotal`, what
     /// `matchCount` works from.
@@ -219,14 +220,17 @@ final class MailSearchSession {
         truncated = false
         foldersSearched = []
         nextCursor = nil
-        dropRows()
+        dropRows(showing: nil)
     }
 
     /// Empties the rows ahead of a run that fetches them again from the top
-    /// (a hard reload); the search stays the one on screen.
-    func dropRows() {
+    /// (a hard reload); the search stays the one on screen. `count` is the
+    /// number a pill is showing for it, which stands until that run answers:
+    /// with the rows gone there is nothing left to work it out from.
+    func dropRows(showing count: Int?) {
         rows.removeAll()
         delivered = 0
+        if let count { matchTotal = count }
     }
 
     /// The number for a pill showing this search: the count its first page

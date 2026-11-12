@@ -8,5 +8,6 @@
   or feed, or quit the app, and the list then reopens as it was; the
   built-in flag's row is remembered for the folder or feed, as the
   Flagged pill always was, and Clear filter shows everything. With only
-  the built-in flag the pill is the toggle it was. A folder's list now
-  says so when the flag you picked is on none of its messages.
+  the built-in flag the pill is the toggle it was. When one of your own
+  flags, or Any flag, is on none of a folder's messages, its list now
+  says so.

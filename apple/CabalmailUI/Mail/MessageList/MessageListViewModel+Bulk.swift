@@ -59,7 +59,7 @@ extension MessageListViewModel {
     /// — the user sees only the unread tab, expects to flag those, not
     /// every read message too.
     func selectAllVisible() {
-        let visible = envelopes.filter(narrowing.includes)
+        let visible = narrowing.shown(envelopes)
         selectedRefs = Set(visible.map { rowRef(for: $0) })
     }
 

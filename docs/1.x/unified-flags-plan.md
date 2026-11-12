@@ -233,11 +233,12 @@ Nothing changes on the server for this.
 > set and clear the default flag, as mail's do (that plan's decision
 > 2). Android follows in android-parity.md leg L2.
 
-> **Erratum (2026-11-12, the second Apple PR, #2425):** nor for the
-> pill, once the palette holds a flag of the user's own: the feed list's
-> Flagged pill is then a menu, and a flag picked from it narrows the
-> list to the items carrying that flag, or any flag, from `items.flags`
-> (that plan's decision 4).
+> **Erratum (2026-11-12):** since the second Apple PR (#2425), nor for
+> the pill while it is lit on a flag picked from its menu, which it has
+> once the palette holds a flag of the user's own. The pick narrows the
+> list to the items carrying that flag (`items.flags`) or any flag
+> (`is_favorite` or `items.flags`). Unlit, and lit on the built-in
+> flag, the pill follows that entry as before (that plan's decision 4).
 
 ### 5. Toggle affordances retarget to the default flag
 
@@ -474,9 +475,9 @@ What the second one settled, all in one value the controls read
   > takes the built-in entry's name
   > (`post-wave-3/flags-and-cross-media.md`, decision 2 and B2.4).
 
-  > **Erratum (2026-11-12, the second Apple PR, #2425):** and the pill
-  > only while it is not lit on a flag picked from its menu (that plan's
-  > decision 4).
+  > **Erratum (2026-11-12):** since the second Apple PR (#2425), the
+  > pill takes it only while it is not lit on a flag picked from its
+  > menu (that plan's decision 4).
 
 - Settings > Flags: the effective palette; "Default" badge and caption
   on the first enabled row; "Make default" in row menus; "Reset to

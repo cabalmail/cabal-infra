@@ -45,7 +45,7 @@ struct FilterPillFace: View {
     /// The number after the label. Nil draws none.
     var count: Int?
     /// A number to keep room for while `count` is nil: drawn unseen, so the
-    /// face is as wide as it will be once the count arrives.
+    /// face already has a number's width when the count arrives.
     var reservedCount: Int?
 
     var body: some View {

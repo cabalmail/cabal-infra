@@ -132,9 +132,11 @@ final class MessageListFlagFilterPillTests: XCTestCase {
         // A full first page, so the run stops there with the next page's
         // cursor in hand and the list pages the rest in.
         let firstPage = fixture.newestFirst(150, through: 101)
+        // The second page brings one row of the first again, as a page
+        // boundary that moved under mailbox churn does; it is one row.
         await fixture.imap.scriptSearchPages([
             answer(firstPage, slot: later, total: 120, cursor: "page-2"),
-            answer([4, 3], slot: later, total: 70),
+            answer([101, 4, 3], slot: later, total: 70),
         ])
         await model.chooseFlagFilter(.flag(slot: later))
         XCTAssertEqual(model.search.nextCursor, "page-2")
@@ -184,6 +186,44 @@ final class MessageListFlagFilterPillTests: XCTestCase {
         XCTAssertEqual(model.flagged, 3, "the built-in flag's count is another number")
     }
 
+    /// A count the server gave low (a total is a lower bound once a search
+    /// is truncated) cannot take the number below nothing.
+    func testTheNumberStopsAtZero() async throws {
+        let model = try await makeModel()
+        await fixture.imap.scriptSearch(answer([7, 5], slot: later, total: 1))
+        await model.chooseFlagFilter(.flag(slot: later))
+
+        model.envelopes.removeAll()
+
+        XCTAssertEqual(model.flagPickCount, 0)
+    }
+
+    /// A hard reload empties the rows before it fetches them again. The
+    /// number on the pill stands until that answer: it does not go back to
+    /// the first count, nor lose the rows that had left twice over.
+    func testAHardReloadKeepsTheNumberUntilItsSearchAnswers() async throws {
+        let model = try await makeModel()
+        await fixture.imap.scriptSearch(answer([7, 5, 3], slot: later, total: 9))
+        await model.chooseFlagFilter(.flag(slot: later))
+        await model.toggle(.keyword(later), on: model.envelopes[0])
+        XCTAssertEqual(model.flagPickCount, 8)
+        await fixture.scriptRefresh(messages: 2, page: [9, 8], flagged: 3)
+        await fixture.imap.holdNextSearch()
+
+        let reload = Task { await model.hardReload() }
+        await fixture.imap.awaitHeldSearch()
+
+        XCTAssertTrue(model.envelopes.isEmpty, "the rows are gone until the search answers")
+        XCTAssertEqual(model.flagPickCount, 8)
+        XCTAssertNil(model.flagPickEmptyState(visibleRowCount: 0), "and an emptied list is not an empty answer")
+
+        await fixture.imap.scriptSearch(answer([5, 3], slot: later, total: 8))
+        await fixture.imap.releaseHeldSearch()
+        await reload.value
+        XCTAssertEqual(model.flagPickCount, 8)
+        XCTAssertEqual(model.envelopes.map(\.uid), [5, 3])
+    }
+
     /// Deleting the picked flag in Settings, the palette's last custom one
     /// included, leaves the list narrowed to its slot. The pill stays a
     /// menu, named for what is in force, with the way out under it.
@@ -221,6 +261,31 @@ final class MessageListFlagFilterPillTests: XCTestCase {
         XCTAssertNil(model.flagPickEmptyState(visibleRowCount: 2))
     }
 
+    /// The answer stands while a refresh asks again (a poll comes every
+    /// minute, and words that blinked out each time would read as a fault),
+    /// and gives way to an error.
+    func testTheEmptyAnswerStandsThroughARefreshAndGivesWayToAnError() async throws {
+        let model = try await makeModel()
+        await fixture.imap.scriptSearchPages([answer([], slot: later), answer([], slot: later)])
+        await model.chooseFlagFilter(.flag(slot: later))
+        XCTAssertNotNil(model.flagPickEmptyState(visibleRowCount: 0))
+        await fixture.scriptRefresh(messages: 2, page: [9, 8], flagged: 3)
+        await fixture.imap.holdNextSearch()
+
+        let refresh = Task { await model.refresh() }
+        await fixture.imap.awaitHeldSearch()
+        XCTAssertNotNil(model.flagPickEmptyState(visibleRowCount: 0), "while the refresh's search is out")
+        await fixture.imap.releaseHeldSearch()
+        await refresh.value
+        XCTAssertNotNil(model.flagPickEmptyState(visibleRowCount: 0))
+
+        // Nothing more is scripted, so the next refresh's search fails.
+        await model.refresh()
+
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertNil(model.flagPickEmptyState(visibleRowCount: 0), "the error line is what the list says now")
+    }
+
     func testTheEmptyStateIsForAPickWithEveryMatchInHand() {
         func state(_ pick: FlagCriterion?, settled: Bool = true, rows: Int = 0) -> FlagPickEmptyState? {
             FlagPickEmptyState(pick: pick, name: "Later", folderName: "INBOX", isSettled: settled,
@@ -237,13 +302,17 @@ final class MessageListFlagFilterPillTests: XCTestCase {
 
     func testAPageStillToComeIsNotAnEmptyAnswer() async throws {
         let model = try await makeModel()
+        // The total is the page's own size, as a truncated search's can be:
+        // by the count alone nothing would be left once these rows are gone.
         await fixture.imap.scriptSearch(
-            answer(fixture.newestFirst(150, through: 101), slot: later, total: 60, cursor: "next")
+            answer(fixture.newestFirst(150, through: 101), slot: later, total: 50, cursor: "next")
         )
         await model.chooseFlagFilter(.flag(slot: later))
         XCTAssertNotNil(model.search.nextCursor)
 
-        // Every loaded row left the pick; the rest are a page away.
-        XCTAssertNil(model.flagPickEmptyState(visibleRowCount: 0))
+        model.envelopes.removeAll()
+
+        XCTAssertEqual(model.flagPickCount, 0)
+        XCTAssertNil(model.flagPickEmptyState(visibleRowCount: 0), "the rest are a page away")
     }
 }

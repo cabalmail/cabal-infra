@@ -173,10 +173,10 @@ final class MessageListViewModel {
     /// view to apply (`receive(_:)`, `MailEventSelectionPolicy`).
     let selectionReactions = ListSelectionReactions()
 
-    /// Where the window keeps the flag its folder list is narrowed to for
-    /// the visit (`FlagPickHold`); nil on the search surface and wherever
-    /// no window holds one.
-    let flagPicks: FlagPickHold<String>?
+    /// This list's turn at the window's hold on the flag its folder list is
+    /// narrowed to for the visit (`FlagPickHold`); nil on the search surface
+    /// and wherever no window holds one.
+    let flagVisit: FlagPickHold<String>.Visit?
 
     /// - Parameter selection: the selection to read and write; a new one
     ///   when nil. A folder list passes its window's.
@@ -189,7 +189,7 @@ final class MessageListViewModel {
     ) {
         self.scope = scope
         self.selection = selection ?? SelectionModel()
-        self.flagPicks = flagPicks
+        self.flagVisit = scope.folder.flatMap { flagPicks?.take(for: $0.path) }
         self.client = client
         self.preferences = preferences
         self.mailStore = mailStore
@@ -199,7 +199,7 @@ final class MessageListViewModel {
         search.host = self
         // The visit's pick lights Flagged and narrows the cached rows from
         // the first paint; `loadInitial` sends its search.
-        if let folder = scope.folder, let pick = flagPicks?.take(for: folder.path) {
+        if let pick = flagVisit?.pick {
             filterTab = .flagged
             search.filters = MessageSearchFilters(flag: pick, thisFolderOnly: true)
         }

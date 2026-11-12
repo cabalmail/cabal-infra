@@ -11,15 +11,19 @@ enum FlagFilterChoice: Hashable {
 
 /// What a list bar draws for its Flagged pill while the pill is a menu.
 struct FlagFilterPillModel {
-    /// The pill's word as drawn: a long flag name is cut short.
+    /// The pill's word as drawn: a picked flag's name, cut short if it is
+    /// long; otherwise the built-in flag's, whole.
     let label: String
     /// The whole name, for VoiceOver.
     let name: String
     let isOn: Bool
     /// The number after the label; nil draws none.
     let count: Int?
-    /// A number whose room the pill keeps while `count` is on its way, so
-    /// the bar does not change shape a moment after a pick.
+    /// A number whose room the pill keeps while `count` is on its way: the
+    /// built-in flag's count, which the pill was showing. The pick's own
+    /// number may be wider or narrower, but the pill has a number's room
+    /// from the tap on, so the bar is less likely to reflow once more when
+    /// the count lands.
     let reservedCount: Int?
     let rows: [ReaderMenuRow<FlagFilterChoice>]
 }
@@ -41,11 +45,12 @@ enum FlagFilterMenuPolicy {
     static let anyFlagLabel = "Any flag"
     static let clearLabel = "Clear filter"
 
-    /// The most characters of a flag's name the lit pill draws. A name may
-    /// run to 32 (`FlagPalette.maxLabelLength`), and a pill that long, with
-    /// its count, is wider than a narrow list column has room for beside
-    /// the bar's other controls. The menu row and VoiceOver keep the whole
-    /// name.
+    /// The most characters of a picked flag's name the pill draws. A name
+    /// may run to 32 (`FlagPalette.maxLabelLength`), and a pill that long,
+    /// with its count, is wider than a narrow list column has room for
+    /// beside the bar's other controls. The menu row and VoiceOver keep the
+    /// whole name. The built-in flag's name is not cut: unlit and lit on
+    /// that flag, the pill reads as the plain pill does.
     static let drawnNameLimit = 20
 
     private static let builtIn = FlagCriterion.slot(FlagPalette.systemSlot)

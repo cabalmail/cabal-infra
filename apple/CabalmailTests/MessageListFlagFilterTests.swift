@@ -149,6 +149,47 @@ final class MessageListFlagFilterTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    /// A search that fails leaves the rows of the one before it on screen,
+    /// so "a search is showing" does not mean this row's is. The retry must
+    /// not be taken for the row already in force.
+    func testAFailedRowOverAnAnsweredPillRunsAgainWhenChosenAgain() async throws {
+        let model = try await makeModel()
+        await fixture.imap.scriptSearchPages([answer([7, 5], carrying: [])])
+        await model.selectFilter(.unread)
+        XCTAssertTrue(model.isSearchActive)
+
+        await model.chooseFlagFilter(.flag(slot: later))
+
+        XCTAssertNotNil(model.errorMessage, "no answer is scripted for the pick, so its search failed")
+        XCTAssertEqual(model.flagPick, .slot(later))
+        XCTAssertTrue(model.isSearchActive, "Unread's rows are still the list's")
+        await fixture.imap.scriptSearchPages([answer([7], carrying: [.keyword(later)])])
+
+        await model.chooseFlagFilter(.flag(slot: later))
+
+        let searches = await fixture.imap.searchCalls
+        XCTAssertEqual(searches.count, 3, "Unread, the pick that failed, and the pick again")
+        XCTAssertEqual(searches.last?.keyword, later)
+        XCTAssertEqual(model.envelopes.map(\.uid), [7])
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testARowChosenAgainWhileItsSearchIsOutIsSentOnce() async throws {
+        let model = try await makeModel()
+        await fixture.imap.holdNextSearch()
+        let first = Task { await model.chooseFlagFilter(.flag(slot: later)) }
+        await fixture.imap.awaitHeldSearch()
+
+        await model.chooseFlagFilter(.flag(slot: later))
+
+        let searches = await fixture.imap.searchCalls
+        XCTAssertEqual(searches.count, 1)
+        await fixture.imap.scriptSearch(answer([7], carrying: [.keyword(later)]))
+        await fixture.imap.releaseHeldSearch()
+        await first.value
+        XCTAssertEqual(model.envelopes.map(\.uid), [7])
+    }
+
     func testAStringThatIsNoFlagOfThePaletteChangesNothing() async throws {
         let model = try await makeModel()
 
@@ -249,14 +290,14 @@ final class MessageListFlagFilterTests: XCTestCase {
 
         await model.chooseFlagFilter(.flag(slot: later))
 
-        XCTAssertEqual(model.envelopes.filter(model.narrowing.includes).map(\.uid), [7, 5],
+        XCTAssertEqual(model.narrowing.shown(model.envelopes).map(\.uid), [7, 5],
                        "and not a row the server sent that does not carry the flag")
         model.selectAllVisible()
         XCTAssertEqual(model.selectedRefs, [fixture.ref(7), fixture.ref(5)])
 
         await fixture.imap.scriptSearch(fixture.searchResult(picked + stale))
         await model.chooseFlagFilter(.flag(slot: FlagPalette.systemSlot))
-        XCTAssertEqual(model.envelopes.filter(model.narrowing.includes).map(\.uid), [3],
+        XCTAssertEqual(model.narrowing.shown(model.envelopes).map(\.uid), [3],
                        "under the built-in flag's row the rule is the built-in flag")
     }
 
@@ -272,7 +313,7 @@ final class MessageListFlagFilterTests: XCTestCase {
         let pick = Task { await model.chooseFlagFilter(.any) }
         await fixture.imap.awaitHeldSearch()
 
-        XCTAssertEqual(model.envelopes.filter(model.narrowing.includes).map(\.uid), [9, 8])
+        XCTAssertEqual(model.narrowing.shown(model.envelopes).map(\.uid), [9, 8])
         await fixture.imap.scriptSearch(answer([9, 8], carrying: [.flagged]))
         await fixture.imap.releaseHeldSearch()
         await pick.value
@@ -297,5 +338,42 @@ final class MessageListFlagFilterTests: XCTestCase {
         XCTAssertEqual(model.envelopes.map(\.uid), [6, 4])
         XCTAssertEqual(model.flagPickCount, 2, "the count is the later pick's too")
         XCTAssertNil(model.errorMessage)
+    }
+}
+
+/// `MessageListNarrowing`: the one rule for which of a list's rows pass its
+/// filter, which the list, Select All and Previous / Next all ask.
+final class MessageListNarrowingTests: XCTestCase {
+    private let later = "cabal-flag-03"
+
+    private var rows: [Envelope] {
+        [
+            TestFixtures.makeEnvelope(uid: 5),
+            TestFixtures.makeEnvelope(uid: 4, flags: [.seen]),
+            TestFixtures.makeEnvelope(uid: 3, flags: [.seen, .flagged]),
+            TestFixtures.makeEnvelope(uid: 2, flags: [.seen, .keyword(later)]),
+            TestFixtures.makeEnvelope(uid: 1, flags: [.keyword("$Forwarded")]),
+        ]
+    }
+
+    private func shown(_ narrowing: MessageListNarrowing) -> [UInt32] {
+        narrowing.shown(rows).map(\.uid)
+    }
+
+    func testEachPillShowsItsOwnRows() {
+        XCTAssertEqual(shown(MessageListNarrowing()), [5, 4, 3, 2, 1])
+        XCTAssertFalse(MessageListNarrowing().narrows)
+        XCTAssertEqual(shown(MessageListNarrowing(tab: .unread)), [5, 1])
+        XCTAssertEqual(shown(MessageListNarrowing(tab: .flagged)), [3], "the built-in flag alone")
+        XCTAssertTrue(MessageListNarrowing(tab: .unread).narrows)
+    }
+
+    /// Under a pick the rule is the picked flag, whatever the pill's own
+    /// filter would say.
+    func testAPickedFlagIsTheRule() {
+        XCTAssertEqual(shown(MessageListNarrowing(tab: .flagged, flag: .slot(later))), [2])
+        XCTAssertEqual(shown(MessageListNarrowing(tab: .flagged, flag: .any)), [3, 2],
+                       "any flag: the built-in one or a palette slot, and no other keyword")
+        XCTAssertTrue(MessageListNarrowing(flag: .any).narrows)
     }
 }

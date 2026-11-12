@@ -158,4 +158,28 @@ final class FlagFilterMenuPolicyTests: XCTestCase {
         XCTAssertEqual(FlagFilterMenuPolicy.drawn(String(long.prefix(20))), "Waiting on reply fro",
                        "a name that fits is drawn whole")
     }
+
+    /// The cut is for a picked flag's name. The built-in flag's is drawn as
+    /// the plain pill draws it, unlit and lit, so the pill does not change
+    /// its word when a flag of the user's own first appears.
+    func testTheBuiltInFlagsNameIsDrawnAsThePlainPillDrawsIt() {
+        let long = "A built-in flag with a long name"
+        let named = [entry(system, long), entry(later, "Later")]
+
+        for current in [nil, builtIn] {
+            let pill = FlagFilterMenuPolicy.pill(palette: named, current: current, builtInCount: 3, pickCount: nil)
+            XCTAssertEqual(pill?.label, long)
+            XCTAssertEqual(pill?.label, FlagToggle.systemFlagName(in: named))
+        }
+    }
+
+    /// Two flags may share a name. A row is told from another by its slot,
+    /// which is what the menu's rows are identified by.
+    func testFlagsOfTheSameNameAreSeparateRows() {
+        let rows = FlagFilterMenuPolicy.rows(palette: [entry(later, "Soon"), entry(work, "Soon")], current: .slot(work))
+
+        XCTAssertEqual(rows.map(\.label), ["Flagged", "Soon", "Soon", "Any flag", "Clear filter"])
+        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
+        XCTAssertEqual(rows.map(\.isOn), [false, false, true, false, false])
+    }
 }

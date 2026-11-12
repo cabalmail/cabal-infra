@@ -39,7 +39,7 @@ final class FeedItemListViewModel {
     /// change reloads, and tells the window what the pick now is.
     private(set) var narrowing: FeedListNarrowing {
         didSet {
-            flagPicks?.set(narrowing.pick, for: scope)
+            flagVisit?.record(narrowing.pick)
             Task { await reload() }
         }
     }
@@ -86,8 +86,9 @@ final class FeedItemListViewModel {
     private let engine: RssSyncEngine?
     private let preferences: Preferences
     private let defaults: FeedDefaultsPersisting?
-    /// Where the window keeps this scope's per-visit pick (`FlagPickHold`).
-    private let flagPicks: FlagPickHold<RssItemScope>?
+    /// This list's turn at the window's hold on the scope's per-visit pick
+    /// (`FlagPickHold`).
+    private let flagVisit: FlagPickHold<RssItemScope>.Visit?
     private let pageSize = 100
     /// The feeds this scope covers as of the last read: a sync of one of
     /// them reloads the list, and a catalog change that moves a feed in or
@@ -120,10 +121,10 @@ final class FeedItemListViewModel {
         self.defaults = defaults ?? engine
         self.ordering = FeedListOrderingPolicy.initial(scope: scope, subscription: subscription, folder: folder,
                                                        allFeedsOrdering: preferences.rssAllFeedsOrdering)
-        self.flagPicks = flagPicks
+        self.flagVisit = flagPicks?.take(for: scope)
         let sticky = FeedListFilterPolicy.initial(scope: scope, subscription: subscription, folder: folder,
                                                   allFeedsFilter: preferences.rssAllFeedsFilter)
-        self.narrowing = FeedListNarrowing(filter: sticky, pick: flagPicks?.take(for: scope))
+        self.narrowing = FeedListNarrowing(filter: sticky, pick: flagVisit?.pick)
     }
 
     /// A pill tap: applies the filter, then makes it the pill this scope's
@@ -309,12 +310,8 @@ final class FeedItemListViewModel {
                 rows.items = try await store.search(feedId: subscription.feedId, query: searchQuery)
                 hasMoreLocal = false
             } else {
-                let query = narrowing.query(scope: scope, ordering: ordering, limit: pageSize)
-                let page = try await store.items(query)
-                // A pill or a flag chosen while this read was out reloads
-                // for itself; these rows are the old filter's.
-                guard query == narrowing.query(scope: scope, ordering: ordering, limit: pageSize) else { return }
-                rows.items = page
+                rows.items = try await store.items(narrowing.query(scope: scope, ordering: ordering,
+                                                                   limit: pageSize))
                 hasMoreLocal = items.count == pageSize
             }
             await rows.refreshPendingMarks()
@@ -334,9 +331,6 @@ final class FeedItemListViewModel {
         do {
             let page = try await store.items(narrowing.query(scope: scope, ordering: ordering, limit: pageSize,
                                                              after: last))
-            // The rows this page follows are still the rows on screen: a
-            // reload meanwhile (another filter, another order) starts over.
-            guard items.last?.id == last.id else { return }
             let shown = Set(items.map(\.id))
             rows.items += page.filter { !shown.contains($0.id) }
             hasMoreLocal = page.count == pageSize

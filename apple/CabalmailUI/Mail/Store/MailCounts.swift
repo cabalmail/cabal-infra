@@ -5,7 +5,8 @@ import CabalmailKit
 
 /// The signed-in account's folder counts: the per-folder unread and total
 /// counts the sidebar badges draw, which are also a message list's Unread
-/// pill (and its flagged counts, its Flagged pill), the Inbox unread count
+/// pill (and its flagged counts, its Flagged pill while that pill is not
+/// lit on a flag picked from its menu), the Inbox unread count
 /// behind the app icon badge, the folders the server reports as subscribed,
 /// and the write-through to the saved folder state an offline launch draws
 /// from.
@@ -46,7 +47,9 @@ public final class MailCounts {
     /// The same for `inboxUnreadCount`: whether a STATUS has set it this
     /// session (`MailSessionStore.polledInboxUnread`, or INBOX's counts).
     var inboxUnreadIsCounted = false
-    /// Per-folder flagged counts: what a message list's Flagged pill shows.
+    /// Per-folder flagged counts: what a message list's Flagged pill shows
+    /// for the built-in flag (a flag picked from its menu has the pick's
+    /// own search to count it).
     /// Set by a STATUS that asked for them (a list's), or seeded from saved
     /// state; moved by the mutation service with every flag change and
     /// removal. The sidebar doesn't draw them, and local changes to them

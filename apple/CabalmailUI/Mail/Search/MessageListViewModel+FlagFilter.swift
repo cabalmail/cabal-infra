@@ -19,6 +19,11 @@ struct MessageListNarrowing: Equatable {
     /// False for All, where every row passes.
     var narrows: Bool { tab != .all || flag != nil }
 
+    /// The rows of `envelopes` the list draws.
+    func shown(_ envelopes: [Envelope]) -> [Envelope] {
+        narrows ? envelopes.filter(includes) : envelopes
+    }
+
     func includes(_ envelope: Envelope) -> Bool {
         if let flag { return flag.matches(envelope.flags) }
         switch tab {
@@ -39,7 +44,7 @@ extension MessageListViewModel {
     ///
     /// It lives in the search's filters, so every run and re-run sends it
     /// and whatever replaces the filters ends it. It is never recorded for
-    /// the folder: only the window holds it (`flagPicks`), for the folder's
+    /// the folder: only the window holds it (`flagVisit`), for the folder's
     /// next list.
     var flagPick: FlagCriterion? { filterTab == .flagged ? search.filters.flag : nil }
 
@@ -76,10 +81,11 @@ extension MessageListViewModel {
     /// visit and record nothing, so the folder reopens on the pill it had.
     /// Clear filter is All, recorded as every route to All is.
     ///
-    /// The row already in force does nothing while its search is showing or
-    /// on its way. Once that search has failed the same row sends it again:
-    /// nothing else would, since a refresh re-runs only a search that
-    /// answered.
+    /// The row already in force does nothing while its own search has
+    /// answered or is on its way. Once that search has failed the same row
+    /// sends it again: nothing else would, since a refresh re-runs only a
+    /// search that answered, and an earlier pill's rows may still be the
+    /// ones on screen.
     func chooseFlagFilter(_ choice: FlagFilterChoice) async {
         guard let criterion = FlagFilterMenuPolicy.criterion(for: choice) else {
             await selectFilter(.all)
@@ -90,7 +96,7 @@ extension MessageListViewModel {
             return
         }
         let inForce = filterTab == .flagged && flagPick == nil
-        guard !(inForce && searchIsShowingOrOut) else { return }
+        guard !(inForce && searchHasAnsweredOrIsOut) else { return }
         if let folder { preferences.setMailFolderFilter(.flagged, for: folder.path) }
         await applyFilter(.flagged)
     }
@@ -102,7 +108,7 @@ extension MessageListViewModel {
         // Only what the server can be asked for: a slot of the palette, or
         // any flag. Anything else would send a search with no criterion.
         guard pick == .any || pick.keywordSlot != nil else { return }
-        guard !(flagPick == pick && searchIsShowingOrOut) else { return }
+        guard !(flagPick == pick && searchHasAnsweredOrIsOut) else { return }
         filterTab = .flagged
         searchQuery = ""
         search.filters = MessageSearchFilters(flag: pick, thisFolderOnly: true)
@@ -113,22 +119,26 @@ extension MessageListViewModel {
     /// Tells the window what this folder's list is now picked on, for the
     /// folder's next list. Called wherever the filters are replaced.
     func holdFlagPick() {
-        guard let folder else { return }
-        flagPicks?.set(flagPick, for: folder.path)
+        flagVisit?.record(flagPick)
     }
 
-    private var searchIsShowingOrOut: Bool { isSearchActive || search.isLoading }
+    /// The search for the filters now in force has answered, or is out.
+    /// Not `isSearchActive`: that stays true for the rows of the search
+    /// before, which a failed one leaves on screen.
+    private var searchHasAnsweredOrIsOut: Bool { search.matchTotal != nil || search.isLoading }
 
     /// What the list says under a pick that nothing in the folder carries,
-    /// given how many rows it is showing; nil while there is a row, a load,
-    /// a page still to come or an error on screen.
+    /// given how many rows it is showing; nil while there is a row, an
+    /// answer or a page still to come, or an error on screen.
     func flagPickEmptyState(visibleRowCount: Int) -> FlagPickEmptyState? {
         FlagPickEmptyState(
             pick: flagPick,
             name: FlagFilterMenuPolicy.name(of: flagPick, palette: flagPalette),
             folderName: folder?.name ?? "",
-            // Every match is in hand: the search answered and has no page left.
-            isSettled: isSearchActive && !isLoading && search.nextCursor == nil && errorMessage == nil,
+            // The pick's own answer says none is left (so not while a new
+            // pick's search is out, and steadily through a refresh of this
+            // one), no page is still to come, and no error is showing.
+            isSettled: flagPickCount == 0 && search.nextCursor == nil && errorMessage == nil,
             visibleRowCount: visibleRowCount
         )
     }
@@ -142,8 +152,9 @@ struct FlagPickEmptyState: Equatable {
     let title: String
     let message: String
 
-    /// - Parameter isSettled: the pick's search has answered with every
-    ///   match in hand. Before that an empty list is not an answer.
+    /// - Parameter isSettled: the pick's search has answered and none of
+    ///   its matches is left or still to come. Before that an empty list is
+    ///   not an answer.
     init?(pick: FlagCriterion?, name: String, folderName: String, isSettled: Bool, visibleRowCount: Int) {
         guard let pick, isSettled, visibleRowCount == 0 else { return nil }
         if pick == .any {

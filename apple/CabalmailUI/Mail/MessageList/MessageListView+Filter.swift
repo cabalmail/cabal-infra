@@ -2,8 +2,10 @@ import SwiftUI
 import CabalmailKit
 
 /// The list's filter: All, Unread, or Flagged. The bar draws only the
-/// Unread and Flagged pills, as toggles (`MessageFilter.toggling`); All is
-/// both of them off. The enum itself lives in the kit (`MessageFilter`),
+/// Unread and Flagged pills; All is both of them off. Unread is a toggle
+/// (`MessageFilter.toggling`), and so is Flagged until Settings > Flags
+/// holds a flag of the user's own, when it becomes a menu of flags to
+/// filter by (`FlagFilterMenuPolicy`). The enum itself lives in the kit (`MessageFilter`),
 /// where `Preferences` stores each folder's sticky pill; the labels are the
 /// view's, and the rule for which rows pass is `MessageListNarrowing`.
 extension MessageFilter {

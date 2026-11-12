@@ -12,8 +12,9 @@ extension FeedItemListView {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
                 // The message list's pills, counting the scope's items as
-                // mail's count the folder's. Toggles, like mail's: All is
-                // neither lit (`RssItemFilter.toggling`).
+                // mail's count the folder's. All is neither lit. Unread is
+                // a toggle (`RssItemFilter.toggling`), and Flagged is one
+                // until it is a menu (`filterPill`), like mail's.
                 FilterPillStrip {
                     ForEach(RssItemFilter.pills) { filterPill($0, model: model) }
                 }

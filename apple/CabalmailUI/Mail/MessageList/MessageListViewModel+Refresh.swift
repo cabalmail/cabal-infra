@@ -6,7 +6,8 @@ import CabalmailKit
 // and the filter pills' counts.
 extension MessageListViewModel {
     /// First load for a freshly built model: the cached snapshot, then the
-    /// folder refresh, then the folder's sticky pill.
+    /// folder refresh, then the flag the window holds for this visit to the
+    /// folder (`flagPick`), or else the folder's sticky pill.
     ///
     /// The pill applies from the first paint: `filterTab` is set before the
     /// cache hydrates so the cached rows are narrowed at once, and the
@@ -71,8 +72,9 @@ extension MessageListViewModel {
         }
     }
 
-    /// The Flagged pill's count: the mail store's flagged count for this
-    /// folder. As `unseen`.
+    /// The Flagged pill's count for the built-in flag: the mail store's
+    /// flagged count for this folder. As `unseen`. Lit on a flag picked
+    /// from its menu, the pill draws `flagPickCount`.
     var flagged: Int {
         get { folder.map { mailStore.counts.folderFlaggedCounts[$0.path] ?? 0 } ?? 0 }
         set {
@@ -108,7 +110,7 @@ extension MessageListViewModel {
         // The reset wiped only the folder window's rows. A pill's results
         // live in the search, so they go here, and the re-run below walks one
         // page, as a fresh pill does.
-        if search.showsResults { search.dropRows() }
+        if search.showsResults { search.dropRows(showing: flagPickCount) }
         await refresh(prefetched: probe, startingOver: true)
     }
 }

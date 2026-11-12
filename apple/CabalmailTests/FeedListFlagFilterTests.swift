@@ -2,14 +2,11 @@ import XCTest
 import CabalmailKit
 @testable import CabalmailUI
 
-/// The Flagged pill's menu on a feed list (cross-media plan, Phase 2): a
-/// flag of the user's own, or any flag, narrows the list for the visit
-/// from the device's own store and records nothing; the built-in flag's
-/// row and Clear filter are the pills they always were. Rows and counts
-/// are read through the real store.
+/// The store, preferences and persister a feed list under test is built
+/// over: two feeds, with an item for each way the flags can fall.
 @MainActor
-final class FeedListFlagFilterTests: XCTestCase {
-    private final class RecordingPersister: FeedDefaultsPersisting, @unchecked Sendable {
+final class FeedFlagFilterWorld {
+    final class RecordingPersister: FeedDefaultsPersisting, @unchecked Sendable {
         private(set) var filters: [RssItemFilter?] = []
 
         func updateSubscription(_ subscription: RssSubscription, _ update: RssSubscriptionUpdate) async throws
@@ -24,43 +21,44 @@ final class FeedListFlagFilterTests: XCTestCase {
         }
     }
 
-    private let later = "cabal-flag-03"
-    private let waiting = "cabal-flag-05"
-    private var directory: URL!
-    private var store: RssStore!
-    private var persister: RecordingPersister!
-    private var preferences: Preferences!
+    static let later = "cabal-flag-03"
+    static let waiting = "cabal-flag-05"
+    let directory: URL
+    let store: RssStore
+    let persister = RecordingPersister()
+    let preferences: Preferences
 
-    override func setUp() async throws {
+    init() async throws {
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("feed-flag-filter-\(UUID().uuidString)")
         store = try RssStore(directory: directory)
-        persister = RecordingPersister()
         preferences = Preferences(store: InMemoryPreferenceStore())
         preferences.activate(controlDomain: "cabalmail.example", username: "alice")
         preferences.flagPalette = [
-            FlagPaletteEntry(slot: later, label: "Later", color: "blue"),
-            FlagPaletteEntry(slot: waiting, label: "Waiting", color: "green"),
+            FlagPaletteEntry(slot: Self.later, label: "Later", color: "blue"),
+            FlagPaletteEntry(slot: Self.waiting, label: "Waiting", color: "green"),
         ]
         try await store.upsertSubscription(RssSubscription(subscriptionId: "s", feedId: "f"))
         try await store.upsertSubscription(RssSubscription(subscriptionId: "t", feedId: "g"))
         try await store.upsertItems([
-            item("a", flags: [later]), item("b", flags: [later, waiting]), item("c", favorite: true),
-            item("d"), item("e", flags: [waiting]), item("z", feed: "g", flags: [later]),
+            item("a", flags: [Self.later]), item("b", flags: [Self.later, Self.waiting]),
+            item("c", favorite: true), item("d"), item("e", flags: [Self.waiting]),
+            item("z", feed: "g", flags: [Self.later]),
         ])
     }
 
-    override func tearDown() async throws {
+    func remove() {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func item(_ key: String, feed: String = "f", favorite: Bool = false, flags: Set<String> = []) -> RssItem {
+    func item(_ key: String, feed: String = "f", favorite: Bool = false, flags: Set<String> = []) -> RssItem {
         RssItem(feedId: feed, subscriptionId: feed == "f" ? "s" : "t", itemId: key, sortKey: key, title: key,
                 publishedAt: "2026-01-01T00:00:00Z", isFavorite: favorite, flags: flags)
     }
 
-    /// The list for feed "s", whose row opens it on `sticky`.
-    private func list(
+    /// The list for feed "s", whose row opens it on `sticky`; or another
+    /// scope's.
+    func list(
         scope: RssItemScope = .subscription("s"), sticky: RssItemFilter = .all,
         picks: FlagPickHold<RssItemScope>? = nil
     ) throws -> FeedItemListViewModel {
@@ -74,15 +72,50 @@ final class FeedListFlagFilterTests: XCTestCase {
         )
     }
 
-    private func shown(_ model: FeedItemListViewModel) -> Set<String> { Set(model.items.map(\.sortKey)) }
+    func shown(_ model: FeedItemListViewModel) -> Set<String> { Set(model.items.map(\.sortKey)) }
 
     /// Lets the write-through task a recorded pill spawned run.
-    private func settle() async {
+    func settle() async {
         for _ in 0..<20 {
             await Task.yield()
             try? await Task.sleep(for: .milliseconds(5))
         }
     }
+}
+
+/// The Flagged pill's menu on a feed list (cross-media plan, Phase 2): a
+/// flag of the user's own, or any flag, narrows the list for the visit
+/// from the device's own store and records nothing; the built-in flag's
+/// row and Clear filter are the pills they always were. Rows and counts
+/// are read through the real store.
+@MainActor
+final class FeedListFlagFilterTests: XCTestCase {
+    private let later = FeedFlagFilterWorld.later
+    private let waiting = FeedFlagFilterWorld.waiting
+    private var world: FeedFlagFilterWorld!
+    private var store: RssStore { world.store }
+    private var persister: FeedFlagFilterWorld.RecordingPersister { world.persister }
+    private var preferences: Preferences { world.preferences }
+
+    override func setUp() async throws {
+        world = try await FeedFlagFilterWorld()
+    }
+
+    override func tearDown() async throws {
+        world.remove()
+        world = nil
+    }
+
+    private func list(
+        scope: RssItemScope = .subscription("s"), sticky: RssItemFilter = .all,
+        picks: FlagPickHold<RssItemScope>? = nil
+    ) throws -> FeedItemListViewModel {
+        try world.list(scope: scope, sticky: sticky, picks: picks)
+    }
+
+    private func shown(_ model: FeedItemListViewModel) -> Set<String> { world.shown(model) }
+
+    private func settle() async { await world.settle() }
 
     // MARK: - What a row lists
 
@@ -226,6 +259,40 @@ final class FeedListFlagFilterTests: XCTestCase {
         XCTAssertEqual(model.filter, .unread)
         XCTAssertEqual(preferences.appPreferencesPayload(), before)
     }
+}
+
+/// Where a feed list's per-visit flag pick is kept, and the number on the
+/// pill while one is in force. The list builds a new model on every
+/// appearance, so the window holds the pick (`FlagPickHold`) and the feed's
+/// next list opens on it; the number is the store's count for the pick.
+@MainActor
+final class FeedListFlagPickTests: XCTestCase {
+    private let later = FeedFlagFilterWorld.later
+    private let waiting = FeedFlagFilterWorld.waiting
+    private var world: FeedFlagFilterWorld!
+    private var store: RssStore { world.store }
+    private var persister: FeedFlagFilterWorld.RecordingPersister { world.persister }
+    private var preferences: Preferences { world.preferences }
+
+    override func setUp() async throws {
+        world = try await FeedFlagFilterWorld()
+    }
+
+    override func tearDown() async throws {
+        world.remove()
+        world = nil
+    }
+
+    private func list(
+        scope: RssItemScope = .subscription("s"), sticky: RssItemFilter = .all,
+        picks: FlagPickHold<RssItemScope>? = nil
+    ) throws -> FeedItemListViewModel {
+        try world.list(scope: scope, sticky: sticky, picks: picks)
+    }
+
+    private func shown(_ model: FeedItemListViewModel) -> Set<String> { world.shown(model) }
+
+    private func settle() async { await world.settle() }
 
     // MARK: - Where the pick is kept
 
@@ -269,13 +336,45 @@ final class FeedListFlagFilterTests: XCTestCase {
         for (name, end) in endings {
             let first = try list(picks: picks)
             first.chooseFlagFilter(.flag(slot: later))
-            XCTAssertEqual(picks.take(for: .subscription("s")), .slot(later), name)
+            XCTAssertEqual(first.flagPick, .slot(later), name)
 
             end(first)
 
             let next = try list(picks: picks)
             XCTAssertNil(next.flagPick, name)
         }
+    }
+
+    /// Only the window's newest list writes the hold: one it has replaced
+    /// (its tasks can still be running) can neither put back a pick for the
+    /// feed the window left nor clear its successor's.
+    func testAListTheWindowHasLeftCannotWriteTheHold() async throws {
+        let picks = FlagPickHold<RssItemScope>()
+        let departed = try list(picks: picks)
+        departed.chooseFlagFilter(.flag(slot: later))
+        let elsewhere = try list(scope: .all, picks: picks)
+        elsewhere.chooseFlagFilter(.any)
+
+        departed.chooseFlagFilter(.flag(slot: waiting))
+        departed.selectFilter(.unread)
+
+        let everywhereAgain = try list(scope: .all, picks: picks)
+        XCTAssertEqual(everywhereAgain.flagPick, .any, "the newer list's pick stands")
+        let back = try list(picks: picks)
+        XCTAssertNil(back.flagPick)
+    }
+
+    /// Choosing a row is all it takes: the list reads the store again for
+    /// the pick without being asked to.
+    func testChoosingARowReloadsTheList() async throws {
+        let model = try list()
+        await model.reload()
+        XCTAssertEqual(shown(model), ["a", "b", "c", "d", "e"])
+
+        model.chooseFlagFilter(.flag(slot: waiting))
+
+        try await waitUntilOnMainActor { self.shown(model) == ["b", "e"] }
+        try await waitUntilOnMainActor { model.flagFilterPill?.count == 2 }
     }
 
     // MARK: - The pick's number
@@ -313,6 +412,47 @@ final class FeedListFlagFilterTests: XCTestCase {
 
         XCTAssertEqual(model.flagFilterPill?.count, 2)
         XCTAssertTrue(shown(model).contains("a"), "the row stays until the next reload, as a read one under Unread")
+    }
+
+    /// A flag set anywhere else (the reader, another window, a sync) reaches
+    /// the list as a store change, and the pick's number follows it.
+    func testThePicksNumberFollowsAFlagSetElsewhere() async throws {
+        let model = try list()
+        model.chooseFlagFilter(.flag(slot: later))
+        await model.reload()
+        XCTAssertEqual(model.flagFilterPill?.count, 2)
+        let following = Task { await model.observe() }
+        defer { following.cancel() }
+        // The list is following once its opening reload has run.
+        try await waitUntilOnMainActor { model.filterCounts != nil }
+        await Task.yield()
+
+        try await store.setFlag(feedId: "f", sortKey: "d", slot: later, true)
+
+        try await waitUntilOnMainActor { model.flagFilterPill?.count == 3 }
+    }
+
+    /// A page read under one filter is not left under another: the pick's
+    /// own reload comes after it and starts the list from the top.
+    func testAPageReadBeforeAPickIsNotLeftUnderIt() async throws {
+        try await store.upsertItems((0..<150).map { index in
+            RssItem(feedId: "f", subscriptionId: "s", itemId: "n\(index)", sortKey: String(format: "n%03d", index),
+                    publishedAt: "2026-02-01T00:00:00Z")
+        })
+        let model = try list()
+        await model.reload()
+        XCTAssertEqual(model.items.count, 100)
+
+        // The page is asked for, and before the store answers a flag is
+        // picked. (The read is a hop to the store's actor; the pick is made
+        // here, on the main actor, before that hop can come back.)
+        let page = Task { await model.loadMore() }
+        await Task.yield()
+        model.chooseFlagFilter(.flag(slot: later))
+        await page.value
+
+        try await waitUntilOnMainActor { self.shown(model) == ["a", "b"] }
+        XCTAssertFalse(model.hasMoreLocal, "nor is the list left thinking the old page was its last read")
     }
 
     func testThePillIsThePlainToggleWithNoFlagOfTheUsersOwn() async throws {
