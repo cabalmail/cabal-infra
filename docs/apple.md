@@ -2057,7 +2057,12 @@ and skips that pull if the push fails), and when the feed queue asks
 before it drops a refused flag add (see the feed store's refused-add
 bullet). No pull is applied over an unsent change, so on a launch that
 sends one, this device's values win over changes made elsewhere since,
-as any late push's do. A push still out when its session ends answers
+as any late push's do. One exception (#2437): the five keys that ride
+only once "syncable" (`flag_palette`, `rss_mark_as_read`, the all-feeds
+filter and order, the swipe bindings) start each launch not syncable,
+so a change that put one back to its default, such as deleting the last
+flag of the user's own, is left out of the launch's push, and the pull
+after it puts the server's value back. A push still out when its session ends answers
 into nothing: it neither applies nor clears the mark, which by then may
 be another account's, and a sign-in over a wired session stops the old
 coordinator before it activates the new account's scope.
