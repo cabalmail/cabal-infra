@@ -38,6 +38,8 @@ final class FlagFilterPillTests: XCTestCase {
         XCTAssertEqual(size(of: menuPill("Later", isOn: true, count: nil)).width, bare.width, accuracy: 0.5)
     }
 
+    /// Two things hold the line, the face's fixed size and the menu's, and
+    /// either alone is enough: this fails only with both gone.
     func testTheMenuPillKeepsItsLabelOnOneLineWhenSqueezed() {
         let pill = menuPill("Waiting on reply", isOn: true, count: 128)
 

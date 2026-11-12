@@ -37,7 +37,11 @@ struct FlagFilterPill: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
+        // No chevron. On macOS the plain style draws none whatever this
+        // says; it is said for the platforms whose default is not ours.
         .menuIndicator(.hidden)
+        // The face keeps its own line (`FilterPillFace`) and this keeps
+        // the menu's: either alone holds the label on one line.
         .fixedSize()
         .accessibilityLabel(FilterPill.spokenLabel(pill.name, count: pill.count))
         .accessibilityHint("Filter by flag")
