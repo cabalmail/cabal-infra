@@ -178,6 +178,17 @@ class FlagPalette(unittest.TestCase):
         self.assertEqual(save_palette([entry('\\Flagged', label='')])[0], 400)
         self.assertEqual(save_palette([entry('\\Flagged', default=True)])[0], 400)
 
+    def test_enabled_is_deprecated_but_still_accepted_and_stored(self):
+        # Builds in the field write `enabled` on every entry, and one refused
+        # entry refuses the whole app map, so the field is accepted until 2.0
+        # (docs/2.x/flag-palette-enabled-removal.md). Nothing reads it.
+        sent = [entry('cabal-flag-01', enabled=False), entry('cabal-flag-02', enabled=True),
+                entry('cabal-flag-03')]
+        status, stored = save_palette(sent)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(stored), sent)
+        self.assertEqual(save_palette([entry('cabal-flag-01', enabled='no')])[0], 400)
+
     def test_system_slot_is_unique_and_has_one_spelling(self):
         self.assertEqual(save_palette([entry('\\Flagged'), entry('\\Flagged')])[0], 400)
         # IMAP matches system flags case-insensitively; the palette does not,

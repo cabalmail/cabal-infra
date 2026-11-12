@@ -470,7 +470,7 @@ class KeywordTest(unittest.TestCase):
         self.assertNotIn('PENDING_KW', content)
         self.assertNotIn('PENDINGANY', content)
 
-    def test_palette_parsing_is_tolerant_and_enabled_only(self):
+    def test_palette_parsing_is_tolerant_and_does_not_read_enabled(self):
         raw = json.dumps([
             {'slot': 'cabal-flag-01', 'label': 'A', 'color': 'red'},
             {'slot': 'cabal-flag-02', 'label': 'B', 'color': 'gray',
@@ -478,11 +478,28 @@ class KeywordTest(unittest.TestCase):
             {'slot': 'not-a-slot', 'label': 'C', 'color': 'red'},
             'garbage',
         ])
-        self.assertEqual(cur.palette_enabled_slots(raw),
-                         frozenset({'cabal-flag-01'}))
-        self.assertEqual(cur.palette_enabled_slots('not json'), frozenset())
-        self.assertEqual(cur.palette_enabled_slots(''), frozenset())
-        self.assertEqual(cur.palette_enabled_slots('{}'), frozenset())
+        self.assertEqual(cur.slots_in_palette(raw),
+                         frozenset({'cabal-flag-01', 'cabal-flag-02'}))
+        self.assertEqual(cur.slots_in_palette('not json'), frozenset())
+        self.assertEqual(cur.slots_in_palette(''), frozenset())
+        self.assertEqual(cur.slots_in_palette('{}'), frozenset())
+
+    def test_a_rule_setting_a_flag_stored_as_disabled_compiles(self):
+        # `enabled` is deprecated and read by nothing
+        # (docs/2.x/flag-palette-enabled-removal.md): the slot is in the
+        # palette, so the rule runs. A slot that is not in it still skips.
+        palette = cur.slots_in_palette(json.dumps([
+            {'slot': 'cabal-flag-02', 'label': 'B', 'color': 'gray',
+             'enabled': False},
+        ]))
+        _, _, reason = compile_one(
+            rule(action='move', moveFolder='Receipts', flags=['cabal-flag-02']),
+            palette_slots=palette)
+        self.assertIsNone(reason)
+        _, _, reason = compile_one(
+            rule(action='move', moveFolder='Receipts', flags=['cabal-flag-01']),
+            palette_slots=palette)
+        self.assertEqual(reason, 'flag_not_in_palette')
 
 
 class FolderTest(unittest.TestCase):
