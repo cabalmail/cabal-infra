@@ -211,6 +211,9 @@ public final class Preferences {
         case swipeTrailing = "cabalmail.prefs.swipe_trailing"
         case rssSwipeLeading = "cabalmail.prefs.rss_swipe_leading"
         case rssSwipeTrailing = "cabalmail.prefs.rss_swipe_trailing"
+        /// Not a preference: the sync state behind `hasUnsentChanges`,
+        /// scoped per account like the values it speaks for.
+        case unsentChanges = "cabalmail.prefs.unsent_changes"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -351,6 +354,22 @@ public final class Preferences {
     /// signed out). While `nil`, reads fall back to defaults and writes
     /// are not persisted.
     public private(set) var accountScope: String?
+
+    /// True while this account's settings hold a change the server has not
+    /// taken: set by the session's `PreferencesSyncCoordinator` at a local
+    /// edit and cleared once a push succeeds. Kept in the store beside the
+    /// values, so a change the app could not send (a new flag among them)
+    /// survives a relaunch, and the next session sends it before it pulls
+    /// the server's copy over it (#2421). Never in the `app` map, never a
+    /// reason to fire `onLocalChange`, and false while no account is
+    /// active.
+    public var hasUnsentChanges: Bool {
+        get { readString(.unsentChanges) == "1" }
+        set {
+            guard let storageKey = storageKey(.unsentChanges) else { return }
+            store.setString(newValue ? "1" : nil, forKey: storageKey)
+        }
+    }
 
     /// Fired after a user-driven preference write, once the new value has been
     /// persisted locally. The session's `PreferencesSyncCoordinator` sets this

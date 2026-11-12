@@ -22,7 +22,8 @@ import Foundation
 ///     coalesced into `/rss_set_item_state` batches, each
 ///     `/rss_mark_all_read` a fence between batches. A failure leaves the
 ///     queue intact for the next attempt, except a flag add the server
-///     refuses, which is dropped (`RssPendingDrain`).
+///     refuses, which is dropped once no settings change of the app's is
+///     waiting to be sent (`RssPendingDrain`, `setUnsentSettingsPush`).
 ///
 /// Single flight: the app asks from several places at once (the session's
 /// poller, the Feeds sidebar, the item list, the reader's marks), so the
@@ -53,6 +54,8 @@ public actor RssSyncEngine {
     private var feedFlights: [String: Flight<Result<Int, Error>>] = [:]
     /// The pending queue's pusher.
     private let pending: RssPendingDrain
+    /// What the drain asks before it drops a refused flag add.
+    private let unsentSettings: RssUnsentSettingsHook
 
     /// Callers waiting on the `syncAll` pass in flight, on a feed's sync, and
     /// on the drain queued behind the one pushing: the tests' view of a join.
@@ -63,7 +66,19 @@ public actor RssSyncEngine {
     public init(client: RssClient, store: RssStore) {
         self.client = client
         self.store = store
-        pending = RssPendingDrain(client: client, store: store)
+        let unsentSettings = RssUnsentSettingsHook()
+        self.unsentSettings = unsentSettings
+        pending = RssPendingDrain(client: client, store: store, unsentSettings: unsentSettings)
+    }
+
+    /// Installs what the drain asks before it drops a flag add the server
+    /// refused: the app's push of a settings change it has not managed to
+    /// send, which may be the very flag (#2421). Nil takes it away, and
+    /// with none installed a refused add is dropped at once. Callable from
+    /// any isolation domain, so the app sets it while wiring the session,
+    /// before the first drain.
+    public nonisolated func setUnsentSettingsPush(_ push: RssUnsentSettingsPush?) {
+        unsentSettings.set(push)
     }
 
     // MARK: - Catalog
