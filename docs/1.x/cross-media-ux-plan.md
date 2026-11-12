@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, is #2420, in review (2026-11-12), and the per-flag filter follows it. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 (2026-11-12); the per-flag filter follows it, and waits for a third server PR, `any_flag` on `search_envelopes` (#2424, in review 2026-11-12), to reach prod. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -380,7 +380,9 @@ Filtering either half by a custom flag needed one server change:
 `search_envelopes` had no keyword criterion, so it gained an optional
 `keyword` (#2400, in prod with 1.49.0), checked against the slot
 pattern and mapped to IMAP `KEYWORD`. The same parameter serves the
-per-flag filter on the mail list (Phase 2).
+per-flag filter on the mail list (Phase 2). That filter's Any flag row,
+decided on 2026-11-12, needed a second: `any_flag` (#2424), the system
+flag or any slot, as one IMAP `OR`.
 
 Rows in a mixed list need one identity for either medium: a two-case
 `ItemRef` in the Kit (`.mail(MessageRef)` and a feed case keyed by feed
@@ -464,8 +466,10 @@ Apple, with the Kit's half of item 5 (`keyword` on its search query).
 Its gate cleared on 2026-11-11 with 1.50.0, and its downgrade drill ran
 on a simulator against stage; `flags-and-cross-media.md` has what was
 built and run. On Apple the rest of 2b is two PRs: #2420 (items 3, 4
-and 6: the menus, the rows and the toggle; in review, 2026-11-12), and
-the per-flag filter (item 5), which opens when the first has merged.
+and 6: the menus, the rows and the toggle; merged 2026-11-12), and
+the per-flag filter (item 5), which is being built. Its shape was
+answered again on 2026-11-12, and its Any flag row needs a third server
+PR, #2424 (item 6 of 2a, in review), in prod before it merges.
 Android has not started (`android-parity.md`, leg L2).
 `flags-and-cross-media.md` has the gates, the answers that settled the
 open points below (its decisions 4 and 11), and what was built.
@@ -484,6 +488,11 @@ open points below (its decisions 4 and 11), and what was built.
 1. `docs/rss.md`: the item and state objects and the endpoint row.
 1. Tests in `lambda/api/_shared/tests` for the expression builder, the
    validation, the serialisers, and the keyword criterion.
+1. `search_envelopes`: an optional `any_flag`, for the filter's Any flag
+   row on the mail list: the system flag or any palette slot, as one
+   IMAP `OR` beside the other filters, with its tests. Added on
+   2026-11-12 with the second answer to `flags-and-cross-media.md`'s
+   decision 4.
 
 ### 2b. Kit and clients
 
@@ -538,13 +547,16 @@ open points below (its decisions 4 and 11), and what was built.
    on the Flagged pill rather than adding a pill per flag, since the
    pill row already wraps at narrow widths (#2014). That default was
    written when the pills were three exclusive choices. Since 1.44.0
-   they are toggles, so a tap on Flagged toggles it, and the flag
-   choice needs a second gesture on the same pill. Settled on
-   2026-11-12 (`flags-and-cross-media.md`, decision 4): the pill is a
-   menu whose primary action is the toggle, with a chevron on the Mac
-   and touch and hold elsewhere, on the two list bars only; a picked
-   flag replaces the built-in criterion; and the pick outlives opening
-   an item, stores nothing, and gives the lit pill the flag's name.
+   they are toggles, so the flag choice had to share the pill with the
+   toggle's tap. Settled on 2026-11-12 (`flags-and-cross-media.md`,
+   decision 4, whose first answer a prototype ruled out on the Mac):
+   the pill is a menu and nothing else, opened by a tap or a click, with
+   a row for every flag, Any flag and Clear filter and no chevron, on
+   the two list bars only, and only when Settings > Flags holds more
+   than the built-in flag; a picked flag is the one criterion; Any flag
+   is the built-in flag or any slot, which on mail is the server's
+   `any_flag`; and the pick outlives opening an item, stores nothing,
+   and gives the lit pill the flag's name.
 1. **Swipe.** `FeedSwipeAction` gains no new case. The flag toggle
    follows the default flag (Decision 1), and custom flags stay a menu
    action on both media.
