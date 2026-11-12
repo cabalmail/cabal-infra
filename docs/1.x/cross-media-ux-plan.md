@@ -26,8 +26,9 @@ after the 2026-10 Apple-client rearchitecture:
 - [`post-wave-3/feed-bulk-actions.md`](./post-wave-3/feed-bulk-actions.md)
   runs Phase 3.
 - [`post-wave-3/android-parity.md`](./post-wave-3/android-parity.md)
-  runs the Android legs if each one follows its Apple leg (see
-  "Context").
+  runs the Android legs, each after its Apple leg: those of Phases 2,
+  4 and 5 by decision, and Phase 3's if `feed-bulk-actions.md`'s
+  decision 2 says so (see "Context").
 
 Where this document assumes the default answer to an open decision, it
 says so; "Open decisions" at the end lists them. The code facts below
@@ -81,11 +82,14 @@ that would mean building them twice.
 Apple and Android are the reference clients. The React admin app is
 second-class and receives none of this unless separately prioritised.
 The Linux client is out of scope. Phase 1 shipped on both clients at
-once. Whether later phases do, or Android follows a release behind each
-Apple phase through `android-parity.md`, is open (see "Open
-decisions"); both execution plans recommend the split. Server changes
-stay additive either way, so a client that has not caught up keeps
-working.
+once. For the phases `flags-and-cross-media.md` executes (2 and 4 to
+6), Android follows a release behind each Apple phase through
+`android-parity.md` (`flags-and-cross-media.md`'s decision 3, answered
+2026-11-09); Phase 6 is Apple's alone unless feed notification
+settings join it. For Phase 3, `feed-bulk-actions.md` asks whether
+Android comes with Apple or later (its decision 2), and that is not
+answered yet (see "Open decisions"). Server changes stay additive
+either way, so a client that has not caught up keeps working.
 
 ### What the rearchitecture changed underneath
 
@@ -117,8 +121,11 @@ moved most of the code this plan names. The facts a phase depends on:
 - Menu commands are window-scoped (`WindowCommand` through
   `FocusedValue`), and the Message, Mailbox and Feeds menus act on the
   window in front.
-- The chrome kit (`Shared/Chrome/`) is shared by both media, but has no
-  unread dot or flag mark yet; the unified flags plan adds them.
+- The chrome kit (`Shared/Chrome/`) is shared by both media. The
+  unified flags plan gave it the unread dot and the flag marks
+  (`UnreadDot`, `FlagDots`; #2375), and Phase 2 added the flag chips
+  and the rows of the flag menus both media draw (`FlagChips`,
+  `FlagMenuToggles`; #2420).
 - `RssStore` is at schema 7 with #2411 (schema 6 before it). From 1.50.0
   (#2404) `openRecovering` sets aside a file written by a newer schema;
   1.49.0 and earlier delete it.
@@ -584,9 +591,11 @@ one adds slot 3 and the other adds slot 5 to the same item; after both
 sync the item carries both. Filter INBOX and a feed to "Read later" and
 each shows only the items carrying it.
 
-**Changelog:** one `Apple:` and one `Android:` fragment, and a plain
-fragment for the server PRs. The Android headline shares the
-500-character release budget.
+**Changelog:** on Apple, two `Apple:` fragments, one for each client
+PR (the first was collated into 1.52.0 before the second merged), and
+a plain one for the Kit (1.51.0). Each of the three server PRs has a
+plain fragment. Android's leg adds one `Android:` fragment, whose
+headline shares the 500-character release budget.
 
 ## Phase 3 -- Acting on feed items in bulk, and out of the reader
 
@@ -780,14 +789,18 @@ app; signing out removes the feed entries from Spotlight.
 
 These are the maintainer's, asked in the execution plans with a
 recommended default. This document is written to the defaults;
-answering otherwise changes the phase named.
+answering otherwise changes the phase named. A decision marked
+answered took its row's default, and one with no mark is open. The
+picker's shape is the exception: the second answer to
+`flags-and-cross-media.md`'s decision 4 set the default shape aside,
+and Phase 2 above was rewritten to it.
 
 | Decision | Phase | Default | Asked in |
 | --- | --- | --- | --- |
-| Do later phases ship on Android with Apple, or a release behind? | All | A release behind, through `android-parity.md` | flags-and-cross-media 3; feed-bulk-actions 2 |
-| Does the feed's Flag control follow the palette's Flagged entry? | 2 | Follows the palette | flags-and-cross-media 2 |
-| Per-flag filtering: both lists, sticky or per visit, or neither yet? | 2 | Both lists, per visit | flags-and-cross-media 4 |
-| Does feed schema 7 ship before the shared offline queue? | 2 | Before, after the set-aside fix | flags-and-cross-media 5 |
+| Do later phases ship on Android with Apple, or a release behind? | All | A release behind, through `android-parity.md` | flags-and-cross-media 3 (answered 2026-11-09); feed-bulk-actions 2 |
+| Does the feed's Flag control follow the palette's Flagged entry? | 2 | Follows the palette | flags-and-cross-media 2 (answered 2026-11-09) |
+| Per-flag filtering: both lists, sticky or per visit, or neither yet? | 2 | Both lists, per visit | flags-and-cross-media 4 (answered 2026-11-10; the picker's shape on 2026-11-12) |
+| Does feed schema 7 ship before the shared offline queue? | 2 | Before, after the set-aside fix | flags-and-cross-media 5 (answered 2026-11-10) |
 | How does Mark All as Read on a feed folder reach the server? | 3 | One queue row per feed, sent as one request | feed-bulk-actions 3 |
 | Where does Forward as Email go? | 3 | The reader's menus and the row menu | feed-bulk-actions 4 |
 | What does the forwarded mail contain? | 3 | The summary as plain text | feed-bulk-actions 5 |
