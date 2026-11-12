@@ -60,6 +60,8 @@ final class SettingsReorderFooterTests: XCTestCase {
             let footer = FlagPaletteSettingsView.footerText(paletteIsEmpty: true, on: host)
             XCTAssertFalse(footer.localizedCaseInsensitiveContains("drag"), footer)
             XCTAssertFalse(footer.localizedCaseInsensitiveContains("right-click"), footer)
+            // A flag goes on a feed item as it does on a message.
+            XCTAssertTrue(footer.contains("any message or feed item"), footer)
         }
     }
 }

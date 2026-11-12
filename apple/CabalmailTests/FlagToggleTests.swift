@@ -88,11 +88,11 @@ final class FlagToggleTests: XCTestCase {
         XCTAssertEqual(toggle.face(isSet: false), ReaderToggleFace.flag(isFlagged: false))
     }
 
-    // MARK: - The built-in flag, for feeds and filters
+    // MARK: - The built-in flag, for the filters
 
-    /// A feed item has the server's flag and no other, so the feed's
-    /// controls follow that entry wherever it sits in the palette.
-    func testTheFeedFlagIsTheBuiltInEntryWhateverItsPosition() {
+    /// The Flagged filters are on the built-in flag, so they follow that
+    /// entry wherever it sits in the palette.
+    func testTheFilterFlagIsTheBuiltInEntryWhateverItsPosition() {
         let palette = [entry("cabal-flag-03", "Todo"), entry(system, "Urgent", color: "red")]
         let toggle = FlagToggle.systemFlag(in: palette)
         XCTAssertEqual(toggle.flag, .flagged)
@@ -101,9 +101,9 @@ final class FlagToggleTests: XCTestCase {
         XCTAssertEqual(FlagToggle.systemFlag(in: []).title(isSet: true), "Unflag")
     }
 
-    /// The feed's controls never lose their flag: a built-in entry stored
-    /// as switched off is the feed's flag all the same.
-    func testTheFeedFlagIsThereForABuiltInEntryStoredAsSwitchedOff() throws {
+    /// The filters never lose their flag: a built-in entry stored as
+    /// switched off is the filters' flag all the same.
+    func testTheFilterFlagIsThereForABuiltInEntryStoredAsSwitchedOff() throws {
         let toggle = FlagToggle.systemFlag(in: try storedAsSwitchedOff())
         XCTAssertEqual(toggle.flag, .flagged)
         XCTAssertEqual(toggle.title(isSet: false), "Urgent")

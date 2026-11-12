@@ -6,10 +6,10 @@ import CabalmailKit
 /// first item of the row and selection menus, the bulk bar's button and
 /// the reader's flag button.
 ///
-/// Mail's controls act on the palette's default flag, the first entry of
-/// Settings > Flags (`defaultFlag(in:)`). A feed item has one mark, the
-/// server's flag, so the feed's controls act on that flag's entry
-/// whatever its position (`systemFlag(in:)`).
+/// Mail's controls and the feed's act on the palette's default flag, the
+/// first entry of Settings > Flags (`defaultFlag(in:)`). The Flagged
+/// filters name the built-in flag, whatever its position
+/// (`systemFlag(in:)`): a plain tap on the pill filters on that one.
 ///
 /// There is always one of each: the list always holds the built-in flag,
 /// and no flag can be switched off.
@@ -24,14 +24,13 @@ struct FlagToggle: Equatable {
         color = entry.color
     }
 
-    /// The flag the mail controls toggle: the first entry of the effective
-    /// palette.
+    /// The flag the one-press controls toggle, on a message and on a feed
+    /// item: the first entry of the effective palette.
     static func defaultFlag(in stored: [FlagPaletteEntry]) -> FlagToggle {
         FlagToggle(FlagPalette.defaultEntry(in: stored))
     }
 
-    /// The built-in flag's entry, for the feed controls and for the
-    /// filters, which the server can only run on that flag.
+    /// The built-in flag's entry, for the Flagged filters.
     static func systemFlag(in stored: [FlagPaletteEntry]) -> FlagToggle {
         FlagToggle(
             FlagPalette.effective(stored).first { $0.slot == FlagPalette.systemSlot }

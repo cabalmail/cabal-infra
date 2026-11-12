@@ -108,22 +108,65 @@ final class ReaderToolbarControlShapeTests: XCTestCase {
     }
 
     func testTheFeedsMoreMenuIsAMenuAndTheRestAreButtons() {
-        XCTAssertEqual(FeedReaderToolbarLayout.macControlShape(for: .more), .menu)
-        for action in [FeedReaderAction.read, .favorite, .readerMode, .remoteContent, .article] {
-            XCTAssertEqual(
-                FeedReaderToolbarLayout.macControlShape(for: action), .button,
-                "\(action.rawValue) draws a plain button on the wide bar"
-            )
+        for hasRows in [false, true] {
+            XCTAssertEqual(feedShape(.more, flagMenuHasRows: hasRows), .menu)
+            for action in [FeedReaderAction.read, .readerMode, .remoteContent, .article] {
+                XCTAssertEqual(
+                    feedShape(action, flagMenuHasRows: hasRows), .button,
+                    "\(action.rawValue) draws a plain button on the wide bar, whatever the palette holds"
+                )
+            }
+        }
+    }
+
+    func testTheFeedsFlagFollowsThePalette() {
+        // The feed reader's flag control is the mail reader's: the plain
+        // button it was while the default flag is all there is to offer, a
+        // split button once its menu has rows.
+        XCTAssertEqual(feedShape(.favorite, flagMenuHasRows: false), .button)
+        XCTAssertEqual(feedShape(.favorite, flagMenuHasRows: true), .splitButton)
+        // And only Flag moves with it.
+        let moved = FeedReaderToolbarLayout.standIns().filter {
+            feedShape($0, flagMenuHasRows: false) != feedShape($0, flagMenuHasRows: true)
+        }
+        XCTAssertEqual(moved, [.favorite])
+    }
+
+    func testTheFeedsFlagStandInCarriesThePalettesRows() {
+        // Two rows or more put a split button in a glass capsule of its
+        // own, so the stand-in carries the count its live twin will: the
+        // palette's, with no item open.
+        let palette = [
+            FlagPaletteEntry(slot: "cabal-flag-01", label: "Later", color: "teal"),
+            FlagPaletteEntry(slot: "cabal-flag-02", label: "Waiting", color: "blue")
+        ]
+        let count = FlagMenuPolicy.rows(palette: palette, taggedSlots: []).count
+        XCTAssertEqual(count, 3, "the built-in flag and the two stored ones")
+        XCTAssertEqual(feedRows(.favorite, flagMenuRowCount: count), 3)
+        XCTAssertEqual(
+            feedRows(.favorite, flagMenuRowCount: 0), 1,
+            "never an empty menu, which AppKit draws as a plain button; the button shape ignores it anyway"
+        )
+        for action in [FeedReaderAction.read, .readerMode, .remoteContent, .article, .more] {
+            XCTAssertEqual(feedRows(action, flagMenuRowCount: 5), 1, "\(action.rawValue) does not follow the palette")
         }
     }
 
     func testTheFeedStandInSetIsTheFullestWideBar() {
-        // The stand-ins are the fullest set, so `.more` — the one menu — is
-        // among them, last, and its shape is the one that matters.
+        // The stand-ins are the fullest set, so `.more`, the pull-down menu,
+        // is among them, last.
         XCTAssertEqual(
             FeedReaderToolbarLayout.standIns(),
             [.read, .favorite, .readerMode, .remoteContent, .article, .more]
         )
+    }
+
+    private func feedShape(_ action: FeedReaderAction, flagMenuHasRows: Bool) -> ReaderToolbarControlShape {
+        FeedReaderToolbarLayout.macControlShape(for: action, flagMenuHasRows: flagMenuHasRows)
+    }
+
+    private func feedRows(_ action: FeedReaderAction, flagMenuRowCount: Int) -> Int {
+        FeedReaderToolbarLayout.macStandInMenuRows(for: action, flagMenuRowCount: flagMenuRowCount)
     }
 
     private func shape(

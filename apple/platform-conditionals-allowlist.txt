@@ -40,7 +40,7 @@ Mail/MessageList/MessageListView.swift 1
 Mail/MoveToFolderSheet.swift 1
 Mail/Reader/EmptyDetailToolbar.swift 1
 Mail/Reader/MessageDetailView+AddressMenu.swift 2
-Mail/Reader/MessageDetailView+DisposeOptions.swift 2
+Mail/Reader/MessageDetailView+DisposeOptions.swift 1
 Mail/Reader/MessageDetailView+FlagOptions.swift 1
 Mail/Reader/MessageDetailView+MacToolbar.swift 1
 Mail/Reader/MessageDetailView+Toolbar.swift 8

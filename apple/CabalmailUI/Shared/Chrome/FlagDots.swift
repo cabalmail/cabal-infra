@@ -21,10 +21,12 @@ struct FlagDotMark: Equatable, Identifiable {
     /// can carry every flag in the palette.
     static let rowLimit = 4
 
-    /// A message's marks: every palette flag it carries, the system flag
+    /// An item's marks: every palette flag it carries, the system flag
     /// included, in palette order (`FlagPalette.slots(in:palette:)`) and
     /// capped at `limit`. A flag whose entry was deleted is still drawn,
-    /// like every tag that outlives being offered.
+    /// like every tag that outlives being offered. `flags` is a message's
+    /// flag set, or a feed item's (`RssItem.paletteFlags`, which reads the
+    /// system flag from the item's favorite bit).
     static func marks(
         for flags: Set<Flag>,
         palette stored: [FlagPaletteEntry],
@@ -35,13 +37,6 @@ struct FlagDotMark: Equatable, Identifiable {
             let entry = entries.first { $0.slot == slot }
             return FlagDotMark(slot: slot, label: entry?.label ?? slot, color: entry?.color ?? "")
         }
-    }
-
-    /// A feed item's marks. A feed item has one flag, stored as its
-    /// favorite bit, and it is the system flag: the mark takes the name and
-    /// color of the palette's entry for it, as a flagged message's does.
-    static func marks(isFlagged: Bool, palette stored: [FlagPaletteEntry]) -> [FlagDotMark] {
-        marks(for: isFlagged ? [.flagged] : [], palette: stored)
     }
 }
 

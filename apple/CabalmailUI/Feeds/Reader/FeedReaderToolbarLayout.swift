@@ -144,13 +144,37 @@ enum FeedReaderToolbarLayout {
     /// reader and for the same reason: `EmptyFeedDetailToolbar` builds each
     /// stand-in from its live twin's kind so the slot is the right width
     /// and nothing shifts when an item opens (#2016). More is a pull-down
-    /// menu (the link rows); every other action is a plain button.
-    static func macControlShape(for action: FeedReaderAction) -> ReaderToolbarControlShape {
+    /// menu (the link rows). Flag follows the palette, as mail's does: a
+    /// split button once its menu has rows (`FeedReaderBarItem`'s flag
+    /// control), the plain button it was while the default flag is all
+    /// there is to offer. Every other action is a plain button.
+    static func macControlShape(
+        for action: FeedReaderAction,
+        flagMenuHasRows: Bool
+    ) -> ReaderToolbarControlShape {
         switch action {
         case .more:
             return .menu
-        case .read, .favorite, .readerMode, .remoteContent, .article:
+        case .favorite:
+            return flagMenuHasRows ? .splitButton : .button
+        case .read, .readerMode, .remoteContent, .article:
             return .button
+        }
+    }
+
+    /// How many inert rows a stand-in carries in its menu. For Flag, as
+    /// many as its live twin's menu holds with no item open: under liquid
+    /// glass a split button whose menu holds two or more rows draws in a
+    /// capsule of its own, and one with fewer shares its neighbours', which
+    /// is worth real points (`ReaderToolbarLayout.macStandInMenuRows`).
+    /// Never none, which AppKit draws as a plain button; the button shape
+    /// ignores it.
+    static func macStandInMenuRows(for action: FeedReaderAction, flagMenuRowCount: Int) -> Int {
+        switch action {
+        case .favorite:
+            return max(flagMenuRowCount, 1)
+        case .read, .readerMode, .remoteContent, .article, .more:
+            return 1
         }
     }
 

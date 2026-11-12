@@ -54,7 +54,7 @@ final class FeedListPillCountsTests: XCTestCase {
         await model.setRead(item, true)
         XCTAssertEqual(model.filterCounts, RssStore.FilterCounts(all: 3, unread: 2, favorite: 1))
 
-        await model.setFavorite(item, true)
+        await model.toggleFlag(slot: FlagPalette.systemSlot, on: item)
         XCTAssertEqual(model.filterCounts, RssStore.FilterCounts(all: 3, unread: 2, favorite: 2))
     }
 

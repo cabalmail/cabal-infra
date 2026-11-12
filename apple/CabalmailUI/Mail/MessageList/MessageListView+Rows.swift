@@ -286,26 +286,17 @@ extension MessageListView {
         }
     }
 
-    /// The Flags submenu body: menu toggles so a set flag carries the
-    /// native checkmark (same construct as the reader's mark-read option
-    /// menu). The rows are the reader's (`FlagMenuPolicy.rows`): every
-    /// entry in palette order, then any flag the message carries whose
-    /// entry was deleted, so it can still be cleared.
-    @ViewBuilder
+    /// The Flags submenu body: the reader's rows (`FlagMenuPolicy.rows`:
+    /// every entry in palette order, then any flag the message carries
+    /// whose entry was deleted, so it can still be cleared) as the
+    /// checkmark toggles every flag menu draws (`FlagMenuToggles`).
     func flagMenuItems(
         _ rows: [FlagMenuRow],
         for envelope: Envelope,
         model: MessageListViewModel
     ) -> some View {
-        ForEach(rows) { row in
-            Toggle(isOn: Binding(
-                get: { row.isOn },
-                set: { _ in
-                    Task { await model.toggle(Flag(wireValue: row.slot), on: envelope) }
-                }
-            )) {
-                Text(row.label)
-            }
+        FlagMenuToggles(rows: rows) { row in
+            Task { await model.toggle(Flag(wireValue: row.slot), on: envelope) }
         }
     }
 

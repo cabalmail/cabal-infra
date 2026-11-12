@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11). Clients not started; the Enabled switch leaves custom flags first (`flags-and-cross-media.md`, decision 10) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, is #2420, in review (2026-11-12), and the per-flag filter follows it. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -463,8 +463,12 @@ Kit (B2.3) merged as #2411 (2026-11-11): items 1 and 2 of 2b on
 Apple, with the Kit's half of item 5 (`keyword` on its search query).
 Its gate cleared on 2026-11-11 with 1.50.0, and its downgrade drill ran
 on a simulator against stage; `flags-and-cross-media.md` has what was
-built and run. The clients (the rest of 2b) have not started and merge
-after the Kit; `flags-and-cross-media.md` has the gates.
+built and run. On Apple the rest of 2b is two PRs: #2420 (items 3, 4
+and 6: the menus, the rows and the toggle; in review, 2026-11-12), and
+the per-flag filter (item 5), which opens when the first has merged.
+Android has not started (`android-parity.md`, leg L2).
+`flags-and-cross-media.md` has the gates, the answers that settled the
+open points below (its decisions 4 and 11), and what was built.
 
 ### 2a. Server
 
@@ -512,18 +516,22 @@ after the Kit; `flags-and-cross-media.md` has the gates.
    the flags off their items again, and sends the rest, because such a
    call can never succeed and would hold every later change behind it
    (decided 2026-11-11).
-1. **Menus.** The mail flag menu's builder (`FlagMenuPolicy`, now in
-   `Mail/Reader/` beside `MessageDetailView+FlagOptions`) moves to
-   `Shared/` over a small "flaggable" value (the current slots, add,
-   remove) and is mounted on the feed reader's Flag button
-   (`FeedReaderToolbar`, which becomes a menu with a primary action, as
-   mail's is) and on the feed row's context menu. Android generalises
+1. **Menus.** The mail flag menu's builder (`FlagMenuPolicy`) moves
+   from `Mail/Reader/` to `Shared/` over a small "flaggable" value (the
+   current slots, add, remove) and is mounted on the feed reader's Flag
+   button (`FeedReaderToolbar`, which becomes a menu with a primary
+   action, as mail's is) and on the feed row's context menu. On Apple
+   (#2420) the policy is in `Shared/Chrome/` with the view that draws
+   its rows for all four menus (`FlagMenuToggles`), and the feed's
+   flaggable value is `FeedItemMark`. Android generalises
    the flag menu in `MessageDetailScreen` the same way and mounts it on
    `FeedItemDetailScreen` and the feed row. The palette's order is
    honoured identically.
 1. **Rows.** Feed rows draw the keyword dots through the shared flag
    mark, the same size and order as mail rows (`MessageListView+Rows`,
-   `EnvelopeRow`).
+   `EnvelopeRow`). On Apple the feed reader's header also names the
+   item's flags, as the mail reader's does (`FlagChips`;
+   `flags-and-cross-media.md`, decision 11).
 1. **Filter.** Both lists gain a per-flag filter. The pick lasts for
    the visit and resets when the list is left. Mail filters through
    `keyword`; feeds query the local cache. By default the choice hangs
@@ -531,13 +539,18 @@ after the Kit; `flags-and-cross-media.md` has the gates.
    pill row already wraps at narrow widths (#2014). That default was
    written when the pills were three exclusive choices. Since 1.44.0
    they are toggles, so a tap on Flagged toggles it, and the flag
-   choice needs a second gesture on the same pill: for example a menu
-   whose primary action is the toggle. Settle its shape in this
-   phase's scope doc.
+   choice needs a second gesture on the same pill. Settled on
+   2026-11-12 (`flags-and-cross-media.md`, decision 4): the pill is a
+   menu whose primary action is the toggle, with a chevron on the Mac
+   and touch and hold elsewhere, on the two list bars only; a picked
+   flag replaces the built-in criterion; and the pick outlives opening
+   an item, stores nothing, and gives the lit pill the flag's name.
 1. **Swipe.** `FeedSwipeAction` gains no new case. The flag toggle
    follows the default flag (Decision 1), and custom flags stay a menu
    action on both media.
-1. **Bulk.** If Phase 3 has landed, Set Flags joins the feed bulk bar.
+1. **Bulk.** Phase 3 has not landed, so Set Flags joins the feed bulk
+   bar in the PR that builds the bar (`feed-bulk-actions.md`, PR E;
+   `flags-and-cross-media.md`, decision 11).
 
 Acceptance: flag an article "Read later" on the phone; it shows the
 dot on the Mac after sync; delete the flag in Settings and it leaves

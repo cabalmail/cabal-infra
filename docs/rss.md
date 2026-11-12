@@ -127,7 +127,8 @@ of the user's flag palette (`cabal-flag-01` .. `cabal-flag-20`, the
 same vocabulary mail keywords use, so one palette entry names and
 colours a flag on both. The system flag is never in the list: on a feed
 item it is `is_favorite`. A slot stays in the list when its palette
-entry is disabled or deleted; clients hide it, as they do for mail.
+entry is deleted. The Apple apps then show it by its slot id until it
+is taken off, as they do a mail keyword whose flag was deleted.
 
 Display preferences on a subscription or folder are stored by the
 server and applied by the client; the server never reorders or filters

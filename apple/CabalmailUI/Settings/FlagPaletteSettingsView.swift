@@ -82,8 +82,8 @@ struct FlagPaletteSettingsView: View {
     /// order to explain. The count is of flags the user can add.
     static func footerText(paletteIsEmpty: Bool, on host: HostPlatform) -> String {
         if paletteIsEmpty {
-            return "Flags you add here can be put on any message from any of "
-                + "your devices. Up to \(FlagPalette.slots.count) of your own."
+            return "Flags you add here can be put on any message or feed item "
+                + "from any of your devices. Up to \(FlagPalette.slots.count) of your own."
         }
         let reorder = host.reordersInEditMode
             ? "Tap Edit to drag flags into a new order"
@@ -256,9 +256,9 @@ private struct FlagPaletteEntryEditor: View {
             } message: {
                 Text(
                     "Deleting a flag hides its name and color. Messages "
-                    + "already tagged with it keep the tag (shown by its "
-                    + "slot id) until untagged, and a new flag created "
-                    + "later may reuse the slot."
+                    + "and feed items already tagged with it keep the tag "
+                    + "(shown by its slot id) until untagged, and a new "
+                    + "flag created later may reuse the slot."
                 )
             }
         }
