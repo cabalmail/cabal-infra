@@ -1120,15 +1120,15 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu; `FolderWindowLoader`, a folder list's window (rows, positions, paging, refresh; the search surface has none), with its engines `WindowPager`, `WindowRefresher`, `WindowReconciler` and `WindowSnapshot`, and the value types `EnvelopeOrder` and `WindowPlanner`; `ListPlaceTracker`, which records a folder list's top row for its window as it scrolls and reopens the list there after a layout swap or a relaunch |
 | `Mail/Reader/` | `MessageDetailView`, `MessageDetailViewModel` and their extension files: the header, the toolbar and its policies, attachments, calendar invites, View Source |
 | `Mail/Search/` | `MailSearchSession`, a list's search (query, filters, results and their paging), the search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
-| `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), feed health and per-feed web storage |
-| `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list, the item reader, and subscribing, editing and OPML |
+| `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), the change a feed control makes to an item (`FeedItemMark`: read, or one palette flag set or cleared, named by its slot; it is where "the built-in flag is the favorite bit and a flag of the user's own is a slot in `RssItem.flags`" stops, so the list and the reader name a flag one way and `RssSyncEngine.write` routes it), feed health and per-feed web storage |
+| `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list (its model decides which rows show; `FeedListRows` holds them and keeps their marks truthful: a control's change drawn at once and written through the engine, the re-read of a row the store says changed, a flag the server refused leaving again, and the queued mark), the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel` (with its autosave loops, `ComposeAutosaveLoops`, and what it starts from, `ComposeSnapshot`), the From picker, drafts, the failed-send banner, and what a closed composer reports (`ComposeOutcomeReport`) |
 | `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene; and the move from a sheet to a window, `ComposeWindowMove` and its hand-off table, `ComposeHandoffs`), and on iPad each main window's scene session, so a notification finds the window it was shown over and a compose window iPadOS restores lands on a main window (the one last used) when it closes |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Admin/` | Administrator screens, listed in Settings only when the session's token names the `admin` group (`SessionManager.isAdmin`): the Users list, each account's page (confirm, enable or disable, delete, domain access) and `UsersViewModel`. The server refuses every admin call to anyone else; a 403 shows as "Administrators only" |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
-| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the item rows' marks (`UnreadDot`, and `FlagDots` with `FlagDotMark`, which works out the flags a mail row, a feed row and the reader's chips draw: the system flag as one more palette entry, in palette order), the flag the one-press controls act on (`FlagToggle`: mail's swipe, shortcuts, bulk bar, reader button and the first item of its menus set the palette's default flag, the first enabled entry; the feed's set the system flag's entry; either way in the entry's name and color, and absent or dimmed when there is none), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), the faces of the toggles both readers share (`ReaderToggleFace`: read, flag, reader view, remote content, and mail's plain text, each glyph naming the action its label names), branding |
+| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the item rows' marks (`UnreadDot`, and `FlagDots` with `FlagDotMark`, which works out the flags a mail row, a feed row and the reader's chips draw: the system flag as one more palette entry, in palette order), the flag the one-press controls act on (`FlagToggle`: the swipe, the shortcuts, the bulk bar, the reader's button and the first flag item of the menus set the palette's default flag, the first entry, on a message and on a feed item alike, in the entry's name and color; the Flagged filters name the built-in flag's entry; there is always one of each, since no flag can be switched off), the flag menu both readers and both row menus draw (`FlagMenuPolicy` for its rows and its identity, `FlagMenuToggles` for the checkmark rows: every flag in Settings > Flags, then any the item carries whose flag was deleted, and no rows at all while the default flag is the only one), the reader headers' named flags (`FlagChips`), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), the faces of the toggles both readers share (`ReaderToggleFace`: read, flag, reader view, remote content, and mail's plain text, each glyph naming the action its label names), branding |
 | `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout, a list's selection (`SelectionModel`: the rows picked, Select mode, and the anchor and cursor a range selection works from) |
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
@@ -1150,7 +1150,7 @@ difference goes in one of two places:
   environment, or a `HostPlatform` capability when the question is about
   the host rather than the window (`columnScopedToolbar`,
   `drawsOverPassthrough`, `settingsOpensBothColumns`,
-  `alwaysWindows`, `reordersInEditMode`).
+  `alwaysWindows`, `reordersInEditMode`, `splitControlsDrawChevron`).
 - **An API one platform lacks** goes behind an adapter in `Platform/`:
   one call the feature view makes on every platform, with the
   conditional inside it. `inlineNavigationTitle()`, `textEntry(_:)`,
@@ -2155,11 +2155,11 @@ spinning up the full view model.
   a change mid-session takes effect immediately, and the swipe label +
   icon follow the preference too — the two advance pickers, and
   `Leading swipe` / `Trailing swipe`, which bind each edge of a message
-  row to Toggle read, Toggle default flag (the first enabled flag in
+  row to Toggle read, Toggle default flag (the first flag in
   Settings › Flags; `FlagToggle`), Dispose (which follows `Dispose
   action` and the in-Trash / in-Archive overrides), or None. Feed items:
   `Leading swipe` / `Trailing swipe` for feed item rows (Toggle read,
-  Toggle flag, None). The same action may be bound to both edges.
+  Toggle default flag, None). The same action may be bound to both edges.
   The edges are named for layout direction, not left / right, so a
   binding means the same gesture under RTL. Synced as `swipe_leading` /
   `swipe_trailing` and `rss_swipe_leading` / `rss_swipe_trailing`; the
@@ -2268,7 +2268,11 @@ flag item shows no shortcut: its two items are retitled when the palette
 changes, and SwiftUI does not give a menu item it is updating a key
 equivalent another item already holds. A chord on an item whose title
 can change must have one declaring item; `FlagChordTests` counts them in
-the menu bar the app built.
+the menu bar the app built. Both flag items are the default flag's
+(`WindowCommands.mailFlag` and `feedFlag`), so they carry one title; the
+feed list answers its command by setting or clearing that flag on the
+open item, the built-in one or one of the user's own
+(`FeedItemListViewModel.toggleFlag(slot:on:)`).
 
 The shared Message menu (`MessageMenuCommands`) carries Reply ⌘R, Reply
 All ⌘⇧R, Forward ⌘⇧J, Mark as Read/Unread ⌘T, Flag/Unflag ⌘⇧8 (the

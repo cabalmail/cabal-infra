@@ -5,7 +5,7 @@ import Foundation
 /// changes, item marks coalesced into `/rss_set_item_state` batches, each
 /// `/rss_mark_all_read` a fence between batches. A failure leaves the queue
 /// intact for the next attempt, with one exception: a flag add the server
-/// refuses because the palette no longer enables that flag would be refused
+/// refuses because the palette no longer holds that flag would be refused
 /// every time, and the whole batch with it, so those adds are dropped and
 /// the rest of the batch is sent again (`push`).
 ///
@@ -104,8 +104,8 @@ actor RssPendingDrain {
     ///
     /// The server checks every flag a call adds against the palette before
     /// it writes anything, and refuses the whole call for one it does not
-    /// enable: the flag was disabled or deleted, here or on another device,
-    /// after the change was queued. Asking again cannot succeed, and the
+    /// hold: the flag was deleted, here or on another device, after the
+    /// change was queued. Asking again cannot succeed, and the
     /// refusal would hold every other change in the batch with it. So the
     /// refused adds are taken back (`dropRefusedFlagAdds`) and what is left
     /// of the batch is sent again. Each round drops at least one row, so
@@ -130,7 +130,7 @@ actor RssPendingDrain {
                 // and the newer change waits for the next pass.
                 let dropped = try await store.dropRefusedFlagAdds(ids: refused.map(\.id))
                 CabalmailLog.warn("RssPendingDrain", "dropped \(dropped) queued flag adds the server refused: "
-                    + "\(refusal.slots.sorted().joined(separator: ", ")) not enabled in the palette")
+                    + "\(refusal.slots.sorted().joined(separator: ", ")) not in the palette")
                 rows.removeAll { refused.contains($0) }
                 cleared += dropped
             }

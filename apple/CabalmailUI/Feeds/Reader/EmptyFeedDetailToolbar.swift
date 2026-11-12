@@ -10,6 +10,12 @@ import SwiftUI
 /// first item opened would swap eleven greyed mail buttons for six feed
 /// ones.
 struct EmptyFeedDetailToolbar: ToolbarContent {
+    /// How many rows the flag control's palette menu will offer, as
+    /// `EmptyDetailToolbar` takes it: none makes its live twin a plain
+    /// button, any more a split button with that many rows. Read from
+    /// `Preferences` by the shell that installs these stand-ins.
+    let flagMenuRowCount: Int
+
     var body: some ToolbarContent {
         ForEach(FeedReaderToolbarLayout.standIns(), id: \.self) { action in
             ToolbarItem { standIn(for: action) }
@@ -20,13 +26,21 @@ struct EmptyFeedDetailToolbar: ToolbarContent {
 
     private func standIn(for action: FeedReaderAction) -> some View {
         // Built as the kind of control its live twin is
-        // (`FeedReaderToolbarLayout.macControlShape`): More is a menu, and a
-        // plain-button stand-in for it is narrower than the menu that
-        // replaces it, which moves every slot after it (#2016).
+        // (`FeedReaderToolbarLayout.macControlShape`): More is a menu and
+        // Flag a split button once the palette gives its menu rows, and a
+        // plain-button stand-in for either is narrower than what replaces
+        // it, which moves every slot after it (#2016).
         ToolbarStandIn(
             title: action.quiescentTitle,
             symbol: action.quiescentSymbol,
-            shape: FeedReaderToolbarLayout.macControlShape(for: action)
+            shape: FeedReaderToolbarLayout.macControlShape(
+                for: action,
+                flagMenuHasRows: flagMenuRowCount > 0
+            ),
+            menuRows: FeedReaderToolbarLayout.macStandInMenuRows(
+                for: action,
+                flagMenuRowCount: flagMenuRowCount
+            )
         )
         .accessibilityIdentifier("feed.reader.empty.\(action.rawValue)")
     }

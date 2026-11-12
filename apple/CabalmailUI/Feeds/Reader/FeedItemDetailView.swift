@@ -219,6 +219,13 @@ struct FeedItemDetailView: View {
             }
             .appFont(.caption)
             .foregroundStyle(.secondary)
+            // The item's flags, named, as the mail reader's header names a
+            // message's. They read the model's optimistic state, so a flag
+            // set from the bar shows here at once.
+            let marks = model.flagMarks
+            if !marks.isEmpty {
+                FlagChips(marks: marks)
+            }
         }
         .accessibilityElement(children: .combine)
     }

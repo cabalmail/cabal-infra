@@ -5,7 +5,6 @@ import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.ui.theme.UiLabel
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 
@@ -57,13 +56,5 @@ class ReaderFlagToggleTest {
             ),
             readerFlagToggle(todo, isSet = true),
         )
-    }
-
-    @Test
-    fun `with no default flag the star stays hollow whatever the message carries`() {
-        // The button is dimmed then; it must not read as a flag that is set.
-        val idle = readerFlagToggle(null, isSet = true)
-        assertFalse(idle.filledStar)
-        assertEquals(UiLabel.Fixed(R.string.add_flag), idle.label)
     }
 }

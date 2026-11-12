@@ -4,7 +4,8 @@ import CabalmailKit
 
 /// Backs `FeedItemListView`: one page of items for a scope from the local
 /// store, the all / unread / favorite filter, the subscription's ordering,
-/// per-feed search, and the optimistic read / favorite mutations.
+/// and per-feed search. The rows themselves and the marks on them (read,
+/// the flags) are `FeedListRows`.
 ///
 /// The filter pill is sticky per scope: the list opens on the pill the user
 /// last chose for this feed (`RssSubscription.defaultFilter`), folder
@@ -26,7 +27,10 @@ import CabalmailKit
 @MainActor
 final class FeedItemListViewModel {
     let scope: RssItemScope
-    var items: [RssItem] = []
+    /// The rows on screen and their marks: a mark made here or anywhere
+    /// else, and the queued mark.
+    let rows: FeedListRows
+    var items: [RssItem] { rows.items }
     /// The active pill. Set through `selectFilter` from the UI; a direct
     /// assignment reloads without recording the choice.
     var filter: RssItemFilter {
@@ -53,7 +57,7 @@ final class FeedItemListViewModel {
     /// model, so a list that takes the model over across a fold keeps it.
     var stepPlace: ListStepPolicy.Place<String>?
     /// Items with a queued (not yet pushed) state change, for the row mark.
-    var pendingIds: Set<String> = []
+    var pendingIds: Set<String> { rows.pendingIds }
     /// What the All / Unread / Flagged pills count for this scope, over the
     /// items the device holds; nil until the first read.
     var filterCounts: RssStore.FilterCounts?
@@ -87,8 +91,10 @@ final class FeedItemListViewModel {
         self.subscription = subscription
         self.folder = folder
         let engine = engine ?? client.rssSync
-        self.store = store ?? client.rssStore
+        let store = store ?? client.rssStore
+        self.store = store
         self.engine = engine
+        self.rows = FeedListRows(store: store, engine: engine)
         self.preferences = preferences
         self.defaults = defaults ?? engine
         self.ordering = FeedListOrderingPolicy.initial(scope: scope, subscription: subscription, folder: folder,
@@ -181,7 +187,7 @@ final class FeedItemListViewModel {
     /// device's marks re-read the list while it is still on its first page,
     /// so new items appear; a list the user has paged through keeps its
     /// place and picks them up on its next reload. A changed mark patches
-    /// its row in place, so the dot and flag agree without a reload; rows
+    /// its row in place, so the dot and flags agree without a reload; rows
     /// stay put even when they no longer match the filter, and the next
     /// reload settles that, the same as the list's own swipe actions.
     func apply(_ batch: FeedChangeBatch) async {
@@ -191,7 +197,7 @@ final class FeedItemListViewModel {
         if reloads {
             await reload()
         } else {
-            if !batch.items.isEmpty { await patch(batch.items) }
+            if !batch.items.isEmpty { await rows.patch(batch.items) }
             // A paged list keeps its rows, but its pills still count what
             // the store now holds.
             await readCounts()
@@ -232,23 +238,6 @@ final class FeedItemListViewModel {
         return reloads
     }
 
-    /// Re-reads the rows the store says changed: their read and flag state
-    /// and the queued mark.
-    private func patch(_ ids: Set<String>) async {
-        guard let store else { return }
-        for row in items where ids.contains(row.id) {
-            let fresh = (try? await store.item(feedId: row.feedId, sortKey: row.sortKey)) ?? nil
-            let queued = (try? await store.hasPending(feedId: row.feedId, sortKey: row.sortKey)) == true
-            if let fresh, fresh.isRead != row.isRead || fresh.isFavorite != row.isFavorite {
-                replace(row) {
-                    $0.isRead = fresh.isRead
-                    $0.isFavorite = fresh.isFavorite
-                }
-            }
-            if queued { pendingIds.insert(row.id) } else { pendingIds.remove(row.id) }
-        }
-    }
-
     private static func titles(of subscriptions: [RssSubscription]) -> [String: String] {
         Dictionary(subscriptions.map { ($0.subscriptionId, $0.displayTitle) },
                    uniquingKeysWith: { first, _ in first })
@@ -278,14 +267,14 @@ final class FeedItemListViewModel {
             scopeFeedIds = Set(try await store.feedIds(in: scope))
             filterCounts = try await store.filterCounts(in: scope)
             if !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty, let subscription {
-                items = try await store.search(feedId: subscription.feedId, query: searchQuery)
+                rows.items = try await store.search(feedId: subscription.feedId, query: searchQuery)
                 hasMoreLocal = false
             } else {
-                items = try await store.items(.init(scope: scope, filter: filter, ordering: ordering,
-                                                    limit: pageSize))
+                rows.items = try await store.items(.init(scope: scope, filter: filter, ordering: ordering,
+                                                         limit: pageSize))
                 hasMoreLocal = items.count == pageSize
             }
-            await refreshPendingMarks()
+            await rows.refreshPendingMarks()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -303,7 +292,7 @@ final class FeedItemListViewModel {
             let page = try await store.items(.init(scope: scope, filter: filter, ordering: ordering,
                                                    limit: pageSize, after: .init(after: last)))
             let shown = Set(items.map(\.id))
-            items += page.filter { !shown.contains($0.id) }
+            rows.items += page.filter { !shown.contains($0.id) }
             hasMoreLocal = page.count == pageSize
         } catch {
             errorMessage = error.localizedDescription
@@ -350,21 +339,27 @@ final class FeedItemListViewModel {
         await reload()
     }
 
-    // MARK: - Mutations (optimistic; the engine queues and pushes)
+    // MARK: - Marks (optimistic: `FeedListRows` draws them, the engine queues and pushes)
 
     func setRead(_ item: RssItem, _ isRead: Bool) async {
-        guard let engine else { return }
-        replace(item) { $0.isRead = isRead }
-        try? await engine.setRead(item, isRead)
-        await patch([item.id])
+        await rows.mark(item, .read(isRead))
         await readCounts()
     }
 
-    func setFavorite(_ item: RssItem, _ isFavorite: Bool) async {
-        guard let engine else { return }
-        replace(item) { $0.isFavorite = isFavorite }
-        try? await engine.setFavorite(item, isFavorite)
-        await patch([item.id])
+    /// The flag the list's one-press controls set and clear (the swipe,
+    /// the row menu's first flag item, Shift-Command-8): the palette's
+    /// default flag, the first entry of Settings > Flags, as mail's do.
+    var defaultFlag: FlagToggle { FlagToggle.defaultFlag(in: preferences.flagPalette) }
+
+    func toggleDefaultFlag(on item: RssItem) async {
+        await toggleFlag(slot: defaultFlag.slot, on: item)
+    }
+
+    /// A flag menu row's press on an item: sets the flag in palette slot
+    /// `slot` or clears it. The built-in flag's slot and a flag of the
+    /// user's own go the same way (`FeedItemMark`).
+    func toggleFlag(slot: String, on item: RssItem) async {
+        await rows.toggleFlag(slot: slot, on: item)
         await readCounts()
     }
 
@@ -387,20 +382,6 @@ final class FeedItemListViewModel {
             try? await engine.markAllRead(subscriptionId: sub.subscriptionId)
         }
         await reload()
-    }
-
-    private func replace(_ item: RssItem, _ change: (inout RssItem) -> Void) {
-        guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
-        change(&items[index])
-    }
-
-    private func refreshPendingMarks() async {
-        guard let store else { return }
-        var pending: Set<String> = []
-        for item in items where (try? await store.hasPending(feedId: item.feedId, sortKey: item.sortKey)) == true {
-            pending.insert(item.id)
-        }
-        pendingIds = pending
     }
 }
 

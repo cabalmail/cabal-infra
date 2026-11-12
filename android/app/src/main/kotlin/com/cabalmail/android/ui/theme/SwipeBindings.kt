@@ -87,15 +87,14 @@ private fun flagSwipeReveal(
     )
 
 /**
- * The reveal for a mail row's edge, or null when the edge does not drag:
- * for [MailSwipeAction.NONE], and for [MailSwipeAction.TOGGLE_FLAG] while
- * the palette has no default flag to toggle.
+ * The reveal for a mail row's edge, or null when the edge does not drag,
+ * which is [MailSwipeAction.NONE].
  */
 internal fun mailSwipeReveal(
     action: MailSwipeAction,
     isSeen: Boolean,
-    /** The default flag ([FlagToggle.defaultFlag]), or null when every flag is disabled. */
-    flag: FlagToggle?,
+    /** The default flag ([FlagToggle.defaultFlag]). */
+    flag: FlagToggle,
     /** Whether the row's message carries [flag]. */
     isFlagSet: Boolean,
     /** What the dispose does in this row's folder: move, restore, or purge. */
@@ -108,7 +107,7 @@ internal fun mailSwipeReveal(
                 glyph = SwipeGlyph.EMAIL,
                 tone = SwipeTone.READ,
             )
-        MailSwipeAction.TOGGLE_FLAG -> flag?.let { flagSwipeReveal(it, isFlagSet) }
+        MailSwipeAction.TOGGLE_FLAG -> flagSwipeReveal(flag, isFlagSet)
         MailSwipeAction.DISPOSE ->
             SwipeReveal(
                 label = disposeVerbRes(dispose),
@@ -127,15 +126,13 @@ internal fun mailSwipeReveal(
 
 /**
  * The reveal for a feed item row's edge, or null when the edge does not
- * drag: for [FeedSwipeAction.NONE], and for
- * [FeedSwipeAction.TOGGLE_FAVORITE] while the built-in flag's entry is
- * disabled.
+ * drag, which is [FeedSwipeAction.NONE].
  */
 internal fun feedSwipeReveal(
     action: FeedSwipeAction,
     isRead: Boolean,
     /** The built-in flag's entry ([FlagToggle.systemFlag]), the one flag a feed item has. */
-    flag: FlagToggle?,
+    flag: FlagToggle,
     isFavorite: Boolean,
 ): SwipeReveal? =
     when (action) {
@@ -145,7 +142,7 @@ internal fun feedSwipeReveal(
                 glyph = SwipeGlyph.EMAIL,
                 tone = SwipeTone.READ,
             )
-        FeedSwipeAction.TOGGLE_FAVORITE -> flag?.let { flagSwipeReveal(it, isFavorite) }
+        FeedSwipeAction.TOGGLE_FAVORITE -> flagSwipeReveal(flag, isFavorite)
         FeedSwipeAction.NONE -> null
     }
 

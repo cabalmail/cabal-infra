@@ -7,10 +7,8 @@ import CabalmailKit
 /// palette order, under the palette's names and colors
 /// (`docs/1.x/unified-flags-plan.md`, decision 4).
 final class FlagDotMarkTests: XCTestCase {
-    private func entry(
-        _ slot: String, _ label: String, _ color: String, enabled: Bool = true
-    ) -> FlagPaletteEntry {
-        FlagPaletteEntry(slot: slot, label: label, color: color, enabled: enabled)
+    private func entry(_ slot: String, _ label: String, _ color: String) -> FlagPaletteEntry {
+        FlagPaletteEntry(slot: slot, label: label, color: color)
     }
 
     private var palette: [FlagPaletteEntry] {
@@ -68,19 +66,6 @@ final class FlagDotMarkTests: XCTestCase {
         XCTAssertEqual(FlagDotMark.marks(for: flags, palette: stored, limit: .max).count, 7)
     }
 
-    func testADisabledEntrysFlagIsStillDrawn() {
-        // A tag outlives being offered, for the system flag as for a
-        // custom one.
-        let stored = [
-            entry(FlagPalette.systemSlot, "Flagged", "yellow", enabled: false),
-            entry("cabal-flag-01", "Later", "teal", enabled: false),
-        ]
-        XCTAssertEqual(
-            FlagDotMark.marks(for: [.flagged, .keyword("cabal-flag-01")], palette: stored).map(\.label),
-            ["Flagged", "Later"]
-        )
-    }
-
     func testATagWhoseEntryWasDeletedIsNamedByItsSlotAndDrawnLast() {
         let marks = FlagDotMark.marks(
             for: [.flagged, .keyword("cabal-flag-09"), .keyword("cabal-flag-01")], palette: palette
@@ -91,16 +76,42 @@ final class FlagDotMarkTests: XCTestCase {
 
     // MARK: - Feeds
 
+    private func feedItem(isFavorite: Bool = false, flags: Set<String> = []) -> RssItem {
+        RssItem(feedId: "f", itemId: "i", sortKey: "k", isFavorite: isFavorite, flags: flags)
+    }
+
+    /// The built-in flag on a feed item is its favorite bit, and draws the
+    /// entry a flagged message draws.
     func testAFlaggedFeedItemDrawsTheSystemEntry() {
-        XCTAssertEqual(FlagDotMark.marks(isFlagged: true, palette: palette), [system()])
-        XCTAssertEqual(FlagDotMark.marks(isFlagged: false, palette: palette), [])
+        XCTAssertEqual(FlagDotMark.marks(for: feedItem(isFavorite: true).paletteFlags, palette: palette), [system()])
+        XCTAssertEqual(FlagDotMark.marks(for: feedItem().paletteFlags, palette: palette), [])
         // The same entry a flagged message draws, renamed and recolored.
         let stored = palette + [entry(FlagPalette.systemSlot, "Read later", "purple")]
         XCTAssertEqual(
-            FlagDotMark.marks(isFlagged: true, palette: stored),
-            FlagDotMark.marks(for: [.flagged], palette: stored)
+            FlagDotMark.marks(for: feedItem(isFavorite: true).paletteFlags, palette: stored),
+            [system("Read later", "purple")]
         )
-        XCTAssertEqual(FlagDotMark.marks(isFlagged: true, palette: stored), [system("Read later", "purple")])
+    }
+
+    /// A feed item's own flags draw beside the built-in one, in palette
+    /// order, as a message's keywords do.
+    func testAFeedItemDrawsItsCustomFlagsInPaletteOrder() {
+        let stored = [palette[1], entry(FlagPalette.systemSlot, "Urgent", "red"), palette[0]]
+        let item = feedItem(isFavorite: true, flags: ["cabal-flag-01", "cabal-flag-02"])
+        XCTAssertEqual(
+            FlagDotMark.marks(for: item.paletteFlags, palette: stored).map(\.label),
+            ["Waiting", "Urgent", "Later"]
+        )
+        // A custom flag alone, with the built-in one not set.
+        XCTAssertEqual(
+            FlagDotMark.marks(for: feedItem(flags: ["cabal-flag-02"]).paletteFlags, palette: palette),
+            [FlagDotMark(slot: "cabal-flag-02", label: "Waiting", color: "blue")]
+        )
+        // A slot whose flag was deleted is still drawn, by its slot id.
+        XCTAssertEqual(
+            FlagDotMark.marks(for: feedItem(flags: ["cabal-flag-09"]).paletteFlags, palette: palette),
+            [FlagDotMark(slot: "cabal-flag-09", label: "cabal-flag-09", color: "")]
+        )
     }
 
     func testTheFeedRowSaysItsFlagByName() {

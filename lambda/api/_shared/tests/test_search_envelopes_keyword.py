@@ -1,8 +1,9 @@
-'''Unit tests for /search_envelopes' `keyword` filter (docs/1.x/
-cross-media-ux-plan.md, decision 8 and Phase 2a): a custom flag's palette
-slot becomes an IMAP KEYWORD criterion, anything that is not a slot is a 400
-before any IMAP session opens, and a request without the parameter builds
-the criteria it always did.
+'''Unit tests for /search_envelopes' flag filters beyond `flagged` (docs/1.x/
+cross-media-ux-plan.md, decision 8 and Phase 2a). `keyword`: a custom flag's
+palette slot becomes an IMAP KEYWORD criterion, and anything that is not a
+slot is a 400 before any IMAP session opens. `any_flag`: one OR over the
+system flag and every palette slot. A request without either builds the
+criteria it always did.
 
 No pytest harness in this repo; run under the stdlib:
 
@@ -104,15 +105,35 @@ DAY = datetime.datetime(2026, 11, 1, 12, 0, 0)
 # The mailbox the fake serves: folder (IMAP name) -> {uid: flags}.
 MAILBOX = {
     'INBOX': {11: {'\\Seen', LATER}, 12: {'\\Flagged'}, 13: {LATER, WORK}, 14: set()},
-    'Archive.2026': {21: {WORK}, 22: {'\\Flagged', LATER}},
+    'Archive.2026': {21: {WORK}, 22: {'\\Flagged', LATER}, 23: {'$Forwarded'}},
     'Trash': {31: {LATER}},
 }
 SESSIONS = []
 
 
+def _one_key_holds(rest, flags):
+    '''Takes one search key off the front of `rest`, as IMAP reads a SEARCH,
+    and says whether a message carrying `flags` matches it. OR is a key made
+    of the two keys after it.'''
+    term = rest.pop(0)
+    if term == 'OR':
+        first = _one_key_holds(rest, flags)
+        second = _one_key_holds(rest, flags)
+        return first or second
+    if term == 'FLAGGED':
+        return '\\Flagged' in flags
+    if term == 'UNSEEN':
+        return '\\Seen' not in flags
+    if term == 'KEYWORD':
+        return rest.pop(0) in flags
+    if term == 'ALL':
+        return True
+    raise AssertionError(f'unexpected criterion {term!r}')
+
+
 class _FakeImapClient:
-    '''Answers SEARCH for the criteria these tests send: ALL, FLAGGED, UNSEEN
-    and KEYWORD <atom>, every one of which must hold.'''
+    '''Answers SEARCH for the criteria these tests send: ALL, FLAGGED, UNSEEN,
+    KEYWORD <atom> and OR <key> <key>. Every key at the top level must hold.'''
 
     def __init__(self):
         self.selected = None
@@ -126,21 +147,13 @@ class _FakeImapClient:
 
     def search(self, criteria, charset=None):
         self.searches.append((self.selected, list(criteria), charset))
-        wanted = list(criteria)
         uids = []
         for uid, flags in MAILBOX[self.selected].items():
-            keep, rest = True, list(wanted)
+            keep, rest = True, list(criteria)
             while rest:
-                term = rest.pop(0)
-                if term == 'FLAGGED':
-                    keep = keep and '\\Flagged' in flags
-                elif term == 'UNSEEN':
-                    keep = keep and '\\Seen' not in flags
-                elif term == 'KEYWORD':
-                    atom = rest.pop(0)
-                    keep = keep and atom in flags
-                elif term != 'ALL':
-                    raise AssertionError(f'unexpected criterion {term!r}')
+                # The key is read first, so a key that fails still leaves
+                # the ones after it to be read.
+                keep = _one_key_holds(rest, flags) and keep
             if keep:
                 uids.append(uid)
         return uids
@@ -191,6 +204,12 @@ def _found(body):
     return sorted((env['folder'], env['id']) for env in body['envelopes'])
 
 
+# `any_flag` as IMAP sees it: twenty ORs, each over one key and the rest of
+# the chain, ending on the last slot's key.
+ANY_FLAG = ['OR', 'FLAGGED'] + [
+    term for number in range(1, 20) for term in ('OR', 'KEYWORD', f'cabal-flag-{number:02d}')
+] + ['KEYWORD', 'cabal-flag-20']
+
 NOT_SLOTS = (
     '\\Flagged', 'Flagged', '$Junk', 'NonJunk', 'later', 'cabal-flag', 'cabal-flag-',
     'cabal-flag-00', 'cabal-flag-21', 'cabal-flag-1', 'cabal-flag-001', 'CABAL-FLAG-03',
@@ -230,6 +249,9 @@ class Criteria(unittest.TestCase):
                 with self.assertRaises(ValueError) as raised:
                     search_envelopes.build_criteria({'keyword': value}, None)
                 self.assertIn('invalid keyword', str(raised.exception))
+                # `any_flag` beside it does not let it through.
+                with self.assertRaises(ValueError):
+                    search_envelopes.build_criteria({'keyword': value, 'any_flag': '1'}, None)
 
     def test_requests_without_a_keyword_build_what_they_always_did(self):
         # What every shipped client sends. The expected lists are the
@@ -253,6 +275,54 @@ class Criteria(unittest.TestCase):
                 for blank in ('', '  ', None):
                     self.assertEqual(search_envelopes.build_criteria({**qs, 'keyword': blank}, cur),
                                      expected)
+                # Nor is an `any_flag` that is not a yes.
+                for off in ('', '0', 'no', 'false', 'False', 'on', None):
+                    self.assertEqual(search_envelopes.build_criteria({**qs, 'any_flag': off}, cur),
+                                     expected)
+
+    def test_any_flag_is_an_or_over_the_system_flag_and_every_slot(self):
+        criteria = search_envelopes.build_criteria({'any_flag': '1'}, None)
+        self.assertEqual(criteria, ANY_FLAG)
+        # Every yes the other switches take, and no other spelling.
+        for yes in sorted(search_envelopes.TRUTHY):
+            with self.subTest(yes=yes):
+                self.assertEqual(search_envelopes.build_criteria({'any_flag': yes}, None), ANY_FLAG)
+        self.assertEqual(criteria.count('OR'), 20)
+        self.assertEqual(
+            [term for term in criteria if term not in ('OR', 'KEYWORD')],
+            ['FLAGGED'] + [f'cabal-flag-{number:02d}' for number in range(1, 21)])
+
+    def test_any_flag_reads_as_one_search_key(self):
+        # What lets it sit among the other filters: read as IMAP reads it,
+        # the chain is used up exactly, so the key after it is not drawn
+        # into the last OR.
+        rest = search_envelopes.build_criteria({'any_flag': '1'}, None) + ['UNSEEN']
+        _one_key_holds(rest, set())
+        self.assertEqual(rest, ['UNSEEN'])
+
+    def test_any_flag_matches_each_flag_alone_and_nothing_else(self):
+        def _any_flag():
+            return search_envelopes.build_criteria({'any_flag': '1'}, None)
+
+        carried = ['\\Flagged'] + [f'cabal-flag-{number:02d}' for number in range(1, 21)]
+        for flag in carried:
+            with self.subTest(flag=flag):
+                self.assertTrue(_one_key_holds(_any_flag(), {flag, '\\Seen'}))
+        for flags in (set(), {'\\Seen'}, {'$Forwarded', 'NonJunk'}, {'cabal-flag-21'}, {'\\Answered'}):
+            with self.subTest(flags=flags):
+                self.assertFalse(_one_key_holds(_any_flag(), flags))
+
+    def test_any_flag_joins_the_other_filters(self):
+        qs = {'text': 'report', 'unread': '1', 'flagged': '1', 'keyword': WORK, 'any_flag': '1'}
+        cursor = {'last_date': '2026-11-01', 'last_folder': 'INBOX', 'last_uid': 9}
+        self.assertEqual(search_envelopes.build_criteria(qs, cursor), [
+            'TEXT', 'report', 'UNSEEN', 'FLAGGED', 'KEYWORD', WORK, *ANY_FLAG,
+            'BEFORE', datetime.date(2026, 11, 2)])
+        # The list's own request for a second page: the chain, then the
+        # cursor's date, and the chain as it was for the request after.
+        self.assertEqual(search_envelopes.build_criteria({'any_flag': '1'}, cursor),
+                         [*ANY_FLAG, 'BEFORE', datetime.date(2026, 11, 2)])
+        self.assertEqual(search_envelopes.build_criteria({'any_flag': '1'}, None), ANY_FLAG)
 
 
 class Handler(unittest.TestCase):
@@ -286,6 +356,35 @@ class Handler(unittest.TestCase):
 
     def test_without_a_keyword_nothing_is_filtered(self):
         status, body = _search(folder='INBOX')
+        self.assertEqual((status, len(body['envelopes'])), (200, 4))
+        self.assertEqual(SESSIONS[0].searches, [('INBOX', ['ALL'], 'UTF-8')])
+
+    def test_any_flag_in_one_folder_returns_every_flagged_message(self):
+        status, body = _search(folder='INBOX', any_flag='1')
+        self.assertEqual(status, 200)
+        self.assertEqual(_found(body), [('INBOX', 11), ('INBOX', 12), ('INBOX', 13)])
+        self.assertEqual(body['total_estimate'], 3)
+        self.assertEqual(SESSIONS[0].searches, [('INBOX', ANY_FLAG, 'UTF-8')])
+
+    def test_any_flag_across_folders_skips_trash_and_other_keywords(self):
+        status, body = _search(any_flag='1')
+        self.assertEqual(status, 200)
+        # Not Archive's 23, whose only keyword is one the API never stores,
+        # and not Trash's 31.
+        self.assertEqual(_found(body), [
+            ('Archive/2026', 21), ('Archive/2026', 22), ('INBOX', 11), ('INBOX', 12), ('INBOX', 13)])
+        self.assertEqual(body['folders_searched'], ['INBOX', 'Archive/2026'])
+
+    def test_any_flag_narrows_and_is_narrowed_by_the_other_filters(self):
+        self.assertEqual(_found(_search(folder='INBOX', any_flag='1', unread='1')[1]),
+                         [('INBOX', 12), ('INBOX', 13)])
+        self.assertEqual(_found(_search(any_flag='1', flagged='1')[1]),
+                         [('Archive/2026', 22), ('INBOX', 12)])
+        self.assertEqual(_found(_search(any_flag='1', keyword=WORK)[1]),
+                         [('Archive/2026', 21), ('INBOX', 13)])
+
+    def test_an_any_flag_that_is_not_a_yes_filters_nothing(self):
+        status, body = _search(folder='INBOX', any_flag='0')
         self.assertEqual((status, len(body['envelopes'])), (200, 4))
         self.assertEqual(SESSIONS[0].searches, [('INBOX', ['ALL'], 'UTF-8')])
 

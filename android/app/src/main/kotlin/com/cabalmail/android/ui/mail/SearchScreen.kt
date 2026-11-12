@@ -301,17 +301,12 @@ private fun SearchFilterSheet(
                 onChange = { value -> viewModel.updateFilters { it.copy(unread = value) } },
             )
             // The server filters on the built-in flag only, so the checkbox
-            // carries that flag's name from Settings > Flags. While that
-            // flag's entry is disabled it is hidden unless checked, so a
-            // filter that is on can still be turned off.
-            val palette = LocalFlagPalette.current
-            if (FlagToggle.systemFlag(palette) != null || state.filters.flagged) {
-                LabeledCheckbox(
-                    label = FlagToggle.systemFlagName(palette),
-                    checked = state.filters.flagged,
-                    onChange = { value -> viewModel.updateFilters { it.copy(flagged = value) } },
-                )
-            }
+            // carries that flag's name from Settings > Flags.
+            LabeledCheckbox(
+                label = FlagToggle.systemFlagName(LocalFlagPalette.current),
+                checked = state.filters.flagged,
+                onChange = { value -> viewModel.updateFilters { it.copy(flagged = value) } },
+            )
             LabeledCheckbox(
                 label = stringResource(R.string.search_has_attachment),
                 checked = state.filters.hasAttachment,

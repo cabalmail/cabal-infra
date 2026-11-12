@@ -15,7 +15,7 @@ extension FeedItemListView {
                 // mail's count the folder's. Toggles, like mail's: All is
                 // neither lit (`RssItemFilter.toggling`).
                 FilterPillStrip {
-                    ForEach(filterPills(lit: model.filter)) { filter in
+                    ForEach(RssItemFilter.pills) { filter in
                         FilterPill(
                             label: filterLabel(filter),
                             isOn: model.filter == filter,
@@ -97,11 +97,5 @@ extension FeedItemListView {
         // stays `favorite`.
         case .favorite: return feedFlagName
         }
-    }
-
-    /// The pills the bar draws, by mail's rule (`MessageFilter.pills`):
-    /// Flagged leaves while the flag's entry is disabled, unless it is lit.
-    func filterPills(lit: RssItemFilter) -> [RssItemFilter] {
-        RssItemFilter.pills.filter { $0 != .favorite || $0 == lit || feedFlag != nil }
     }
 }

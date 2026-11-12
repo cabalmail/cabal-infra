@@ -145,11 +145,12 @@ public final class WindowCommands {
     // MARK: - The flag items
 
     /// What the Message menu's flag item toggles and is titled for: the
-    /// default flag. Nil, and the item dimmed, while the palette has none.
-    var mailFlag: FlagToggle? { FlagToggle.defaultFlag(in: flagPalette) }
+    /// default flag.
+    var mailFlag: FlagToggle { FlagToggle.defaultFlag(in: flagPalette) }
 
-    /// The Feeds menu's: the server's flag, the one mark a feed item has.
-    var feedFlag: FlagToggle? { FlagToggle.systemFlag(in: flagPalette) }
+    /// The Feeds menu's: the default flag too, which the feed list's
+    /// handler sets and clears on the open item.
+    var feedFlag: FlagToggle { FlagToggle.defaultFlag(in: flagPalette) }
 
     // MARK: - Availability
 

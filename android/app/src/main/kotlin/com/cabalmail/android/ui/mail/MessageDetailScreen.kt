@@ -42,7 +42,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -167,13 +166,12 @@ fun MessageDetailScreen(
                 Shortcut.REPLY -> viewModel.startReply(ReplyBuilder.Mode.REPLY)
                 Shortcut.REPLY_ALL -> viewModel.startReply(ReplyBuilder.Mode.REPLY_ALL)
                 Shortcut.TOGGLE_READ -> viewModel.setFlag("\\Seen", !envelope.isSeen)
-                // The default flag, read live for the same reason; with none
-                // (every flag disabled) the chord does nothing.
+                // The default flag, read live for the same reason.
                 Shortcut.TOGGLE_FLAG ->
                     FlagToggle
                         .defaultFlag(
                             viewModel.container.preferences.preferences.value.flagPalette,
-                        )?.let { flag -> viewModel.setFlag(flag.slot, !flag.isSetIn(envelope.flags)) }
+                        ).let { flag -> viewModel.setFlag(flag.slot, !flag.isSetIn(envelope.flags)) }
                 Shortcut.COMPOSE -> Unit
             }
         }
@@ -242,13 +240,13 @@ fun MessageDetailScreen(
                         )
                     }
                     // The star button sets and clears the default flag, the
-                    // first enabled entry of Settings > Flags, under its name
-                    // and in its color. With no default flag it is dimmed.
+                    // first entry of Settings > Flags, under its name and in
+                    // its color.
                     val defaultFlag = FlagToggle.defaultFlag(preferences.flagPalette)
-                    val flagIsSet = defaultFlag?.isSetIn(state.envelope?.flags.orEmpty()) == true
+                    val flagIsSet = defaultFlag.isSetIn(state.envelope?.flags.orEmpty())
                     IconButton(
-                        onClick = { defaultFlag?.let { viewModel.setFlag(it.slot, !flagIsSet) } },
-                        enabled = !state.busy && defaultFlag != null,
+                        onClick = { viewModel.setFlag(defaultFlag.slot, !flagIsSet) },
+                        enabled = !state.busy,
                     ) {
                         val flagToggle = readerFlagToggle(defaultFlag, flagIsSet)
                         if (flagToggle.filledStar) {
@@ -261,13 +259,7 @@ fun MessageDetailScreen(
                             Icon(
                                 painterResource(R.drawable.ic_star_border),
                                 contentDescription = flagToggle.label.text(),
-                                // Inside a disabled button the content color is the dimmed one.
-                                tint =
-                                    if (defaultFlag == null) {
-                                        LocalContentColor.current
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -282,12 +274,12 @@ fun MessageDetailScreen(
                         Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more_actions))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        // Flags: one check-marked item per enabled flag in
-                        // the order of Settings > Flags, the built-in one
-                        // included, plus any flag the message carries whose
-                        // entry is disabled or deleted (FlagMenu.rows). Not
-                        // shown when the default flag is all there is: the
-                        // star button beside the menu already toggles it.
+                        // Flags: one check-marked item per flag in the order
+                        // of Settings > Flags, the built-in one included,
+                        // plus any flag the message carries whose entry was
+                        // deleted (FlagMenu.rows). Not shown when the
+                        // default flag is all there is: the star button
+                        // beside the menu already toggles it.
                         FlagMenu
                             .rows(preferences.flagPalette, state.envelope?.flags.orEmpty())
                             .takeUnless { FlagMenu.isOnlyTheDefault(it, preferences.flagPalette) }
@@ -632,19 +624,11 @@ internal data class ReaderFlagToggle(
     val color: String,
 )
 
-/**
- * [flag] is the default flag, null when every flag is disabled: the button
- * is then dimmed, hollow, and keeps the plain "Flag" label.
- */
+/** [flag] is the default flag, and [isSet] whether the open message carries it. */
 internal fun readerFlagToggle(
-    flag: FlagToggle?,
+    flag: FlagToggle,
     isSet: Boolean,
-): ReaderFlagToggle =
-    ReaderFlagToggle(
-        label = flag?.title(isSet) ?: UiLabel.Fixed(R.string.add_flag),
-        filledStar = flag != null && isSet,
-        color = flag?.color.orEmpty(),
-    )
+): ReaderFlagToggle = ReaderFlagToggle(label = flag.title(isSet), filledStar = isSet, color = flag.color)
 
 /**
  * What the reader's read toggle says for the message's state (#2171). Its

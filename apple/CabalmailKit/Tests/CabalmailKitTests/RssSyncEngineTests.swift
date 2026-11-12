@@ -259,7 +259,7 @@ actor FakeRssClient: RssClient {
     private var markAllReadWatermark = "w"
     private var failNextState = false
     private var servesStates = false
-    private var enabledSlots: Set<String>?
+    private var paletteSlots: Set<String>?
     private var nextStateRefusal: RssFlagRefusal?
     private var armed: [Gate: Int] = [:]
     private var parked: [Gate: [CheckedContinuation<Void, Never>]] = [:]
@@ -300,7 +300,7 @@ actor FakeRssClient: RssClient {
     func set(servesStates: Bool) { self.servesStates = servesStates }
     /// The slots the palette enables: adding any other refuses the whole
     /// call, naming it. Nil, the default, enables every slot.
-    func set(enabledSlots: Set<String>?) { self.enabledSlots = enabledSlots }
+    func set(paletteSlots: Set<String>?) { self.paletteSlots = paletteSlots }
     /// Refuse the next `setItemState` with this, whatever it adds.
     func set(nextStateRefusal: RssFlagRefusal?) { self.nextStateRefusal = nextStateRefusal }
     func set(syncError: Error?, for subscriptionId: String) { syncErrors[subscriptionId] = syncError }
@@ -415,8 +415,8 @@ actor FakeRssClient: RssClient {
     /// The server's check before it writes anything: every slot a call adds
     /// must be one the palette enables. Removing needs no palette entry.
     private func paletteRefusal(of changes: [RssItemStateChange]) -> RssFlagRefusal? {
-        guard let enabledSlots else { return nil }
-        let refused = changes.reduce(into: Set<String>()) { $0.formUnion($1.addFlags) }.subtracting(enabledSlots)
+        guard let paletteSlots else { return nil }
+        let refused = changes.reduce(into: Set<String>()) { $0.formUnion($1.addFlags) }.subtracting(paletteSlots)
         guard !refused.isEmpty else { return nil }
         return RssFlagRefusal(slots: refused, message: "Not an enabled flag in the palette.")
     }

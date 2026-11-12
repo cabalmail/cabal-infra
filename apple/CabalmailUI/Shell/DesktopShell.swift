@@ -18,9 +18,10 @@ import CabalmailKit
 /// re-fires for the new folder or message.
 struct DesktopShell: View {
     @Environment(SceneNavigator.self) private var navigator
-    /// Read for one thing: whether the reader's flag control will draw a
+    /// Read for one thing: whether a reader's flag control will draw a
     /// palette menu, which decides the shape — and so the width — of its
-    /// disabled stand-in (`EmptyDetailToolbar`, #2016).
+    /// disabled stand-in (`EmptyDetailToolbar` and
+    /// `EmptyFeedDetailToolbar`, #2016).
     @Environment(Preferences.self) private var preferences
     @State private var mailState = WideMailState()
     @FocusState private var searchFieldFocused: Bool
@@ -44,11 +45,12 @@ struct DesktopShell: View {
     /// of similar size) has the column. Zero until measured.
     @State private var listLeadingToolbarWidth: CGFloat = 0
 
-    /// How many palette rows the reader's flag control offers: none draws
+    /// How many palette rows a reader's flag control offers: none draws
     /// it as a plain button, any more as a split button with that many
-    /// rows. The reader asks `FlagMenuPolicy.rows(palette:taggedSlots:)`
-    /// with the open message's flags; with no message open there are none,
-    /// so the enabled palette is the whole answer.
+    /// rows. Each reader asks `FlagMenuPolicy.rows(palette:taggedSlots:)`
+    /// with the open message's or feed item's flags; with nothing open
+    /// there are none, so the palette is the whole answer, and the same
+    /// one for both.
     private var flagMenuRowCount: Int {
         FlagMenuPolicy.rows(palette: preferences.flagPalette, taggedSlots: []).count
     }
@@ -117,7 +119,7 @@ struct DesktopShell: View {
                     items: EmptyDetailToolbar(flagMenuRowCount: flagMenuRowCount)
                 ),
                 feedPlaceholder: ReaderPlaceholderToolbar(
-                    items: EmptyFeedDetailToolbar()
+                    items: EmptyFeedDetailToolbar(flagMenuRowCount: flagMenuRowCount)
                 )
             )
             // The addresses toggle sits at the window toolbar's trailing

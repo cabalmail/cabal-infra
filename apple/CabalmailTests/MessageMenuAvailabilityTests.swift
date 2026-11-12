@@ -4,7 +4,7 @@ import XCTest
 // Regression coverage for issue #985: the Message menu left Reply, Reply All,
 // Forward, Mark as Read/Unread, Flag/Unflag and Move to Folder… enabled with
 // no message selected, and choosing one did nothing — the handlers act on
-// `shortcutTargetUIDs` (the selection, else the open message) or on the open
+// `shortcutTargetRefs` (the selection, else the open message) or on the open
 // message in `MessageDetailView`, all of which are empty then. Availability
 // has to answer those same two target rules.
 final class MessageMenuAvailabilityTests: XCTestCase {
@@ -33,7 +33,7 @@ final class MessageMenuAvailabilityTests: XCTestCase {
     }
 
     // Compact iPhone opens a message without putting it in the list's
-    // selection set; `shortcutTargetUIDs` falls back to the open message, so
+    // selection set; `shortcutTargetRefs` falls back to the open message, so
     // the selection-scoped commands act on it and stay enabled.
     func testAnOpenMessageWithNoListSelectionStillHasTargets() {
         let availability = MessageMenuAvailability(selectedCount: 0, hasOpenMessage: true)

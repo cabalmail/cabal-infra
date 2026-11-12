@@ -13,8 +13,7 @@ extension MessageDetailView {
     /// button; touch platforms keep the plain toggle with the menu on
     /// touch-and-hold. While the default flag is the only one offered the
     /// control stays the plain button it always was — no dead menu, no
-    /// footprint change. With no default flag the face is dimmed, and the
-    /// menu, if the message carries a flag to clear, still opens.
+    /// footprint change.
     @ViewBuilder
     var flagButton: some View {
         if let model {
@@ -25,7 +24,6 @@ extension MessageDetailView {
                 } label: {
                     flagToolbarLabel(model: model)
                 }
-                .disabled(model.defaultFlag == nil)
                 // Cmd+Shift+L rides `readerChordHosts`, not this button — an
                 // equivalent on a toolbar item dies with the item when the
                 // toolbar overflows (#1047).
@@ -62,7 +60,6 @@ extension MessageDetailView {
             } label: {
                 flagToolbarLabel(model: model)
             }
-            .disabled(model.defaultFlag == nil)
             .accessibilityIdentifier("reader.toggleFlag")
             let rows = menuRows(model: model)
             if !rows.isEmpty {
@@ -77,11 +74,8 @@ extension MessageDetailView {
     #endif
 
     /// The face of the control: what a press does to the default flag.
-    /// With none, the classic "Flag" face, dimmed by its caller.
     private func flagToolbarLabel(model: MessageDetailViewModel) -> some View {
-        let face = model.defaultFlag?.face(isSet: model.isDefaultFlagSet)
-            ?? ReaderToggleFace.flag(isFlagged: false)
-        return face.label
+        model.defaultFlag.face(isSet: model.isDefaultFlagSet).label
     }
 
     /// The rows the menu offers, read here so the enclosing body observes
@@ -93,22 +87,14 @@ extension MessageDetailView {
         )
     }
 
-    /// One checkmark toggle per row. `isOn` reads the row rather than the
-    /// model so the drawn state and the menu's identity can never disagree.
-    @ViewBuilder
+    /// One checkmark toggle per row (`FlagMenuToggles`, which the feed
+    /// reader's flag menu draws too).
     func flagOptionItems(
         rows: [FlagMenuRow],
         model: MessageDetailViewModel
     ) -> some View {
-        ForEach(rows) { row in
-            Toggle(isOn: Binding(
-                get: { row.isOn },
-                set: { _ in
-                    Task { await model.toggle(Flag(wireValue: row.slot)) }
-                }
-            )) {
-                Text(row.label)
-            }
+        FlagMenuToggles(rows: rows) { row in
+            Task { await model.toggle(Flag(wireValue: row.slot)) }
         }
     }
 }

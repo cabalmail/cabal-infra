@@ -6,15 +6,13 @@ import CabalmailKit
 /// first item of the row and selection menus, the bulk bar's button and
 /// the reader's flag button.
 ///
-/// Mail's controls act on the palette's default flag, the first enabled
-/// entry of Settings > Flags (`defaultFlag(in:)`). A feed item has one
-/// mark, the server's flag, so the feed's controls act on that flag's
-/// entry whatever its position (`systemFlag(in:)`).
+/// Mail's controls and the feed's act on the palette's default flag, the
+/// first entry of Settings > Flags (`defaultFlag(in:)`). The Flagged
+/// filters name the built-in flag, whatever its position
+/// (`systemFlag(in:)`): a plain tap on the pill filters on that one.
 ///
-/// Both are nil when there is nothing to act on. In the app that takes a
-/// stored palette whose built-in entry is switched off, since the entry's
-/// editor has no such switch; the controls then hide or dim instead of
-/// falling back to a flag the user turned off.
+/// There is always one of each: the list always holds the built-in flag,
+/// and no flag can be switched off.
 struct FlagToggle: Equatable {
     let slot: String
     let label: String
@@ -26,27 +24,25 @@ struct FlagToggle: Equatable {
         color = entry.color
     }
 
-    /// The flag the mail controls toggle: the first enabled entry of the
-    /// effective palette.
-    static func defaultFlag(in stored: [FlagPaletteEntry]) -> FlagToggle? {
-        FlagPalette.defaultEntry(in: stored).map(FlagToggle.init)
+    /// The flag the one-press controls toggle, on a message and on a feed
+    /// item: the first entry of the effective palette.
+    static func defaultFlag(in stored: [FlagPaletteEntry]) -> FlagToggle {
+        FlagToggle(FlagPalette.defaultEntry(in: stored))
     }
 
-    /// The built-in flag's entry, for the feed controls and for the
-    /// filters, which the server can only run on that flag. Nil while the
-    /// entry is disabled.
-    static func systemFlag(in stored: [FlagPaletteEntry]) -> FlagToggle? {
-        FlagPalette.effective(stored)
-            .first { $0.slot == FlagPalette.systemSlot && $0.enabled }
-            .map(FlagToggle.init)
+    /// The built-in flag's entry, for the Flagged filters.
+    static func systemFlag(in stored: [FlagPaletteEntry]) -> FlagToggle {
+        FlagToggle(
+            FlagPalette.effective(stored).first { $0.slot == FlagPalette.systemSlot }
+                ?? FlagPalette.defaultSystemEntry
+        )
     }
 
     /// The built-in flag's name as a state rather than an action, for the
     /// Flagged filter pills and the search sheet's toggle: its entry's
-    /// label, enabled or not.
+    /// label.
     static func systemFlagName(in stored: [FlagPaletteEntry]) -> String {
-        FlagPalette.effective(stored).first { $0.slot == FlagPalette.systemSlot }?.label
-            ?? FlagPalette.defaultSystemEntry.label
+        systemFlag(in: stored).label
     }
 
     var flag: Flag { Flag(wireValue: slot) }
@@ -78,8 +74,8 @@ struct FlagToggle: Equatable {
         "\(title(isSet: false))/\(title(isSet: true))"
     }
 
-    /// The menu bar's title while there is no flag to toggle; the item is
-    /// dimmed then.
+    /// The menu bar's title while no window has given it a flag to name;
+    /// the item is dimmed then.
     static let idleCommandTitle = "Flag/Unflag"
 
     private var keepsClassicWords: Bool {

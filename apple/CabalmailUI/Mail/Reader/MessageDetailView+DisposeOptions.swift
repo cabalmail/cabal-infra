@@ -60,15 +60,12 @@ extension MessageDetailView {
         }
     }
 
-    /// Chevron segment on macOS only. On the touch platforms the control
-    /// keeps its plain-button footprint — the hold menu is an accelerator,
-    /// not a second hit target.
+    /// Chevron segment on macOS only (`HostPlatform.splitControlsDrawChevron`,
+    /// the rule the feed reader's flag control reads too). On the touch
+    /// platforms the control keeps its plain-button footprint — the hold
+    /// menu is an accelerator, not a second hit target.
     var optionMenuIndicator: Visibility {
-        #if os(macOS)
-        return .visible
-        #else
-        return .hidden
-        #endif
+        HostPlatform.current.splitControlsDrawChevron ? .visible : .hidden
     }
 
     /// Red face for a destructive default on the touch platforms, standing

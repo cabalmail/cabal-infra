@@ -45,6 +45,15 @@ final class DefaultFlagToggleTests: XCTestCase {
 
     private func ref(_ uid: UInt32) -> MessageRef { MessageRef(folder: "INBOX", uid: uid) }
 
+    /// A palette as a build from before the Enabled switch was removed
+    /// stored it: `enabled` on every entry, false on both.
+    private func storedAsSwitchedOff() throws -> [FlagPaletteEntry] {
+        try XCTUnwrap(FlagPalette.decode(
+            #"[{"color":"red","enabled":false,"label":"Todo","slot":"cabal-flag-03"},"#
+                + #"{"color":"yellow","enabled":false,"label":"Flagged","slot":"\\Flagged"}]"#
+        ))
+    }
+
     // MARK: - List rows
 
     func testAnUntouchedPaletteStillTogglesTheServersFlag() async throws {
@@ -77,20 +86,23 @@ final class DefaultFlagToggleTests: XCTestCase {
         XCTAssertEqual(calls.map(\.operation), [.add, .remove])
     }
 
-    func testWithNoDefaultFlagTheRowToggleWritesNothing() async throws {
+    /// A flag cannot be switched off, so a palette a build from before
+    /// that stored with every entry `enabled: false` still has a default
+    /// flag, its first, and the row toggle writes it.
+    func testAPaletteStoredAsAllSwitchedOffStillTogglesItsFirstFlag() async throws {
         let imap = FakeImapClient()
-        var off = system
-        off.enabled = false
-        let model = try makeList(imap: imap, palette: [off], envelopes: [TestFixtures.makeEnvelope(uid: 1)])
+        let model = try makeList(
+            imap: imap, palette: try storedAsSwitchedOff(), envelopes: [TestFixtures.makeEnvelope(uid: 1)]
+        )
 
-        XCTAssertNil(model.defaultFlag)
+        XCTAssertEqual(model.defaultFlag.flag, .keyword("cabal-flag-03"))
+        XCTAssertTrue(model.defaultFlagIsMissing(from: [ref(1)]))
         await model.toggleDefaultFlag(model.envelopes[0])
-        await model.setDefaultFlag(true, refs: [ref(1)])
 
         let calls = await imap.flagCalls
-        XCTAssertTrue(calls.isEmpty)
-        XCTAssertFalse(model.envelopes[0].flags.contains(.flagged))
-        XCTAssertFalse(model.defaultFlagIsMissing(from: [ref(1)]), "nothing to set, so nothing is missing")
+        XCTAssertEqual(calls.map(\.flags), [[.keyword("cabal-flag-03")]])
+        XCTAssertEqual(calls.map(\.operation), [.add])
+        XCTAssertFalse(model.defaultFlagIsMissing(from: [ref(1)]))
     }
 
     // MARK: - Selections
@@ -122,12 +134,12 @@ final class DefaultFlagToggleTests: XCTestCase {
         let reader = try makeReader(imap: imap, palette: [todo, system], flags: [.flagged])
 
         XCTAssertFalse(reader.isDefaultFlagSet, "flagged, but not with the default flag")
-        XCTAssertEqual(reader.defaultFlag?.title(isSet: reader.isDefaultFlagSet), "Todo")
+        XCTAssertEqual(reader.defaultFlag.title(isSet: reader.isDefaultFlagSet), "Todo")
 
         await reader.toggleDefaultFlag()
 
         XCTAssertTrue(reader.isDefaultFlagSet)
-        XCTAssertEqual(reader.defaultFlag?.title(isSet: reader.isDefaultFlagSet), "Remove Todo")
+        XCTAssertEqual(reader.defaultFlag.title(isSet: reader.isDefaultFlagSet), "Remove Todo")
         XCTAssertEqual(reader.keywordSlots, ["cabal-flag-03"])
         XCTAssertTrue(reader.isFlagged, "the server's flag is left alone")
         let calls = await imap.flagCalls
@@ -160,17 +172,17 @@ final class DefaultFlagToggleTests: XCTestCase {
         XCTAssertEqual(calls.map(\.flags), [[.flagged], [.keyword("cabal-flag-03")]], "\\Seen is not a palette flag")
     }
 
-    func testWithNoDefaultFlagTheReaderButtonWritesNothing() async throws {
+    /// The reader's half of the same rule: a built-in flag stored as
+    /// switched off, alone in the palette, is what the button writes.
+    func testTheReaderButtonWritesABuiltInFlagStoredAsSwitchedOff() async throws {
         let imap = FakeImapClient()
-        var off = system
-        off.enabled = false
-        let reader = try makeReader(imap: imap, palette: [off])
+        let reader = try makeReader(imap: imap, palette: Array(try storedAsSwitchedOff().dropFirst()))
 
-        XCTAssertNil(reader.defaultFlag)
+        XCTAssertEqual(reader.defaultFlag.flag, .flagged)
         await reader.toggleDefaultFlag()
 
-        XCTAssertFalse(reader.isFlagged)
+        XCTAssertTrue(reader.isFlagged)
         let calls = await imap.flagCalls
-        XCTAssertTrue(calls.isEmpty)
+        XCTAssertEqual(calls.map(\.flags), [[.flagged]])
     }
 }

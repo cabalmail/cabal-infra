@@ -10,17 +10,15 @@ import CabalmailKit
 /// The rows are the effective palette, so the built-in flag's entry leads
 /// every palette here that does not place it elsewhere.
 final class FlagMenuPolicyTests: XCTestCase {
-    private func entry(
-        _ slot: String, _ label: String, enabled: Bool = true
-    ) -> FlagPaletteEntry {
-        FlagPaletteEntry(slot: slot, label: label, color: "blue", enabled: enabled)
+    private func entry(_ slot: String, _ label: String) -> FlagPaletteEntry {
+        FlagPaletteEntry(slot: slot, label: label, color: "blue")
     }
 
     private let system = FlagPalette.systemSlot
 
     // MARK: - Rows
 
-    func testOffersEveryEnabledEntryInPaletteOrder() {
+    func testOffersEveryEntryInPaletteOrder() {
         let rows = FlagMenuPolicy.rows(
             palette: [entry("cabal-flag-02", "Beta"), entry("cabal-flag-01", "Alpha")],
             taggedSlots: []
@@ -50,16 +48,21 @@ final class FlagMenuPolicyTests: XCTestCase {
         XCTAssertEqual(rows.map(\.isOn), [false, false, true])
     }
 
-    /// A disabled entry is not offered, but a tag on it still needs its
-    /// untag row — and keeps the entry's label.
-    func testADisabledEntrysSurvivingTagKeepsItsLabel() {
-        let rows = FlagMenuPolicy.rows(
-            palette: [entry("cabal-flag-01", "Alpha"), entry("cabal-flag-02", "Beta", enabled: false)],
-            taggedSlots: ["cabal-flag-02"]
-        )
-        XCTAssertEqual(rows.map(\.slot), [system, "cabal-flag-01", "cabal-flag-02"])
-        XCTAssertEqual(rows.map(\.label), ["Flagged", "Alpha", "Beta"])
-        XCTAssertEqual(rows.last?.isOn, true)
+    /// A flag cannot be switched off, so an entry a build from before that
+    /// stored as `enabled: false` is a row like the rest, to set as well as
+    /// to clear, in its palette position.
+    func testAnEntryStoredAsSwitchedOffIsOfferedLikeAnyOther() throws {
+        let palette = try XCTUnwrap(FlagPalette.decode(
+            #"[{"color":"blue","enabled":false,"label":"Beta","slot":"cabal-flag-02"},"#
+                + #"{"color":"blue","enabled":true,"label":"Alpha","slot":"cabal-flag-01"}]"#
+        ))
+        let untagged = FlagMenuPolicy.rows(palette: palette, taggedSlots: [])
+        XCTAssertEqual(untagged.map(\.slot), [system, "cabal-flag-02", "cabal-flag-01"])
+        XCTAssertEqual(untagged.map(\.label), ["Flagged", "Beta", "Alpha"])
+        XCTAssertEqual(untagged.map(\.isOn), [false, false, false])
+
+        let tagged = FlagMenuPolicy.rows(palette: palette, taggedSlots: ["cabal-flag-02"])
+        XCTAssertEqual(tagged.map(\.isOn), [false, true, false])
     }
 
     /// A deleted entry has no label left, so the slot id names the row.
@@ -84,30 +87,23 @@ final class FlagMenuPolicyTests: XCTestCase {
             "renamed, it is still the only flag"
         )
         XCTAssertTrue(
+            FlagMenuPolicy.rows(palette: [entry(system, "Urgent")], taggedSlots: [system]).isEmpty,
+            "set on the message, the button's own press clears it"
+        )
+    }
+
+    /// A second flag makes it a menu, whichever of the two is the default.
+    func testASecondFlagIsAMenu() {
+        XCTAssertEqual(
+            FlagMenuPolicy.rows(palette: [entry("cabal-flag-01", "Alpha")], taggedSlots: []).map(\.slot),
+            [system, "cabal-flag-01"]
+        )
+        XCTAssertEqual(
             FlagMenuPolicy.rows(
-                palette: [entry(system, "Flagged", enabled: false), entry("cabal-flag-01", "Alpha")],
-                taggedSlots: []
-            ).isEmpty,
-            "a custom flag that is the default and the only one offered"
+                palette: [entry("cabal-flag-01", "Alpha"), entry(system, "Flagged")], taggedSlots: []
+            ).map(\.slot),
+            ["cabal-flag-01", system]
         )
-    }
-
-    func testAnUntaggedDisabledEntryIsNotOffered() {
-        let rows = FlagMenuPolicy.rows(
-            palette: [entry("cabal-flag-01", "Alpha", enabled: false)],
-            taggedSlots: []
-        )
-        XCTAssertTrue(rows.isEmpty, "the built-in flag is then the default, and alone")
-    }
-
-    /// A disabled built-in entry on a flagged message: no default flag to
-    /// toggle, but the flag still needs its way off.
-    func testADisabledBuiltInFlagOnAFlaggedMessageKeepsItsUntagRow() {
-        let rows = FlagMenuPolicy.rows(
-            palette: [entry(system, "Urgent", enabled: false)],
-            taggedSlots: [system]
-        )
-        XCTAssertEqual(rows, [FlagMenuRow(slot: system, label: "Urgent", isOn: true)])
     }
 
     /// A single row that is not the default flag is still a menu: the

@@ -17,13 +17,11 @@ import org.junit.jupiter.api.Test
  */
 class RuleFlagRowsTest {
     private val urgent = FlagPaletteEntry(slot = "cabal-flag-01", label = "Urgent", color = "red")
-    private val muted = FlagPaletteEntry(slot = "cabal-flag-02", label = "Muted", color = "gray", enabled = false)
+    private val muted = FlagPaletteEntry(slot = "cabal-flag-02", label = "Muted", color = "gray")
     private val rule = Rule(name = "r")
 
-    private fun system(
-        label: String = "Flagged",
-        enabled: Boolean = true,
-    ) = FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = label, color = "yellow", enabled = enabled)
+    private fun system(label: String = "Flagged") =
+        FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = label, color = "yellow")
 
     @Test
     fun `an untouched palette offers the built-in flag alone, reading the rule's flag`() {
@@ -41,22 +39,33 @@ class RuleFlagRowsTest {
             listOf(
                 RuleFlagRow("cabal-flag-01", "Urgent", "red", isOn = true),
                 RuleFlagRow(FlagPalette.SYSTEM_SLOT, "Later", "yellow", isOn = false),
+                RuleFlagRow("cabal-flag-02", "Muted", "gray", isOn = false),
             ),
             ruleFlagRows(palette, rule.copy(flags = listOf("cabal-flag-01"))),
         )
     }
 
     @Test
-    fun `the built-in flag is offered even when its entry is disabled`() {
-        // A rule can always set the server's flag; the compiler never skips
-        // a rule for it.
-        val rows = ruleFlagRows(listOf(system(enabled = false), urgent), rule.copy(flag = true))
-        assertEquals(listOf(FlagPalette.SYSTEM_SLOT, "cabal-flag-01"), rows.map { it.slot })
-        assertTrue(rows.first().isOn)
+    fun `a flag an older build switched off is offered, the built-in one too`() {
+        // The server compiles a rule that sets such a flag, so the editor
+        // has to offer it. A switched-off flag of the user's own used to be
+        // left out unless the rule already set it.
+        val olderBuildPalette =
+            FlagPalette.decode(
+                """[{"slot":"\\Flagged","label":"Flagged","color":"yellow","enabled":false},""" +
+                    """{"slot":"cabal-flag-02","label":"Muted","color":"gray","enabled":false}]""",
+            )!!
+        assertEquals(
+            listOf(
+                RuleFlagRow(FlagPalette.SYSTEM_SLOT, "Flagged", "yellow", isOn = true),
+                RuleFlagRow("cabal-flag-02", "Muted", "gray", isOn = false),
+            ),
+            ruleFlagRows(olderBuildPalette, rule.copy(flag = true)),
+        )
     }
 
     @Test
-    fun `slots the rule sets whose entry is disabled or deleted come last, for clearing`() {
+    fun `a slot the rule sets whose entry was deleted comes last, for clearing`() {
         val rows = ruleFlagRows(listOf(urgent, muted), rule.copy(flags = listOf("cabal-flag-09", "cabal-flag-02")))
         assertEquals(
             listOf(
@@ -67,8 +76,8 @@ class RuleFlagRowsTest {
             ),
             rows,
         )
-        // A disabled entry the rule does not set is not offered.
-        assertFalse(ruleFlagRows(listOf(urgent, muted), rule).any { it.slot == "cabal-flag-02" })
+        // A deleted flag the rule does not set is not offered.
+        assertFalse(ruleFlagRows(listOf(urgent, muted), rule).any { it.slot == "cabal-flag-09" })
     }
 
     @Test

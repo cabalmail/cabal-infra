@@ -37,9 +37,29 @@ final class FeedItemDetailViewModel {
     private let defaults: (any FeedDefaultsPersisting)?
     private let preferences: Preferences
 
-    /// The flag the reader's button sets and clears, as the item list has
-    /// it (`FeedItemListView.feedFlag`). Nil while its entry is disabled.
-    var flagToggle: FlagToggle? { FlagToggle.systemFlag(in: preferences.flagPalette) }
+    /// The flag the reader's button sets and clears: the palette's default
+    /// flag, as the item list has it (`FeedItemListViewModel.defaultFlag`)
+    /// and as the mail reader's button does.
+    var flagToggle: FlagToggle { FlagToggle.defaultFlag(in: preferences.flagPalette) }
+
+    /// Whether the open item carries that flag: the button's face.
+    var isDefaultFlagSet: Bool { item.carries(slot: flagToggle.slot) }
+
+    /// The flag menu's rows for the open item (`FlagMenuPolicy.rows`):
+    /// none while the default flag is all there is to offer, which leaves
+    /// the control a plain button.
+    var flagMenuRows: [FlagMenuRow] {
+        FlagMenuPolicy.rows(
+            palette: preferences.flagPalette,
+            taggedSlots: Set(FlagPalette.slots(in: item.paletteFlags, palette: preferences.flagPalette))
+        )
+    }
+
+    /// The flags the header names (`FlagChips`): every one the item
+    /// carries, in palette order.
+    var flagMarks: [FlagDotMark] {
+        FlagDotMark.marks(for: item.paletteFlags, palette: preferences.flagPalette, limit: .max)
+    }
 
     init(
         item: RssItem,
@@ -65,9 +85,10 @@ final class FeedItemDetailViewModel {
     }
 
     /// The view's `.task` while the reader is up: follows the store, so the
-    /// toolbar's read and flag state stay truthful when the item is marked
-    /// elsewhere (the list's swipe or context menu, another window, another
-    /// device's marks arriving by state sync), and the feed's stored
+    /// toolbar's read and flag state and the header's flags stay truthful
+    /// when the item is marked elsewhere (the list's swipe or context menu,
+    /// another window, another device's marks arriving by state sync, a flag
+    /// the server refused being taken off again), and the feed's stored
     /// defaults follow its settings sheet, which the next toggle compares
     /// against. What is on screen (article or summary, styling, remote
     /// content) stays as the reader opened it.
@@ -86,8 +107,7 @@ final class FeedItemDetailViewModel {
 
     private func readItem(from store: RssStore) async {
         guard let stored = (try? await store.item(feedId: item.feedId, sortKey: item.sortKey)) ?? nil else { return }
-        item.isRead = stored.isRead
-        item.isFavorite = stored.isFavorite
+        item.takeMarks(from: stored)
     }
 
     private func readSubscription(from store: RssStore) async {
@@ -179,16 +199,26 @@ final class FeedItemDetailViewModel {
         Task { _ = try? await defaults.updateSubscription(subscription, update) }
     }
 
-    /// Optimistic: the toolbar flips at once, and the store's write tells
-    /// the list and the sidebar.
     func setRead(_ isRead: Bool) async {
-        item.isRead = isRead
-        try? await engine?.setRead(item, isRead)
+        await mark(.read(isRead))
     }
 
-    func setFavorite(_ isFavorite: Bool) async {
-        item.isFavorite = isFavorite
-        try? await engine?.setFavorite(item, isFavorite)
+    /// Flips the default flag: the button's press.
+    func toggleDefaultFlag() async {
+        await toggleFlag(slot: flagToggle.slot)
+    }
+
+    /// Flips one palette flag, the built-in one or one of the user's own:
+    /// a row of the flag menu.
+    func toggleFlag(slot: String) async {
+        await mark(.flag(slot: slot, isSet: !item.carries(slot: slot)))
+    }
+
+    /// Optimistic: the toolbar and the header change at once, and the
+    /// store's write tells the list and the sidebar.
+    private func mark(_ mark: FeedItemMark) async {
+        item.apply(mark)
+        try? await engine?.write(mark, to: item)
     }
 }
 

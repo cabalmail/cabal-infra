@@ -12,8 +12,8 @@ import CabalmailKit
 /// `Preferences.flagPalette`, and the wire, only once the user has changed
 /// it or moved something above it.
 ///
-/// The editor is pushed on a `slot`, but every `Binding` it hands to a
-/// live `TextField` or `Toggle` outlives the entry: confirming the delete
+/// The editor is pushed on a `slot`, but the `Binding` it hands to a
+/// live `TextField` outlives the entry: confirming the delete
 /// shrinks `Preferences.flagPalette` while those children are still
 /// mounted, and SwiftUI pulls their getters during the very same update
 /// pass — on macOS the hosting view's minimum-size recompute as the
@@ -50,16 +50,15 @@ struct FlagPaletteEntryBindings {
     }
 
     /// Whether this entry is the default flag, the one the swipe, the flag
-    /// button and the flag shortcuts set: the first enabled entry.
+    /// button and the flag shortcuts set: the first entry.
     var isDefault: Bool {
-        FlagPalette.defaultEntry(in: preferences.flagPalette)?.slot == slot
+        FlagPalette.defaultEntry(in: preferences.flagPalette).slot == slot
     }
 
-    /// Whether `makeDefault()` would change anything: the entry is there,
-    /// enabled, and not the default already. A disabled flag is offered
-    /// nowhere, so it cannot be the one the gestures set.
+    /// Whether `makeDefault()` would change anything: the entry is there
+    /// and is not the default already.
     var canMakeDefault: Bool {
-        entry?.enabled == true && !isDefault
+        entry != nil && !isDefault
     }
 
     /// The palette as the list shows it.
@@ -78,17 +77,6 @@ struct FlagPaletteEntryBindings {
             set: { newValue in
                 self.write { $0.label = String(newValue.prefix(FlagPalette.maxLabelLength)) }
             }
-        )
-    }
-
-    /// A write-through binding on one field, reading `fallback` when the
-    /// entry is gone.
-    func value<Value>(
-        _ keyPath: WritableKeyPath<FlagPaletteEntry, Value>, or fallback: Value
-    ) -> Binding<Value> {
-        Binding(
-            get: { self.entry?[keyPath: keyPath] ?? fallback },
-            set: { newValue in self.set(keyPath, to: newValue) }
         )
     }
 

@@ -53,13 +53,12 @@ public struct MessageMenuCommands: Commands {
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(!itemsLive)
             // The default flag, by name once it is not the built-in one
-            // under its own (`FlagToggle.commandTitle`); dimmed while the
-            // palette has no default flag.
-            Button(commands?.mailFlag?.commandTitle ?? FlagToggle.idleCommandTitle) {
+            // under its own (`FlagToggle.commandTitle`).
+            Button(commands?.mailFlag.commandTitle ?? FlagToggle.idleCommandTitle) {
                 commands?.send(.toggleFlagged)
             }
             .keyboardShortcut(SharedChordPolicy.flagChord(for: .mail, activeSection: section))
-            .disabled(!itemsLive || commands?.mailFlag == nil)
+            .disabled(!itemsLive)
             Button("Move to Folder…") { commands?.send(.moveSelection) }
                 .keyboardShortcut("m", modifiers: .command)
                 .disabled(!availability.canActOnSelection)

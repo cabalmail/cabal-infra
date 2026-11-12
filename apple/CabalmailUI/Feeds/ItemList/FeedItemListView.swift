@@ -2,8 +2,8 @@ import SwiftUI
 import CabalmailKit
 
 /// Item list for a feed scope (one subscription, a folder, or everything):
-/// filter pills, the local page from `RssStore`, swipe read/favorite,
-/// per-feed search, and "Load older". Selection is lifted to the parent so
+/// filter pills, the local page from `RssStore`, swipe read/flag, the row's
+/// flag menu, per-feed search, and "Load older". Selection is lifted to the parent so
 /// the split view can bind the reader to it.
 struct FeedItemListView: View {
     let scope: RssItemScope
@@ -269,7 +269,7 @@ struct FeedItemListView: View {
             guard let item, item.id != previous?.id else { return }
             Task { await model.didOpen(item) }
         }
-        // Rows are tagged by value, so a row patched in place (read, favorite)
+        // Rows are tagged by value, so a row patched in place (read, a flag)
         // stops matching the selected value and drops its highlight. Follow
         // the patch: same id, fresh state.
         .onChange(of: model.items) { _, items in
@@ -299,31 +299,45 @@ struct FeedItemListView: View {
                     .swipeActions(edge: .trailing) {
                         feedSwipeButton(model.swipeTrailing, item: item, model: model)
                     }
-                    .contextMenu {
-                        Button(item.isRead ? "Mark as unread" : "Mark as read") {
-                            Task { await model.setRead(item, !item.isRead) }
-                        }
-                        if let toggle = feedFlag {
-                            Button(toggle.title(isSet: item.isFavorite)) {
-                                Task { await model.setFavorite(item, !item.isFavorite) }
-                            }
-                        }
-                        if let url = URL(string: item.url) {
-                            Link("Open in browser", destination: url)
-                        }
-                    }
+                    .contextMenu { rowMenu(item, model: model) }
     }
 }
 
 extension FeedItemListView {
-    /// The flag the feed's controls set and clear: the server's flag, which
-    /// is the only mark a feed item has, in the name and color its entry
-    /// has in Settings > Flags. Nil while that entry is disabled; the swipe
-    /// and the menu item go then, and the menu bar's item is dimmed.
-    var feedFlag: FlagToggle? { FlagToggle.systemFlag(in: preferences.flagPalette) }
-
-    /// That flag's name as a state, for the filter pill (`filterLabel`).
+    /// The built-in flag's name as a state, for the filter pill
+    /// (`filterLabel`), which filters on that flag whatever the default
+    /// flag is. The one-press controls act on the default flag
+    /// (`FeedItemListViewModel.defaultFlag`).
     var feedFlagName: String { FlagToggle.systemFlagName(in: preferences.flagPalette) }
+
+    /// The row's menu: read, the default flag's toggle named for the flag,
+    /// a Flags submenu of every flag the palette offers whenever that is
+    /// more than the default flag alone (`FlagMenuPolicy.rows`, the mail
+    /// row menu's rule), and the article's link.
+    @ViewBuilder
+    func rowMenu(_ item: RssItem, model: FeedItemListViewModel) -> some View {
+        Button(item.isRead ? "Mark as unread" : "Mark as read") {
+            Task { await model.setRead(item, !item.isRead) }
+        }
+        let toggle = model.defaultFlag
+        Button(toggle.title(isSet: item.carries(slot: toggle.slot))) {
+            Task { await model.toggleDefaultFlag(on: item) }
+        }
+        let rows = FlagMenuPolicy.rows(
+            palette: preferences.flagPalette,
+            taggedSlots: Set(FlagPalette.slots(in: item.paletteFlags, palette: preferences.flagPalette))
+        )
+        if !rows.isEmpty {
+            Menu("Flags") {
+                FlagMenuToggles(rows: rows) { row in
+                    Task { await model.toggleFlag(slot: row.slot, on: item) }
+                }
+            }
+        }
+        if let url = URL(string: item.url) {
+            Link("Open in browser", destination: url)
+        }
+    }
 
     /// The button a swipe edge bound to `action` reveals for `item`; nothing
     /// for a disabled edge. Read on every row build, so a change under
@@ -341,19 +355,19 @@ extension FeedItemListView {
             .tint(ColorTokens.accentForestFg)
             .accessibilityIdentifier("feed.swipe.toggleRead")
         case .toggleFavorite:
-            // Same words, glyphs and tint as the mail list's flag swipe
-            // makes for this flag (`FlagToggle`): one mark, one vocabulary
-            // across media. The identifier keeps the wire name for the probes.
-            if let toggle = feedFlag {
-                Button {
-                    Task { await model.setFavorite(item, !item.isFavorite) }
-                } label: {
-                    Label(toggle.title(isSet: item.isFavorite),
-                          systemImage: toggle.systemImage(isSet: item.isFavorite))
-                }
-                .tint(toggle.tint)
-                .accessibilityIdentifier("feed.swipe.toggleFavorite")
+            // The default flag, in the words, glyphs and tint the mail
+            // list's flag swipe has for it (`FlagToggle`): one vocabulary
+            // across media. The option's stored value and the identifier
+            // keep the wire name.
+            let toggle = model.defaultFlag
+            let isSet = item.carries(slot: toggle.slot)
+            Button {
+                Task { await model.toggleDefaultFlag(on: item) }
+            } label: {
+                Label(toggle.title(isSet: isSet), systemImage: toggle.systemImage(isSet: isSet))
             }
+            .tint(toggle.tint)
+            .accessibilityIdentifier("feed.swipe.toggleFavorite")
         case .disabled:
             EmptyView()
         }
@@ -361,8 +375,8 @@ extension FeedItemListView {
 }
 
 /// One item row: unread dot, title, the first line of the body (when it
-/// has one), feed name (in multi-feed scopes), relative date, the flag
-/// dot, and a "queued" mark while a state change waits for the network.
+/// has one), feed name (in multi-feed scopes), relative date, a dot per
+/// flag, and a "queued" mark while a state change waits for the network.
 struct FeedItemRow: View {
     let item: RssItem
     /// The feed's name, in multi-feed scopes; nil in a single feed's list.
@@ -376,9 +390,9 @@ struct FeedItemRow: View {
         // line of prose, not the end of the body (see `HTMLText.firstLine`).
         let snippet = HTMLText.firstLine(from: item.bodyHtml)
         let title = item.title.isEmpty ? "Untitled" : item.title
-        // The item's flag is the system flag, so its mark is the mail
-        // row's: the same dot, in the palette entry's color and name.
-        let flagMarks = FlagDotMark.marks(isFlagged: item.isFavorite, palette: palette)
+        // The item's flags, the built-in one and the user's own, drawn as
+        // a mail row draws a message's: the same dots, in palette order.
+        let flagMarks = FlagDotMark.marks(for: item.paletteFlags, palette: palette)
         HStack(alignment: .top, spacing: 10) {
             UnreadDot(isUnread: !item.isRead)
             VStack(alignment: .leading, spacing: 3) {

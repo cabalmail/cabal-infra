@@ -11,16 +11,18 @@ extension FeedItemListView {
     /// list is single-selection and its selection is the open item (the
     /// reader is bound to it, and on compact it is what pushed the reader),
     /// so one value answers both; the reader picks the change up from the
-    /// state bus. Mark all read goes through the same confirmation the
-    /// toolbar button uses. The catalog commands are the sidebar's.
+    /// state bus. The flag command toggles the default flag, as the Message
+    /// menu's does for mail. Mark all read goes through the same
+    /// confirmation the toolbar button uses. The catalog commands are the
+    /// sidebar's.
     func handleFeedCommand(_ command: FeedCommand, model: FeedItemListViewModel) {
         switch command {
         case .toggleRead:
             guard let item = selection else { return }
             Task { await model.setRead(item, !item.isRead) }
         case .toggleFlag:
-            guard let item = selection, feedFlag != nil else { return }
-            Task { await model.setFavorite(item, !item.isFavorite) }
+            guard let item = selection else { return }
+            Task { await model.toggleDefaultFlag(on: item) }
         case .markAllRead:
             confirmMarkAllRead = true
         case .subscribe, .newFolder, .importOpml, .exportOpml, .refresh:

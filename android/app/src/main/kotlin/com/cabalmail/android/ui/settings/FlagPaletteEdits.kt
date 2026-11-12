@@ -87,22 +87,21 @@ internal object FlagPaletteEdits {
 
     /**
      * Whether [slot] is the default flag, the one the swipe, the star
-     * button and the flag shortcut set: the first enabled entry.
+     * button and the flag shortcut set: the first entry.
      */
     fun isDefault(
         stored: List<FlagPaletteEntry>,
         slot: String,
-    ): Boolean = FlagPalette.defaultEntry(stored)?.slot == slot
+    ): Boolean = FlagPalette.defaultEntry(stored).slot == slot
 
     /**
-     * Whether [madeDefault] would change anything: the entry is there,
-     * enabled, and not the default already. A disabled flag is offered
-     * nowhere, so it cannot be the one the gestures set.
+     * Whether [madeDefault] would change anything: the entry is there and
+     * is not the default already.
      */
     fun canMakeDefault(
         stored: List<FlagPaletteEntry>,
         slot: String,
-    ): Boolean = FlagPalette.effective(stored).any { it.slot == slot && it.enabled } && !isDefault(stored, slot)
+    ): Boolean = FlagPalette.effective(stored).any { it.slot == slot } && !isDefault(stored, slot)
 
     /**
      * Makes the entry the default flag by moving it to the top of the

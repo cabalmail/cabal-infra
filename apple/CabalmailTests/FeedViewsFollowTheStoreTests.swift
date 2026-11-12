@@ -192,7 +192,7 @@ final class FeedViewsFollowTheStoreTests: XCTestCase {
                                  subscription: RssSubscription(subscriptionId: "s", feedId: "f"))
         let reader = try await followingReader(subscription: nil)
 
-        await list.setFavorite(item("k1"), true)
+        await list.toggleFlag(slot: FlagPalette.systemSlot, on: item("k1"))
 
         try await waitUntilOnMainActor { reader.item.isFavorite }
     }

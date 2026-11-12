@@ -20,7 +20,7 @@ class SwipeRevealTest {
     private val archive = DisposeIntent.Move(DisposeAction.ARCHIVE)
 
     /** The default flag of an untouched palette: the built-in flag under its own name. */
-    private val builtIn = FlagToggle.defaultFlag(emptyList())!!
+    private val builtIn = FlagToggle.defaultFlag(emptyList())
     private val todo = FlagToggle(slot = "cabal-flag-01", label = "Todo", color = "blue")
 
     @Test
@@ -77,17 +77,32 @@ class SwipeRevealTest {
     }
 
     @Test
-    fun `with no default flag the flag edge reveals nothing, and so does not drag`() {
-        assertNull(mailSwipeReveal(MailSwipeAction.TOGGLE_FLAG, isSeen = true, flag = null, isFlagSet = false, archive))
-        // The other bindings do not depend on it.
+    fun `the flag edge drags on a palette whose flags an older build switched off`() {
+        // Such a palette used to have no flag to toggle, and the edge bound
+        // to the flag did not drag in mail or in a feed.
+        val allOff =
+            FlagPalette.decode(
+                """[{"slot":"\\Flagged","label":"Urgent","color":"red","enabled":false},""" +
+                    """{"slot":"cabal-flag-01","label":"Todo","color":"blue","enabled":false}]""",
+            )!!
         assertEquals(
-            SwipeReveal(R.string.mark_unread, SwipeGlyph.EMAIL, SwipeTone.READ),
-            mailSwipeReveal(MailSwipeAction.TOGGLE_READ, isSeen = true, flag = null, isFlagSet = false, archive),
+            SwipeReveal(UiLabel.Verbatim("Urgent"), SwipeGlyph.STAR_HOLLOW, SwipeTone.FLAG, flagColor = "red"),
+            mailSwipeReveal(
+                MailSwipeAction.TOGGLE_FLAG,
+                isSeen = true,
+                flag = FlagToggle.defaultFlag(allOff),
+                isFlagSet = false,
+                archive,
+            ),
         )
-        assertNull(feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = null, isFavorite = false))
         assertEquals(
-            SwipeReveal(R.string.mark_read, SwipeGlyph.EMAIL, SwipeTone.READ),
-            feedSwipeReveal(FeedSwipeAction.TOGGLE_READ, isRead = false, flag = null, isFavorite = false),
+            SwipeReveal(UiLabel.Verbatim("Urgent"), SwipeGlyph.STAR_HOLLOW, SwipeTone.FLAG, flagColor = "red"),
+            feedSwipeReveal(
+                FeedSwipeAction.TOGGLE_FAVORITE,
+                isRead = true,
+                flag = FlagToggle.systemFlag(allOff),
+                isFavorite = false,
+            ),
         )
     }
 

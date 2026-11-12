@@ -98,6 +98,15 @@ public enum HostPlatform {
         self == .iOS
     }
 
+    /// Whether a control that is a menu with a primary action (the readers'
+    /// flag, read and dispose controls) draws a chevron segment for its
+    /// menu: the Mac's split button. Elsewhere the control keeps its
+    /// plain-button footprint and the menu opens on touch and hold, an
+    /// accelerator rather than a second hit target.
+    var splitControlsDrawChevron: Bool {
+        self == .macOS
+    }
+
     /// Whether Settings offers the app's own text sizes (`AppTextSize`):
     /// the Mac, which has no Dynamic Type. Everywhere else the system text
     /// size already reaches every surface, and a second control would only
