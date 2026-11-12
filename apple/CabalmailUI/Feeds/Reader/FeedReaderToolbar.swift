@@ -82,15 +82,7 @@ struct FeedReaderBarItem: View {
             }
             .accessibilityIdentifier(action.identifier)
         case .favorite:
-            // The mail reader's flag control, word for word and glyph for
-            // glyph, for the flag a feed item has (`FlagToggle`); the
-            // identifier keeps the wire name for the probes.
-            Button {
-                Task { await model.setFavorite(!model.item.isFavorite) }
-            } label: {
-                model.flagToggle.face(isSet: model.item.isFavorite).label
-            }
-            .accessibilityIdentifier(action.identifier)
+            flagControl
         case .readerMode:
             readerModeButton
         case .remoteContent:
@@ -100,6 +92,48 @@ struct FeedReaderBarItem: View {
         case .more:
             moreMenu
         }
+    }
+
+    /// The flag control, the mail reader's (`MessageDetailView.flagButton`)
+    /// word for word and glyph for glyph: the face toggles the default flag
+    /// (`FlagToggle`), and the menu offers one checkmark toggle per palette
+    /// flag. macOS draws a split button; the touch platforms keep the plain
+    /// toggle with the menu on touch-and-hold. While the default flag is
+    /// all there is to offer the control stays the plain button it was.
+    /// The rows are read here, in the item's own body, so the control
+    /// follows them. The identifier keeps the wire name for the probes.
+    @ViewBuilder
+    private var flagControl: some View {
+        let rows = model.flagMenuRows
+        if rows.isEmpty {
+            Button {
+                Task { await model.toggleDefaultFlag() }
+            } label: {
+                flagFace
+            }
+            .accessibilityIdentifier(FeedReaderAction.favorite.identifier)
+        } else {
+            Menu {
+                FlagMenuToggles(rows: rows) { row in
+                    Task { await model.toggleFlag(slot: row.slot) }
+                }
+            } label: {
+                flagFace
+            } primaryAction: {
+                Task { await model.toggleDefaultFlag() }
+            }
+            .menuIndicator(HostPlatform.current.splitControlsDrawChevron ? .visible : .hidden)
+            .accessibilityIdentifier(FeedReaderAction.favorite.identifier)
+            // macOS keeps the AppKit menu it built the first time this
+            // `Menu` was opened, checkmarks and titles included, so the
+            // identity carries what the rows draw (#1329).
+            .id(FlagMenuPolicy.identity(rows))
+        }
+    }
+
+    /// The flag control's face: what a press does to the default flag.
+    private var flagFace: some View {
+        model.flagToggle.face(isSet: model.isDefaultFlagSet).label
     }
 
     private var readerModeButton: some View {

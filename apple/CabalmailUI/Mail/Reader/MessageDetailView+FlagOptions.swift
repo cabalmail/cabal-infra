@@ -87,22 +87,14 @@ extension MessageDetailView {
         )
     }
 
-    /// One checkmark toggle per row. `isOn` reads the row rather than the
-    /// model so the drawn state and the menu's identity can never disagree.
-    @ViewBuilder
+    /// One checkmark toggle per row (`FlagMenuToggles`, which the feed
+    /// reader's flag menu draws too).
     func flagOptionItems(
         rows: [FlagMenuRow],
         model: MessageDetailViewModel
     ) -> some View {
-        ForEach(rows) { row in
-            Toggle(isOn: Binding(
-                get: { row.isOn },
-                set: { _ in
-                    Task { await model.toggle(Flag(wireValue: row.slot)) }
-                }
-            )) {
-                Text(row.label)
-            }
+        FlagMenuToggles(rows: rows) { row in
+            Task { await model.toggle(Flag(wireValue: row.slot)) }
         }
     }
 }

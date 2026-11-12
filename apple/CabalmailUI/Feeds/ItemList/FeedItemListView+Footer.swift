@@ -63,7 +63,20 @@ extension FeedItemListView {
         switch model.filter {
         case .all: return "New items appear here as the feed is fetched."
         case .unread: return "Every item here has been read."
-        case .favorite: return "Swipe an item or use its menu to flag it."
+        case .favorite:
+            return Self.flaggedEmptyDescription(
+                defaultFlagIsBuiltIn: model.defaultFlag.slot == FlagPalette.systemSlot, flagName: feedFlagName
+            )
         }
+    }
+
+    /// Under the Flagged pill with nothing to show. The pill filters on the
+    /// built-in flag; the swipe and the menu's first item set the default
+    /// flag, which is that flag only until another is made the default.
+    /// After that the Flags menu is the way to set the one this pill shows.
+    nonisolated static func flaggedEmptyDescription(defaultFlagIsBuiltIn: Bool, flagName: String) -> String {
+        defaultFlagIsBuiltIn
+            ? "Swipe an item or use its menu to flag it."
+            : "Use an item's Flags menu to mark it \(flagName)."
     }
 }

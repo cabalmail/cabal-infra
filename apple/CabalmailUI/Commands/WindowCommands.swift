@@ -148,8 +148,9 @@ public final class WindowCommands {
     /// default flag.
     var mailFlag: FlagToggle { FlagToggle.defaultFlag(in: flagPalette) }
 
-    /// The Feeds menu's: the server's flag, the one mark a feed item has.
-    var feedFlag: FlagToggle { FlagToggle.systemFlag(in: flagPalette) }
+    /// The Feeds menu's: the default flag too, which the feed list's
+    /// handler sets and clears on the open item.
+    var feedFlag: FlagToggle { FlagToggle.defaultFlag(in: flagPalette) }
 
     // MARK: - Availability
 

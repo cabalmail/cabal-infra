@@ -215,7 +215,7 @@ struct ActionsSettingsView: View {
     @ViewBuilder
     private var feedSwipeOptions: some View {
         Text("Toggle read").tag(FeedSwipeAction.toggleRead)
-        Text("Toggle flag").tag(FeedSwipeAction.toggleFavorite)
+        Text("Toggle default flag").tag(FeedSwipeAction.toggleFavorite)
         Text("None").tag(FeedSwipeAction.disabled)
     }
 

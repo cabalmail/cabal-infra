@@ -66,7 +66,7 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
         XCTAssertTrue(body.contains(".menuIndicator(optionMenuIndicator)"))
     }
 
-    func testTheFeedsMoreMenuIsTheOnlyMenuOnTheWideBar() throws {
+    func testTheFeedsMoreMenuIsAMenuOnTheWideBar() throws {
         let body = try Self.source("CabalmailUI/Feeds/Reader/FeedReaderToolbar.swift")
         // The macOS arm of the platform split, which is where the wide bar's
         // More menu is declared.
@@ -76,8 +76,29 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
         let tail = String(body[macArm.lowerBound...])
         XCTAssertTrue(tail.contains("Menu {"), "More is a menu on the wide bar")
         XCTAssertEqual(
-            FeedReaderToolbarLayout.macControlShape(for: .more), .menu,
+            FeedReaderToolbarLayout.macControlShape(for: .more, flagMenuHasRows: false), .menu,
             "and the policy the stand-in reads says so"
+        )
+    }
+
+    func testTheFeedsFlagControlCarriesBothShapesThePolicyNames() throws {
+        // The feed bar's one slot whose shape is state-dependent, as mail's
+        // flag control is: a plain button while its menu has no rows and a
+        // split button once it has, which is what
+        // `FeedReaderToolbarLayout.macControlShape(for: .favorite, flagMenuHasRows:)`
+        // answers.
+        let body = try Self.declaration(
+            named: "flagControl", in: "CabalmailUI/Feeds/Reader/FeedReaderToolbar.swift", access: "private "
+        )
+        XCTAssertTrue(body.contains("if rows.isEmpty {"), "the palette branch is what picks the shape")
+        XCTAssertTrue(body.contains("Button {"), "the empty branch is a plain button")
+        XCTAssertEqual(Self.shape(ofDeclaration: body), .splitButton, "the other is a menu with a primary action")
+        XCTAssertTrue(body.contains(".menuIndicator(HostPlatform.current.splitControlsDrawChevron"))
+        XCTAssertEqual(
+            FeedReaderToolbarLayout.macControlShape(for: .favorite, flagMenuHasRows: false), .button
+        )
+        XCTAssertEqual(
+            FeedReaderToolbarLayout.macControlShape(for: .favorite, flagMenuHasRows: true), .splitButton
         )
     }
 
@@ -91,6 +112,9 @@ final class ReaderToolbarStandInShapeSourceScanTests: XCTestCase {
         let feed = try Self.standInBuilder(in: "CabalmailUI/Feeds/Reader/EmptyFeedDetailToolbar.swift")
         XCTAssertTrue(feed.contains("FeedReaderToolbarLayout.macControlShape("))
         XCTAssertTrue(feed.contains("ToolbarStandIn("))
+        // The feed set's Flag is a split button too once the palette gives
+        // its menu rows, so it reads its row count from the policy as well.
+        XCTAssertTrue(feed.contains("menuRows: FeedReaderToolbarLayout.macStandInMenuRows("))
     }
 
     func testNeitherStandInBuilderConstructsAControlItself() throws {

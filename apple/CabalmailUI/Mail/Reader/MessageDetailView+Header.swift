@@ -99,39 +99,18 @@ extension MessageDetailView {
         // ("Not verified" muted). Bucketing lives in CabalmailKit; see
         // `AuthResultsLine`.
         AuthResultsLine(results: envelope.authResults, showsWarning: showsAuthWarning)
-        // Flag chips: color dot + label per flag the message carries, the
+        // Flag chips (`FlagChips`): one per flag the message carries, the
         // system flag included, in palette order. They read the view
         // model's optimistic state, so a toggle from the toolbar or the
-        // flag menu shows here at once. A deleted slot's surviving tag
-        // shows its slot id in gray, per the palette editor's
-        // delete-confirmation copy.
+        // flag menu shows here at once.
         if let model {
             let marks = FlagDotMark.marks(
                 for: model.shownFlags, palette: preferences.flagPalette, limit: .max
             )
             if !marks.isEmpty {
-                flagChips(marks, maxWidth: maxWidth)
-            }
-        }
-    }
-
-    // A flow rather than an `HStack`: a message can carry every flag in the
-    // palette, and the trailing column caps how wide they may run before
-    // wrapping.
-    private func flagChips(_ marks: [FlagDotMark], maxWidth: CGFloat) -> some View {
-        FlowLayout(horizontalSpacing: 6, verticalSpacing: 4, maxLineWidth: maxWidth) {
-            ForEach(marks) { mark in
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(FlagPaletteColor.color(for: mark.color))
-                        .frame(width: 8, height: 8)
-                    Text(mark.label)
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.quaternary, in: Capsule())
+                // The trailing column caps how wide they may run before
+                // wrapping.
+                FlagChips(marks: marks, maxWidth: maxWidth)
             }
         }
     }

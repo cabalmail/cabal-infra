@@ -1,8 +1,9 @@
 import Foundation
 import CabalmailKit
 
-/// One row of a flag menu (the reader's, and the list row's Flags
-/// submenu): everything the row draws, plus whether it is checked.
+/// One row of a flag menu (a reader's, and a list row's Flags submenu, for
+/// a message or a feed item): everything the row draws, plus whether it is
+/// checked.
 ///
 /// A value type rather than a bare slot id because the menu's SwiftUI
 /// identity is derived from what it draws (see `FlagMenuPolicy.identity`),
@@ -31,12 +32,13 @@ struct FlagMenuRow: Equatable, Hashable, Identifiable {
 /// `Menu` itself is what has to be replaced.
 enum FlagMenuPolicy {
     /// The rows the menu offers: every entry of the effective palette in
-    /// its order, the built-in flag's included, plus any flag the message
+    /// its order, the built-in flag's included, plus any flag the item
     /// already carries whose entry was deleted — that one still needs an
     /// untag affordance (the palette editor's delete confirmation promises
     /// tags stay removable), and is labelled by slot id, having no palette
     /// entry to name it. `taggedSlots` are wire slots, the built-in flag's
-    /// atom among them (`FlagPalette.slots(in:palette:)`).
+    /// atom among them (`FlagPalette.slots(in:palette:)`): a message's
+    /// flags, or a feed item's (`RssItem.paletteFlags`).
     ///
     /// No rows when the default flag is all there is to offer: the control
     /// the menu hangs from toggles that flag as its primary action, so the
