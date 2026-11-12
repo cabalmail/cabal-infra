@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Swipe actions for the virtualized message list, restored after the
-// ScrollView+LazyVStack rework (`project_apple_list_virtualization`)
+// ScrollView+LazyVStack rework (the index-addressed virtualization)
 // dropped `List`-only `.swipeActions`.
 //
 // There are two paths, and which one a row takes is the OS it's running on.

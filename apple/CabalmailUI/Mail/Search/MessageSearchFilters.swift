@@ -5,7 +5,7 @@ import Foundation
 /// Mirrors the React webmail's filter sidebar
 /// (`react/admin/src/Email/Search/index.jsx`): `from`, `to`, `subject`,
 /// `since`, `before`, `unread`, `flagged`, `has_attachment`, and a
-/// `this_folder_only` scope toggle. The view model snapshots this struct
+/// `thisFolderOnly` scope toggle. The view model snapshots this struct
 /// into a `SearchQuery` on every `runSearch()` call, so flipping a filter
 /// re-issues the request the next time the user submits.
 ///

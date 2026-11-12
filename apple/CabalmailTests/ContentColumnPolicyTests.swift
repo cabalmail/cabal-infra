@@ -9,7 +9,7 @@ import SwiftUI
 // — clearing the query dropped you straight into the folder — so the two
 // pieces of state disagreed and only one of them was on screen.
 //
-// `contentColumn` prefers search to any folder while the search field is
+// `MailContentColumn` prefers search to any folder while the search field is
 // engaged, which is right; nothing was ending the search when the user asked
 // to go somewhere else, which is the defect. Both halves are stated in
 // `ContentColumnPolicy` so the transition can be tested as a sequence.
