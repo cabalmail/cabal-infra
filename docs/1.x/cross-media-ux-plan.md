@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit and clients not started |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11). Clients not started; the Enabled switch leaves custom flags first (`flags-and-cross-media.md`, decision 10) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -68,8 +68,8 @@ Spotlight.
 The motivating example is flags. A user who has defined a "Receipts"
 flag and a "Read later" flag in Settings > Flags, then opens a feed
 item, has no way to apply either. Nothing about an article makes a flag
-inapplicable; the palette is already medium-neutral (a slot, a label, a
-colour, an enabled bit, synced as a preference), and only the storage
+inapplicable; the palette is already medium-neutral (a slot, a label
+and a colour, synced as a preference), and only the storage
 binding, an IMAP keyword per slot, is mail-specific. Extending flags to
 feed items is the cheapest of the unifications and the one that unlocks
 two deferred feed decisions (tagging, save-for-later) at once. It is
@@ -119,9 +119,10 @@ moved most of the code this plan names. The facts a phase depends on:
   window in front.
 - The chrome kit (`Shared/Chrome/`) is shared by both media, but has no
   unread dot or flag mark yet; the unified flags plan adds them.
-- `RssStore` is at schema 6, and `openRecovering` deletes a file written
-  by a newer schema. Android's `RoomRssStore` is at version 1 with a
-  destructive fallback.
+- `RssStore` is at schema 7 with #2411 (schema 6 before it). From 1.50.0
+  (#2404) `openRecovering` sets aside a file written by a newer schema;
+  1.49.0 and earlier delete it.
+  Android's `RoomRssStore` is at version 1 with a destructive fallback.
 
 ### Where the two media already align
 
@@ -207,21 +208,23 @@ These are the model to copy, not work items:
 
 The palette (`FlagPalette.swift`, `FlagPalette.kt`; the `flag_palette`
 synced preference) holds twenty keyword slots `cabal-flag-01` ..
-`cabal-flag-20`, each with a label, colour, and enabled bit, and, once
+`cabal-flag-20`, each with a label and a colour, and, once
 the unified flags plan ships, one more entry for the system `\Flagged`
 flag (21 entries at most). Feed items reference the same entries.
 Renaming or recolouring a flag in Settings therefore changes it on both
-media at once, and an entry disabled in the palette disappears from
-both menus while its marks persist, exactly as mail keywords do today.
-There is no second palette, no feed-specific flag, and no per-medium
-enable bit.
+media at once, and a flag deleted from the palette leaves both menus
+while its marks persist, exactly as mail keywords do today.
+There is no second palette and no feed-specific flag. An entry has no
+Enabled switch: a flag is in the palette or it is deleted
+(`flags-and-cross-media.md`, decision 10). The wire's `enabled` field
+is deprecated, and nothing reads it.
 
 On a feed item, the `\Flagged` entry binds to the existing
 `is_favorite` bit and the keyword slots bind to a new `flags` set
 (Decision 2). So the feed's Flag control takes the Flagged entry's name
-and colour and hides when that entry is disabled; and once Phase 2
+and colour; and once Phase 2
 gives feed items keyword flags, the feed swipe and ⌘⇧8 toggle the
-user's default flag (the first enabled entry), as mail's do after
+user's default flag (the first entry), as mail's do after
 unified flags. This is the "Follows the palette" default; the
 alternative keeps a fixed Flagged toggle on feeds whatever the palette
 says.
@@ -239,7 +242,7 @@ same item offline cannot clobber each other, which a whole-set replace
 would.
 
 Validation follows `set_flag`'s `_check_keyword`: adding needs a slot
-that is enabled in the user's palette; removing is always allowed, so a
+that is in the user's palette; removing is always allowed, so a
 retired slot can still be cleared; and an entry that adds and removes
 the same slot is rejected. Items and state-sync rows serialise `flags`
 as a sorted list, empty when the attribute is absent. No new index:
@@ -455,9 +458,13 @@ shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
 are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
 API; `flags-and-cross-media.md`, Session 2, has what was run. Both
-merged after 1.48.0 was cut and shipped in 1.49.0 the same day. The Kit
-and the clients (2b) have not started; `flags-and-cross-media.md` gates
-them.
+merged after 1.48.0 was cut and shipped in 1.49.0 the same day. The
+Kit (B2.3) merged as #2411 (2026-11-11): items 1 and 2 of 2b on
+Apple, with the Kit's half of item 5 (`keyword` on its search query).
+Its gate cleared on 2026-11-11 with 1.50.0, and its downgrade drill ran
+on a simulator against stage; `flags-and-cross-media.md` has what was
+built and run. The clients (the rest of 2b) have not started and merge
+after the Kit; `flags-and-cross-media.md` has the gates.
 
 ### 2a. Server
 
@@ -481,7 +488,12 @@ them.
    `removeFlags`. Apple: `RssStore` schema 7, on the migration runner
    from the SQLite mail store plan's PR 0.1, adds an `items.flags`
    column (a JSON list) and a slot column on `pending`, with a flag
-   kind whose value means add or remove. Android: the feed store is at
+   kind whose value means add or remove. The step also empties each
+   feed's state-sync cursor, so the first sync after the upgrade pulls
+   every state row again: the older build read those rows without
+   their flags and stepped past them, and a flag another device set
+   before this one was upgraded would otherwise never arrive. Android's
+   migration needs the same. Android: the feed store is at
    Room version 1 with a destructive fallback, so its first bump needs
    a real migration or an upgrade drops queued marks. `android-parity.md`
    PR 9 plans that bump (version 2, for folder and All Feeds order); if
@@ -493,7 +505,13 @@ them.
    not nothing), and a state page never overwrites a slot that has a
    queued change. The drain sends at most 100 items a call, and every
    write shares a transaction with its queue row, as #1956 made the
-   read and flag writes do.
+   read and flag writes do. The server refuses a whole call that adds
+   a slot that is not in the palette (`flag_not_in_palette`, naming
+   the slots), which is what a flag deleted on another
+   device leaves in the queue. The drain drops those queued adds, takes
+   the flags off their items again, and sends the rest, because such a
+   call can never succeed and would hold every later change behind it
+   (decided 2026-11-11).
 1. **Menus.** The mail flag menu's builder (`FlagMenuPolicy`, now in
    `Mail/Reader/` beside `MessageDetailView+FlagOptions`) moves to
    `Shared/` over a small "flaggable" value (the current slots, add,
@@ -501,8 +519,8 @@ them.
    (`FeedReaderToolbar`, which becomes a menu with a primary action, as
    mail's is) and on the feed row's context menu. Android generalises
    the flag menu in `MessageDetailScreen` the same way and mounts it on
-   `FeedItemDetailScreen` and the feed row. The palette's enabled bit
-   and order are honoured identically.
+   `FeedItemDetailScreen` and the feed row. The palette's order is
+   honoured identically.
 1. **Rows.** Feed rows draw the keyword dots through the shared flag
    mark, the same size and order as mail rows (`MessageListView+Rows`,
    `EnvelopeRow`).
@@ -522,8 +540,9 @@ them.
 1. **Bulk.** If Phase 3 has landed, Set Flags joins the feed bulk bar.
 
 Acceptance: flag an article "Read later" on the phone; it shows the
-dot on the Mac after sync; disable the slot in Settings and the dot
-vanishes on both media; re-enable and it returns. Two devices offline,
+dot on the Mac after sync; delete the flag in Settings and it leaves
+the menus on both media, while an item that carries it keeps its mark
+and can still have it removed. Two devices offline,
 one adds slot 3 and the other adds slot 5 to the same item; after both
 sync the item carries both. Filter INBOX and a feed to "Read later" and
 each shows only the items carrying it.
@@ -709,12 +728,14 @@ app; signing out removes the feed entries from Spotlight.
   or loses a feed rule. Shipped app versions keep working across each
   server deploy.
 - Local schema migrations (`RssStore` schema 7, the next Room version)
-  are forward-only, but a downgrade is not yet safe: `RssStore` deletes a
-  file written by a newer schema, and with it any unsent feed marks.
-  The SQLite mail store plan's PR 0.2 sets such a file aside and
-  imports its pending rows when a newer build returns; by default
-  schema 7 ships after that. Room must not move past version 1 without
-  a real migration.
+  are forward-only. On Apple, a downgrade keeps unsent feed marks only
+  when the older build is 1.50.0 or later, which has the SQLite mail
+  store plan's PR 0.2 (#2404): the older build sets the newer file
+  aside, without sending or showing its marks, and the newer build
+  imports that file's pending rows when it is installed again. Signing
+  out in between deletes the set-aside file. 1.49.0 and earlier delete
+  the file, and with it any unsent feed marks, so schema 7 ships after
+  1.50.0. Room must not move past version 1 without a real migration.
 - Each phase's acceptance line above is written to be a tester sweep
   item.
 

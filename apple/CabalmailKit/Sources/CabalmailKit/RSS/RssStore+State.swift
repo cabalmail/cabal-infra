@@ -3,17 +3,21 @@ import Foundation
 // MARK: - Local state changes, the pending queue, and sync cursors
 
 extension RssStore {
-    /// One queued mutation awaiting a push to the server.
     /// What a queued mutation does.
-    public enum PendingKind: String, Sendable { case read, favorite, markAllRead = "mark_all_read" }
+    public enum PendingKind: String, Sendable { case read, favorite, flag, markAllRead = "mark_all_read" }
 
+    /// One queued mutation awaiting a push to the server.
     public struct PendingMutation: Sendable, Hashable, Identifiable {
         public var id: Int
         public var kind: PendingKind
         public var feedId: String
         public var sortKey: String
         public var subscriptionId: String
+        /// The state to set. For `flag`: true adds `slot`, false removes it.
         public var value: Bool
+        /// For `flag`: the palette slot the change is about. "" for the
+        /// other kinds.
+        public var slot: String = ""
         /// For `markAllRead`: the watermark the user's tap applied locally,
         /// which the drain sends so the server applies the same one. ""
         /// for the other kinds.
@@ -66,6 +70,28 @@ extension RssStore {
         emit(.items(["\(feedId)#\(sortKey)"]))
     }
 
+    /// Sets or clears one custom flag on an item locally and queues the
+    /// change, in one transaction for the reason `setRead` is (#1956). The
+    /// queue keeps one change per item and slot, the latest: an add and
+    /// then a remove leaves the remove, since only the server knows whether
+    /// it holds the flag. Changes to other slots of the item stay queued
+    /// beside it, so two devices that each change a different flag both
+    /// take effect.
+    ///
+    /// `slot` is a palette keyword slot (`FlagPalette.slots`). Anything
+    /// else throws: the server refuses it (the system flag is
+    /// `setFavorite`), and no later call could clear it from the queue.
+    public func setFlag(feedId: String, sortKey: String, slot: String, _ isSet: Bool) throws {
+        guard FlagPalette.slots.contains(slot) else {
+            throw CabalmailError.protocolError("\(slot) is not a custom flag slot")
+        }
+        try database.transaction {
+            try RssStoredFlags.write(slot, isSet: isSet, feedId: feedId, sortKey: sortKey, in: database)
+            try enqueue(kind: .flag, feedId: feedId, sortKey: sortKey, slot: slot, value: isSet)
+        }
+        emit(.items(["\(feedId)#\(sortKey)"]))
+    }
+
     /// Mark-all-read for one subscription, the way the server does it:
     /// advance the watermark and flip items explicitly marked unread. One
     /// transaction with the queued push: a watermark advanced here with no
@@ -93,13 +119,16 @@ extension RssStore {
     }
 
     /// Applies state rows the server reported (the state sync) to the
-    /// items this device has, without queueing anything. A flag with a
+    /// items this device has, without queueing anything. A mark with a
     /// queued local change is left alone - the local intent is newer than
     /// whatever the server had when it answered - and an item not cached
-    /// here is skipped; it arrives with its state when it is listed.
+    /// here is skipped; it arrives with its state when it is listed. Custom
+    /// flags follow the same rule slot by slot: a slot with a queued change
+    /// stays as that change left it, and every other slot is the server's.
     public func applyServerStates(_ states: [RssItemState]) throws {
         guard !states.isEmpty else { return }
         try database.transaction {
+            let queuedFlags = try RssStoredFlags.queued(in: database)
             for state in states {
                 try database.run("""
                     UPDATE items SET is_read = ?, state_is_explicit = ?
@@ -113,6 +142,10 @@ extension RssStore {
                       SELECT 1 FROM pending WHERE kind = 'favorite' AND feed_id = items.feed_id
                         AND sort_key = items.sort_key)
                     """, [.init(state.isFavorite), .init(state.feedId), .init(state.sortKey)])
+                let queued = queuedFlags["\(state.feedId)#\(state.sortKey)"] ?? [:]
+                let flags = RssStoredFlags.overlaying(queued, on: state.flags)
+                try database.run("UPDATE items SET flags = ? WHERE feed_id = ? AND sort_key = ?",
+                                 [.init(RssStoredFlags.encode(flags)), .init(state.feedId), .init(state.sortKey)])
             }
         }
         emit(.feeds(Set(states.map(\.feedId))))
@@ -129,11 +162,11 @@ extension RssStore {
 
     public func pendingMutations() throws -> [PendingMutation] {
         try database.rows(
-            "SELECT id, kind, feed_id, sort_key, subscription_id, value, created_at FROM pending ORDER BY id"
+            "SELECT id, kind, feed_id, sort_key, subscription_id, value, created_at, slot FROM pending ORDER BY id"
         ).compactMap {
             guard let kind = PendingKind(rawValue: $0.string(1)) else { return nil }
             return PendingMutation(id: $0.int(0), kind: kind, feedId: $0.string(2), sortKey: $0.string(3),
-                                   subscriptionId: $0.string(4), value: $0.bool(5),
+                                   subscriptionId: $0.string(4), value: $0.bool(5), slot: $0.string(7),
                                    watermark: kind == .markAllRead ? $0.string(6) : "")
         }
     }
@@ -160,13 +193,48 @@ extension RssStore {
         emit(.items(Set(items)))
     }
 
-    private func enqueue(kind: PendingKind, feedId: String, sortKey: String, value: Bool) throws {
-        // The latest intent for an item wins; drop earlier queued flips of
-        // the same kind so a drain never replays a superseded state.
-        try database.run("DELETE FROM pending WHERE kind = ? AND feed_id = ? AND sort_key = ?",
-                   [.init(kind.rawValue), .init(feedId), .init(sortKey)])
-        try database.run("INSERT INTO pending (kind, feed_id, sort_key, value, created_at) VALUES (?, ?, ?, ?, ?)",
-                   [.init(kind.rawValue), .init(feedId), .init(sortKey), .init(value), .init(Self.isoNow())])
+    /// Takes back flag adds the server refused (`RssFlagRefusal`): each
+    /// queued add still in the queue leaves it, and its slot leaves the
+    /// item again, in one transaction so the item never shows a flag that
+    /// nothing will send. A row a later change has replaced since the
+    /// drain read the queue is gone already, and that change stands.
+    /// Returns how many rows were dropped.
+    ///
+    /// The slot is cleared here whatever the server holds for it. Where the
+    /// server did hold it (the user removed it and added it back before
+    /// either was sent), this device shows the item without the flag until
+    /// the server next reports that item's state.
+    @discardableResult
+    public func dropRefusedFlagAdds(ids: [Int]) throws -> Int {
+        guard !ids.isEmpty else { return 0 }
+        var items: Set<String> = []
+        let dropped = try database.transaction {
+            let rows = try database.rows("""
+                SELECT id, feed_id, sort_key, slot FROM pending
+                WHERE id IN (\(Self.placeholders(ids.count))) AND kind = 'flag' AND value = 1
+                """, ids.map(SQLiteDatabase.Value.init(_:)))
+            for row in rows {
+                try RssStoredFlags.write(row.string(3), isSet: false, feedId: row.string(1),
+                                         sortKey: row.string(2), in: database)
+                try database.run("DELETE FROM pending WHERE id = ?", [.init(row.int(0))])
+                items.insert("\(row.string(1))#\(row.string(2))")
+            }
+            return rows.count
+        }
+        emit(.items(items))
+        return dropped
+    }
+
+    private func enqueue(kind: PendingKind, feedId: String, sortKey: String, slot: String = "", value: Bool) throws {
+        // The latest intent for an item wins (for an item and slot, when
+        // the change is to one flag); drop earlier queued flips of the same
+        // kind so a drain never replays a superseded state.
+        try database.run("DELETE FROM pending WHERE kind = ? AND feed_id = ? AND sort_key = ? AND slot = ?",
+                   [.init(kind.rawValue), .init(feedId), .init(sortKey), .init(slot)])
+        try database.run("""
+            INSERT INTO pending (kind, feed_id, sort_key, slot, value, created_at) VALUES (?, ?, ?, ?, ?, ?)
+            """, [.init(kind.rawValue), .init(feedId), .init(sortKey), .init(slot), .init(value),
+                  .init(Self.isoNow())])
     }
 
     // MARK: Sync cursors

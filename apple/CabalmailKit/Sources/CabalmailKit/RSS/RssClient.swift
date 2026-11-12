@@ -10,7 +10,8 @@ import Foundation
 /// Server-side failures with a documented `code` token surface as
 /// `CabalmailError.server(code: <token>, message: <Error>)`, e.g.
 /// `code == "not_a_feed"`; failures without one are
-/// `CabalmailError.http(status:body:)`.
+/// `CabalmailError.http(status:body:)`. The one exception is
+/// `setItemState`'s `RssFlagRefusal`, which carries the slots refused.
 public protocol RssClient: Sendable {
     func listSubscriptions() async throws -> RssCatalog
     func subscribe(url: String, folderId: String?) async throws -> RssSubscribeResult
@@ -34,6 +35,8 @@ public protocol RssClient: Sendable {
     func syncItemStates(subscriptionId: String, since: String, limit: Int) async throws -> RssStateSyncPage
     func getItem(feedId: String, sortKey: String) async throws -> RssItem
     /// Returns the number of state rows written (at most 100 per call).
+    /// Throws `RssFlagRefusal` when the server refuses the call for a flag
+    /// the palette does not enable; it has then written nothing.
     func setItemState(_ changes: [RssItemStateChange]) async throws -> Int
     /// `watermark` is when the user asked (ISO 8601); the server writes it,
     /// clamped to its own now, instead of the time the call arrives, so a

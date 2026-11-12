@@ -145,15 +145,17 @@ final class SchemaMigratorTests: XCTestCase {
         XCTAssertEqual(try columns(of: "notes"), ["id", "body", "pinned"])
     }
 
-    /// `RssStore` is on the runner with its schema where it was.
-    func testTheFeedStoreMigratesThroughTheRunnerAtSchemaSix() throws {
-        XCTAssertEqual(RssStore.migrator.version, 6)
-        XCTAssertEqual(RssStore.schemaVersion, 6)
+    /// `RssStore` is on the runner, one step per version of its schema.
+    func testTheFeedStoreMigratesThroughTheRunnerAtSchemaSeven() throws {
+        XCTAssertEqual(RssStore.migrator.version, 7)
+        XCTAssertEqual(RssStore.schemaVersion, 7)
 
         try RssStore.migrator.migrate(database, newerSchema: .refuse)
 
-        XCTAssertEqual(try database.userVersion(), 6)
-        XCTAssertTrue(try columns(of: "folders").contains("ordering_mode"), "the last step, version 6, ran")
+        XCTAssertEqual(try database.userVersion(), 7)
+        XCTAssertTrue(try columns(of: "folders").contains("ordering_mode"), "version 6 ran")
+        XCTAssertTrue(try columns(of: "items").contains("flags"), "the last step, version 7, ran")
+        XCTAssertTrue(try columns(of: "pending").contains("slot"))
     }
 }
 

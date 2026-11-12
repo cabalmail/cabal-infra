@@ -3,8 +3,8 @@ import Synchronization
 
 /// The RSS reader's on-device store: the whole catalog (folders,
 /// subscriptions), the items the device has synced, the caller's read and
-/// favorite state, per-feed sync cursors, and the queue of mutations made
-/// while offline. One SQLite file per install (`rss/` under the client's
+/// favorite state and custom flags, per-feed sync cursors, and the queue of
+/// mutations made while offline. One SQLite file per install (`rss/` under the client's
 /// shared cache directory, emptied by `clearLocalData()` on sign-out), WAL
 /// mode, FTS5 over item text for per-feed search. `RssSyncEngine` is the
 /// writer for everything that comes from the server; the UI writes only
@@ -32,14 +32,14 @@ public actor RssStore {
     /// Announces each committed write on `changes()`.
     let changeBroadcast = RssChangeBroadcast()
 
-    static let schemaVersion = 6
+    static let schemaVersion = 7
 
     /// The schema, one step per version. A file from a newer build (a
     /// downgrade) is refused, and `openRecovering` sets it aside and starts
     /// a new one, rather than read it with columns this build does not know.
     static let migrator = SchemaMigrator(name: "rss.sqlite", steps: [
         .sql(Schema.version1), .sql(Schema.version2), .sql(Schema.version3), .sql(Schema.version4),
-        .sql(Schema.version5), .sql(Schema.version6),
+        .sql(Schema.version5), .sql(Schema.version6), .sql(Schema.version7),
     ])
 
     public init(directory: URL) throws {
@@ -65,8 +65,9 @@ public actor RssStore {
 
     /// What a write changed, announced on `changes()` after it commits.
     public enum Change: Sendable, Equatable {
-        /// Items whose read or favorite state the user changed here, or whose
-        /// queued change was pushed, by `RssItem.id`: rows patch in place.
+        /// Items whose read or favorite state or custom flags the user changed
+        /// here, or whose queued change was pushed or dropped, by
+        /// `RssItem.id`: rows patch in place.
         case items(Set<String>)
         /// Feeds whose items or read state moved wholesale, by feed id: a
         /// sync, the server's states or watermark, a mark-all-read, the items
@@ -407,7 +408,7 @@ enum Schema {
         i.updated_at, i.fetched_at, i.fetched_key, i.summary_html, i.content_html,
         (\(readExpression)) AS effective_read, i.is_favorite,
         COALESCE((SELECT s.subscription_id FROM subscriptions s WHERE s.feed_id = i.feed_id LIMIT 1), ''),
-        i.state_is_explicit
+        i.state_is_explicit, i.flags
         """
     /// The read-state rule in SQL; `i` is the items alias and the
     /// subscription's watermark is looked up per row.
@@ -499,5 +500,24 @@ enum Schema {
     /// server's default for a folder that never set it.
     static let version6 = """
         ALTER TABLE folders ADD COLUMN ordering_mode TEXT NOT NULL DEFAULT 'newest_first';
+        """
+
+    /// Custom flags on items (`RssStoredFlags`): the slots an item carries,
+    /// a JSON list, and the slot a queued `flag` change is about. A row from
+    /// before either existed reads as no flags and no slot, which is what a
+    /// queued read or favorite change still has. An older build cannot read
+    /// a file with these and sets it aside (`openRecovering`), so its unsent
+    /// changes wait there for a build that can.
+    ///
+    /// The state-sync cursors are emptied, as version 2 left them, so the
+    /// next sync of each feed pulls its whole state partition: the build
+    /// that wrote this file read the server's state rows without their
+    /// flags and stepped its cursor past them, and the state sync only
+    /// delivers rows changed since the cursor, so a flag another device set
+    /// before this one was upgraded would otherwise never arrive.
+    static let version7 = """
+        ALTER TABLE items ADD COLUMN flags TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE pending ADD COLUMN slot TEXT NOT NULL DEFAULT '';
+        UPDATE feed_sync SET state_cursor = '';
         """
 }

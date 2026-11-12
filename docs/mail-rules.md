@@ -107,9 +107,9 @@ there is no message left to act on):
   on in the rule editor, which lists them as Settings → Flags does. The
   built-in flag, "Flagged" until you rename it, is that list's entry for
   the mail server's own flag, and a rule can always set it; the rest
-  are the custom flags you have defined. If you later delete or disable
-  a custom flag, rules that set it are skipped entirely — pick a
-  different flag or remove it from the rule to re-arm them.
+  are the custom flags you have defined. If you later delete a custom
+  flag, rules that set it are skipped entirely — pick a different flag
+  or remove it from the rule to re-arm them.
 - **Mark as read** — the message arrives read.
 - **Forward** — send a copy to up to 10 addresses. The forward carries
   the original message; forwarded copies are stamped with a loop-guard
@@ -208,8 +208,8 @@ Work down this list:
    deleted is skipped and the message stays in the inbox; the editor
    marks the folder as missing.
 4. **Are the rule's custom flags still in your palette?** A rule that
-   sets a flag you have since deleted or disabled is skipped entirely
-   until you update it (Settings → Flags shows the palette).
+   sets a flag you have since deleted is skipped entirely until you
+   update it (Settings → Flags shows the palette).
 5. **Is the condition matching what you think?** Matching is a literal
    substring against the raw header line. `To contains` matches the
    `To:` header — not the envelope recipient — so mail where your
@@ -242,8 +242,8 @@ Work down this list:
   `compile_skip_rule` / `compile_skip_user` lines (with per-rule skip
   reasons such as `folder_not_found`, `folder_not_set`,
   `unsafe_folder`, `flag_not_in_palette` — the last meaning the rule
-  sets a custom flag that is no longer in, or is disabled in, the
-  user's palette, the flag twin of `folder_not_found`) to the imap tier's CloudWatch log group, and emits
+  sets a custom flag that is no longer in the user's palette, the flag
+  twin of `folder_not_found`) to the imap tier's CloudWatch log group, and emits
   per-run counts to the `Cabal/UserRules` metric namespace
   (`CompiledRules`, `SkippedRules`, `FailedUsers`, `CompileOkUsers`).
 - **Alarms** (always on, independent of the optional monitoring stack;

@@ -12,16 +12,17 @@ import Foundation
 ///     to the largest `fetchedKey` seen; after that it follows the server's
 ///     since-sync (ingest-time cursor) in pages until `hasMore` is false,
 ///     bounded per run so one huge feed cannot monopolise a refresh. Then
-///     the feed's state sync: the read/favorite marks changed on the
-///     server (by another device, or by a mark-all-read's flip) since the
-///     feed's state cursor, applied to the cached items. Without it a mark
-///     made elsewhere never arrives, because ingest time does not move
-///     when state does.
+///     the feed's state sync: the read/favorite marks and custom flags
+///     changed on the server (by another device, or by a mark-all-read's
+///     flip) since the feed's state cursor, applied to the cached items.
+///     Without it a mark made elsewhere never arrives, because ingest time
+///     does not move when state does.
 ///   * `drainPending()` - the offline mutation queue, replayed in the
-///     order the user made the changes: item marks coalesced into
-///     `/rss_set_item_state` batches, each `/rss_mark_all_read` a fence
-///     between batches. A failure leaves the queue intact for the next
-///     attempt.
+///     order the user made the changes: item marks and flag changes
+///     coalesced into `/rss_set_item_state` batches, each
+///     `/rss_mark_all_read` a fence between batches. A failure leaves the
+///     queue intact for the next attempt, except a flag add the server
+///     refuses, which is dropped (`RssPendingDrain`).
 ///
 /// Single flight: the app asks from several places at once (the session's
 /// poller, the Feeds sidebar, the item list, the reader's marks), so the
@@ -274,6 +275,13 @@ public actor RssSyncEngine {
 
     public func setFavorite(_ item: RssItem, _ isFavorite: Bool) async throws {
         try await store.setFavorite(feedId: item.feedId, sortKey: item.sortKey, isFavorite)
+        await pushSoon()
+    }
+
+    /// Sets or clears one custom flag, by its palette slot
+    /// (`FlagPalette.slots`). The system flag is `setFavorite`.
+    public func setFlag(_ item: RssItem, slot: String, _ isSet: Bool) async throws {
+        try await store.setFlag(feedId: item.feedId, sortKey: item.sortKey, slot: slot, isSet)
         await pushSoon()
     }
 
