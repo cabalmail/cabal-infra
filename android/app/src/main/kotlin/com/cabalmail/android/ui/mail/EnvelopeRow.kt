@@ -343,13 +343,12 @@ internal fun SwipeRow(
     val dispose =
         disposeIntent
             ?: DisposeIntent.Move(if (LocalDisposeToTrash.current) DisposeAction.TRASH else DisposeAction.ARCHIVE)
-    // The flag swipe toggles the default flag, the first enabled entry of
-    // Settings > Flags. With none (every entry disabled) the edge bound to
-    // it does not drag, as an edge bound to NONE does not.
+    // The flag swipe toggles the default flag, the first entry of Settings
+    // > Flags.
     val defaultFlag = FlagToggle.defaultFlag(LocalFlagPalette.current)
-    val isFlagSet = defaultFlag?.isSetIn(flags) == true
+    val isFlagSet = defaultFlag.isSetIn(flags)
     val currentToggleSeen by rememberUpdatedState(onToggleSeen)
-    val toggleFlag: () -> Unit = { if (defaultFlag != null) onSetFlag(defaultFlag.slot, !isFlagSet) }
+    val toggleFlag: () -> Unit = { onSetFlag(defaultFlag.slot, !isFlagSet) }
     val currentToggleFlag by rememberUpdatedState(toggleFlag)
     val currentDispose by rememberUpdatedState(onDispose)
     val reveal: (MailSwipeAction) -> SwipeReveal? = { action ->

@@ -47,15 +47,11 @@ internal fun UiLabel.text(): String =
  * items, a search result's long-press and the reader's star button. The
  * Kotlin sibling of the Apple app's `FlagToggle`.
  *
- * Mail's controls act on the palette's default flag, the first enabled
- * entry of Settings > Flags ([defaultFlag]). A feed item has one mark, the
- * server's flag, so the feed's controls act on that flag's entry whatever
- * its position ([systemFlag]).
- *
- * Both are null when there is nothing to act on. In the app that takes a
- * stored palette whose built-in entry is switched off, since the entry's
- * dialog has no such switch; the controls then go inert instead of falling
- * back to a flag the user turned off.
+ * Mail's controls act on the palette's default flag, the first entry of
+ * Settings > Flags ([defaultFlag]). A feed item has one mark, the server's
+ * flag, so the feed's controls act on that flag's entry whatever its
+ * position ([systemFlag]). There is always one of each: the list always
+ * holds the built-in flag, and a flag cannot be switched off.
  */
 internal data class FlagToggle(
     val slot: String,
@@ -88,29 +84,22 @@ internal data class FlagToggle(
         get() = slot == FlagPalette.SYSTEM_SLOT && label == FlagPalette.DEFAULT_SYSTEM_ENTRY.label
 
     companion object {
-        /** The flag the mail controls toggle: the first enabled entry of the effective palette. */
-        fun defaultFlag(palette: List<FlagPaletteEntry>): FlagToggle? =
-            FlagPalette.defaultEntry(palette)?.let(::FlagToggle)
+        /** The flag the mail controls toggle: the first entry of the effective palette. */
+        fun defaultFlag(palette: List<FlagPaletteEntry>): FlagToggle = FlagToggle(FlagPalette.defaultEntry(palette))
 
         /**
-         * The built-in flag's entry, for the feed controls. Null while the
-         * entry is disabled.
+         * The built-in flag's entry, for the feed controls. The effective
+         * palette always holds it.
          */
-        fun systemFlag(palette: List<FlagPaletteEntry>): FlagToggle? =
-            FlagPalette
-                .effective(palette)
-                .firstOrNull { it.slot == FlagPalette.SYSTEM_SLOT && it.enabled }
-                ?.let(::FlagToggle)
+        fun systemFlag(palette: List<FlagPaletteEntry>): FlagToggle =
+            FlagToggle(FlagPalette.effective(palette).first { it.slot == FlagPalette.SYSTEM_SLOT })
 
         /**
          * The built-in flag's name as a state rather than an action, for
          * the Flagged filter pills and the search sheet's checkbox, which
-         * the server can only run on that flag: its entry's label, enabled
-         * or not.
+         * the server can only run on that flag.
          */
-        fun systemFlagName(palette: List<FlagPaletteEntry>): String =
-            FlagPalette.effective(palette).firstOrNull { it.slot == FlagPalette.SYSTEM_SLOT }?.label
-                ?: FlagPalette.DEFAULT_SYSTEM_ENTRY.label
+        fun systemFlagName(palette: List<FlagPaletteEntry>): String = systemFlag(palette).label
     }
 }
 
@@ -136,30 +125,24 @@ internal data class FlagMenuRow(
  */
 internal object FlagMenu {
     /**
-     * Every enabled entry of the effective palette in its order, the
-     * built-in flag's included, then any flag the message already carries
-     * whose entry is disabled or deleted — those still need an untag
-     * affordance (the palette editor's delete confirmation promises tags
-     * stay removable). A deleted slot's surviving tag is labelled by slot
-     * id, having no palette entry to name it, and draws gray.
+     * Every entry of the effective palette in its order, the built-in
+     * flag's included, then any flag the message already carries whose
+     * entry was deleted — that one still needs an untag affordance (the
+     * palette editor's delete confirmation promises tags stay removable).
+     * It is labelled by slot id, having no palette entry to name it, and
+     * draws gray.
      */
     fun rows(
         palette: List<FlagPaletteEntry>,
         flags: List<String>,
     ): List<FlagMenuRow> {
-        val effective = FlagPalette.effective(palette)
+        val offered = FlagPalette.effective(palette)
         val tagged = FlagPalette.slotsIn(flags, palette).toSet()
-        val offered = effective.filter { it.enabled }
-        val stray =
-            (listOf(FlagPalette.SYSTEM_SLOT) + FlagPalette.SLOTS).filter { slot ->
-                slot in tagged &&
-                    offered.none { it.slot == slot }
-            }
+        // The built-in flag is always offered, so only a keyword slot can
+        // be carried without an entry.
+        val stray = FlagPalette.SLOTS.filter { slot -> slot in tagged && offered.none { it.slot == slot } }
         return offered.map { FlagMenuRow(it.slot, it.label, it.color, it.slot in tagged) } +
-            stray.map { slot ->
-                val entry = effective.firstOrNull { it.slot == slot }
-                FlagMenuRow(slot, entry?.label ?: slot, entry?.color.orEmpty(), isOn = true)
-            }
+            stray.map { slot -> FlagMenuRow(slot, label = slot, color = "", isOn = true) }
     }
 
     /**
@@ -171,5 +154,5 @@ internal object FlagMenu {
     fun isOnlyTheDefault(
         rows: List<FlagMenuRow>,
         palette: List<FlagPaletteEntry>,
-    ): Boolean = rows.size == 1 && rows.single().slot == FlagPalette.defaultEntry(palette)?.slot
+    ): Boolean = rows.size == 1 && rows.single().slot == FlagPalette.defaultEntry(palette).slot
 }

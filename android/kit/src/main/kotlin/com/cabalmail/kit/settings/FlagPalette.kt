@@ -10,7 +10,7 @@ import kotlinx.serialization.json.Json
  *
  * [slot] is one of the fixed IMAP keyword atoms `cabal-flag-01` ...
  * `cabal-flag-20` (decision 4): the mailstore only ever sees slot atoms,
- * and everything user-visible — label, color, order, enabled — is palette
+ * and everything user-visible — label, color, order — is palette
  * metadata riding synced preferences. One entry is not a keyword:
  * [FlagPalette.SYSTEM_SLOT] stands for the system `\Flagged` flag
  * (`docs/1.x/unified-flags-plan.md`), which every mailbox has and no
@@ -18,13 +18,17 @@ import kotlinx.serialization.json.Json
  * than an enum on purpose: the server enforces the fixed color set, and a
  * color this build doesn't know (from a newer client) must round-trip
  * unchanged instead of being coerced and re-pushed.
+ *
+ * An entry has no `enabled`: a flag is in the palette or it is deleted
+ * (`docs/1.x/post-wave-3/flags-and-cross-media.md`, decision 10). A
+ * palette stored by an older build still carries the key; it is skipped
+ * on decode and never written, so the next push from this build drops it.
  */
 @Serializable
 data class FlagPaletteEntry(
     val slot: String,
     val label: String,
     val color: String,
-    val enabled: Boolean = true,
 )
 
 /**
@@ -69,8 +73,9 @@ object FlagPalette {
     val COLORS =
         listOf("red", "orange", "yellow", "green", "teal", "blue", "indigo", "purple", "pink", "gray")
 
+    // Unknown keys are skipped, which is what reads an older build's
+    // `enabled` (and anything a newer one adds) without failing the palette.
     private val decoder = Json { ignoreUnknownKeys = true }
-    private val encoder = Json { encodeDefaults = true }
 
     /**
      * Decodes the wire string, or null when it doesn't parse — callers keep
@@ -79,8 +84,8 @@ object FlagPalette {
     fun decode(wire: String): List<FlagPaletteEntry>? =
         runCatching { decoder.decodeFromString<List<FlagPaletteEntry>>(wire) }.getOrNull()
 
-    /** Encodes for the wire; `enabled` always rides, like the Apple kit. */
-    fun encode(entries: List<FlagPaletteEntry>): String = encoder.encodeToString(entries)
+    /** Encodes for the wire: `{slot, label, color}` an entry, in palette order. */
+    fun encode(entries: List<FlagPaletteEntry>): String = Json.encodeToString(entries)
 
     /** The lowest keyword slot not yet used, or null once all 20 are. */
     fun firstFreeSlot(entries: List<FlagPaletteEntry>): String? =
@@ -121,11 +126,11 @@ object FlagPalette {
 
     /**
      * The flag the one-gesture toggles act on (the swipe, the shortcut, the
-     * reader's button): the first enabled entry of the effective palette
-     * (decision 3). Null when every entry is disabled; there is then no
-     * default, and nothing falls back to `\Flagged`.
+     * reader's button): the first entry of the effective palette. There is
+     * always one, since the effective palette always holds the system
+     * flag's entry.
      */
-    fun defaultEntry(stored: List<FlagPaletteEntry>): FlagPaletteEntry? = effective(stored).firstOrNull { it.enabled }
+    fun defaultEntry(stored: List<FlagPaletteEntry>): FlagPaletteEntry = effective(stored).first()
 
     /**
      * What to store after the user edits the effective palette.
@@ -155,10 +160,10 @@ object FlagPalette {
 
     /**
      * The palette slots a message carries, in the order dots and chips draw
-     * them: the effective palette's order, the system flag included,
-     * whether or not an entry is enabled. A keyword slot the message
-     * carries but the palette no longer lists comes last, in slot order, so
-     * its tag can still be shown and removed. The system flag's atom is
+     * them: the effective palette's order, the system flag included. A
+     * keyword slot the message carries but the palette no longer lists
+     * comes last, in slot order, so its tag can still be shown and
+     * removed. The system flag's atom is
      * matched without regard to case, as [com.cabalmail.kit.models.Envelope.isFlagged]
      * matches it, and reported as [SYSTEM_SLOT].
      */

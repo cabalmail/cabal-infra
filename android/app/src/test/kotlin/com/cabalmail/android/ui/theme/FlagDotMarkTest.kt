@@ -14,13 +14,11 @@ import org.junit.jupiter.api.Test
  */
 class FlagDotMarkTest {
     private val urgent = FlagPaletteEntry(slot = "cabal-flag-01", label = "Urgent", color = "red")
-    private val waiting = FlagPaletteEntry(slot = "cabal-flag-02", label = "Waiting", color = "blue", enabled = false)
 
     private fun system(
         label: String = "Flagged",
         color: String = "yellow",
-        enabled: Boolean = true,
-    ) = FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = label, color = color, enabled = enabled)
+    ) = FlagPaletteEntry(slot = FlagPalette.SYSTEM_SLOT, label = label, color = color)
 
     @Test
     fun `a flagged message gets the default entry's mark from a palette that stores none`() {
@@ -69,15 +67,19 @@ class FlagDotMarkTest {
     }
 
     @Test
-    fun `a disabled entry's tag is still drawn`() {
-        // Disabled means offered nowhere, not hidden: the tag is on the
-        // message and has to stay visible to be removed.
+    fun `a flag an older build switched off is drawn like any other`() {
+        // A palette stored before the Enabled switch was removed.
+        val olderBuildPalette =
+            FlagPalette.decode(
+                """[{"slot":"\\Flagged","label":"Flagged","color":"yellow","enabled":false},""" +
+                    """{"slot":"cabal-flag-02","label":"Waiting","color":"blue","enabled":false}]""",
+            )!!
         assertEquals(
             listOf(
                 FlagDotMark(FlagPalette.SYSTEM_SLOT, "Flagged", "yellow"),
                 FlagDotMark("cabal-flag-02", "Waiting", "blue"),
             ),
-            FlagDotMark.marks(listOf("\\Flagged", "cabal-flag-02"), listOf(system(enabled = false), waiting)),
+            FlagDotMark.marks(listOf("\\Flagged", "cabal-flag-02"), olderBuildPalette),
         )
     }
 
