@@ -216,6 +216,14 @@ the entry's colour, from `is_favorite`, and the feed's Flag button and
 swipe take the entry's label and hide when the entry is disabled.
 Nothing changes on the server for this.
 
+> **Erratum (2026-11-12):** on Apple, since cross-media Phase 2's first
+> client PR (#2420; `post-wave-3/flags-and-cross-media.md`, B2.4), this
+> holds for the Flagged pill only. A feed item also carries the user's
+> own flags (`RssItem.flags`) and its row draws a dot for each. The
+> feed's swipe, ⌘⇧8, row-menu item, Feeds menu item and reader button
+> set and clear the default flag, as mail's do (that plan's decision
+> 2). Android follows in android-parity.md leg L2.
+
 ### 5. Toggle affordances retarget to the default flag
 
 Every `\Flagged` toggle becomes a *default flag* toggle:
@@ -430,6 +438,13 @@ What the second one settled, all in one value the controls read
   > pills and the search sheet's toggle are always shown, the rule
   > editor lists every entry, and the feed's swipe, menu item and
   > reader button are always there.
+
+  > **Erratum (2026-11-12):** the Feeds bullet is the feed's controls as
+  > this plan left them. Since cross-media Phase 2's first Apple PR
+  > (#2420) they act on the default flag, not the built-in entry, and a
+  > feed item carries the user's own flags as well; only the pill still
+  > takes the built-in entry's name
+  > (`post-wave-3/flags-and-cross-media.md`, decision 2 and B2.4).
 
 - Settings > Flags: the effective palette; "Default" badge and caption
   on the first enabled row; "Make default" in row menus; "Reset to
