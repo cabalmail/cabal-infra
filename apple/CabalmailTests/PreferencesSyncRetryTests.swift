@@ -93,6 +93,37 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
         XCTAssertFalse(relaunched.hasUnsentChanges)
     }
 
+    /// #2437 as filed: the flag reached the server, then was deleted while
+    /// the settings push failed, and the app was quit. The launch's push
+    /// carries the emptied list, and the pull after it leaves the flag
+    /// deleted. Before, the launch's push left `flag_palette` out (its gate
+    /// started each launch closed), and the pull brought the flag back.
+    func testDeletingTheLastFlagWhileThePushFailsSurvivesARelaunch() async throws {
+        let first = launchPreferences()
+        let firstSync = coordinator(first)
+        await firstSync.start()
+        first.flagPalette = [newFlag]
+        let added = await firstSync.pushUnsent()
+        XCTAssertTrue(added)
+        await server.fail(.setPreferences)
+        first.flagPalette = []
+        let deleted = await firstSync.pushUnsent()
+        XCTAssertFalse(deleted, "the push failed")
+        firstSync.stop()
+        await server.reconnect()
+
+        let relaunched = launchPreferences()
+        let sync = coordinator(relaunched)
+        await sync.start()
+
+        let seen = await calls()
+        XCTAssertEqual(Array(seen.suffix(2)), ["/set_preferences accepted", "/get_preferences accepted"])
+        let slots = await server.paletteSlots
+        XCTAssertEqual(slots, [], "the launch's push carried the emptied list")
+        XCTAssertEqual(relaunched.flagPalette, [], "the pull did not bring the flag back")
+        XCTAssertFalse(relaunched.hasUnsentChanges)
+    }
+
     /// A launch whose own push fails does not pull, and the connection's
     /// first value (the connection as it is) is not a return: one attempt,
     /// until the connection really comes back.
