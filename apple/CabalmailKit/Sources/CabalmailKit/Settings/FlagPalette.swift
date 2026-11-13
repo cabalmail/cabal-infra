@@ -45,8 +45,12 @@ public struct FlagPaletteEntry: Codable, Hashable, Sendable, Identifiable {
 /// STRING under the `flag_palette` key — deliberately not a nested object,
 /// because every shipped client decodes the app map as string-to-string
 /// and a nested value would silently break their whole preferences pull.
-/// The limits mirror `lambda/api/set_preferences/function.py`, the sole
-/// enforcement point.
+/// The limits mirror `lambda/api/set_preferences/function.py`, which
+/// enforces them all and refuses the whole map over one. The Kit holds a
+/// name to its own limit as well (`ServerTextRules.flagLabel(_:)`,
+/// applied by `Preferences`), so the app sends no name the server refuses;
+/// the slots, the count of entries and the colors are the server's alone
+/// to check.
 public enum FlagPalette {
     /// The 20 keyword slots plus the system flag's entry.
     public static let maxEntries = 21
