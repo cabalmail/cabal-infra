@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12) and is on `stage`, and then for the fix of #2439 and #2440 (#2446, merged 2026-11-13); the filter and the fixes ship in that release, with #2447's fix of #2437 (merged 2026-11-13); on 2026-11-13 the maintainer held it once more, for the fix of #2450's trigger (#2457). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12) and is on `stage`, and then for the fix of #2439 and #2440 (#2446, merged 2026-11-13); the filter and the fixes ship in that release, with #2447's fix of #2437 (merged 2026-11-13); on 2026-11-13 the maintainer held it once more, for the fix of #2450's trigger (#2457, merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -482,9 +482,9 @@ fix of #2421; the fix merged as #2435 (2026-11-12) and is on `stage`
 with it. The maintainer held it for the fix of #2439 and #2440 too
 (#2446, merged 2026-11-13), and #2447's fix of #2437 merged the same
 day and rides that release. On 2026-11-13 the maintainer held it once
-more, for the fix of #2450's trigger (#2457), a fault on the mail tier
-older than these PRs and already in prod. The filter's shape was
-answered again on
+more, for the fix of #2450's trigger (#2457, merged 2026-11-13 and
+checked on stage the same day), a fault on the mail tier older than
+these PRs and already in prod. The filter's shape was answered again on
 2026-11-12, and its Any flag row needed a third server PR in prod
 before it merged: #2424 (item 6 of 2a), merged on 2026-11-12, passed
 against the stage API, and in prod the same day with 1.52.0, the
