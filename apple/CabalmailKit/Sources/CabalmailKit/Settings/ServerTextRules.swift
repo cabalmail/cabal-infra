@@ -19,8 +19,9 @@ public enum ServerTextRules {
 
     /// A flag's name as the server takes it: control characters (below
     /// U+0020, and U+007F) dropped, then cut to `FlagPalette.maxLabelLength`
-    /// code points. It can come out empty, which the server refuses too;
-    /// `FlagPalette.accepted(_:)` names such an entry.
+    /// code points. It can come out empty, which the server refuses too:
+    /// the flag editor writes no such name, and `FlagPalette.accepted(_:)`
+    /// names an entry stored with one.
     public static func flagLabel(_ label: String) -> String {
         cut(keeping(label) { !isControl($0) }, toCodePoints: FlagPalette.maxLabelLength)
     }
@@ -62,20 +63,27 @@ public enum ServerTextRules {
 }
 
 extension FlagPalette {
-    /// What Settings names a new flag, and the name an entry stored with an
-    /// empty one gets back.
+    /// What Settings names a new flag, and the name a flag of the user's
+    /// own gets back when it is stored with an empty one.
     public static let newFlagLabel = "New flag"
 
     /// `entries` with every name as the server takes it
     /// (`ServerTextRules.flagLabel(_:)`); a name that comes out empty is
-    /// `newFlagLabel`. The editor never stores an empty name, so only a
-    /// palette an older build stored can have one.
+    /// the entry's default one (`defaultLabel(forSlot:)`). The flag editor
+    /// writes no such name, so this names an entry that got one another
+    /// way: 1.52.0 stored a cleared name as it was typed.
     public static func accepted(_ entries: [FlagPaletteEntry]) -> [FlagPaletteEntry] {
         entries.map { entry in
             var entry = entry
             let label = ServerTextRules.flagLabel(entry.label)
-            entry.label = label.isEmpty ? newFlagLabel : label
+            entry.label = label.isEmpty ? defaultLabel(forSlot: entry.slot) : label
             return entry
         }
+    }
+
+    /// The name an entry has before the user gives it one: the built-in
+    /// flag's own for its entry ("Flagged"), `newFlagLabel` for any other.
+    public static func defaultLabel(forSlot slot: String) -> String {
+        slot == systemSlot ? defaultSystemEntry.label : newFlagLabel
     }
 }

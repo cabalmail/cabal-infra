@@ -62,6 +62,21 @@ final class ServerTextRulesTests: XCTestCase {
         XCTAssertEqual(FlagPalette.accepted(palette).map(\.label), [FlagPalette.newFlagLabel])
     }
 
+    /// The built-in flag is not a new flag: its own default name is
+    /// "Flagged", and that is what an empty one becomes (#2448). Its color
+    /// and place are the user's and stay.
+    func testTheBuiltInFlagWithAnEmptyNameIsNamedFlagged() {
+        let palette = [
+            FlagPaletteEntry(slot: "cabal-flag-01", label: "", color: "red"),
+            FlagPaletteEntry(slot: FlagPalette.systemSlot, label: "", color: "teal"),
+        ]
+
+        XCTAssertEqual(FlagPalette.accepted(palette), [
+            FlagPaletteEntry(slot: "cabal-flag-01", label: "New flag", color: "red"),
+            FlagPaletteEntry(slot: FlagPalette.systemSlot, label: "Flagged", color: "teal"),
+        ])
+    }
+
     // MARK: - Preferences holds to them
 
     func testPreferencesCutsASignatureAsItIsWrittenAndPersistsTheCut() {
@@ -107,6 +122,21 @@ final class ServerTextRulesTests: XCTestCase {
         XCTAssertEqual(launched.flagPalette.map(\.label), [FlagPalette.newFlagLabel])
         let wire = try XCTUnwrap(launched.appPreferencesPayload()["flag_palette"])
         XCTAssertTrue(wire.contains(#""label":"New flag""#))
+    }
+
+    /// The same for the built-in flag, whose name 1.52.0 could clear too:
+    /// it launches as "Flagged", and that is what the next push carries.
+    func testTheBuiltInFlagAnOlderBuildStoredWithAnEmptyNameIsFlaggedAtLaunch() throws {
+        let store = InMemoryPreferenceStore()
+        let older = activated(store)
+        let key = try XCTUnwrap(older.storageKey(.flagPalette))
+        store.setString(#"[{"color":"red","label":"","slot":"\\Flagged"}]"#, forKey: key)
+
+        let launched = activated(store)
+
+        XCTAssertEqual(launched.flagPalette.map(\.label), ["Flagged"])
+        let wire = try XCTUnwrap(launched.appPreferencesPayload()["flag_palette"])
+        XCTAssertTrue(wire.contains(#""label":"Flagged""#))
     }
 
     /// A signature an older build stored past the limit is cut at launch.

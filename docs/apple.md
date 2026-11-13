@@ -2085,21 +2085,43 @@ The values a user types are held to those rules in the Kit
 characters and are cut by code points, as the server's `len()` counts,
 at a character boundary. `Preferences` applies them on every write and
 at `reload()`, so a value an older build stored is mended at the next
-launch, a stored empty name becoming "New flag". The flag editor never
-stores an empty name: an emptied field writes nothing, and leaving the
-editor with it empty gives back the name it opened with.
+launch, a stored empty name becoming "New flag", or "Flagged" on the
+built-in flag. The flag editor never stores an empty name: an emptied
+field writes nothing, and neither does text the rules reduce to nothing,
+and leaving the editor with the field empty gives back the name it
+opened with.
 
-That has known corners, each with its issue. The mark is set through
-the edit observer, which
+The name field's state is `FlagNameField`, a value the editor keeps in
+`@State` and `FlagNameFieldTests` drives directly: whether the user has
+emptied the field, the name to give back, and the name the field's own
+last write left. A flag's name that differs from that last one came by
+another route, Reset to Default or a pull that brings a rename from
+another device, and is the newer name: the field shows it, it becomes
+the name to give back, and leaving writes nothing older over it (#2448).
+The pull that follows this device's own push brings back the name the
+field last wrote, which is no rename, so the field stays empty. Reset to
+Default goes through the same value, so the field shows the default name
+even when the reset left the name as it was. Leaving settles the name,
+and a later visit to the same editor opens on the name the flag has
+then.
+
+All of this has known corners, each with its issue. The mark is set
+through the edit observer, which
 `start` attaches after its first push and pull, so an edit made before
 the session's first pull returns is not marked, and a session wired
 from a compose window alone has no coordinator at all (#2441). The
 pull that follows a push reads the server's row without a consistent
 read, so it can return the map as it was before the push and put the
-older values back (#2442). The flag editor's own state does not follow
-a Reset to Default or a pull, so leaving it with the name field empty
-writes the opening name over either (#2448). While a push is out,
-typing in the signature or a flag's name sends requests back to back
+older values back (#2442). While the flag editor's name field is empty
+the flag holds the last name the field wrote, a stub when the letters
+were deleted one at a time, and only leaving the editor puts the opening
+name back, so an app that ends with the editor open and the field empty
+leaves the stub as the flag's name; whether closing the Mac's Settings
+window with the editor open counts as leaving has not been run. And
+because a cut keeps whole characters, a combining mark typed onto the
+character that ends at the limit removes that character, in a flag's
+name and in the signature (#2448). While a push is out, typing in the
+signature or a flag's name sends requests back to back
 (#2449). An edit that joined a push which is then refused or fails
 waits for another trigger; a change that was refused or failed and is
 then put back to the last synced settings schedules nothing and leaves
