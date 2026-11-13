@@ -2057,15 +2057,30 @@ and skips that pull if the push fails), and when the feed queue asks
 before it drops a refused flag add (see the feed store's refused-add
 bullet). No pull is applied over an unsent change, so on a launch that
 sends one, this device's values win over changes made elsewhere since,
-as any late push's do. One exception (#2437): the five keys that ride
-only once "syncable" (`flag_palette`, `rss_mark_as_read`, the all-feeds
+as any late push's do. One exception (#2437): the keys behind the five
+"syncable" gates (`flag_palette`, `rss_mark_as_read`, the all-feeds
 filter and order, the swipe bindings) start each launch not syncable,
 so a change that put one back to its default, such as deleting the last
 flag of the user's own, is left out of the launch's push, and the pull
-after it puts the server's value back. A push still out when its session ends answers
-into nothing: it neither applies nor clears the mark, which by then may
-be another account's, and a sign-in over a wired session stops the old
-coordinator before it activates the new account's scope.
+after it puts the server's value back. A push still out when its
+session ends answers into nothing: it neither applies nor clears the
+mark, which by then may be another account's, and a sign-in over a
+wired session stops the old coordinator before it activates the new
+account's scope.
+
+That has known corners, each with its issue. The coordinator treats
+every failed push alike, so a settings map the server refuses with a
+400 (a flag's name left empty is one) is sent again at each trigger and
+holds the pull until the value is corrected (#2439). An edit whose
+debounce ends while an earlier push is still out only waits on that
+push, which does not carry it, and then stays unsent until another
+trigger (#2440). The mark is set through the edit observer, which
+`start` attaches after its first push and pull, so an edit made before
+the session's first pull returns is not marked, and a session wired
+from a compose window alone has no coordinator at all (#2441). The
+pull that follows a push reads the server's row without a consistent
+read, so it can return the map as it was before the push and put the
+older values back (#2442).
 
 A single `@Observable` class is used in preference to `@AppStorage`
 property wrappers because multiple views (compose, message detail,

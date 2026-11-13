@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the release after 1.52.0 is held for the fix of #2421 (#2435), and the filter ships with it. The third server PR it waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12) and is on `stage`; the filter and the fix ship in that release. The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -477,8 +477,9 @@ on a simulator against stage; `flags-and-cross-media.md` has what was
 built and run. On Apple the rest of 2b is two PRs: #2420 (items 3, 4
 and 6: the menus, the rows and the toggle; merged 2026-11-12), and
 the per-flag filter (item 5), merged as #2425 (2026-11-12) and on
-`stage` for the release after 1.52.0, which the maintainer held until
-#2421 is fixed (#2435). Its shape was answered again on
+`stage` for the release after 1.52.0, which the maintainer held for a
+fix of #2421; the fix merged as #2435 (2026-11-12) and is on `stage`
+with it. The filter's shape was answered again on
 2026-11-12, and its Any flag row needed a third server PR in prod
 before it merged: #2424 (item 6 of 2a), merged on 2026-11-12, passed
 against the stage API, and in prod the same day with 1.52.0, the
@@ -537,7 +538,12 @@ open points below (its decisions 4 and 11), and what was built.
    device leaves in the queue. The drain drops those queued adds, takes
    the flags off their items again, and sends the rest, because such a
    call can never succeed and would hold every later change behind it
-   (decided 2026-11-11).
+   (decided 2026-11-11). On Apple, since #2435, the drain first asks
+   the app to send any settings change still unsent, because a flag
+   created while the settings push failed is refused the same way
+   (#2421): if the settings then go it sends the batch again, once;
+   if they cannot it leaves the adds queued; and it drops only when
+   the answer is that nothing is unsent (or nobody is there to ask).
 1. **Menus.** The mail flag menu's builder (`FlagMenuPolicy`) moves
    from `Mail/Reader/` to `Shared/` over a small "flaggable" value (the
    current slots, add, remove) and is mounted on the feed reader's Flag
