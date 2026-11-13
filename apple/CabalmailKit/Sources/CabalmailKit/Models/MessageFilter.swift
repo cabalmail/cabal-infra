@@ -3,8 +3,10 @@ import Foundation
 /// The mail list's filter pill — the three tabs the React webmail shows
 /// (`react/admin/src/Email/Messages/index.jsx`). Lives in the kit because
 /// `Preferences` stores the pill each folder's list opens on
-/// (`mailFolderFilters`); the labels and the envelope predicate stay with
-/// the view in the app target.
+/// (`mailFolderFilters`); the labels and the rule for which rows pass stay
+/// in the app layer, which also narrows a list to one flag of the user's
+/// own, or to any flag, for a visit. That pick is not a case here: these
+/// are the values a folder remembers, and the server refuses any other.
 public enum MessageFilter: String, Codable, CaseIterable, Identifiable, Sendable {
     case all
     case unread

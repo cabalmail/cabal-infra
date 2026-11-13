@@ -220,7 +220,8 @@ sessions out of known potholes:
   `<folder>` is the row's own `/`-delimited path, so a search result in
   Sent is `message.row.Sent/316` and one in a nested folder is
   `message.row.Archive/2026/7`. A folder list's Unread / Flagged pills
-  are searches narrowed to that list's folder and keep the bare form.
+  are searches narrowed to that list's folder and keep the bare form, a
+  flag picked from the Flagged pill's menu included.
 - **Secure fields.** A SwiftUI `SecureField` does not accept the
   keyboard assistant bar's Paste button, but does accept hardware Cmd-V.
   Seed the simulator pasteboard host-side and paste:
@@ -1110,25 +1111,25 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | --- | --- |
 | `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the compose coordinator and slot registry, drag and drop, contacts, BIMI and `mailStore`, and what the app does once as it leaves and returns to the foreground (`appScenePhaseChanged(to:)`, called by each app entry's scene-level handler); its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
 | `Session/` | The session lifecycle, in `SessionManager`: sign-in and its second factor, restoring the last session, signing out and its ordering (`SessionTeardownGate`), the session's client, cursor, preferences sync and expiry observer, the Inbox badge and feed pollers (`SessionPollers`), and lending the client to the push and App Intents paths (`borrowClient()`, one client per account). `SessionEnvironment` and `SessionHooks` are its seams to the outside; `SessionOwnerHooks` are what a session does to `AppState`'s state. Also the sign-in screen and its error wording |
-| `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, list place, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included, and where that list is scrolled, as a `ListAnchor`: its top row by Message-ID, UID and position), its `StoredRoute` (the route its scene storage keeps, and where its folder list was scrolled, for the account they were stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, which also keeps where the last-used window's folder list was scrolled, on this device only, reading positions and the cross-device cursor); `DeepLinkRouter` (a notification, a Spotlight result or Siri's Open Folder opens in one main window: the system's target, else the window last used) with the `WindowRegistry` it finds windows in, and Spotlight routing |
+| `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, list place, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included, and where that list is scrolled, as a `ListAnchor`: its top row by Message-ID, UID and position), its `ListFlagPicks` (two `FlagPickHold`s, one for the folder list and one for the feed list: the flag picked from the Flagged pill's menu for the visit, which the same folder's or feed's next list opens on, however it came to be rebuilt, and which a list for another folder or feed drops; never stored), its `StoredRoute` (the route its scene storage keeps, and where its folder list was scrolled, for the account they were stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, which also keeps where the last-used window's folder list was scrolled, on this device only, reading positions and the cross-device cursor); `DeepLinkRouter` (a notification, a Spotlight result or Siri's Open Folder opens in one main window: the system's target, else the window last used) with the `WindowRegistry` it finds windows in, and Spotlight routing |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
 | `Shell/` | How a window is laid out. The sign-in / signed-in router resolves the window's `ShellLayout` and draws one of four layout shells: `DesktopShell` (the Mac window), `SplitShell` (the iPad split, and iPhone Duo unfolded), `TabShell` (the iPhone tab bar, a narrowed iPad window and Duo folded) and `OrnamentShell` (the Vision Pro tabs). `WideMail` is what the two wide shells share, `CompactTab` is the tab list as data, and `CompactMailStack` is the phone's Mail tab. Also here: the layout and column policies, the split's Settings sheet presenter, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
 | `Shell/Columns/` | What the mail columns show on every layout, with no platform conditionals (`MailSidebarColumn`, `MailContentColumn`, `MailReaderColumn`, `FeedReaderColumn`); column and inspector widths, the pinned list column's width and fold rules (`ListColumnPolicy`, `ListColumnState`, `ListColumnTab`), the column resize handle, the macOS split-view autosave workaround |
 | `Mail/` | Mail pieces used by more than one mail column: drag and drop, Move to Folder, the sender avatar, the authentication line |
-| `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts: the unread ones are the sidebar badges and a message list's Unread pill, the flagged ones its Flagged pill; and the Inbox count behind the app badge), `MessageShields` (the one record of writes in flight and removals just confirmed, which every list's merge and every writer of a fetched STATUS asks, so a refresh can't undo a write made anywhere or count it twice), `MailEvents` (every change to mail, delivered at once and in order to every message list's and reader's view model but the one that made it, naming the window that started it when a reader did, and saying whether another list's selection may move on), and `MailMutationService` (the one place the app's writes go through: every flag change, move, dispose and purge from a list, the reader or the composer is recorded, posted and counted before it goes out, made through the writer's client, then confirmed, forgetting a removed message in the offline caches, or taken back; Mark All as Read and Empty Trash go through it too, acting once the server answers; a notification's actions are the exception, #1973); and `FolderPollers` (the change watching of the folders open in message lists: one `FolderPoller` per folder, made by the first list showing it and stopped with the last or at sign-out, whose watcher events and 60-second tick each ask one STATUS that every list on the folder takes); also saved folder counts |
+| `Mail/Store/` | Mail state the folder list, message list, reader and composer share: `MailSessionStore`, which `AppState` owns as `mailStore` and resets at sign-out, made of `MailCounts` (folder counts: the unread ones are the sidebar badges and a message list's Unread pill, the flagged ones its Flagged pill, until that pill is lit on a flag picked from its menu, whose number is the pick's search total; and the Inbox count behind the app badge), `MessageShields` (the one record of writes in flight and removals just confirmed, which every list's merge and every writer of a fetched STATUS asks, so a refresh can't undo a write made anywhere or count it twice), `MailEvents` (every change to mail, delivered at once and in order to every message list's and reader's view model but the one that made it, naming the window that started it when a reader did, and saying whether another list's selection may move on), and `MailMutationService` (the one place the app's writes go through: every flag change, move, dispose and purge from a list, the reader or the composer is recorded, posted and counted before it goes out, made through the writer's client, then confirmed, forgetting a removed message in the offline caches, or taken back; Mark All as Read and Empty Trash go through it too, acting once the server answers; a notification's actions are the exception, #1973); and `FolderPollers` (the change watching of the folders open in message lists: one `FolderPoller` per folder, made by the first list showing it and stopped with the last or at sign-out, whose watcher events and 60-second tick each ask one STATUS that every list on the folder takes); also saved folder counts |
 | `Mail/Folders/` | The folder sidebar and its view model, filters, rows, New Folder |
 | `Mail/MessageList/` | `MessageListView`, `MessageListViewModel` and their extension files: rows, swipes, selection, bulk actions, sort, the folder-switch menu; `FolderWindowLoader`, a folder list's window (rows, positions, paging, refresh; the search surface has none), with its engines `WindowPager`, `WindowRefresher`, `WindowReconciler` and `WindowSnapshot`, and the value types `EnvelopeOrder` and `WindowPlanner`; `ListPlaceTracker`, which records a folder list's top row for its window as it scrolls and reopens the list there after a layout swap or a relaunch |
 | `Mail/Reader/` | `MessageDetailView`, `MessageDetailViewModel` and their extension files: the header, the toolbar and its policies, attachments, calendar invites, View Source |
-| `Mail/Search/` | `MailSearchSession`, a list's search (query, filters, results and their paging), the search model and query, the Search tab, the global search field, the filters sheet, and the list's `+Search` extension files |
+| `Mail/Search/` | `MailSearchSession`, a list's search (query, filters, results and their paging, and the first page's match count, which a pill lit on a picked flag draws less the rows that have since left), the search model and query, the Search tab, the global search field, the filters sheet, the list's `+Search` extension files, and `+FlagFilter`: what each row of a folder list's Flagged menu does (the built-in flag's row is the remembered Flagged filter; a flag of the user's own and Any flag are picks, carried in the search's filters and recorded nowhere), `MessageListNarrowing`, the one rule for which rows pass that the list, Select All and Previous / Next all ask, and what the list says when a pick finds nothing |
 | `Feeds/` | The Feeds tab root, `FeedStoreChanges` (how the feed sidebar, item list and reader follow `RssStore.changes()`, each from its view's `.task` through its model's `observe()`), the change a feed control makes to an item (`FeedItemMark`: read, or one palette flag set or cleared, named by its slot; it is where "the built-in flag is the favorite bit and a flag of the user's own is a slot in `RssItem.flags`" stops, so the list and the reader name a flag one way and `RssSyncEngine.write` routes it), feed health and per-feed web storage |
-| `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list (its model decides which rows show; `FeedListRows` holds them and keeps their marks truthful: a control's change drawn at once and written through the engine, the re-read of a row the store says changed, a flag the server refused leaving again, and the queued mark), the item reader, and subscribing, editing and OPML |
+| `Feeds/Sidebar/`, `Feeds/ItemList/`, `Feeds/Reader/`, `Feeds/Management/` | The feed tree, the item list (its model decides which rows show, by `FeedListNarrowing`: the lit pill, which the scope remembers, and under Flagged a flag picked from that pill's menu, which it does not; `FeedListRows` holds them and keeps their marks truthful: a control's change drawn at once and written through the engine, the re-read of a row the store says changed, a flag the server refused leaving again, and the queued mark; `FeedListCounts` reads the pills' numbers, a picked flag's among them), the item reader, and subscribing, editing and OPML |
 | `Compose/` | `ComposeView`, `ComposeViewModel` (with its autosave loops, `ComposeAutosaveLoops`, and what it starts from, `ComposeSnapshot`), the From picker, drafts, the failed-send banner, and what a closed composer reports (`ComposeOutcomeReport`) |
 | `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene; and the move from a sheet to a window, `ComposeWindowMove` and its hand-off table, `ComposeHandoffs`), and on iPad each main window's scene session, so a notification finds the window it was shown over and a compose window iPadOS restores lands on a main window (the one last used) when it closes |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
 | `Rules/` | The rule list, the rule editor and its view model |
 | `Admin/` | Administrator screens, listed in Settings only when the session's token names the `admin` group (`SessionManager.isAdmin`): the Users list, each account's page (confirm, enable or disable, delete, domain access) and `UsersViewModel`. The server refuses every admin call to anyone else; a 403 shows as "Administrators only" |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
-| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill`, and `FilterPillStrip`, which stacks pills in a narrow column), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the item rows' marks (`UnreadDot`, and `FlagDots` with `FlagDotMark`, which works out the flags a mail row, a feed row and the reader's chips draw: the system flag as one more palette entry, in palette order), the flag the one-press controls act on (`FlagToggle`: the swipe, the shortcuts, the bulk bar, the reader's button and the first flag item of the menus set the palette's default flag, the first entry, on a message and on a feed item alike, in the entry's name and color; the Flagged filters name the built-in flag's entry; there is always one of each, since no flag can be switched off), the flag menu both readers and both row menus draw (`FlagMenuPolicy` for its rows and its identity, `FlagMenuToggles` for the checkmark rows: every flag in Settings > Flags, then any the item carries whose flag was deleted, and no rows at all while the default flag is the only one), the reader headers' named flags (`FlagChips`), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), the faces of the toggles both readers share (`ReaderToggleFace`: read, flag, reader view, remote content, and mail's plain text, each glyph naming the action its label names), branding |
+| `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill` over `FilterPillFace`, and `FilterPillStrip`, which stacks pills in a narrow column), the Flagged pill of the two list bars as a menu (`FlagFilterPill`, the same face in a `Menu` with no chevron, and `FlagFilterMenuPolicy` for when it is one, which is once Settings > Flags holds a flag of the user's own, and for its rows, every flag then Any flag then Clear filter, and the word and number on it), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the item rows' marks (`UnreadDot`, and `FlagDots` with `FlagDotMark`, which works out the flags a mail row, a feed row and the reader's chips draw: the system flag as one more palette entry, in palette order), the flag the one-press controls act on (`FlagToggle`: the swipe, the shortcuts, the bulk bar, the reader's button and the first flag item of the menus set the palette's default flag, the first entry, on a message and on a feed item alike, in the entry's name and color; the Flagged filters name the built-in flag's entry while they are not lit on another flag; there is always one of each, since no flag can be switched off), the flag menu both readers and both row menus draw (`FlagMenuPolicy` for its rows and its identity, `FlagMenuToggles` for the checkmark rows: every flag in Settings > Flags, then any the item carries whose flag was deleted, and no rows at all while the default flag is the only one), the reader headers' named flags (`FlagChips`), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), the faces of the toggles both readers share (`ReaderToggleFace`: read, flag, reader view, remote content, and mail's plain text, each glyph naming the action its label names), branding |
 | `Shared/Primitives/` | Generic building blocks: the load-state scaffold, the flow layout, a list's selection (`SelectionModel`: the rows picked, Select mode, and the anchor and cursor a range selection works from) |
 | `Shared/BodyRendering/` | Rendering a message or article body for both readers: the HTML view and its bridges, HTML rewriting, plain text, the link menu |
 | `Shared/Banners/` | Toasts and where banners sit |
@@ -1356,10 +1357,10 @@ its place, each way, and a list the move replaced takes no pending
 restore once off screen (`ListPlaceTracker.mayTakeParked`). A feed list
 moves the same way through the split's `FeedListHold`: the list mounting
 next for the same scope takes the moved one's model, with its rows,
-pages, filter and search, and lands on its top row, so a fold reloads
-nothing: the model catches up with the store's marks and counts as it
-starts following it again, and syncs only if no sync of it ran to the
-end. The feed reader's actions are in its own bar in a tall window
+pages, filter, picked flag and search, and lands on its top row, so a
+fold reloads nothing: the model catches up with the store's marks and
+counts as it starts following it again, and syncs only if no sync of it
+ran to the end. The feed reader's actions are in its own bar in a tall window
 (below), so laptop pose hiding the navigation bar loses none of them.
 
 **Laptop pose: compose (`Compose/ComposeLaptopArrangement.swift`).** With
@@ -1776,6 +1777,13 @@ a second copy.
 - A feed item's custom flags (`RssItem.flags`) are palette slots, the
   vocabulary mail keywords use, kept as a JSON list in `items.flags`; the
   system flag is not among them, since on a feed item it is `isFavorite`.
+  A list narrowed to a flag asks the store for it (`ItemQuery.flag`, a
+  `FlagCriterion`: one slot, or any flag) and for its count
+  (`flagCount`). The query finds a slot between its quotes in that text,
+  so the text's shape is part of it: compact, sorted, `[]` when empty.
+  The column is the row's last, after the bodies, so the query asks
+  SQLite for its length first (`octet_length`, read from the row's
+  header) and reads the text only of items that carry a custom flag.
   A change to one (`RssSyncEngine.setFlag`) is written with a `pending`
   row of kind `flag` that names its slot, in one transaction. The queue
   keeps one change per item and slot, the latest, and the drain sends
@@ -1790,13 +1798,21 @@ a second copy.
   and stepped past them, and a flag another device set before this one
   was upgraded would otherwise never arrive.
 - The server refuses a whole `/rss_set_item_state` call that adds a flag
-  the palette does not enable, which is what a flag disabled or deleted
-  on another device leaves in the queue. It names the slots, the API
-  client throws them as `RssFlagRefusal`, and `RssPendingDrain` drops
-  those queued adds, takes the flags off their items again in the same
-  transaction, and sends the rest of the batch, because the refusal
-  would otherwise hold every later change. Any other failure leaves the
-  queue as it was.
+  its palette does not hold, which is what a flag deleted on another
+  device leaves in the queue. It names the slots, and the API client
+  throws them as `RssFlagRefusal`. A flag created on this device while
+  the settings push was failing is refused the same way, because the
+  server has not been told of it yet (#2421), so before it drops
+  anything `RssPendingDrain` asks the app, through the hook
+  `RssSyncEngine.setUnsentSettingsPush` that `PreferencesSyncCoordinator`
+  installs, to send any settings change still waiting
+  (`RssUnsentSettings`). Sent: the batch goes again once, and a refusal
+  after that is final. Still unsent: the refused adds stay queued, on
+  their items, and the rest of the batch goes now. Nothing waiting (or
+  no hook): the drain drops those queued adds, takes the flags off their
+  items again in the same transaction, and sends the rest of the batch,
+  because the refusal would otherwise hold every later change. It asks
+  once a batch. Any other failure leaves the queue as it was.
 - A feed store that cannot be opened is set aside, not deleted. The file
   holds a cache of server state and also the queue of read and flag marks
   not yet sent, which nothing can refetch. `RssStore.openRecovering`
@@ -2028,6 +2044,93 @@ account instead: `PreferencesSyncCoordinator` stores the settings per
 Cognito user on the server (`/get_preferences` / `/set_preferences`),
 pulls with server-wins semantics on login and foreground, and pushes
 debounced local edits.
+
+A push that fails is not dropped (#2421). From a local edit until a
+push succeeds, `Preferences.hasUnsentChanges` is set: a scoped key in
+the same local store, never in the `app` map, so it survives a relaunch
+and belongs to one account. While it is set the coordinator sends the
+settings as they are then, one push at a time: when the connection
+comes back (an offline-to-online change of `Reachability`, not its
+first value), on return to the foreground (`reconcile` pushes before
+it pulls), at the next session's `start` (pushes before the first pull,
+and skips that pull if the push fails), and when the feed queue asks
+before it drops a refused flag add (see the feed store's refused-add
+bullet). No pull is applied over an unsent change, so on a launch that
+sends one, this device's values win over changes made elsewhere since,
+as any late push's do. The keys behind the five "syncable" gates
+(`flag_palette`, `rss_mark_as_read`, the all-feeds filter and order,
+the swipe bindings), which the payload sends only once the server or
+the user has introduced them, are opened again at `reload()` when the
+account's store holds a value for the key (#2437): only a user edit and
+a pull store them, the two things that open a gate in a session. So a
+change that put one back to its default, such as deleting the last flag
+of the user's own, still rides the launch's push. A push still out when its
+session ends answers into nothing: it neither applies nor clears the
+mark, which by then may be another account's, and a sign-in over a
+wired session stops the old coordinator before it activates the new
+account's scope.
+
+Whoever asks for a push while one is out waits on it. When a push lands
+and the settings changed while it was out, the same push task sends
+again at once with the settings as they are then, so an edit whose
+debounce ended during the push (and joined it) is not left for another
+trigger (#2440); a failure, a refusal or the session's end stops it. A
+400 is a refusal, not a failure: `set_preferences` refuses the whole
+map when one value breaks its rules, and the same map would be refused
+again, so the coordinator keeps it for the session and no trigger sends
+it again until the settings change. The mark and the held pull stay, so
+nothing is lost, and the next session's start sends once more (#2439).
+The values a user types are held to those rules in the Kit
+(`ServerTextRules`): a flag's name and the signature drop control
+characters and are cut by code points, as the server's `len()` counts,
+at a character boundary. `Preferences` applies them on every write and
+at `reload()`, so a value an older build stored is mended at the next
+launch, a stored empty name becoming "New flag", or "Flagged" on the
+built-in flag. The flag editor never stores an empty name: an emptied
+field writes nothing, and neither does text the rules reduce to nothing,
+and leaving the editor with the field empty gives back the name it
+opened with.
+
+The name field's state is `FlagNameField`, a value the editor keeps in
+`@State` and `FlagNameFieldTests` drives directly: whether the user has
+emptied the field, the name to give back, and the name the field's own
+last write left. A flag's name that differs from that last one came by
+another route, Reset to Default or a pull that brings a rename from
+another device, and is the newer name: the field shows it, it becomes
+the name to give back, and leaving writes nothing older over it (#2448).
+The pull that follows this device's own push brings back the name the
+field last wrote, which is no rename, so the field stays empty. Reset to
+Default goes through the same value, so the field shows the default name
+even when the reset left the name as it was. Leaving settles the name,
+and a later visit to the same editor opens on the name the flag has
+then.
+
+All of this has known corners, each with its issue. The mark is set
+through the edit observer, which
+`start` attaches after its first push and pull, so an edit made before
+the session's first pull returns is not marked, and a session wired
+from a compose window alone has no coordinator at all (#2441). The
+pull that follows a push reads the server's row without a consistent
+read, so it can return the map as it was before the push and put the
+older values back (#2442). While the flag editor's name field is empty
+the flag holds the last name the field wrote, a stub when the letters
+were deleted one at a time, and only leaving the editor puts the opening
+name back, so an app that ends with the editor open and the field empty
+leaves the stub as the flag's name; whether closing the Mac's Settings
+window with the editor open counts as leaving has not been run. And
+because a cut keeps whole characters, a combining mark typed onto the
+character that ends at the limit removes that character, in a flag's
+name and in the signature (#2448). While a push is out, typing in the
+signature or a flag's name sends requests back to back
+(#2449). An edit that joined a push which is then refused or fails
+waits for another trigger; a change that was refused or failed and is
+then put back to the last synced settings schedules nothing and leaves
+the mark set, so the next trigger sends the unchanged map; and a
+Default From address over 100 characters is a value the server refuses
+and the Kit's rules do not cover (#2451). When a session's first pull
+fails, the first settings change sends this device's values over the
+account's, and a gate one account opened stays open for the next
+account signed in during the same run (#2452).
 
 A single `@Observable` class is used in preference to `@AppStorage`
 property wrappers because multiple views (compose, message detail,

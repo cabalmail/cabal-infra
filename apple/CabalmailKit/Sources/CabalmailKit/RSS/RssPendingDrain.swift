@@ -5,9 +5,10 @@ import Foundation
 /// changes, item marks coalesced into `/rss_set_item_state` batches, each
 /// `/rss_mark_all_read` a fence between batches. A failure leaves the queue
 /// intact for the next attempt, with one exception: a flag add the server
-/// refuses because the palette no longer holds that flag would be refused
-/// every time, and the whole batch with it, so those adds are dropped and
-/// the rest of the batch is sent again (`push`).
+/// refuses because its palette does not hold that flag would be refused
+/// every time, and the whole batch with it, so once the app has no
+/// settings change waiting to be sent those adds are dropped and the rest
+/// of the batch is sent again (`push`).
 ///
 /// One pass at a time. A drain asked for before the pass has read the queue
 /// joins it; asked for while it is pushing, it waits for one more pass behind
@@ -16,6 +17,8 @@ import Foundation
 actor RssPendingDrain {
     let client: RssClient
     let store: RssStore
+    /// Asked before a refused flag add is dropped (`push`).
+    let unsentSettings: RssUnsentSettingsHook
     /// The pass that has read the queue and is pushing it.
     private var pushing: Flight<Result<Int, Error>>?
     /// The pass waiting to read the queue: joined until it starts.
@@ -24,9 +27,10 @@ actor RssPendingDrain {
     /// Callers waiting on the queued pass: the tests' view of a join.
     var queuedWaiterCount: Int { queued?.run.waiterCount ?? 0 }
 
-    init(client: RssClient, store: RssStore) {
+    init(client: RssClient, store: RssStore, unsentSettings: RssUnsentSettingsHook) {
         self.client = client
         self.store = store
+        self.unsentSettings = unsentSettings
     }
 
     /// Returns how many queue rows were cleared. Throws `CancellationError`
@@ -102,17 +106,27 @@ actor RssPendingDrain {
     /// Sends one batch and clears its rows from the queue; returns how many
     /// rows left it.
     ///
-    /// The server checks every flag a call adds against the palette before
-    /// it writes anything, and refuses the whole call for one it does not
-    /// hold: the flag was deleted, here or on another device, after the
-    /// change was queued. Asking again cannot succeed, and the
-    /// refusal would hold every other change in the batch with it. So the
-    /// refused adds are taken back (`dropRefusedFlagAdds`) and what is left
-    /// of the batch is sent again. Each round drops at least one row, so
-    /// this ends.
+    /// The server checks every flag a call adds against its copy of the
+    /// palette before it writes anything, and refuses the whole call for
+    /// one it does not hold. Two things leave such an add in the queue. The
+    /// flag was deleted, here or on another device, after the change was
+    /// queued, and asking again cannot succeed. Or the flag was created on
+    /// this device while the app's settings push was failing, and the
+    /// server has not been told of it yet (#2421). So the first refusal of
+    /// a batch asks the app to send any settings change still waiting
+    /// (`RssUnsentSettingsHook`), and what it answers decides:
+    ///   * sent: the batch goes again as it was, and a refusal after that
+    ///     is final, since the server's palette is now this device's;
+    ///   * still unsent: the refused adds stay queued for a later pass and
+    ///     the rest of the batch goes now, because the refusal would
+    ///     otherwise hold every other change with it;
+    ///   * nothing waiting: the refused adds are taken back
+    ///     (`dropRefusedFlagAdds`) and the rest of the batch goes.
+    /// Every round after the first takes at least one row out, so this ends.
     private func push(_ rows: [RssStore.PendingMutation]) async throws -> Int {
         var rows = rows
         var cleared = 0
+        var asked: RssUnsentSettings?
         while !rows.isEmpty {
             do {
                 _ = try await client.setItemState(Self.changes(for: rows))
@@ -125,14 +139,32 @@ actor RssPendingDrain {
                 guard !refused.isEmpty else {
                     throw CabalmailError.server(code: RssFlagRefusal.code, message: refusal.message)
                 }
-                // Fewer than `refused` when the user has changed one of them
-                // again since this pass read the queue: that row is gone
-                // and the newer change waits for the next pass.
-                let dropped = try await store.dropRefusedFlagAdds(ids: refused.map(\.id))
-                CabalmailLog.warn("RssPendingDrain", "dropped \(dropped) queued flag adds the server refused: "
-                    + "\(refusal.slots.sorted().joined(separator: ", ")) not in the palette")
-                rows.removeAll { refused.contains($0) }
-                cleared += dropped
+                let settings: RssUnsentSettings
+                if let asked {
+                    settings = asked == .sent ? .nothingUnsent : asked
+                } else {
+                    settings = await unsentSettings.ask()
+                    asked = settings
+                }
+                let slots = refusal.slots.sorted().joined(separator: ", ")
+                switch settings {
+                case .sent:
+                    CabalmailLog.info("RssPendingDrain", "sent the waiting settings after \(slots) "
+                        + "was refused; trying the flag adds again")
+                case .stillUnsent:
+                    CabalmailLog.warn("RssPendingDrain", "kept \(refused.count) queued flag adds the server "
+                        + "refused: \(slots) may be in settings not sent yet")
+                    rows.removeAll { refused.contains($0) }
+                case .nothingUnsent:
+                    // Fewer than `refused` when the user has changed one of
+                    // them again since this pass read the queue: that row is
+                    // gone and the newer change waits for the next pass.
+                    let dropped = try await store.dropRefusedFlagAdds(ids: refused.map(\.id))
+                    CabalmailLog.warn("RssPendingDrain", "dropped \(dropped) queued flag adds the server refused: "
+                        + "\(slots) not in the palette")
+                    rows.removeAll { refused.contains($0) }
+                    cleared += dropped
+                }
             }
         }
         try await store.deletePending(ids: rows.map(\.id))

@@ -29,8 +29,7 @@ private struct MessageListStepping: ViewModifier {
     }
 
     private var isShown: (Envelope) -> Bool {
-        let filter = model.filterTab
-        return { filter.includes($0) }
+        model.narrowing.includes
     }
 
     private var loaded: ListStepPolicy.Rows<Envelope, MessageRef> {

@@ -48,7 +48,9 @@ public enum RssRemoteContentMode: String, Codable, Sendable, CaseIterable, Ident
 /// `filter=` on `/rss_list_items`, and the sticky pill a feed's, folder's,
 /// or the all-feeds list opens on (`default_filter` on the subscription and
 /// folder rows; the `filter:feeds:all` preference for the all-feeds
-/// scope). Unread by default: a feed is read for what is new.
+/// scope). Unread by default: a feed is read for what is new. A list
+/// narrowed to one custom flag, or to any flag, is not a case here: that
+/// pick is never stored, and `RssStore.ItemQuery.flag` carries it.
 public enum RssItemFilter: String, Codable, Sendable, CaseIterable, Identifiable {
     case all
     case unread

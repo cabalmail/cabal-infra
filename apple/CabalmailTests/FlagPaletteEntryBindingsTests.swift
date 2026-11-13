@@ -52,6 +52,56 @@ final class FlagPaletteEntryBindingsTests: XCTestCase {
         XCTAssertEqual(prefs.flagPalette[0].label.count, FlagPalette.maxLabelLength)
     }
 
+    /// The server refuses the whole settings map over an empty name
+    /// (#2439), so an emptied field writes nothing, and the flag keeps the
+    /// last name it had. Before, the empty name was stored and pushed.
+    func testAnEmptiedNameFieldWritesNothing() {
+        let prefs = preferences([entry("cabal-flag-01", "Later")])
+        let bindings = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+        var writes = 0
+        prefs.onLocalChange = { writes += 1 }
+
+        bindings.label.wrappedValue = "L"
+        bindings.label.wrappedValue = ""
+
+        XCTAssertEqual(prefs.flagPalette[0].label, "L")
+        XCTAssertEqual(writes, 1)
+    }
+
+    /// Leaving the editor with the field empty gives the flag back the name
+    /// it opened with, not the last letter left on the way to empty.
+    func testLeavingTheEditorWithTheNameEmptyGivesBackTheOpeningName() {
+        let prefs = preferences([entry("cabal-flag-01", "Later")])
+        let bindings = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+        bindings.label.wrappedValue = "Gro"
+        bindings.label.wrappedValue = ""
+
+        bindings.leaveEditor(nameFieldEmpty: true, openedWith: "Later")
+
+        XCTAssertEqual(prefs.flagPalette[0].label, "Later")
+    }
+
+    func testLeavingTheEditorWithANameKeepsIt() {
+        let prefs = preferences([entry("cabal-flag-01", "Later")])
+        let bindings = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+        bindings.label.wrappedValue = "Groceries"
+
+        bindings.leaveEditor(nameFieldEmpty: false, openedWith: "Later")
+
+        XCTAssertEqual(prefs.flagPalette[0].label, "Groceries")
+    }
+
+    /// The cut counts as the server does, in code points: 20 thumbs-up
+    /// with a skin tone are 20 characters and 40 code points.
+    func testAnEmojiNameIsCutAsTheServerCounts() {
+        let prefs = preferences([entry("cabal-flag-01", "Alpha")])
+        let bindings = FlagPaletteEntryBindings(preferences: prefs, slot: "cabal-flag-01")
+
+        bindings.label.wrappedValue = String(repeating: "\u{1F44D}\u{1F3FD}", count: 20)
+
+        XCTAssertEqual(prefs.flagPalette[0].label.unicodeScalars.count, FlagPalette.maxLabelLength)
+    }
+
     // MARK: - The reported crash: the entry is gone and the editor is still mounted
 
     /// The exact 1-flag arm from the report: the only entry is deleted, so

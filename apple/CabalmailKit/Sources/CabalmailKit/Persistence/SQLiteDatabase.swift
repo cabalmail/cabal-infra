@@ -57,6 +57,12 @@ final class SQLiteDatabase {
         }
     }
 
+    /// Whether this OS's SQLite has `octet_length()` (3.43.0 and later),
+    /// which answers from a row's header: a query can test that a text
+    /// column is non-empty without reading the column, and so without
+    /// reading the pages a long row overflows onto.
+    static let hasOctetLength = sqlite3_libversion_number() >= 3_043_000
+
     private var handle: OpaquePointer?
     // SQLITE_TRANSIENT is a C macro (a cast of -1) the Swift importer drops.
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

@@ -88,6 +88,9 @@ final class SceneNavigator {
 
     /// The window's folder list: its selection and place (`FolderListHold`).
     let listHold = FolderListHold()
+    /// The flag each of the window's two lists is narrowed to for the
+    /// visit (`ListFlagPicks`).
+    let flagPicks = ListFlagPicks()
 
     /// Counts the feed banners this window has followed, so the wide split
     /// can end a search for one as it does for a feed pick (`navigateFeeds`).

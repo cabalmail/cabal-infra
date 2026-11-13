@@ -279,6 +279,7 @@ struct MessageListView: View {
         // says which of the two it is (#1027).
         .overlay {
             searchResultsPlaceholder(model: model, visibleRowCount: visible.count)
+            flagPickPlaceholder(model: model, visibleRowCount: visible.count)
         }
         // A search/filter list that empties out from under the user (every
         // loaded Unread row marked read, say) has no rows left to fire the
@@ -507,7 +508,8 @@ extension MessageListView {
                         client: client,
                         preferences: preferences,
                         mailStore: appState.mailStore,
-                        selection: folder.flatMap { navigator?.mailSelection(for: $0.path) }
+                        selection: folder.flatMap { navigator?.mailSelection(for: $0.path) },
+                        flagPicks: navigator?.flagPicks.mail
                     )
                     await model?.loadInitial()
                     await model?.startWatching()

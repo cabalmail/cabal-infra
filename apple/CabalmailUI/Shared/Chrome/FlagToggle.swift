@@ -9,7 +9,10 @@ import CabalmailKit
 /// Mail's controls and the feed's act on the palette's default flag, the
 /// first entry of Settings > Flags (`defaultFlag(in:)`). The Flagged
 /// filters name the built-in flag, whatever its position
-/// (`systemFlag(in:)`): a plain tap on the pill filters on that one.
+/// (`systemFlag(in:)`): the filter a folder or a feed remembers is that
+/// flag's, and a tap on the plain pill turns it on. A list bar's pill is a
+/// menu of every flag once the palette holds one of the user's own, and
+/// takes its words from `FlagFilterMenuPolicy`.
 ///
 /// There is always one of each: the list always holds the built-in flag,
 /// and no flag can be switched off.
@@ -39,8 +42,8 @@ struct FlagToggle: Equatable {
     }
 
     /// The built-in flag's name as a state rather than an action, for the
-    /// Flagged filter pills and the search sheet's toggle: its entry's
-    /// label.
+    /// Flagged filter pills while they are not lit on another flag, and the
+    /// search sheet's toggle: its entry's label.
     static func systemFlagName(in stored: [FlagPaletteEntry]) -> String {
         systemFlag(in: stored).label
     }

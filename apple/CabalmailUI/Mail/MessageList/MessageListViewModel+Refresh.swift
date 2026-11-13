@@ -6,7 +6,8 @@ import CabalmailKit
 // and the filter pills' counts.
 extension MessageListViewModel {
     /// First load for a freshly built model: the cached snapshot, then the
-    /// folder refresh, then the folder's sticky pill.
+    /// folder refresh, then the flag the window holds for this visit to the
+    /// folder (`flagPick`), or else the folder's sticky pill.
     ///
     /// The pill applies from the first paint: `filterTab` is set before the
     /// cache hydrates so the cached rows are narrowed at once, and the
@@ -22,12 +23,24 @@ extension MessageListViewModel {
     func loadInitial() async {
         guard envelopes.isEmpty else { return }
         let sticky = folder.map { preferences.mailFolderFilter(for: $0.path) } ?? .all
-        filterTab = sticky
+        // A flag the window holds for this visit to the folder (taken as
+        // the model was built) comes before the folder's sticky pill.
+        let pick = flagPick
+        if pick == nil { filterTab = sticky }
+        let opened = (tab: filterTab, filters: search.filters)
         await Task {
             await self.window?.hydrateFromCache()
             await self.window?.seedSavedCounts()
             await self.refresh()
-            if sticky != .all { await self.applyFilter(sticky) }
+            // The pill is live from the first paint. One chosen while the
+            // first load was out is the user's, and replaying over it would
+            // put the list back on a filter they had just left.
+            guard self.filterTab == opened.tab, self.search.filters == opened.filters else { return }
+            if let pick {
+                await self.narrow(to: pick)
+            } else if sticky != .all {
+                await self.applyFilter(sticky)
+            }
         }.value
         window?.scheduleBottomPrefetch()
     }
@@ -59,8 +72,9 @@ extension MessageListViewModel {
         }
     }
 
-    /// The Flagged pill's count: the mail store's flagged count for this
-    /// folder. As `unseen`.
+    /// The Flagged pill's count for the built-in flag: the mail store's
+    /// flagged count for this folder. As `unseen`. Lit on a flag picked
+    /// from its menu, the pill draws `flagPickCount`.
     var flagged: Int {
         get { folder.map { mailStore.counts.folderFlaggedCounts[$0.path] ?? 0 } ?? 0 }
         set {
@@ -96,7 +110,7 @@ extension MessageListViewModel {
         // The reset wiped only the folder window's rows. A pill's results
         // live in the search, so they go here, and the re-run below walks one
         // page, as a fresh pill does.
-        if search.showsResults { search.rows.removeAll() }
+        if search.showsResults { search.dropRows(showing: flagPickCount) }
         await refresh(prefetched: probe, startingOver: true)
     }
 }

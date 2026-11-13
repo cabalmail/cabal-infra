@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 (2026-11-12); the per-flag filter follows it, and waits for a third server PR, `any_flag` on `search_envelopes` (#2424, in review 2026-11-12), to reach prod. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12) and is on `stage`, and then for the fix of #2439 and #2440 (#2446, merged 2026-11-13); the filter and the fixes ship in that release, with #2447's fix of #2437 (merged 2026-11-13); on 2026-11-13 the maintainer held it once more, for the fix of #2450's trigger (#2457, merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -26,8 +26,9 @@ after the 2026-10 Apple-client rearchitecture:
 - [`post-wave-3/feed-bulk-actions.md`](./post-wave-3/feed-bulk-actions.md)
   runs Phase 3.
 - [`post-wave-3/android-parity.md`](./post-wave-3/android-parity.md)
-  runs the Android legs if each one follows its Apple leg (see
-  "Context").
+  runs the Android legs, each after its Apple leg: those of Phases 2,
+  4 and 5 by decision, and Phase 3's if `feed-bulk-actions.md`'s
+  decision 2 says so (see "Context").
 
 Where this document assumes the default answer to an open decision, it
 says so; "Open decisions" at the end lists them. The code facts below
@@ -81,11 +82,14 @@ that would mean building them twice.
 Apple and Android are the reference clients. The React admin app is
 second-class and receives none of this unless separately prioritised.
 The Linux client is out of scope. Phase 1 shipped on both clients at
-once. Whether later phases do, or Android follows a release behind each
-Apple phase through `android-parity.md`, is open (see "Open
-decisions"); both execution plans recommend the split. Server changes
-stay additive either way, so a client that has not caught up keeps
-working.
+once. For the phases `flags-and-cross-media.md` executes (2 and 4 to
+6), Android follows a release behind each Apple phase through
+`android-parity.md` (`flags-and-cross-media.md`'s decision 3, answered
+2026-11-09); Phase 6 is Apple's alone unless feed notification
+settings join it. For Phase 3, `feed-bulk-actions.md` asks whether
+Android comes with Apple or later (its decision 2), and that is not
+answered yet (see "Open decisions"). Server changes stay additive
+either way, so a client that has not caught up keeps working.
 
 ### What the rearchitecture changed underneath
 
@@ -117,8 +121,11 @@ moved most of the code this plan names. The facts a phase depends on:
 - Menu commands are window-scoped (`WindowCommand` through
   `FocusedValue`), and the Message, Mailbox and Feeds menus act on the
   window in front.
-- The chrome kit (`Shared/Chrome/`) is shared by both media, but has no
-  unread dot or flag mark yet; the unified flags plan adds them.
+- The chrome kit (`Shared/Chrome/`) is shared by both media. The
+  unified flags plan gave it the unread dot and the flag marks
+  (`UnreadDot`, `FlagDots`; #2375), and Phase 2 added the flag chips
+  and the rows of the flag menus both media draw (`FlagChips`,
+  `FlagMenuToggles`; #2420).
 - `RssStore` is at schema 7 with #2411 (schema 6 before it). From 1.50.0
   (#2404) `openRecovering` sets aside a file written by a newer schema;
   1.49.0 and earlier delete it.
@@ -381,8 +388,8 @@ Filtering either half by a custom flag needed one server change:
 `keyword` (#2400, in prod with 1.49.0), checked against the slot
 pattern and mapped to IMAP `KEYWORD`. The same parameter serves the
 per-flag filter on the mail list (Phase 2). That filter's Any flag row,
-decided on 2026-11-12, needed a second: `any_flag` (#2424), the system
-flag or any slot, as one IMAP `OR`.
+decided on 2026-11-12, needed a second: `any_flag` (#2424, in prod
+with 1.52.0), the system flag or any slot, as one IMAP `OR`.
 
 Rows in a mixed list need one identity for either medium: a two-case
 `ItemRef` in the Kit (`.mail(MessageRef)` and a feed case keyed by feed
@@ -455,7 +462,9 @@ The motivating feature. It follows the unified flags plan, which puts
 and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
-**Status:** Server in prod (2026-11-11). The unified flags plan
+**Status:** Server in prod (2026-11-11); Apple merged (2026-11-12),
+the per-flag filter waiting for its release; Android not started. The
+unified flags plan
 shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
 are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
@@ -467,9 +476,19 @@ Its gate cleared on 2026-11-11 with 1.50.0, and its downgrade drill ran
 on a simulator against stage; `flags-and-cross-media.md` has what was
 built and run. On Apple the rest of 2b is two PRs: #2420 (items 3, 4
 and 6: the menus, the rows and the toggle; merged 2026-11-12), and
-the per-flag filter (item 5), which is being built. Its shape was
-answered again on 2026-11-12, and its Any flag row needs a third server
-PR, #2424 (item 6 of 2a, in review), in prod before it merges.
+the per-flag filter (item 5), merged as #2425 (2026-11-12) and on
+`stage` for the release after 1.52.0, which the maintainer held for a
+fix of #2421; the fix merged as #2435 (2026-11-12) and is on `stage`
+with it. The maintainer held it for the fix of #2439 and #2440 too
+(#2446, merged 2026-11-13), and #2447's fix of #2437 merged the same
+day and rides that release. On 2026-11-13 the maintainer held it once
+more, for the fix of #2450's trigger (#2457, merged 2026-11-13 and
+checked on stage the same day), a fault on the mail tier older than
+these PRs and already in prod. The filter's shape was answered again on
+2026-11-12, and its Any flag row needed a third server PR in prod
+before it merged: #2424 (item 6 of 2a), merged on 2026-11-12, passed
+against the stage API, and in prod the same day with 1.52.0, the
+release that also carried #2420.
 Android has not started (`android-parity.md`, leg L2).
 `flags-and-cross-media.md` has the gates, the answers that settled the
 open points below (its decisions 4 and 11), and what was built.
@@ -524,7 +543,12 @@ open points below (its decisions 4 and 11), and what was built.
    device leaves in the queue. The drain drops those queued adds, takes
    the flags off their items again, and sends the rest, because such a
    call can never succeed and would hold every later change behind it
-   (decided 2026-11-11).
+   (decided 2026-11-11). On Apple, since #2435, the drain first asks
+   the app to send any settings change still unsent, because a flag
+   created while the settings push failed is refused the same way
+   (#2421): if the settings then go it sends the batch again, once;
+   if they cannot it leaves the adds queued; and it drops only when
+   the answer is that nothing is unsent (or nobody is there to ask).
 1. **Menus.** The mail flag menu's builder (`FlagMenuPolicy`) moves
    from `Mail/Reader/` to `Shared/` over a small "flaggable" value (the
    current slots, add, remove) and is mounted on the feed reader's Flag
@@ -556,7 +580,14 @@ open points below (its decisions 4 and 11), and what was built.
    than the built-in flag; a picked flag is the one criterion; Any flag
    is the built-in flag or any slot, which on mail is the server's
    `any_flag`; and the pick outlives opening an item, stores nothing,
-   and gives the lit pill the flag's name.
+   and gives the lit pill the flag's name. On Apple (#2425) the pill is
+   `FlagFilterPill`, its rules are `FlagFilterMenuPolicy`, a pick is the
+   Kit's `FlagCriterion`, and the window holds it for the folder or the
+   feed it was made in (`FlagPickHold`), so nothing is stored and the
+   filter enums gain no case. The built-in flag's row is the remembered
+   Flagged filter; a flag of the user's own and Any flag are the picks.
+   What else the builder settled is under `flags-and-cross-media.md`'s
+   decision 4, for Android's leg L2 to follow.
 1. **Swipe.** `FeedSwipeAction` gains no new case. The flag toggle
    follows the default flag (Decision 1), and custom flags stay a menu
    action on both media.
@@ -572,9 +603,11 @@ one adds slot 3 and the other adds slot 5 to the same item; after both
 sync the item carries both. Filter INBOX and a feed to "Read later" and
 each shows only the items carrying it.
 
-**Changelog:** one `Apple:` and one `Android:` fragment, and a plain
-fragment for the server PRs. The Android headline shares the
-500-character release budget.
+**Changelog:** on Apple, two `Apple:` fragments, one for each client
+PR (the first was collated into 1.52.0 before the second merged), and
+a plain one for the Kit (1.51.0). Each of the three server PRs has a
+plain fragment. Android's leg adds one `Android:` fragment, whose
+headline shares the 500-character release budget.
 
 ## Phase 3 -- Acting on feed items in bulk, and out of the reader
 
@@ -768,14 +801,18 @@ app; signing out removes the feed entries from Spotlight.
 
 These are the maintainer's, asked in the execution plans with a
 recommended default. This document is written to the defaults;
-answering otherwise changes the phase named.
+answering otherwise changes the phase named. A decision marked
+answered took its row's default, and one with no mark is open. The
+picker's shape is the exception: the second answer to
+`flags-and-cross-media.md`'s decision 4 set the default shape aside,
+and Phase 2 above was rewritten to it.
 
 | Decision | Phase | Default | Asked in |
 | --- | --- | --- | --- |
-| Do later phases ship on Android with Apple, or a release behind? | All | A release behind, through `android-parity.md` | flags-and-cross-media 3; feed-bulk-actions 2 |
-| Does the feed's Flag control follow the palette's Flagged entry? | 2 | Follows the palette | flags-and-cross-media 2 |
-| Per-flag filtering: both lists, sticky or per visit, or neither yet? | 2 | Both lists, per visit | flags-and-cross-media 4 |
-| Does feed schema 7 ship before the shared offline queue? | 2 | Before, after the set-aside fix | flags-and-cross-media 5 |
+| Do later phases ship on Android with Apple, or a release behind? | All | A release behind, through `android-parity.md` | flags-and-cross-media 3 (answered 2026-11-09); feed-bulk-actions 2 |
+| Does the feed's Flag control follow the palette's Flagged entry? | 2 | Follows the palette | flags-and-cross-media 2 (answered 2026-11-09) |
+| Per-flag filtering: both lists, sticky or per visit, or neither yet? | 2 | Both lists, per visit | flags-and-cross-media 4 (answered 2026-11-10; the picker's shape on 2026-11-12) |
+| Does feed schema 7 ship before the shared offline queue? | 2 | Before, after the set-aside fix | flags-and-cross-media 5 (answered 2026-11-10) |
 | How does Mark All as Read on a feed folder reach the server? | 3 | One queue row per feed, sent as one request | feed-bulk-actions 3 |
 | Where does Forward as Email go? | 3 | The reader's menus and the row menu | feed-bulk-actions 4 |
 | What does the forwarded mail contain? | 3 | The summary as plain text | feed-bulk-actions 5 |

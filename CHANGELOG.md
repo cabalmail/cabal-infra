@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.53.0] - 2026-11-13
+
+### Added
+- Apple: **Filter a list by any of your flags.** With a flag of your own
+  in Settings > Flags, a tap or a click on the Flagged pill above a
+  folder's messages or a feed's items now opens a menu: every flag, Any
+  flag, and Clear filter. Choosing a flag shows only what carries it, and
+  the pill takes that flag's name and count. Any flag shows everything
+  that is flagged, including what still carries a flag you deleted. A
+  flag of your own, or Any flag, lasts until you move to another folder
+  or feed, or quit the app, and the list then reopens as it was; the
+  built-in flag's row is remembered for the folder or feed, as the
+  Flagged pill always was, and Clear filter shows everything. With only
+  the built-in flag the pill is the toggle it was. When one of your own
+  flags, or Any flag, is on none of a folder's messages, its list now
+  says so.
+
+### Fixed
+- Apple: **A flag created offline is kept.** A change in Settings that
+  the app could not send, a new or deleted flag among them, is now sent
+  again when the connection returns, when the app comes back to the
+  front, and at the next launch, even if you quit the app first. Before,
+  it waited for your next change to a setting, and a relaunch could undo
+  it. A feed item given a new flag before the server had it lost the
+  flag again, with no message, once the connection returned; now the app
+  sends the new flag first and the item keeps it.
+- **No more sendmail restart on the IMAP tier for a settings change that
+  adds or deletes no flag.** Once an account had a flag list, nearly
+  every settings change made in an Apple or Android app (a theme, a mail
+  folder's Unread pill) carried that list, and `set_preferences` told the
+  IMAP tier to recompile the mail rules whether or not the list had
+  changed; a recompile ends by restarting sendmail. It now does so only
+  when a flag of the user's own is added or deleted, the one change to
+  the list the rule compiler reads (#2450).
+- Apple: **Flag names and signatures the server takes.** A flag's name
+  is cut where the server cuts it, which for emoji and some accented
+  letters is fewer than 32 characters, and the signature is cut at 2,000.
+  A flag's name can no longer be left empty: leaving its editor with the
+  name cleared gives the flag back the name it had when the editor
+  opened, or the newer one if the flag was reset or renamed on another
+  device in the meantime. A name or signature already stored that the
+  server would refuse is mended at the next launch, an empty name
+  becoming "New flag", or "Flagged" on the built-in flag. Before, the
+  server refused every change in Settings from a device holding one,
+  with no message.
+
 ## [1.52.0] - 2026-11-12
 
 ### Added
