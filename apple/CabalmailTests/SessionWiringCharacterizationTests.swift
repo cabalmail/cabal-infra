@@ -189,6 +189,33 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         XCTAssertEqual(trail, ["InitiateAuth USER_PASSWORD_AUTH", "API GET /prod/get_preferences"])
     }
 
+    /// A sign-in over a wired session (#1826) stops the replaced session's
+    /// settings sync before it activates the new account's settings (#2444,
+    /// item 3): asked afterwards, the old coordinator sends nothing, so a
+    /// push or pull of its can no longer land in, or clear the unsent mark
+    /// of, the settings that are active now.
+    func testASignInOverAWiredSessionStopsTheReplacedSettingsSync() async throws {
+        let preferences = Preferences(store: InMemoryPreferenceStore())
+        harness.appState.usePreferences(preferences)
+        await SignOutSuiteSteps.signIn(harness)
+        let replaced = try XCTUnwrap(harness.appState.prefsCoordinator)
+        try await waitUntilOnMainActor { preferences.onLocalChange != nil }
+
+        await SignOutSuiteSteps.signIn(harness, idToken: "ID-2")
+        XCTAssertFalse(harness.appState.prefsCoordinator === replaced)
+        // The new session's start has run its pull and taken the observer.
+        try await waitUntilOnMainActor { preferences.onLocalChange != nil }
+        preferences.hasUnsentChanges = true
+        let before = await harness.cognito.trail.count
+
+        let answer = await replaced.sendUnsentForFeedQueue()
+
+        XCTAssertEqual(answer, .nothingUnsent)
+        let after = await harness.cognito.trail.dropFirst(before)
+        XCTAssertFalse(after.contains { $0.hasSuffix("/set_preferences") }, "the replaced session sent nothing")
+        XCTAssertTrue(preferences.hasUnsentChanges)
+    }
+
     // MARK: - refreshWatchSession
 
     /// Each call pushes the tokens stored now (a silent refresh since the

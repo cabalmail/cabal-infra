@@ -128,7 +128,7 @@ struct FlagPaletteSettingsView: View {
         var palette = FlagPalette.effective(preferences.flagPalette)
         palette.append(FlagPaletteEntry(
             slot: slot,
-            label: "New flag",
+            label: FlagPalette.newFlagLabel,
             color: FlagPalette.colors.first ?? "gray"
         ))
         store(palette)
@@ -184,6 +184,13 @@ private struct FlagPaletteEntryEditor: View {
     let slot: String
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
+    /// Whether the user has emptied the name field, which the palette never
+    /// stores (`FlagPaletteEntryBindings.label`): the field shows it empty
+    /// while the flag keeps a name.
+    @State private var nameFieldEmpty = false
+    /// The name when the editor opened, given back if the field is left
+    /// empty.
+    @State private var openingName: String?
 
     /// Every read and write in this editor goes through the slot, never a
     /// captured index — see `FlagPaletteEntryBindings` (#1340).
@@ -203,7 +210,7 @@ private struct FlagPaletteEntryEditor: View {
     private func editor(_ entry: FlagPaletteEntry) -> some View {
         Form {
             Section {
-                TextField("Name", text: bindings.label)
+                TextField("Name", text: nameField)
                     .autocorrectionDisabled()
             }
             Section(formHeader: "Color") {
@@ -218,6 +225,26 @@ private struct FlagPaletteEntryEditor: View {
         .navigationTitle(entry.label)
         .groupedFormStyleOnMac()
         .inlineNavigationTitle()
+        .onAppear {
+            if openingName == nil { openingName = entry.label }
+        }
+        .onDisappear {
+            bindings.leaveEditor(nameFieldEmpty: nameFieldEmpty, openedWith: openingName ?? entry.label)
+            nameFieldEmpty = false
+        }
+    }
+
+    /// The name field: the flag's name, or empty once the user has emptied
+    /// it.
+    private var nameField: Binding<String> {
+        let label = bindings.label
+        return Binding(
+            get: { nameFieldEmpty ? "" : label.wrappedValue },
+            set: { newValue in
+                nameFieldEmpty = newValue.isEmpty
+                label.wrappedValue = newValue
+            }
+        )
     }
 
     private var resetSection: some View {

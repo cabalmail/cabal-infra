@@ -29,6 +29,14 @@ import CabalmailKit
 ///   (`RssSyncEngine.setUnsentSettingsPush`): a flag created while the push
 ///   was failing is in this device's palette and not yet the server's
 ///   (#2421). Each retry sends the settings as they are then.
+/// - **A refused push** (a 400: the server does not take a value in the
+///   map) is not sent again while the settings are still that map, since
+///   it would be refused again; the next settings change sends again, and
+///   so does the next session's start. It stays unsent meanwhile, and the
+///   pull stays held, so nothing the user changed is lost (#2439).
+/// - **An edit made while a push is out** is not in that push. When the
+///   push lands, the settings as they are then go in another, at once
+///   (#2440).
 /// - **Foreground** (`reconcile`): send a change still unsent, then re-fetch
 ///   and re-apply so a change made on another device mid-session lands. A
 ///   pull never lands over a change that has not reached the server.
@@ -40,6 +48,9 @@ public final class PreferencesSyncCoordinator {
     private var saveTask: Task<Void, Never>?
     /// The push in flight; whoever else asks for one waits on it.
     private var pushing: Task<Bool, Never>?
+    /// The map the server last refused, for this session only: no trigger
+    /// sends it again until the settings change.
+    private var refused: [String: String]?
     /// Follows the connection while the session runs (`observeConnection`).
     private var connectionTask: Task<Void, Never>?
     /// What `observeConnection` follows: a test's stream, or nil for the
@@ -144,36 +155,60 @@ public final class PreferencesSyncCoordinator {
         if let pushing { return await pushing.value }
         guard !stopped else { return false }
         guard hasUnsentChange else { return true }
+        guard preferences.appPreferencesPayload() != refused else { return false }
         // Main-actor work, like this method: the task clears itself before
         // anyone waiting on it resumes, so no caller joins a finished push.
         let task = Task {
-            let sent = await self.sendNow()
+            var outcome = await self.sendNow()
+            // An edit made while the push was out (its debounce may have
+            // ended then, and joined this push) goes in another, at once.
+            while outcome == .changedSince {
+                outcome = await self.sendNow()
+            }
             self.pushing = nil
-            return sent
+            return outcome == .sent
         }
         pushing = task
         return await task.value
     }
 
-    private func sendNow() async -> Bool {
+    /// How one request of a push went.
+    private enum PushOutcome {
+        /// The server took the settings, and they have not changed since.
+        case sent
+        /// The server took them, and they changed while the request was out.
+        case changedSince
+        /// The request did not reach the server, or the server failed.
+        case failed
+        /// The server refused the map (a 400).
+        case refused
+        /// The session ended first.
+        case stopped
+    }
+
+    private func sendNow() async -> PushOutcome {
+        // After `stop()` the settings may already be the next account's.
+        guard !stopped else { return .stopped }
         // The settings as they are now, not as they were at the edit: a
         // retry must not send back something changed since.
         let payload = preferences.appPreferencesPayload()
         do {
             try await client.saveAppPreferences(payload)
+        } catch CabalmailError.http(status: 400, let body) {
+            refused = payload
+            CabalmailLog.warn("PreferencesSync", "the server refused the settings; "
+                + "they go again once they change: " + body)
+            return .refused
         } catch {
             CabalmailLog.warn("PreferencesSync", "settings push failed; it goes again later: "
                 + error.localizedDescription)
-            return false
+            return .failed
         }
-        guard !stopped else { return false }
+        guard !stopped else { return .stopped }
         lastSynced = payload
-        // An edit made while this push was out is not in it, and its own
-        // push is already scheduled.
-        if preferences.appPreferencesPayload() == payload {
-            hasUnsentChange = false
-        }
-        return !hasUnsentChange
+        guard preferences.appPreferencesPayload() == payload else { return .changedSince }
+        hasUnsentChange = false
+        return .sent
     }
 
     /// Sends a change still unsent each time the connection comes back.
