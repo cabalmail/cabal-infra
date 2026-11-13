@@ -94,16 +94,18 @@ final class PreferencesSyncOnePushTests: PreferencesSyncTestCase {
     /// account's. Before, it took that map and sent it through the old
     /// session's client.
     func testAPushThatStartsAfterTheSessionEndedTakesNoSettings() async throws {
+        guard #available(macOS 26.0, iOS 26.0, *) else { throw XCTSkip("needs Task.immediate") }
         launchPreferences(username: "bob").theme = .light
         let preferences = launchPreferences()
         let sync = coordinator(preferences)
         await sync.start()
         preferences.flagPalette = [newFlag]
 
-        // `pushUnsent()` starts its push in a task of its own, which runs
-        // once this test's next await lets the main actor go.
-        let pushing = Task { await sync.pushUnsent() }
-        await Task.yield()
+        // `pushUnsent()` starts its push in a task of its own. Started
+        // immediately, the call runs up to that task before this test goes
+        // on, so the session ends between the two every time; a plain
+        // `Task` and a yield leave the order to the scheduler.
+        let pushing = Task.immediate { await sync.pushUnsent() }
         sync.stop()
         preferences.activate(controlDomain: "cabalmail.example", username: "bob")
         preferences.hasUnsentChanges = true
