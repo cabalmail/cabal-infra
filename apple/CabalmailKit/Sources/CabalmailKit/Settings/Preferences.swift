@@ -229,9 +229,20 @@ public final class Preferences {
         didSet { persist(.defaultFromAddress, defaultFromAddress) }
     }
     /// Plain-text signature appended to outgoing messages. Empty string
-    /// means no signature.
+    /// means no signature. Held to what the server takes
+    /// (`ServerTextRules.signature(_:)`), so a field bound to it is cut as
+    /// it is typed.
     public var signature: String {
-        didSet { persist(.signature, signature) }
+        didSet {
+            let accepted = ServerTextRules.signature(signature)
+            guard accepted == signature else {
+                // Runs this observer again (the property is tracked by
+                // `@Observable`), which persists the accepted value.
+                signature = accepted
+                return
+            }
+            persist(.signature, signature)
+        }
     }
     public var disposeAction: DisposeAction {
         didSet { persist(.disposeAction, disposeAction.rawValue) }
@@ -278,8 +289,16 @@ public final class Preferences {
             if !isReloading && !isApplyingRemote { rssMarkAsReadSyncable = true }
         }
     }
+    /// Every name held to what the server takes (`FlagPalette.accepted(_:)`),
+    /// a palette an older build stored included.
     public var flagPalette: [FlagPaletteEntry] {
         didSet {
+            let accepted = FlagPalette.accepted(flagPalette)
+            guard accepted == flagPalette else {
+                // Runs this observer again, as `signature`'s does.
+                flagPalette = accepted
+                return
+            }
             // A palette that has existed must keep syncing even once
             // emptied, or the deletion could never reach the server.
             if !flagPalette.isEmpty { flagPaletteSyncable = true }

@@ -2068,13 +2068,27 @@ mark, which by then may be another account's, and a sign-in over a
 wired session stops the old coordinator before it activates the new
 account's scope.
 
-That has known corners, each with its issue. The coordinator treats
-every failed push alike, so a settings map the server refuses with a
-400 (a flag's name left empty is one) is sent again at each trigger and
-holds the pull until the value is corrected (#2439). An edit whose
-debounce ends while an earlier push is still out only waits on that
-push, which does not carry it, and then stays unsent until another
-trigger (#2440). The mark is set through the edit observer, which
+Whoever asks for a push while one is out waits on it. When a push lands
+and the settings changed while it was out, the same push task sends
+again at once with the settings as they are then, so an edit whose
+debounce ended during the push (and joined it) is not left for another
+trigger (#2440); a failure, a refusal or the session's end stops it. A
+400 is a refusal, not a failure: `set_preferences` refuses the whole
+map when one value breaks its rules, and the same map would be refused
+again, so the coordinator keeps it for the session and no trigger sends
+it again until the settings change. The mark and the held pull stay, so
+nothing is lost, and the next session's start sends once more (#2439).
+The values a user types are held to those rules in the Kit
+(`ServerTextRules`): a flag's name and the signature drop control
+characters and are cut by code points, as the server's `len()` counts,
+at a character boundary. `Preferences` applies them on every write and
+at `reload()`, so a value an older build stored is mended at the next
+launch, a stored empty name becoming "New flag". The flag editor never
+stores an empty name: an emptied field writes nothing, and leaving the
+editor with it empty gives back the name it opened with.
+
+That has known corners, each with its issue. The mark is set through
+the edit observer, which
 `start` attaches after its first push and pull, so an edit made before
 the session's first pull returns is not marked, and a session wired
 from a compose window alone has no coordinator at all (#2441). The

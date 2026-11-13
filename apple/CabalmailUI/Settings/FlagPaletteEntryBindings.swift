@@ -66,18 +66,28 @@ struct FlagPaletteEntryBindings {
         FlagPalette.effective(preferences.flagPalette)
     }
 
-    /// Label writes are capped to the server's length limit as they are
-    /// typed. A momentarily empty label (mid-edit) stays local: the server
-    /// rejects it, the push silently retries on the next keystroke, and
-    /// nothing is lost — the same transient-invalid posture the reply-body
-    /// editor takes.
+    /// The name, written as it is typed; `Preferences` holds it to what
+    /// the server takes (`ServerTextRules.flagLabel(_:)`), so a long name
+    /// is cut at 32 code points. An empty name is not written: the server
+    /// refuses the whole settings map over one (#2439), so until the field
+    /// is filled again the flag keeps the last name it had, and
+    /// `leaveEditor(nameFieldEmpty:openedWith:)` settles it.
     var label: Binding<String> {
         Binding(
             get: { self.entry?.label ?? "" },
             set: { newValue in
-                self.write { $0.label = String(newValue.prefix(FlagPalette.maxLabelLength)) }
+                guard !newValue.isEmpty else { return }
+                self.write { $0.label = newValue }
             }
         )
+    }
+
+    /// On leaving the editor: a name field left empty gives the flag back
+    /// the name it had when the editor opened, not the last letters it held
+    /// on the way to empty.
+    func leaveEditor(nameFieldEmpty: Bool, openedWith opening: String) {
+        guard nameFieldEmpty else { return }
+        label.wrappedValue = opening
     }
 
     /// A one-shot write on one field, for a control that acts rather than
