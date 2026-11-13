@@ -377,6 +377,10 @@ extension SessionManager {
         if let standby = takeStandby(), standby !== newClient { letGo(of: standby) }
         owner.clientInstalled(newClient)
         self.navCoordinator = sessionEnvironment.makeNavCoordinator(newClient)
+        // The session this one replaces (#1826) stops syncing first: a pull
+        // or push of its still in flight must not land in, or clear the
+        // unsent mark of, the scope activated below.
+        prefsCoordinator?.stop()
         if let preferences {
             // Swap the local settings cache to this account's scoped keys
             // before the server pull below: the previous account's values
@@ -386,9 +390,11 @@ extension SessionManager {
             preferences.activate(controlDomain: controlDomain, username: username)
             let coordinator = PreferencesSyncCoordinator(client: newClient, preferences: preferences)
             self.prefsCoordinator = coordinator
-            // Non-blocking: the initial server pull (server wins on login)
+            // Non-blocking: the initial server pull (server wins on login,
+            // once a change an earlier session could not send has gone)
             // shouldn't hold up the UI flipping to signed-in; the applied
-            // values land a moment later.
+            // values land a moment later. The feed queue's question about
+            // unsent settings is answered from here on (the init).
             Task { await coordinator.start() }
         }
         observeSessionInvalidation()

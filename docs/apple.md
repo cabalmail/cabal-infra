@@ -1798,13 +1798,21 @@ a second copy.
   and stepped past them, and a flag another device set before this one
   was upgraded would otherwise never arrive.
 - The server refuses a whole `/rss_set_item_state` call that adds a flag
-  the palette does not enable, which is what a flag disabled or deleted
-  on another device leaves in the queue. It names the slots, the API
-  client throws them as `RssFlagRefusal`, and `RssPendingDrain` drops
-  those queued adds, takes the flags off their items again in the same
-  transaction, and sends the rest of the batch, because the refusal
-  would otherwise hold every later change. Any other failure leaves the
-  queue as it was.
+  its palette does not hold, which is what a flag deleted on another
+  device leaves in the queue. It names the slots, and the API client
+  throws them as `RssFlagRefusal`. A flag created on this device while
+  the settings push was failing is refused the same way, because the
+  server has not been told of it yet (#2421), so before it drops
+  anything `RssPendingDrain` asks the app, through the hook
+  `RssSyncEngine.setUnsentSettingsPush` that `PreferencesSyncCoordinator`
+  installs, to send any settings change still waiting
+  (`RssUnsentSettings`). Sent: the batch goes again once, and a refusal
+  after that is final. Still unsent: the refused adds stay queued, on
+  their items, and the rest of the batch goes now. Nothing waiting (or
+  no hook): the drain drops those queued adds, takes the flags off their
+  items again in the same transaction, and sends the rest of the batch,
+  because the refusal would otherwise hold every later change. It asks
+  once a batch. Any other failure leaves the queue as it was.
 - A feed store that cannot be opened is set aside, not deleted. The file
   holds a cache of server state and also the queue of read and flag marks
   not yet sent, which nothing can refetch. `RssStore.openRecovering`
@@ -2036,6 +2044,28 @@ account instead: `PreferencesSyncCoordinator` stores the settings per
 Cognito user on the server (`/get_preferences` / `/set_preferences`),
 pulls with server-wins semantics on login and foreground, and pushes
 debounced local edits.
+
+A push that fails is not dropped (#2421). From a local edit until a
+push succeeds, `Preferences.hasUnsentChanges` is set: a scoped key in
+the same local store, never in the `app` map, so it survives a relaunch
+and belongs to one account. While it is set the coordinator sends the
+settings as they are then, one push at a time: when the connection
+comes back (an offline-to-online change of `Reachability`, not its
+first value), on return to the foreground (`reconcile` pushes before
+it pulls), at the next session's `start` (pushes before the first pull,
+and skips that pull if the push fails), and when the feed queue asks
+before it drops a refused flag add (see the feed store's refused-add
+bullet). No pull is applied over an unsent change, so on a launch that
+sends one, this device's values win over changes made elsewhere since,
+as any late push's do. One exception (#2437): the five keys that ride
+only once "syncable" (`flag_palette`, `rss_mark_as_read`, the all-feeds
+filter and order, the swipe bindings) start each launch not syncable,
+so a change that put one back to its default, such as deleting the last
+flag of the user's own, is left out of the launch's push, and the pull
+after it puts the server's value back. A push still out when its session ends answers
+into nothing: it neither applies nor clears the mark, which by then may
+be another account's, and a sign-in over a wired session stops the old
+coordinator before it activates the new account's scope.
 
 A single `@Observable` class is used in preference to `@AppStorage`
 property wrappers because multiple views (compose, message detail,
