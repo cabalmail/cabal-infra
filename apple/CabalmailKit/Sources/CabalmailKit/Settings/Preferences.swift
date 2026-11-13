@@ -351,11 +351,14 @@ public final class Preferences {
     private var isApplyingRemote = false
     /// True once the `flag_palette` key has any reason to ride the payload:
     /// a server pull carried it (proof the server build understands it) or
-    /// a palette existed locally at some point this session (a user act
-    /// that must sync, including a subsequent deletion). While false the
-    /// payload omits the key entirely: `set_preferences` rejects the whole
-    /// map on any unknown key, so an eager send against a not-yet-upgraded
-    /// server would break every preference push from this build.
+    /// a palette existed locally (a user act that must sync, including a
+    /// subsequent deletion). While false the payload omits the key
+    /// entirely: `set_preferences` rejects the whole map on any unknown key,
+    /// so an eager send against a not-yet-upgraded server would break every
+    /// preference push from this build. It and the four gates below are
+    /// also set at `reload()` when the account's store holds a value for
+    /// the key (`restoreSyncableGates()`), so a launch knows what the last
+    /// session knew.
     private var flagPaletteSyncable = false
     /// Same gate for `rss_mark_as_read`: a server predating the key 400s the
     /// whole map, so the key rides only once the server has shown it knows
@@ -494,6 +497,7 @@ public final class Preferences {
         swipeTrailing = readEnum(.swipeTrailing, default: .dispose)
         rssSwipeLeading = readEnum(.rssSwipeLeading, default: .toggleRead)
         rssSwipeTrailing = readEnum(.rssSwipeTrailing, default: .toggleFavorite)
+        restoreSyncableGates()
     }
 
     /// `persist` for a swipe binding: a genuine user edit also makes the
@@ -555,6 +559,24 @@ public final class Preferences {
 // A same-file extension so the class body stays under SwiftLint's
 // `type_body_length` cap; `private` members stay reachable from here.
 extension Preferences {
+    /// Sets each syncable gate whose key the account's store holds a value
+    /// for (#2437). Only a user edit and a pull ever store these keys, the
+    /// same two things that set a gate in a session, so a stored value
+    /// means the key rode, or could have, before this launch. Without this,
+    /// a change the last session could not send that put a gated setting
+    /// back to its default (deleting the last flag of the user's own) was
+    /// left out of the launch's push, and the pull after it put the
+    /// server's value back. A gate set in memory stays set.
+    private func restoreSyncableGates() {
+        func stored(_ key: Key) -> Bool { readString(key) != nil }
+        if stored(.flagPalette) { flagPaletteSyncable = true }
+        if stored(.rssMarkAsRead) { rssMarkAsReadSyncable = true }
+        if stored(.rssAllFeedsFilter) { rssAllFeedsFilterSyncable = true }
+        if stored(.rssAllFeedsOrdering) { rssAllFeedsOrderingSyncable = true }
+        let swipeKeys: [Key] = [.swipeLeading, .swipeTrailing, .rssSwipeLeading, .rssSwipeTrailing]
+        if swipeKeys.contains(where: stored) { swipeBindingsSyncable = true }
+    }
+
     /// Wire keys for the server-synced `app` map (the `set_preferences` Lambda
     /// validates against these exact names). Distinct from `Key`, whose dotted
     /// raw values are the local UserDefaults keys; these short snake_case
