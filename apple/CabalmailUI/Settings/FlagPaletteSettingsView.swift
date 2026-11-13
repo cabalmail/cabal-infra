@@ -184,13 +184,16 @@ private struct FlagPaletteEntryEditor: View {
     let slot: String
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
-    /// Whether the user has emptied the name field, which the palette never
-    /// stores (`FlagPaletteEntryBindings.label`): the field shows it empty
-    /// while the flag keeps a name.
-    @State private var nameFieldEmpty = false
-    /// The name when the editor opened, given back if the field is left
-    /// empty.
-    @State private var openingName: String?
+    /// The name field's own state: whether the user has emptied it, and
+    /// the name to give back if the editor is left that way. Reset to
+    /// Default goes through it as well, so the field follows the reset.
+    @State private var name: FlagNameField
+
+    init(preferences: Preferences, slot: String) {
+        self.preferences = preferences
+        self.slot = slot
+        _name = State(initialValue: FlagNameField(preferences: preferences, slot: slot))
+    }
 
     /// Every read and write in this editor goes through the slot, never a
     /// captured index — see `FlagPaletteEntryBindings` (#1340).
@@ -225,32 +228,24 @@ private struct FlagPaletteEntryEditor: View {
         .navigationTitle(entry.label)
         .groupedFormStyleOnMac()
         .inlineNavigationTitle()
-        .onAppear {
-            if openingName == nil { openingName = entry.label }
-        }
         .onDisappear {
-            bindings.leaveEditor(nameFieldEmpty: nameFieldEmpty, openedWith: openingName ?? entry.label)
-            nameFieldEmpty = false
+            name.leave()
         }
     }
 
     /// The name field: the flag's name, or empty once the user has emptied
-    /// it.
+    /// it (`FlagNameField.text`).
     private var nameField: Binding<String> {
-        let label = bindings.label
-        return Binding(
-            get: { nameFieldEmpty ? "" : label.wrappedValue },
-            set: { newValue in
-                nameFieldEmpty = newValue.isEmpty
-                label.wrappedValue = newValue
-            }
+        Binding(
+            get: { name.text },
+            set: { name.text = $0 }
         )
     }
 
     private var resetSection: some View {
         Section {
             Button("Reset to Default") {
-                bindings.reset()
+                name.resetToDefault()
             }
             .disabled(!bindings.canReset)
             .accessibilityIdentifier("flag.resetToDefault")

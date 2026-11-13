@@ -66,17 +66,27 @@ struct FlagPaletteEntryBindings {
         FlagPalette.effective(preferences.flagPalette)
     }
 
+    /// Whether `text` is a name the palette stores: one the server's rules
+    /// (`ServerTextRules.flagLabel(_:)`) leave something of. Empty text is
+    /// not, and neither is text they reduce to nothing: control characters
+    /// alone, or a single character of more code points than a name may
+    /// have.
+    nonisolated static func isName(_ text: String) -> Bool {
+        !ServerTextRules.flagLabel(text).isEmpty
+    }
+
     /// The name, written as it is typed; `Preferences` holds it to what
     /// the server takes (`ServerTextRules.flagLabel(_:)`), so a long name
-    /// is cut at 32 code points. An empty name is not written: the server
-    /// refuses the whole settings map over one (#2439), so until the field
-    /// is filled again the flag keeps the last name it had, and
-    /// `leaveEditor(nameFieldEmpty:openedWith:)` settles it.
+    /// is cut at 32 code points. Text that is not a name (`isName(_:)`) is
+    /// not written: the server refuses the whole settings map over an
+    /// empty name (#2439), so until the field holds a name again the flag
+    /// keeps the last one it had, and the editor's `FlagNameField` settles
+    /// it on leaving.
     var label: Binding<String> {
         Binding(
             get: { self.entry?.label ?? "" },
             set: { newValue in
-                guard !newValue.isEmpty else { return }
+                guard Self.isName(newValue) else { return }
                 self.write { $0.label = newValue }
             }
         )
@@ -84,7 +94,7 @@ struct FlagPaletteEntryBindings {
 
     /// On leaving the editor: a name field left empty gives the flag back
     /// the name it had when the editor opened, not the last letters it held
-    /// on the way to empty.
+    /// on the way to empty. `FlagNameField.leave()` decides both arguments.
     func leaveEditor(nameFieldEmpty: Bool, openedWith opening: String) {
         guard nameFieldEmpty else { return }
         label.wrappedValue = opening
