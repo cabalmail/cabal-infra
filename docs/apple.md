@@ -2096,7 +2096,19 @@ the session's first pull returns is not marked, and a session wired
 from a compose window alone has no coordinator at all (#2441). The
 pull that follows a push reads the server's row without a consistent
 read, so it can return the map as it was before the push and put the
-older values back (#2442).
+older values back (#2442). The flag editor's own state does not follow
+a Reset to Default or a pull, so leaving it with the name field empty
+writes the opening name over either (#2448). While a push is out,
+typing in the signature or a flag's name sends requests back to back
+(#2449). An edit that joined a push which is then refused or fails
+waits for another trigger; a change that was refused or failed and is
+then put back to the last synced settings schedules nothing and leaves
+the mark set, so the next trigger sends the unchanged map; and a
+Default From address over 100 characters is a value the server refuses
+and the Kit's rules do not cover (#2451). When a session's first pull
+fails, the first settings change sends this device's values over the
+account's, and a gate one account opened stays open for the next
+account signed in during the same run (#2452).
 
 A single `@Observable` class is used in preference to `@AppStorage`
 property wrappers because multiple views (compose, message detail,
