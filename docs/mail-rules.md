@@ -233,8 +233,10 @@ Work down this list:
   there.
 - **Compiled form**: `/etc/procmail-user/<user>.rc` inside the imap
   container, regenerated atomically by
-  `/usr/local/bin/compile-user-rules.py` on every reconfigure (SNS
-  fan-out from `set_rules`, plus the 15-minute fallback). Every local
+  `/usr/local/bin/compile-user-rules.py` on every reconfigure (an SNS
+  message from `set_rules`, from `set_preferences` when a custom flag
+  is added or deleted, or from any address change, plus the 15-minute
+  fallback). Every local
   user gets a file; no rules means an empty file. Procmail includes it
   from the user's `~/.procmailrc` after the system recipes and before
   default delivery.

@@ -7,11 +7,15 @@ ddb = boto3.resource('dynamodb')
 sns = boto3.client('sns')
 TABLE_NAME = os.environ.get('USER_PREFERENCES_TABLE_NAME', 'cabal-user-preferences')
 table = ddb.Table(TABLE_NAME)
-# The user-rules reconfigure topic. A flag-palette edit changes what the
-# rule compiler may emit (a deleted or disabled slot must start skipping
-# its rules; rules-composition plan, decision 6), so palette writes nudge
-# the imap tier the same way set_rules does instead of waiting out the
-# ~15-minute fallback recompile. Best-effort, like set_rules' publish.
+# The user-rules reconfigure topic. A flag-palette edit that adds or
+# deletes a keyword slot changes what the rule compiler may emit (a deleted
+# slot must start skipping its rules; rules-composition plan, decision 6),
+# so such a write nudges the imap tier the same way set_rules does instead
+# of waiting out the ~15-minute fallback recompile. Best-effort, like
+# set_rules' publish. A write that leaves the slots as they were publishes
+# nothing: see _keyword_slots. So a publish that is lost is not made up by
+# the next save of the same list; it waits for the tier's next regenerate
+# from any cause, the fallback at the latest.
 RULES_TOPIC_ARN = os.environ.get('USER_RULES_TOPIC_ARN', '')
 
 ALLOWED = {
@@ -110,6 +114,9 @@ MAX_FLAG_LABEL_LENGTH = 32
 FLAG_PALETTE_SYSTEM_SLOT = '\\Flagged'
 FLAG_PALETTE_SLOTS = ({f'cabal-flag-{i:02d}' for i in range(1, 21)}
                       | {FLAG_PALETTE_SYSTEM_SLOT})
+# The slots the rule compiler reads out of a palette: the keyword slots
+# only. A rule reaches the system flag without the palette.
+FLAG_PALETTE_KEYWORD_SLOTS = FLAG_PALETTE_SLOTS - {FLAG_PALETTE_SYSTEM_SLOT}
 # 20 keyword slots plus the system flag.
 MAX_FLAG_PALETTE_ENTRIES = 21
 FLAG_PALETTE_COLORS = {
@@ -191,6 +198,41 @@ def _validate_flag_palette(value):
             return None
     # Canonical compact form: deterministic storage, order-preserving.
     return json.dumps(entries, separators=(',', ':'), sort_keys=True)
+
+
+def _keyword_slots(raw):
+    '''The keyword slot ids in one palette JSON string, as a frozenset.
+
+    This is all the imap tier takes from a palette (`slots_in_palette` in
+    docker/shared/compile-user-rules.py): not names, colors or order, and
+    not the system flag's entry. The clients send the whole `app` map with
+    every settings change, the palette in it, and a message on the rules
+    topic makes the imap tier regenerate and restart sendmail, so the
+    handler publishes only when this set changes (#2450). Anything
+    unparseable, a missing value included, reads as no slots, as it does
+    for the compiler.
+    '''
+    try:
+        entries = json.loads(raw)
+    except (TypeError, ValueError):
+        return frozenset()
+    if not isinstance(entries, list):
+        return frozenset()
+    return frozenset(
+        entry['slot'] for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get('slot'), str)
+        and entry['slot'] in FLAG_PALETTE_KEYWORD_SLOTS)
+
+
+def _stored_palette(written):
+    '''The palette string the row held before the write, from an
+    update_item response asked for `ALL_OLD` (the item as it was); None
+    when the row had none. Tolerant of any other shape: the write is
+    already committed, so nothing here may fail the request.'''
+    try:
+        return written['Attributes']['app']['flag_palette']
+    except (KeyError, TypeError):
+        return None
 
 
 # pylint: disable-next=too-many-return-statements,too-many-branches
@@ -341,6 +383,8 @@ def handler(event, _context):
     # here would let one stale device silently wipe every newer setting.
     app = updates.pop('app', None)
     sets, names, values = _build_expression(updates, app)
+    saves_palette = bool(app) and 'flag_palette' in app
+    written = None
     try:
         if app:
             _ensure_app_map(user)
@@ -348,11 +392,17 @@ def handler(event, _context):
         # old wholesale replace would have wiped the map here; there is no
         # legitimate caller for that.)
         if sets:
-            table.update_item(
+            written = table.update_item(
                 Key={'user': user},
                 UpdateExpression='SET ' + ', '.join(sets),
                 ExpressionAttributeNames=names,
                 ExpressionAttributeValues=values,
+                # A palette write also asks for the row as it was, in the
+                # same request, to tell below whether the slots changed.
+                # ALL_OLD and not UPDATED_OLD: DynamoDB documents the
+                # first for any update and does not say what the second
+                # returns for a member of a map. It costs no read.
+                ReturnValues='ALL_OLD' if saves_palette else 'NONE',
             )
     except Exception as err:  # pylint: disable=broad-exception-caught
         return {
@@ -361,7 +411,9 @@ def handler(event, _context):
         }
     if app is not None:
         updates['app'] = app
-        if 'flag_palette' in app and RULES_TOPIC_ARN:
+        if (saves_palette and RULES_TOPIC_ARN
+                and _keyword_slots(app['flag_palette'])
+                != _keyword_slots(_stored_palette(written))):
             try:
                 sns.publish(TopicArn=RULES_TOPIC_ARN,
                             Message=json.dumps({'user': user,

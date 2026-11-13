@@ -1,7 +1,8 @@
 '''Unit tests for set_preferences' `app` map validation: the enum keys, the
 sticky filter-pill keys (`filter:mail:<folder>`, `filter:feeds:all`), the
 flag palette, and the unknown-key rejection that keeps a client typo from
-persisting silently.
+persisting silently. Also when a palette write publishes to the rules
+topic: only when its keyword slots change (#2450).
 
 No pytest harness in this repo; run under the stdlib:
 
@@ -20,23 +21,52 @@ _API = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 
 class _FakeTable:
-    '''Records update_item calls; the handler never reads the row back.'''
+    '''Records update_item calls and keeps the one row's `app` map, so a
+    write that asks for `ALL_OLD` is answered as DynamoDB answers it: with
+    the row as it was before that write.'''
 
     def __init__(self):
         self.updates = []
+        self.app = {}
+        self.failing = False
 
     def update_item(self, **kwargs):
+        if self.failing:
+            raise RuntimeError('DynamoDB is down')
         self.updates.append(kwargs)
+        names = kwargs.get('ExpressionAttributeNames', {})
+        values = kwargs.get('ExpressionAttributeValues', {})
+        before = {'user': kwargs['Key']['user'], 'app': dict(self.app)}
+        # The nested SETs are `#app.#aN = :aN`; the flat ones are not kept.
+        for alias, key in names.items():
+            if alias.startswith('#a') and alias != '#app':
+                self.app[key] = values[':' + alias[1:]]
+        if kwargs.get('ReturnValues') == 'ALL_OLD':
+            return {'Attributes': before}
         return {}
 
 
+class _FakeSns:
+    '''Records publishes; `failing` makes the next ones raise.'''
+
+    def __init__(self):
+        self.published = []
+        self.failing = False
+
+    def publish(self, **kwargs):
+        if self.failing:
+            raise RuntimeError('SNS is down')
+        self.published.append(kwargs)
+
+
 TABLE = _FakeTable()
+SNS = _FakeSns()
 
 
 def _install_fake_boto3():
     boto3 = types.ModuleType('boto3')
     boto3.resource = lambda *_a, **_k: types.SimpleNamespace(Table=lambda _name: TABLE)
-    boto3.client = lambda *_a, **_k: types.SimpleNamespace(publish=lambda **_k: None)
+    boto3.client = lambda *_a, **_k: SNS
     sys.modules['boto3'] = boto3
 
 
@@ -52,12 +82,18 @@ def _load_handler():
 MOD = _load_handler()
 
 
-def call(app):
-    '''Posts an `app` map for user alice; returns (status, decoded body).'''
+def call_body(body):
+    '''Posts a whole request body for user alice; returns (status, decoded
+    body). The Android app sends flat keys beside the `app` map.'''
     event = {'requestContext': {'authorizer': {'claims': {'cognito:username': 'alice'}}},
-             'body': json.dumps({'app': app})}
+             'body': json.dumps(body)}
     response = MOD.handler(event, None)
     return response['statusCode'], json.loads(response['body'])
+
+
+def call(app):
+    '''Posts an `app` map for user alice; returns (status, decoded body).'''
+    return call_body({'app': app})
 
 
 class AppMap(unittest.TestCase):
@@ -230,6 +266,206 @@ class FlagPalette(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(stored), sent)
         self.assertEqual(save_palette([])[1], '[]')
+
+
+class PalettePublish(unittest.TestCase):
+    '''A palette write publishes to the rules topic only when its keyword
+    slots change. The imap tier answers every message on that topic with a
+    regenerate that restarts sendmail, and the clients send the palette
+    with every settings change, so a publish for an unchanged list was a
+    restart for nothing (#2450). The rule compiler reads the slot ids and
+    nothing else (`slots_in_palette` in docker/shared/compile-user-rules.py).'''
+
+    TOPIC = 'arn:aws:sns:us-east-1:000000000000:user-rules'
+
+    def setUp(self):
+        TABLE.updates.clear()
+        TABLE.app.clear()
+        TABLE.failing = False
+        SNS.published.clear()
+        SNS.failing = False
+        self.topic_before = MOD.RULES_TOPIC_ARN
+        MOD.RULES_TOPIC_ARN = self.TOPIC
+
+    def tearDown(self):
+        MOD.RULES_TOPIC_ARN = self.topic_before
+        TABLE.app.clear()
+        TABLE.failing = False
+        SNS.failing = False
+
+    def published(self):
+        '''How many messages went out since the last call.'''
+        count = len(SNS.published)
+        SNS.published.clear()
+        return count
+
+    def test_the_first_flag_of_the_users_own_publishes(self):
+        self.assertEqual(save_palette([entry('cabal-flag-01', 'Later', 'teal')])[0], 200)
+        self.assertEqual(
+            SNS.published,
+            [{'TopicArn': self.TOPIC,
+              'Message': json.dumps({'user': 'alice', 'palette': True})}])
+
+    def test_the_same_palette_sent_again_publishes_nothing(self):
+        # What every settings change sends: the whole map, the list in it.
+        palette = [entry('\\Flagged', 'Urgent', 'red'), entry('cabal-flag-01'),
+                   entry('cabal-flag-02')]
+        save_palette(palette)
+        self.assertEqual(self.published(), 1)
+        for _ in range(3):
+            status, _ = call({'theme': 'dark', 'flag_palette': json.dumps(palette),
+                              'filter:mail:INBOX': 'unread'})
+            self.assertEqual(status, 200)
+        self.assertEqual(self.published(), 0)
+        # The same many-key map with one more flag in it is a change.
+        call({'theme': 'dark', 'filter:mail:INBOX': 'unread',
+              'flag_palette': json.dumps(palette + [entry('cabal-flag-03')])})
+        self.assertEqual(self.published(), 1)
+
+    def test_flat_keys_beside_the_map_change_nothing(self):
+        # The Android app's request: name, accent and density beside `app`.
+        def push(palette):
+            return call_body({'accent': 'ink', 'density': 'normal', 'name': 'A',
+                              'app': {'theme': 'dark',
+                                      'flag_palette': json.dumps(palette)}})[0]
+        self.assertEqual(push([entry('cabal-flag-01')]), 200)
+        self.assertEqual(self.published(), 1)
+        for _ in range(3):
+            self.assertEqual(push([entry('cabal-flag-01')]), 200)
+        self.assertEqual(self.published(), 0)
+        self.assertEqual(TABLE.updates[-1]['ReturnValues'], 'ALL_OLD')
+        self.assertEqual(push([entry('cabal-flag-01'), entry('cabal-flag-02')]), 200)
+        self.assertEqual(self.published(), 1)
+
+    def test_a_rename_a_recolor_and_a_reorder_publish_nothing(self):
+        save_palette([entry('cabal-flag-01', 'Later', 'teal'), entry('cabal-flag-02')])
+        self.published()
+        save_palette([entry('cabal-flag-01', 'Soon', 'teal'), entry('cabal-flag-02')])
+        save_palette([entry('cabal-flag-01', 'Soon', 'pink'), entry('cabal-flag-02')])
+        save_palette([entry('cabal-flag-02'), entry('cabal-flag-01', 'Soon', 'pink')])
+        save_palette([entry('cabal-flag-02', enabled=False),
+                      entry('cabal-flag-01', 'Soon', 'pink')])
+        self.assertEqual(self.published(), 0)
+
+    def test_adding_and_deleting_a_flag_each_publish(self):
+        save_palette([entry('cabal-flag-01')])
+        self.published()
+        save_palette([entry('cabal-flag-01'), entry('cabal-flag-02')])
+        self.assertEqual(self.published(), 1)
+        save_palette([entry('cabal-flag-02')])
+        self.assertEqual(self.published(), 1)
+        # One flag deleted and another made in one write: as many slots,
+        # not the same ones.
+        save_palette([entry('cabal-flag-03')])
+        self.assertEqual(self.published(), 1)
+
+    def test_deleting_the_last_flag_publishes(self):
+        save_palette([entry('cabal-flag-07')])
+        self.published()
+        save_palette([])
+        self.assertEqual(self.published(), 1)
+        # And an empty list over an empty one does not.
+        save_palette([])
+        self.assertEqual(self.published(), 0)
+
+    def test_the_system_flags_entry_is_not_a_slot_the_rules_read(self):
+        # Never stored, stored renamed, renamed again, reset: no keyword
+        # slot came or went.
+        save_palette([])
+        save_palette([entry('\\Flagged', 'Urgent', 'red')])
+        save_palette([entry('\\Flagged', 'Today', 'orange')])
+        save_palette([])
+        self.assertEqual(self.published(), 0)
+        # Beside a flag of the user's own it changes nothing either.
+        save_palette([entry('cabal-flag-01')])
+        self.assertEqual(self.published(), 1)
+        save_palette([entry('\\Flagged', 'Urgent', 'red'), entry('cabal-flag-01')])
+        self.assertEqual(self.published(), 0)
+
+    def test_a_map_without_the_palette_publishes_nothing_and_asks_for_nothing(self):
+        save_palette([entry('cabal-flag-01')])
+        self.published()
+        self.assertEqual(call({'theme': 'dark'})[0], 200)
+        self.assertEqual(self.published(), 0)
+        self.assertEqual(TABLE.updates[-1]['ReturnValues'], 'NONE')
+        # The list is still what it was: the next write of it is no change.
+        save_palette([entry('cabal-flag-01')])
+        self.assertEqual(self.published(), 0)
+
+    def test_the_old_list_comes_back_from_the_write_itself(self):
+        # No read before the write: one request, so two devices saving at
+        # once cannot both miss a change.
+        save_palette([entry('cabal-flag-01')])
+        self.assertEqual(len(TABLE.updates), 2)  # the map's creation, the write
+        self.assertEqual(TABLE.updates[1]['ReturnValues'], 'ALL_OLD')
+
+    def test_a_stored_value_that_is_not_a_palette_reads_as_no_slots(self):
+        for stored in ('not json', '{"slot":"cabal-flag-01"}', '[["cabal-flag-01"]]',
+                       '[{"slot":["cabal-flag-01"]}]', '[{"slot":"cabal-flag-21"}]',
+                       '7', 'null', 'true', 7):
+            TABLE.app['flag_palette'] = stored
+            save_palette([])
+            self.assertEqual(self.published(), 0, stored)
+            TABLE.app['flag_palette'] = stored
+            save_palette([entry('cabal-flag-01')])
+            self.assertEqual(self.published(), 1, stored)
+
+    def test_a_response_of_another_shape_is_taken_as_no_old_list(self):
+        for answer in (None, {}, {'Attributes': None}, {'Attributes': {'app': 'x'}},
+                       {'Attributes': {'app': {}}}):
+            self.assertIsNone(MOD._stored_palette(answer))  # pylint: disable=protected-access
+        self.assertEqual(
+            MOD._stored_palette(  # pylint: disable=protected-access
+                {'Attributes': {'app': {'flag_palette': '[]', 'theme': 'dark'}}}),
+            '[]')
+
+    def test_a_failed_publish_does_not_fail_the_save(self):
+        SNS.failing = True
+        status, stored = save_palette([entry('cabal-flag-01')])
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(stored), [entry('cabal-flag-01')])
+
+    def test_without_a_topic_nothing_is_published(self):
+        MOD.RULES_TOPIC_ARN = ''
+        self.assertEqual(save_palette([entry('cabal-flag-01')])[0], 200)
+        self.assertEqual(self.published(), 0)
+
+    def test_a_failed_write_publishes_nothing(self):
+        TABLE.failing = True
+        status, _ = save_palette([entry('cabal-flag-01')])
+        self.assertEqual(status, 500)
+        self.assertEqual(self.published(), 0)
+
+    def test_the_slots_are_the_ones_the_rule_compiler_reads(self):
+        # The handler skips a publish only because the imap tier's compiler
+        # takes nothing but these slot ids from a palette. The two are
+        # separate copies in separate deploys (the Lambda zip, the imap
+        # image); this fails if either moves without the other.
+        compiler_path = os.path.join(_API, '..', '..', 'docker', 'shared',
+                                     'compile-user-rules.py')
+        spec = importlib.util.spec_from_file_location('compile_user_rules', compiler_path)
+        compiler = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(compiler)
+        palettes = [
+            [],
+            [entry('\\Flagged', 'Urgent', 'red')],
+            [entry('cabal-flag-01')],
+            [entry('cabal-flag-01', 'Soon', 'pink', enabled=False)],
+            [entry('\\Flagged'), entry('cabal-flag-20'), entry('cabal-flag-07')],
+            [entry(slot) for slot in ['\\Flagged'] + KEYWORD_SLOTS],
+            # Shapes the validator refuses, which only a row written some
+            # other way could hold.
+            [entry('cabal-flag-00'), entry('cabal-flag-21'), entry('urgent')],
+            [entry('cabal-flag-02'), entry('cabal-flag-02')],
+            [{'slot': 7}, {'slot': ['cabal-flag-01']}, 'cabal-flag-01', None],
+        ]
+        raws = [json.dumps(palette) for palette in palettes]
+        raws += ['', 'not json', '7', 'null', '{"slot":"cabal-flag-01"}', None]
+        for raw in raws:
+            self.assertEqual(MOD._keyword_slots(raw),  # pylint: disable=protected-access
+                             compiler.slots_in_palette(raw), raw)
+        self.assertEqual(MOD.FLAG_PALETTE_KEYWORD_SLOTS,
+                         {slot for slot in KEYWORD_SLOTS if compiler.SLOT_RE.match(slot)})
 
 
 if __name__ == '__main__':
