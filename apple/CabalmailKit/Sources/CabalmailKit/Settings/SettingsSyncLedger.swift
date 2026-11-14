@@ -181,13 +181,22 @@ extension FlagPalette {
     /// before. The order is this device's when it reordered the flags it
     /// shares with `base`, and otherwise the server's; flags the chosen
     /// order does not hold follow it, in the other list's order.
+    ///
+    /// Two flags added on the two sides are two flags, though both apps
+    /// give a new flag the first free slot and so the same one
+    /// (`firstFreeSlot(in:)`). The server's keeps the slot, which may
+    /// already be on messages, and this device's moves to the next slot
+    /// neither list uses. With no slot left, this device's takes the slot,
+    /// as a changed flag does.
     public static func merged(
         base: [FlagPaletteEntry], mine: [FlagPaletteEntry], theirs: [FlagPaletteEntry]
     ) -> [FlagPaletteEntry] {
         let bySlot: ([FlagPaletteEntry]) -> [String: FlagPaletteEntry] = { entries in
             Dictionary(entries.map { ($0.slot, $0) }) { first, _ in first }
         }
-        let (was, here, there) = (bySlot(base), bySlot(mine), bySlot(theirs))
+        let (was, there) = (bySlot(base), bySlot(theirs))
+        let mine = movingNewFlags(in: mine, offSlotsNewIn: there, since: was)
+        let here = bySlot(mine)
         var kept: [String: FlagPaletteEntry] = [:]
         for slot in Set(here.keys).union(there.keys) {
             kept[slot] = here[slot] != was[slot] ? here[slot] : there[slot]
@@ -200,6 +209,24 @@ extension FlagPalette {
         var seen: Set<String> = []
         return order.compactMap { slot in
             seen.insert(slot).inserted ? kept[slot] : nil
+        }
+    }
+
+    /// `mine` with each flag it added on a keyword slot where the server's
+    /// list (`there`) added a different one moved to a slot neither list
+    /// uses, for as long as there is one.
+    private static func movingNewFlags(
+        in mine: [FlagPaletteEntry],
+        offSlotsNewIn there: [String: FlagPaletteEntry],
+        since was: [String: FlagPaletteEntry]
+    ) -> [FlagPaletteEntry] {
+        var used = Set(mine.map(\.slot)).union(there.keys)
+        return mine.map { entry in
+            guard was[entry.slot] == nil, let other = there[entry.slot], other != entry,
+                  let free = slots.first(where: { !used.contains($0) }), slots.contains(entry.slot)
+            else { return entry }
+            used.insert(free)
+            return FlagPaletteEntry(slot: free, label: entry.label, color: entry.color)
         }
     }
 }

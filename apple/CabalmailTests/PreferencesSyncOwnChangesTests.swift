@@ -123,6 +123,31 @@ final class PreferencesSyncOwnChangesTests: PreferencesSyncTestCase {
         XCTAssertFalse(preferences.hasUnsentChanges)
     }
 
+    /// Each device adds a flag in Settings. Both apps give a new flag the
+    /// first free slot, so the two arrive on the same one; the server ends
+    /// with both. Seen on stage before this was handled: the second
+    /// device's "New flag" replaced the first's flag.
+    func testEachDeviceAddsAFlagAndTheServerEndsWithBoth() async throws {
+        await server.anotherDeviceWrites(accountsSettings)
+        let preferences = launchPreferences()
+        let sync = coordinator(preferences)
+        await sync.start()
+        await server.anotherDeviceWrites(["flag_palette": #"""
+        [{"color":"red","label":"Urgent","slot":"cabal-flag-02"},\#
+        {"color":"teal","label":"Added on A","slot":"cabal-flag-01"}]
+        """#])
+        let slot = try XCTUnwrap(FlagPalette.firstFreeSlot(in: preferences.flagPalette))
+        XCTAssertEqual(slot, "cabal-flag-01", "the slot A's flag took")
+
+        preferences.flagPalette += [FlagPaletteEntry(slot: slot, label: "New flag", color: "red")]
+        let sent = await sync.pushUnsent()
+
+        XCTAssertTrue(sent)
+        let onTheServer = await labels(on: server)
+        XCTAssertEqual(onTheServer, ["Urgent", "Added on A", "New flag"])
+        XCTAssertEqual(preferences.flagPalette.map(\.slot), ["cabal-flag-02", "cabal-flag-01", "cabal-flag-03"])
+    }
+
     /// Another device that writes again and again between this one's
     /// answers does not keep it sending for ever: the push gives up, and
     /// the change waits for the next trigger.

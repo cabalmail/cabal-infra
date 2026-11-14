@@ -38,19 +38,47 @@ final class SettingsSyncLedgerTests: XCTestCase {
                        [flag(1, "Later"), flag(3, "Theirs"), flag(2, "Mine")])
     }
 
-    /// Both changed the same flag, or both gave the same free slot to a
-    /// new one: this device's wins, as its whole list did before.
+    /// Both changed the same flag: this device's wins, as its whole list
+    /// did before.
     func testTheSameFlagChangedOnBothSidesIsThisDevices() {
         let base = [flag(1, "Later")]
 
         XCTAssertEqual(FlagPalette.merged(base: base, mine: [flag(1, "Mine")], theirs: [flag(1, "Theirs")]),
                        [flag(1, "Mine")])
-        XCTAssertEqual(FlagPalette.merged(base: base,
-                                          mine: [flag(1, "Later"), flag(2, "Mine")],
-                                          theirs: [flag(1, "Later"), flag(2, "Theirs")]),
-                       [flag(1, "Later"), flag(2, "Mine")])
         XCTAssertEqual(FlagPalette.merged(base: base, mine: [], theirs: [flag(1, "Theirs")]), [],
                        "deleted here, renamed there: the delete is this device's change")
+    }
+
+    /// Each device added a flag. Both apps give a new flag the first free
+    /// slot, so the two flags arrive on the same one; they are still two
+    /// flags. Seen on stage with two simulators: the second device's "New
+    /// flag" replaced the first's flag on the server.
+    func testAFlagAddedOnEachSideToTheSameFreeSlotIsTwoFlags() {
+        let base = [flag(1, "Later"), flag(2, "Work")]
+        let mine = base + [flag(3, "New flag")]
+        let theirs = base + [flag(3, "Theirs", "teal")]
+
+        XCTAssertEqual(FlagPalette.firstFreeSlot(in: base), "cabal-flag-03", "what both apps pick")
+        XCTAssertEqual(FlagPalette.merged(base: base, mine: mine, theirs: theirs),
+                       base + [flag(3, "Theirs", "teal"), flag(4, "New flag")],
+                       "the server's keeps the slot; this device's moves to the next free one")
+        // Two added here, one there: each of this device's gets a slot of
+        // its own, past the ones either list uses.
+        XCTAssertEqual(FlagPalette.merged(base: base, mine: base + [flag(3, "Mine 1"), flag(4, "Mine 2")],
+                                          theirs: theirs),
+                       base + [flag(3, "Theirs", "teal"), flag(5, "Mine 1"), flag(4, "Mine 2")])
+        // The same flag added on both sides is one flag.
+        XCTAssertEqual(FlagPalette.merged(base: base, mine: theirs, theirs: theirs), theirs)
+    }
+
+    /// With all twenty slots in use there is nowhere to move to: this
+    /// device's takes the slot, as a changed flag does.
+    func testWithNoSlotLeftThisDevicesNewFlagTakesTheSlot() {
+        let base = (1...19).map { flag($0, "F\($0)") }
+
+        XCTAssertEqual(FlagPalette.merged(base: base, mine: base + [flag(20, "Mine")],
+                                          theirs: base + [flag(20, "Theirs")]).last,
+                       flag(20, "Mine"))
     }
 
     /// The first flag in the list is the default flag, so the order is a

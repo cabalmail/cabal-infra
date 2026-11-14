@@ -2083,7 +2083,10 @@ that opens (below) owes only the key whose value the user changed.
   flag this device changed, added or deleted is as this device has it,
   every other is as the row has it, and where both changed the same
   flag this device's wins. The order is this device's when it reordered
-  the flags, and otherwise the row's.
+  the flags, and otherwise the row's. Two flags added on two devices
+  are two flags, though both apps give a new flag the first free slot
+  and so the same one: the row's keeps the slot and this device's moves
+  to the next slot neither list uses.
 
 Pushes go one at a time, and whoever asks for one while it is out waits
 on it. The triggers are a local edit's debounce, the connection coming
