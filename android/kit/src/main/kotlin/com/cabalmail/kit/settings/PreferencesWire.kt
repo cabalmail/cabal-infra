@@ -33,11 +33,80 @@ object PreferencesWire {
     }
 
     /**
-     * The full synced payload. Every key this build knows is sent each time
-     * (the server merges per key, so keys a newer client added survive).
-     * The flat `theme` mirrors [AppPreferences.theme] for the web only when
-     * it is an explicit light/dark — `system` has no web equivalent, so the
-     * web keeps whatever it last set.
+     * Prefix of the row's flat keys (`name`, `accent`, `density`, `theme`)
+     * in a values map ([toValues]), which holds the `app` map's keys bare.
+     * No `app` key starts with it.
+     */
+    const val FLAT = "/"
+    private const val FLAT_THEME = FLAT + "theme"
+    private const val FLAT_ACCENT = FLAT + "accent"
+    private const val FLAT_DENSITY = FLAT + "density"
+    private const val FLAT_NAME = FLAT + "name"
+
+    /**
+     * This device's synced settings as one map of key to wire value: what
+     * [SettingsSyncLedger] keeps its books in. The `app` map's keys are
+     * bare and the flat keys carry the [FLAT] prefix.
+     */
+    fun toValues(preferences: AppPreferences): Map<String, String> {
+        val update = toUpdate(preferences)
+        return buildMap {
+            update.theme?.let { put(FLAT_THEME, it) }
+            update.accent?.let { put(FLAT_ACCENT, it) }
+            update.density?.let { put(FLAT_DENSITY, it) }
+            update.name?.let { put(FLAT_NAME, it) }
+            putAll(update.app.orEmpty())
+        }
+    }
+
+    /** The request that writes [values] (a part of [toValues]) and nothing else. */
+    fun toUpdate(values: Map<String, String>): PreferencesUpdate =
+        PreferencesUpdate(
+            theme = values[FLAT_THEME],
+            accent = values[FLAT_ACCENT],
+            density = values[FLAT_DENSITY],
+            name = values[FLAT_NAME],
+            app = values.filterKeys { !it.startsWith(FLAT) }.takeIf { it.isNotEmpty() },
+        )
+
+    /** The server's row in the keys of [toValues]. */
+    fun rowValues(remote: Preferences): Map<String, String> =
+        buildMap {
+            put(FLAT_THEME, remote.theme)
+            put(FLAT_ACCENT, remote.accent)
+            put(FLAT_DENSITY, remote.density)
+            put(FLAT_NAME, remote.name)
+            putAll(remote.app)
+        }
+
+    /**
+     * The values a [SettingsSyncLedger.rebase] said to apply, as a server
+     * response [applyRemote] can take: a flat key that is not to be
+     * applied carries [current]'s value, and an `app` key that is not is
+     * left out, so both stay as they are. The flat theme only ever seeds
+     * the `app` theme, so it is dropped while that one is [owed].
+     */
+    fun remoteFor(
+        current: AppPreferences,
+        apply: Map<String, String>,
+        owed: Set<String>,
+    ): Preferences =
+        Preferences(
+            theme = apply[FLAT_THEME].takeUnless { AppKey.THEME in owed }.orEmpty(),
+            accent = apply[FLAT_ACCENT] ?: current.accent.wire,
+            density = apply[FLAT_DENSITY] ?: current.density.wire,
+            name = apply[FLAT_NAME] ?: current.displayName,
+            app = apply.filterKeys { !it.startsWith(FLAT) },
+        )
+
+    /**
+     * This device's synced settings as a request: every key this build
+     * knows. It is what the account's row is compared with, never what is
+     * sent: a push carries the part of it a user's edit changed
+     * ([SettingsSyncLedger.changes]). The flat `theme` mirrors
+     * [AppPreferences.theme] for the web only when it is an explicit
+     * light/dark — `system` has no web equivalent, so the web keeps
+     * whatever it last set.
      */
     fun toUpdate(preferences: AppPreferences): PreferencesUpdate =
         PreferencesUpdate(
@@ -56,9 +125,9 @@ object PreferencesWire {
                     put(AppKey.THEME, preferences.theme.wire)
                     put(AppKey.DEFAULT_BODY_RENDER_MODE, preferences.bodyRenderMode.wire)
                     put(AppKey.FOLDER_COUNT_DISPLAY, preferences.folderCountDisplay.wire)
-                    // One exception to "send every key": `flag_palette`
-                    // rides only once syncable — a server that predates the
-                    // key 400s the whole map on it (see
+                    // One exception to "every key": `flag_palette` is here
+                    // only once syncable — a server that predates the key
+                    // 400s the whole request on it (see
                     // [AppPreferences.flagPaletteSyncable]).
                     if (preferences.flagPalette.isNotEmpty() || preferences.flagPaletteSyncable) {
                         put(AppKey.FLAG_PALETTE, FlagPalette.encode(preferences.flagPalette))
@@ -79,7 +148,8 @@ object PreferencesWire {
         )
 
     /**
-     * Applies a server response over [current] (server wins on login).
+     * Applies a server response over [current]. The caller hands it only
+     * the values this device does not owe the server ([remoteFor]).
      * Missing or unrecognized values leave the current value untouched;
      * local-only fields are never touched. When the `app` map carries no
      * theme yet (a user who has only ever used the web), the flat
