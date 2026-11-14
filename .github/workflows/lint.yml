@@ -84,6 +84,10 @@ jobs:
             # The user-mail-rules procmail compiler and its corpus tests
             # live with the container sources but gate here.
             - 'docker/shared/**'
+            # The sendmail-restart suite reads each tier's startsecs out
+            # of its supervisord.conf: the 15s floor in
+            # sendmail-restart-lib.sh is set against it.
+            - 'docker/*/supervisord.conf'
             # Several suites under lambda/api/_shared/tests are cross-tree
             # invariant scans that READ terraform/infra (the API Gateway
             # method overrides and log-group split, the MFA-exempt service
@@ -310,6 +314,13 @@ jobs:
       # logged. Runs the real script against PATH stubs (bash, jq and sort
       # are real), so it needs no root or image.
       run: python3 -m unittest discover -s docker/shared/test/sync-users -p "test_*.py"
+    - name: unittest-sendmail-restart
+      # How reconfigure.sh restarts sendmail (issue #2450): never one
+      # supervisord started less than 15s ago, and after a queue message
+      # only when a file sendmail reads has changed. Runs the real
+      # scripts against PATH stubs and a faked clock (bash, jq and
+      # sha256sum are real), so it needs no root or image.
+      run: python3 -m unittest discover -s docker/shared/test/sendmail-restart -p "test_*.py"
 
   # ---------------------------------------------------------------------------
   # Swift. The platform-conditionals ratchet, which apple.yml's kit-test macOS
