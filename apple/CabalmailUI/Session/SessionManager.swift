@@ -390,8 +390,8 @@ extension SessionManager {
             preferences.activate(controlDomain: controlDomain, username: username)
             let coordinator = PreferencesSyncCoordinator(client: newClient, preferences: preferences)
             self.prefsCoordinator = coordinator
-            // Non-blocking: the initial server pull (server wins on login,
-            // once a change an earlier session could not send has gone)
+            // Non-blocking: the initial server pull (the server's value
+            // for every setting but one changed here and not yet sent)
             // shouldn't hold up the UI flipping to signed-in; the applied
             // values land a moment later. The feed queue's question about
             // unsent settings is answered from here on (the init).

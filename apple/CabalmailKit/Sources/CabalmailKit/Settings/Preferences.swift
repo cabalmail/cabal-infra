@@ -211,9 +211,13 @@ public final class Preferences {
         case swipeTrailing = "cabalmail.prefs.swipe_trailing"
         case rssSwipeLeading = "cabalmail.prefs.rss_swipe_leading"
         case rssSwipeTrailing = "cabalmail.prefs.rss_swipe_trailing"
-        /// Not a preference: the sync state behind `hasUnsentChanges`,
-        /// scoped per account like the values it speaks for.
+        /// Not a preference: the mark builds up to 1.53.0 kept that
+        /// something was unsent, without saying what. Read once, at the
+        /// first sync after the update (`take(_:)`), and then removed.
         case unsentChanges = "cabalmail.prefs.unsent_changes"
+        /// Not a preference: the account's `SettingsSyncLedger` as JSON,
+        /// scoped per account like the values it speaks for.
+        case syncLedger = "cabalmail.prefs.sync_ledger"
     }
 
     public var markAsRead: MarkAsReadBehavior {
@@ -353,16 +357,19 @@ public final class Preferences {
     /// a server pull carried it (proof the server build understands it) or
     /// a palette existed locally (a user act that must sync, including a
     /// subsequent deletion). While false the payload omits the key
-    /// entirely: `set_preferences` rejects the whole map on any unknown key,
-    /// so an eager send against a not-yet-upgraded server would break every
-    /// preference push from this build. It and the four gates below are
-    /// also set at `reload()` when the account's store holds a value for
-    /// the key (`restoreSyncableGates()`), so a launch knows what the last
-    /// session knew.
+    /// entirely: `set_preferences` rejects the whole request on any unknown
+    /// key, so the key is not offered to a server that may predate it. It
+    /// and the four gates below are also set at `reload()` when the
+    /// account's store holds a value for the key (`restoreSyncableGates()`),
+    /// so a launch knows what the last session knew, and closed when the
+    /// account changes (`closeSyncableGates()`). A push carries only the
+    /// keys a user's edit changed (`unsentChanges()`), and such an edit
+    /// opens its key's gate, so the gates no longer decide what is sent;
+    /// they decide what `appPreferencesPayload()` describes.
     private var flagPaletteSyncable = false
     /// Same gate for `rss_mark_as_read`: a server predating the key 400s the
-    /// whole map, so the key rides only once the server has shown it knows
-    /// it (a fetched map carried it) or the user has actually set it.
+    /// whole request, so the key rides only once the server has shown it
+    /// knows it (a fetched map carried it) or the user has actually set it.
     private var rssMarkAsReadSyncable = false
     /// Same gate for the all-feeds pill (`filter:feeds:all`).
     private var rssAllFeedsFilterSyncable = false
@@ -377,25 +384,20 @@ public final class Preferences {
     /// are not persisted.
     public private(set) var accountScope: String?
 
-    /// True while this account's settings hold a change the server has not
-    /// taken: set by the session's `PreferencesSyncCoordinator` at a local
-    /// edit and cleared once a push succeeds. Kept in the store beside the
-    /// values, so a change the app could not send (a new flag among them)
-    /// survives a relaunch, and the next session sends it before it pulls
-    /// the server's copy over it (#2421). Never in the `app` map, never a
-    /// reason to fire `onLocalChange`, and false while no account is
-    /// active.
-    public var hasUnsentChanges: Bool {
-        get { readString(.unsentChanges) == "1" }
-        set {
-            guard let storageKey = storageKey(.unsentChanges) else { return }
-            store.setString(newValue ? "1" : nil, forKey: storageKey)
-        }
-    }
+    /// What this device knows of the account's settings row and which keys
+    /// it has changed that the server has not taken
+    /// (`Preferences+Sync.swift`). Kept in the store beside the values, so
+    /// a change the app could not send (a new flag among them) survives a
+    /// relaunch (#2421). Never in the `app` map, and empty while no account
+    /// is active.
+    var ledger = SettingsSyncLedger()
+    /// Every synced value as it was after the last edit, reload or server
+    /// apply: what an edit is compared with to tell which keys it changed.
+    var editSnapshot: [String: String] = [:]
 
     /// Fired after a user-driven preference write, once the new value has been
     /// persisted locally. The session's `PreferencesSyncCoordinator` sets this
-    /// to debounce a push of the full `app` map to the server so settings
+    /// to debounce a push of the changed keys to the server so settings
     /// follow the Cabalmail account across devices. Deliberately *not* fired
     /// for the `reload()` (store change / account switch) or `applyRemote(_:)`
     /// (inbound server) paths — echoing an inbound update back out would loop.
@@ -452,7 +454,24 @@ public final class Preferences {
         guard scope != accountScope else { return }
         accountScope = scope
         purgeLegacyUnscopedValues()
+        // The gates say what this account has synced, and `reload()` only
+        // ever opens them: left as the last account set them, they would
+        // put its keys in this account's payload (#2452).
+        closeSyncableGates()
         reload()
+    }
+
+    /// The store's value for `key` under the active account.
+    func storedString(_ key: Key) -> String? {
+        readString(key)
+    }
+
+    /// Writes (nil: removes) the store's value for `key` under the active
+    /// account, with none of a setting's side effects. Nothing is written
+    /// while no account is active.
+    func storeString(_ value: String?, for key: Key) {
+        guard let storageKey = storageKey(key) else { return }
+        store.setString(value, forKey: storageKey)
     }
 
     /// The store key for `key` under the active account, or `nil` while no
@@ -498,6 +517,7 @@ public final class Preferences {
         rssSwipeLeading = readEnum(.rssSwipeLeading, default: .toggleRead)
         rssSwipeTrailing = readEnum(.rssSwipeTrailing, default: .toggleFavorite)
         restoreSyncableGates()
+        loadSyncState()
     }
 
     /// `persist` for a swipe binding: a genuine user edit also makes the
@@ -518,6 +538,10 @@ public final class Preferences {
         // fetched change would echo out as a fresh save. Only genuine user
         // edits fall through to notify the sync coordinator.
         guard !isApplyingRemote else { return }
+        // Marked here and not by the coordinator, so an edit made before a
+        // session's sync has started, or with no session at all, is still
+        // owed to the server (#2441).
+        noteUserEdit()
         onLocalChange?()
     }
 
@@ -567,6 +591,16 @@ extension Preferences {
     /// back to its default (deleting the last flag of the user's own) was
     /// left out of the launch's push, and the pull after it put the
     /// server's value back. A gate set in memory stays set.
+    /// Closes every gate: the settings are about to become another
+    /// account's (`activate`).
+    private func closeSyncableGates() {
+        flagPaletteSyncable = false
+        rssMarkAsReadSyncable = false
+        rssAllFeedsFilterSyncable = false
+        rssAllFeedsOrderingSyncable = false
+        swipeBindingsSyncable = false
+    }
+
     private func restoreSyncableGates() {
         func stored(_ key: Key) -> Bool { readString(key) != nil }
         if stored(.flagPalette) { flagPaletteSyncable = true }
@@ -599,12 +633,22 @@ extension Preferences {
         static let rssAllFeedsOrdering = "order:feeds:all"
     }
 
-    /// The complete set of synced preferences as the `app` map the server
-    /// stores. Always sends every key this build knows; the server merges
-    /// per key, so keys a newer client added (and this build doesn't know)
-    /// survive the push. `defaultFromAddress`'s "no default" (`nil`) is
-    /// encoded as an empty string — key removal is never needed.
+    /// This device's synced preferences as the `app` map the server stores:
+    /// every key this build knows whose gate is open. It is what the
+    /// account's row is compared with, never what is sent: a push carries
+    /// the part of it a user's edit changed (`unsentChanges()`).
+    /// `defaultFromAddress`'s "no default" (`nil`) is encoded as an empty
+    /// string — key removal is never needed.
     public func appPreferencesPayload() -> [String: String] {
+        syncedValues(gated: true)
+    }
+
+    /// The synced settings as wire key to value. Gated, a key behind a
+    /// closed gate is left out (`appPreferencesPayload()`); ungated, every
+    /// key is there, which is what telling one edit's keys apart needs: a
+    /// gate that opens brings its keys into the payload whether or not
+    /// their values changed.
+    func syncedValues(gated: Bool) -> [String: String] {
         var payload = [
             AppWireKey.markAsRead: markAsRead.rawValue,
             AppWireKey.loadRemoteContent: loadRemoteContent.rawValue,
@@ -618,22 +662,21 @@ extension Preferences {
             AppWireKey.defaultBodyRenderMode: defaultBodyRenderMode.rawValue,
             AppWireKey.folderCountDisplay: folderCountDisplay.rawValue,
         ]
-        // One exception to "always send every key": `flag_palette` rides
-        // only once it is syncable (see `flagPaletteSyncable`). A server
-        // that predates the key 400s the whole map on it, which would
-        // break every preference push from this build.
-        if !flagPalette.isEmpty || flagPaletteSyncable {
+        // One exception to "every key": `flag_palette` is here only once
+        // it is syncable (see `flagPaletteSyncable`). A server that
+        // predates the key 400s the whole request on it.
+        if !gated || !flagPalette.isEmpty || flagPaletteSyncable {
             payload[AppWireKey.flagPalette] = FlagPalette.encode(flagPalette)
         }
         // Same exception for the feed reader's mark-as-read (phase 5 of the
         // RSS plan): only once the server has shown it accepts the key.
-        if rssMarkAsRead != .manual || rssMarkAsReadSyncable {
+        if !gated || rssMarkAsRead != .manual || rssMarkAsReadSyncable {
             payload[AppWireKey.rssMarkAsRead] = rssMarkAsRead.rawValue
         }
-        if rssAllFeedsFilter != .defaultForFeeds || rssAllFeedsFilterSyncable {
+        if !gated || rssAllFeedsFilter != .defaultForFeeds || rssAllFeedsFilterSyncable {
             payload[AppWireKey.rssAllFeedsFilter] = rssAllFeedsFilter.rawValue
         }
-        if rssAllFeedsOrdering != .newestFirst || rssAllFeedsOrderingSyncable {
+        if !gated || rssAllFeedsOrdering != .newestFirst || rssAllFeedsOrderingSyncable {
             payload[AppWireKey.rssAllFeedsOrdering] = rssAllFeedsOrdering.rawValue
         }
         // A mail folder's pill exists only once a user set it (here or on
@@ -641,17 +684,54 @@ extension Preferences {
         // knows the key shape.
         payload.merge(folderFilterWireEntries()) { _, folder in folder }
         // And for the swipe bindings (`Preferences+Swipe.swift`).
-        payload.merge(swipeWireEntries()) { _, swipe in swipe }
+        payload.merge(swipeWireEntries(gated: gated)) { _, swipe in swipe }
         return payload
     }
 
-    /// Applies a server-fetched `app` map (server wins on login). Each value is
-    /// written through to the local store as a cache, but `isApplyingRemote`
-    /// suppresses the `onLocalChange` push so the fetch doesn't bounce back out.
+    /// The wire keys this device holds a stored value for under the active
+    /// account: set here, or pulled earlier. One of them that the server's
+    /// row lacks is a value only this device holds
+    /// (`SettingsSyncLedger.rebase`).
+    func storedSyncedKeys() -> Set<String> {
+        let single: [(Key, String)] = [
+            (.markAsRead, AppWireKey.markAsRead),
+            (.loadRemoteContent, AppWireKey.loadRemoteContent),
+            (.defaultFromAddress, AppWireKey.defaultFromAddress),
+            (.signature, AppWireKey.signature),
+            (.disposeAction, AppWireKey.disposeAction),
+            (.disposeAdvance, AppWireKey.disposeAdvance),
+            (.markReadAdvance, AppWireKey.markReadAdvance),
+            (.theme, AppWireKey.theme),
+            (.crashReportingEnabled, AppWireKey.crashReportingEnabled),
+            (.defaultBodyRenderMode, AppWireKey.defaultBodyRenderMode),
+            (.folderCountDisplay, AppWireKey.folderCountDisplay),
+            (.flagPalette, AppWireKey.flagPalette),
+            (.rssMarkAsRead, AppWireKey.rssMarkAsRead),
+            (.rssAllFeedsFilter, AppWireKey.rssAllFeedsFilter),
+            (.rssAllFeedsOrdering, AppWireKey.rssAllFeedsOrdering),
+            (.swipeLeading, Self.swipeLeadingWireKey),
+            (.swipeTrailing, Self.swipeTrailingWireKey),
+            (.rssSwipeLeading, Self.rssSwipeLeadingWireKey),
+            (.rssSwipeTrailing, Self.rssSwipeTrailingWireKey),
+        ]
+        var keys = Set(single.filter { readString($0.0) != nil }.map(\.1))
+        keys.formUnion(folderFilterWireEntries().keys)
+        return keys
+    }
+
+    /// Applies values from a server-fetched `app` map: every key of the row
+    /// that this device does not owe the server (`take(_:)` chooses them).
+    /// Each value is written through to the local store as a cache, but
+    /// `isApplyingRemote` keeps it from counting as an edit, so the fetch
+    /// doesn't bounce back out.
     /// Missing or unrecognized values leave the current value untouched.
     public func applyRemote(_ remote: [String: String]) {
         isApplyingRemote = true
-        defer { isApplyingRemote = false }
+        defer {
+            isApplyingRemote = false
+            // What the server said is not an edit to tell apart later.
+            editSnapshot = syncedValues(gated: false)
+        }
         applyEnum(remote[AppWireKey.markAsRead], to: \.markAsRead)
         applyEnum(remote[AppWireKey.loadRemoteContent], to: \.loadRemoteContent)
         if let raw = remote[AppWireKey.defaultFromAddress] {

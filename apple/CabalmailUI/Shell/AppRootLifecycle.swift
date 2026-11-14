@@ -27,7 +27,8 @@ struct AppRootLifecycle: ViewModifier {
             .task {
                 // Hand the app-root Preferences to AppState before any
                 // restore so the session's PreferencesSyncCoordinator can
-                // pull the server copy (server wins on login).
+                // pull the server copy (the server's value for every
+                // setting not changed on this device).
                 appState.usePreferences(preferences)
                 beforeRestore()
                 // Launch-time auto-restore. `restoreIfPossible()` is a

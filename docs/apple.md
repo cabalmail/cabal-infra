@@ -1807,7 +1807,9 @@ a second copy.
   `RssSyncEngine.setUnsentSettingsPush` that `PreferencesSyncCoordinator`
   installs, to send any settings change still waiting
   (`RssUnsentSettings`). Sent: the batch goes again once, and a refusal
-  after that is final. Still unsent: the refused adds stay queued, on
+  after that is final. The coordinator also answers "sent" for a minute
+  after the server took a flag list from this device, since that push
+  may have landed between the refusal and the question. Still unsent: the refused adds stay queued, on
   their items, and the rest of the batch goes now. Nothing waiting (or
   no hook): the drain drops those queued adds, takes the flags off their
   items again in the same transaction, and sends the rest of the batch,
@@ -2041,45 +2043,84 @@ to that account's own keys (the shared key plus a stable hash of
 domain + username), so two accounts on one device can never see or
 overwrite each other's settings. Cross-device sync rides the Cabalmail
 account instead: `PreferencesSyncCoordinator` stores the settings per
-Cognito user on the server (`/get_preferences` / `/set_preferences`),
-pulls with server-wins semantics on login and foreground, and pushes
-debounced local edits.
+Cognito user on the server (`/get_preferences` / `/set_preferences`;
+the server's side of the contract is
+[settings-sync.md](settings-sync.md)), pulls on login and on return to
+the foreground, and pushes local edits after a debounce.
 
-A push that fails is not dropped (#2421). From a local edit until a
-push succeeds, `Preferences.hasUnsentChanges` is set: a scoped key in
-the same local store, never in the `app` map, so it survives a relaunch
-and belongs to one account. While it is set the coordinator sends the
-settings as they are then, one push at a time: when the connection
-comes back (an offline-to-online change of `Reachability`, not its
-first value), on return to the foreground (`reconcile` pushes before
-it pulls), at the next session's `start` (pushes before the first pull,
-and skips that pull if the push fails), and when the feed queue asks
-before it drops a refused flag add (see the feed store's refused-add
-bullet). No pull is applied over an unsent change, so on a launch that
-sends one, this device's values win over changes made elsewhere since,
-as any late push's do. The keys behind the five "syncable" gates
-(`flag_palette`, `rss_mark_as_read`, the all-feeds filter and order,
-the swipe bindings), which the payload sends only once the server or
-the user has introduced them, are opened again at `reload()` when the
-account's store holds a value for the key (#2437): only a user edit and
-a pull store them, the two things that open a gate in a session. So a
-change that put one back to its default, such as deleting the last flag
-of the user's own, still rides the launch's push. A push still out when its
-session ends answers into nothing: it neither applies nor clears the
-mark, which by then may be another account's, and a sign-in over a
-wired session stops the old coordinator before it activates the new
-account's scope.
+**A device sends only what was changed on it, and says which version of
+the row it was built on.** `Preferences` keeps a `SettingsSyncLedger`
+per account: the row as this device last saw it (its `app` map and its
+version) and the wire keys a user's edit has changed that the server
+has not taken. It is a scoped key in the same local store, never in the
+`app` map, so it survives a relaunch and belongs to one account. An
+edit is recorded where it is stored (`Preferences.persist`), by
+comparing every synced value before and after, so it is recorded
+whether or not a session's coordinator is listening yet, and a gate
+that opens (below) owes only the key whose value the user changed.
+`hasUnsentChanges` is true while any key is owed.
 
-Whoever asks for a push while one is out waits on it. When a push lands
-and the settings changed while it was out, the same push task sends
-again at once with the settings as they are then, so an edit whose
-debounce ended during the push (and joined it) is not left for another
-trigger (#2440); a failure, a refusal or the session's end stops it. A
-400 is a refusal, not a failure: `set_preferences` refuses the whole
-map when one value breaks its rules, and the same map would be refused
-again, so the coordinator keeps it for the session and no trigger sends
-it again until the settings change. The mark and the held pull stay, so
-nothing is lost, and the next session's start sends once more (#2439).
+- **A pull** takes the row's value for every key that is not owed and
+  leaves the owed ones alone (`Preferences.take`), so it never waits
+  for a push and is never held by one that fails or is refused. A row
+  older than the one already held, an answer overtaken on its way, is
+  dropped. A stored value the row has no key for is the only copy there
+  is, and becomes owed.
+- **A push** carries the owed keys at their values now
+  (`unsentChanges()`), never the whole map, with `expectedVersion`. The
+  server merges per key, so every key the push does not name keeps the
+  value another device gave it.
+- **Nothing is sent before this device has read the row.** A device new
+  to the account holds defaults, not the account's settings, so a push
+  asked for first makes the pull itself, and waits if that fails
+  (#2452).
+- **A push built on an older row is refused** with a 409 that carries
+  the row as it is. The coordinator takes it as it takes a pull and
+  sends again on its version, up to three times in one push (#2464).
+- **The flag list is merged, not replaced.** It is one key, so when it
+  is owed and the row's copy has changed too, `FlagPalette.merged`
+  makes one list of the two against the list this device last saw: a
+  flag this device changed, added or deleted is as this device has it,
+  every other is as the row has it, and where both changed the same
+  flag this device's wins. The order is this device's when it reordered
+  the flags, and otherwise the row's. Two flags added on two devices
+  are two flags, though both apps give a new flag the first free slot
+  and so the same one: the row's keeps the slot and this device's moves
+  to the next slot neither list uses.
+
+Pushes go one at a time, and whoever asks for one while it is out waits
+on it. The triggers are a local edit's debounce, the connection coming
+back (an offline-to-online change of `Reachability`, not its first
+value), a pull (`start` and `reconcile` pull, then push), and the feed
+queue's question before it drops a refused flag add (see the feed
+store's refused-add bullet). When a request lands and something is
+still owed, an edit made while it was out, the same push sends again at
+once (#2440); a failure or the session's end stops it. A 400 is a
+refusal, not a failure: `set_preferences` refuses the whole request
+when one value breaks its rules, and the same changes would be refused
+again, so the coordinator keeps them for the session and no trigger
+sends them again until one of them changes; an edit made while the
+refused request was out has already changed them, and goes in that
+push. The next session's start sends once more (#2439). A push still
+out when its session ends answers into nothing: it settles no owed key,
+which by then may be another account's, and a sign-in over a wired
+session stops the old coordinator before it activates the new account's
+scope.
+
+Against a server that predates the version (it answers none), a push
+still carries only the owed keys and names no version. A build up to
+1.53.0 recorded only that something was unsent, in a mark of its own;
+the first row read after the update turns that mark into the keys:
+every stored value that differs from the row.
+
+The five "syncable" gates (`flag_palette`, `rss_mark_as_read`, the
+all-feeds filter and order, the swipe bindings) keep a key out of
+`appPreferencesPayload()` until the server or the user has introduced
+it. They open again at `reload()` when the account's store holds a
+value for the key (#2437), and `activate` closes them when the account
+changes, so one account's open gates never put its keys in the next
+account's payload.
+
 The values a user types are held to those rules in the Kit
 (`ServerTextRules`): a flag's name and the signature drop control
 characters and are cut by code points, as the server's `len()` counts,
@@ -2105,32 +2146,24 @@ even when the reset left the name as it was. Leaving settles the name,
 and a later visit to the same editor opens on the name the flag has
 then.
 
-All of this has known corners, each with its issue. The mark is set
-through the edit observer, which
-`start` attaches after its first push and pull, so an edit made before
-the session's first pull returns is not marked, and a session wired
-from a compose window alone has no coordinator at all (#2441). The
-pull that follows a push reads the server's row without a consistent
-read, so it can return the map as it was before the push and put the
-older values back (#2442). While the flag editor's name field is empty
-the flag holds the last name the field wrote, a stub when the letters
-were deleted one at a time, and only leaving the editor puts the opening
-name back, so an app that ends with the editor open and the field empty
-leaves the stub as the flag's name; whether closing the Mac's Settings
-window with the editor open counts as leaving has not been run. And
-because a cut keeps whole characters, a combining mark typed onto the
-character that ends at the limit removes that character, in a flag's
-name and in the signature (#2448). While a push is out, typing in the
-signature or a flag's name sends requests back to back
-(#2449). An edit that joined a push which is then refused or fails
-waits for another trigger; a change that was refused or failed and is
-then put back to the last synced settings schedules nothing and leaves
-the mark set, so the next trigger sends the unchanged map; and a
-Default From address over 100 characters is a value the server refuses
-and the Kit's rules do not cover (#2451). When a session's first pull
-fails, the first settings change sends this device's values over the
-account's, and a gate one account opened stays open for the next
-account signed in during the same run (#2452).
+All of this has known corners, each with its issue. A session wired
+from a compose window alone has no coordinator, so an edit made in it
+is owed and waits for a session that has one (#2441). A device running
+a build that sends the whole map can still put its older values over
+the row, whatever newer builds do; the server takes such a push as it
+always did (see [settings-sync.md](settings-sync.md)). While the flag
+editor's name field is empty the flag holds the last name the field
+wrote, a stub when the letters were deleted one at a time, and only
+leaving the editor puts the opening name back, so an app that ends with
+the editor open and the field empty leaves the stub as the flag's name;
+whether closing the Mac's Settings window with the editor open counts
+as leaving has not been run. And because a cut keeps whole characters,
+a combining mark typed onto the character that ends at the limit
+removes that character, in a flag's name and in the signature (#2448).
+While a push is out, typing in the signature or a flag's name sends
+requests back to back (#2449). While a change stays refused, a flag add
+the server refused stays in the feed queue and is sent again at each
+drain (#2451).
 
 A single `@Observable` class is used in preference to `@AppStorage`
 property wrappers because multiple views (compose, message detail,

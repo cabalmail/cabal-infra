@@ -2,13 +2,14 @@ import XCTest
 import CabalmailKit
 @testable import CabalmailUI
 
-/// A settings map the server refuses (#2439). `set_preferences` answers 400
-/// for the whole map when one value breaks its rules, and the same map would
-/// be refused again, so the coordinator does not send it again at every
-/// trigger. It stays unsent and the pull stays held, so nothing the user
-/// changed is lost; the next settings change sends again, and so does the
-/// next launch, once. And the values a user can type are held to the
-/// server's rules, so none of them gets there.
+/// A settings push the server refuses (#2439). `set_preferences` answers 400
+/// for the whole request when one value breaks its rules, and the same
+/// changes would be refused again, so the coordinator does not send them
+/// again at every trigger. They stay unsent, so nothing the user changed is
+/// lost, while a pull still brings what other devices changed; the next
+/// settings change sends again, and so does the next launch, once. And the
+/// values a user can type are held to the server's rules, so none of them
+/// gets there.
 @MainActor
 final class PreferencesSyncRefusalTests: PreferencesSyncTestCase {
     /// A thumbs-up with a skin tone: one character, two code points.
@@ -25,14 +26,18 @@ final class PreferencesSyncRefusalTests: PreferencesSyncTestCase {
     // MARK: - Not sent again
 
     /// Before, the foreground, the connection's return and the feed queue's
-    /// question each sent the same map again, and each was refused.
-    func testARefusedMapIsNotSentAgainByTheTriggersAndHoldsThePull() async throws {
+    /// question each sent the same map again, and each was refused. And
+    /// since #2435 the refusal held the pull, across relaunches, for as
+    /// long as it lasted (#2451); a pull now leaves the refused change
+    /// where it is and takes the rest.
+    func testARefusedChangeIsNotSentAgainByTheTriggersAndDoesNotHoldThePull() async throws {
         let (connection, link) = AsyncStream.makeStream(of: Bool.self)
         link.yield(true)
         let preferences = launchPreferences()
         let sync = coordinator(preferences, connection: connection)
         await sync.start()
         await refusedEdit(preferences, sync)
+        await server.anotherDeviceWrites(["signature": "From the other device"])
 
         await sync.reconcile()
         let answer = await sync.sendUnsentForFeedQueue()
@@ -43,10 +48,12 @@ final class PreferencesSyncRefusalTests: PreferencesSyncTestCase {
 
         XCTAssertEqual(answer, .stillUnsent)
         let seen = await calls()
-        XCTAssertEqual(seen, ["/get_preferences accepted", "/set_preferences refused"],
-                       "no second push, and no pull over the unsent change")
+        XCTAssertEqual(seen, ["/get_preferences accepted", "/set_preferences refused",
+                              "/get_preferences accepted"],
+                       "the foreground's pull, and no second push")
         XCTAssertTrue(preferences.hasUnsentChanges)
-        XCTAssertEqual(preferences.theme, .dark)
+        XCTAssertEqual(preferences.theme, .dark, "the pull left the unsent change")
+        XCTAssertEqual(preferences.signature, "From the other device", "and took the rest")
     }
 
     func testTheNextSettingsChangeSendsAgain() async throws {
@@ -86,8 +93,8 @@ final class PreferencesSyncRefusalTests: PreferencesSyncTestCase {
     }
 
     /// What the server refused is remembered for the session alone: the
-    /// next launch sends once more, and holds its pull while it is refused.
-    func testTheNextLaunchSendsOnceMoreAndHoldsThePullWhileItIsRefused() async throws {
+    /// next launch sends once more, and not again while it is refused.
+    func testTheNextLaunchSendsOnceMoreAndNotAgainWhileItIsRefused() async throws {
         let first = launchPreferences()
         let firstSync = coordinator(first)
         await firstSync.start()
@@ -101,7 +108,8 @@ final class PreferencesSyncRefusalTests: PreferencesSyncTestCase {
         await sync.reconcile()
 
         let seen = Array(await calls().dropFirst(before))
-        XCTAssertEqual(seen, ["/set_preferences refused"])
+        XCTAssertEqual(seen, ["/get_preferences accepted", "/set_preferences refused",
+                              "/get_preferences accepted"])
         XCTAssertTrue(relaunched.hasUnsentChanges)
         XCTAssertEqual(relaunched.theme, .dark)
     }
@@ -147,14 +155,15 @@ final class PreferencesSyncRefusalTests: PreferencesSyncTestCase {
         let scope = try XCTUnwrap(older.accountScope)
         let key = "\(Preferences.Key.flagPalette.rawValue).\(scope)"
         store.setString(#"[{"color":"blue","label":"","slot":"cabal-flag-01"}]"#, forKey: key)
-        older.hasUnsentChanges = true
+        // That build's mark that something was unsent.
+        store.setString("1", forKey: "\(Preferences.Key.unsentChanges.rawValue).\(scope)")
 
         let launched = launchPreferences()
         let sync = coordinator(launched)
         await sync.start()
 
         let seen = await calls()
-        XCTAssertEqual(seen, ["/set_preferences accepted", "/get_preferences accepted"])
+        XCTAssertEqual(seen, ["/get_preferences accepted", "/set_preferences accepted"])
         XCTAssertFalse(launched.hasUnsentChanges)
         let slots = await server.paletteSlots
         XCTAssertEqual(slots, [newFlag.slot])

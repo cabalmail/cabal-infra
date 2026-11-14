@@ -184,7 +184,11 @@ final class SessionWiringCharacterizationTests: XCTestCase {
 
         XCTAssertNotNil(preferences.accountScope)
         XCTAssertNotNil(harness.appState.prefsCoordinator)
-        try await waitUntilOnMainActor { preferences.onLocalChange != nil }
+        // The observer is attached before the session's first pull is
+        // sent, so it is the pull itself that says the start has run.
+        let cognito = harness.cognito
+        try await waitUntilOnMainActor { await cognito.trail.count == 2 }
+        XCTAssertNotNil(preferences.onLocalChange)
         let trail = await harness.cognito.trail
         XCTAssertEqual(trail, ["InitiateAuth USER_PASSWORD_AUTH", "API GET /prod/get_preferences"])
     }
@@ -205,7 +209,8 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         XCTAssertFalse(harness.appState.prefsCoordinator === replaced)
         // The new session's start has run its pull and taken the observer.
         try await waitUntilOnMainActor { preferences.onLocalChange != nil }
-        preferences.hasUnsentChanges = true
+        preferences.signature = "Unsent"
+        XCTAssertTrue(preferences.hasUnsentChanges)
         let before = await harness.cognito.trail.count
 
         let answer = await replaced.sendUnsentForFeedQueue()

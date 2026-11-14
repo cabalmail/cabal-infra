@@ -140,19 +140,24 @@ public protocol ApiClient: Sendable {
     /// server-side when composing the From header.
     func updateDisplayName(_ name: String) async throws
 
-    /// Fetches the Apple client's synced preferences from `/get_preferences`.
-    /// These live under the row's `app` map (namespaced away from the web
-    /// client's flat theme/accent/density), so this returns just that
-    /// sub-object as wire-key -> value. An empty dictionary means the user has
-    /// no server-side app preferences yet (fall back to local/enum defaults).
-    func fetchAppPreferences() async throws -> [String: String]
+    /// Fetches the Apple client's synced settings from `/get_preferences`:
+    /// the row's `app` map (namespaced away from the web client's flat
+    /// theme/accent/density) as wire key to value, and the row's version.
+    /// An empty map means the user has no server-side app settings yet. A
+    /// reply that does not decode throws: read as an empty row it would
+    /// make every value this device holds look like one only it holds.
+    func fetchSyncedSettings() async throws -> SyncedSettingsRow
 
-    /// Persists the Apple client's preferences via `/set_preferences`, wrapped
-    /// in an `{"app": {...}}` envelope so the Lambda merges only that map and
-    /// never disturbs the display name or the web client's fields. The client
-    /// always sends its complete set, and the server merges it key by key, so
-    /// a key this client doesn't know survives its save.
-    func saveAppPreferences(_ prefs: [String: String]) async throws
+    /// Writes `changes` via `/set_preferences`, wrapped in an
+    /// `{"app": {...}}` envelope so the Lambda merges only that map and
+    /// never disturbs the display name or the web client's fields. The
+    /// server merges key by key, so a key that is not sent keeps its value.
+    /// With `expectedVersion` the write lands only if the row is still at
+    /// that version; otherwise nothing is written and the answer is
+    /// `.stale` with the row as it is (`docs/settings-sync.md`).
+    func saveSyncedSettings(
+        _ changes: [String: String], expectedVersion: Int?
+    ) async throws -> SyncedSettingsSaveResult
 
     // MARK: Mail rules
     /// Fetches the caller's whole ordered rule set from `/get_rules`. A user

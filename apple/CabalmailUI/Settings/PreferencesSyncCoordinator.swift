@@ -2,44 +2,47 @@ import Foundation
 import CabalmailKit
 
 /// Syncs the user's app `Preferences` to the server so a setting changed on one
-/// Apple client shows up the next time they sign in on another. The settings
-/// are stored per Cognito user (the `app` map on the `cabal-user-preferences`
-/// row, behind `/get_preferences` / `/set_preferences`), which anchors them to
-/// the Cabalmail login rather than the Apple ID. This is the ONLY sync path:
-/// the local `PreferenceStore` is device-local `UserDefaults`, account-scoped
-/// (see `Preferences.activate`), and never touches iCloud.
+/// Apple client shows up on another. The settings are stored per Cognito user
+/// (the `app` map on the `cabal-user-preferences` row, behind
+/// `/get_preferences` / `/set_preferences`), which anchors them to the
+/// Cabalmail login rather than the Apple ID. This is the ONLY sync path: the
+/// local `PreferenceStore` is device-local `UserDefaults`, account-scoped (see
+/// `Preferences.activate`), and never touches iCloud. The server's side of
+/// the contract is `docs/settings-sync.md`.
 ///
 /// Created by `AppState` when a client is wired (sign-in or restore) and torn
 /// down on sign-out. `@MainActor` because it drives the main-actor-isolated
 /// `Preferences` and is invoked from SwiftUI lifecycle hooks.
 ///
-/// Lifecycle:
-/// - **Start** (`start`): fetch the server copy once and apply it — the server
-///   wins on login — then observe local edits via `Preferences.onLocalChange`.
-///   The one exception is a change an earlier session could not send
-///   (`Preferences.hasUnsentChanges`, kept on disk): it is pushed first, and
-///   the pull waits until it has gone, since the pull would overwrite it.
-/// - **Local edit**: debounce, then push the complete `app` map (every key
-///   this build knows). The server merges per key, so concurrent multi-device
-///   edits are last-write-wins per key, and a key introduced by a newer
-///   client build survives a push from an older one.
-/// - **A failed push** stays unsent and goes again when the connection
-///   returns, on return to the foreground, at the next session's start, and
-///   when the feed queue asks before it drops a flag add the server refused
-///   (`RssSyncEngine.setUnsentSettingsPush`): a flag created while the push
-///   was failing is in this device's palette and not yet the server's
-///   (#2421). Each retry sends the settings as they are then.
-/// - **A refused push** (a 400: the server does not take a value in the
-///   map) is not sent again while the settings are still that map, since
-///   it would be refused again; the next settings change sends again, and
-///   so does the next session's start. It stays unsent meanwhile, and the
-///   pull stays held, so nothing the user changed is lost (#2439).
-/// - **An edit made while a push is out** is not in that push. When the
-///   push lands, the settings as they are then go in another, at once
-///   (#2440).
-/// - **Foreground** (`reconcile`): send a change still unsent, then re-fetch
-///   and re-apply so a change made on another device mid-session lands. A
-///   pull never lands over a change that has not reached the server.
+/// The rule it keeps: **a device sends only what was changed on it, and says
+/// which version of the row it was built on.** `Preferences` records the keys
+/// a user's edit changed (`hasUnsentChanges`, kept on disk); this class makes
+/// the requests.
+///
+/// - **A pull** (`start`, and `reconcile` on return to the foreground) takes
+///   the server's value for every key this device has not changed, and leaves
+///   the changed ones alone, so it never waits for a push. An answer older
+///   than the row already held is dropped.
+/// - **A push** carries the unsent keys only, never the whole map, with the
+///   row's version as this device last saw it. It goes a debounce after a
+///   local edit, and again when the connection returns, at a pull, and when
+///   the feed queue asks before it drops a flag add the server refused
+///   (`RssSyncEngine.setUnsentSettingsPush`, #2421). One push is out at a
+///   time; whoever asks meanwhile waits on it, and it sends again, at once,
+///   for an edit made while a request was out (#2440).
+/// - **Nothing is sent before this device has read the row.** A device new to
+///   the account holds defaults, not the account's settings (#2452).
+/// - **The server refuses a push built on an older row** (a 409, carrying
+///   the row as it is). The row is taken as a pull is, the flag list merged
+///   with this device's when both changed it, and the push goes again on the
+///   new version (#2464).
+/// - **A failed push** (no connection, a server error) stays unsent and goes
+///   again at the next trigger.
+/// - **A refused push** (a 400: the server does not take a value in it) is
+///   not sent again while the unsent keys still hold those values, since it
+///   would be refused again (#2439). It goes again once one of them changes,
+///   in this push if that happened while the request was out, and at the
+///   next session's start.
 @MainActor
 public final class PreferencesSyncCoordinator {
     private let client: CabalmailClient
@@ -48,17 +51,17 @@ public final class PreferencesSyncCoordinator {
     private var saveTask: Task<Void, Never>?
     /// The push in flight; whoever else asks for one waits on it.
     private var pushing: Task<Bool, Never>?
-    /// The map the server last refused, for this session only: no trigger
-    /// sends it again until the settings change.
+    /// The changes the server last refused, for this session only: no
+    /// trigger sends them again until one of them changes.
     private var refused: [String: String]?
+    /// When the server last took a flag list from this device
+    /// (`sendUnsentForFeedQueue`).
+    private var flagListTakenAt: ContinuousClock.Instant?
     /// Follows the connection while the session runs (`observeConnection`).
     private var connectionTask: Task<Void, Never>?
     /// What `observeConnection` follows: a test's stream, or nil for the
     /// client's own reachability.
     private let connection: AsyncStream<Bool>?
-    /// The map last confirmed in sync with the server (fetched or pushed), so a
-    /// no-op edit or a redundant reconcile doesn't trigger a write.
-    private var lastSynced: [String: String]?
     /// Debounce window for pushes: a quick flurry of toggles collapses to one
     /// write. Matches `NavStateCoordinator`'s cursor-save cadence.
     private let saveDebounce: Duration
@@ -67,16 +70,17 @@ public final class PreferencesSyncCoordinator {
     /// fetch is in flight; without this guard the late response would apply
     /// the *previous* account's settings into whatever scope `Preferences`
     /// has activated by then — the cross-account leak, resurrected. A push
-    /// that outlives the session must not clear the unsent mark either:
-    /// by then it is the next account's.
+    /// that outlives the session must not settle the unsent keys either:
+    /// by then they are the next account's.
     private var stopped = false
 
-    /// True from a local edit until the server has taken it, kept on disk
-    /// beside the account's settings so a relaunch still sends it.
-    private var hasUnsentChange: Bool {
-        get { preferences.hasUnsentChanges }
-        set { preferences.hasUnsentChanges = newValue }
-    }
+    /// How many times in a row one push takes a newer row and sends again
+    /// before it leaves the rest to the next trigger. More than one means
+    /// another device wrote between this one's answer and its next request.
+    private static let newerRowLimit = 3
+    /// How long after the server took a flag list the feed queue is still
+    /// told so (`sendUnsentForFeedQueue`).
+    private static let flagListRecency: Duration = .seconds(60)
 
     /// `connection` replaces the client's reachability, for tests; the
     /// feed queue's question is answered from the moment this exists, so
@@ -96,28 +100,24 @@ public final class PreferencesSyncCoordinator {
         }
     }
 
-    /// Applies the server copy (server wins on login) and starts observing
-    /// local edits. Safe to call once per wired session.
+    /// Starts observing local edits and the connection, then pulls the
+    /// server's copy and sends whatever this device still owes it. Safe to
+    /// call once per wired session.
     func start() async {
-        // A change an earlier session could not send goes before the pull,
-        // which would otherwise put the server's older values over it.
-        let nothingUnsent = hasUnsentChange ? await pushUnsent() : true
-        if nothingUnsent {
-            await pullFromServer()
-        }
-        // A sign-out during the pull above must not re-attach the observer
-        // (`stop()` already detached it for good).
         guard !stopped else { return }
+        // Before the first request, not after it: an edit made while the
+        // pull is out has to be scheduled like any other (#2441).
         preferences.onLocalChange = { [weak self] in
             self?.scheduleSave()
         }
         observeConnection()
+        await sync()
     }
 
     /// Detaches the local-edit observer, cancels any pending push, and marks
     /// the coordinator dead so an in-flight server pull is discarded instead
     /// of applied. Called on sign-out before the coordinator is released.
-    /// A change still unsent stays marked on disk for this account's next
+    /// A change still unsent stays recorded on disk for this account's next
     /// session.
     func stop() {
         stopped = true
@@ -129,73 +129,138 @@ public final class PreferencesSyncCoordinator {
         client.rssSync?.setUnsentSettingsPush(nil)
     }
 
-    /// On return to the foreground: sends a change still unsent, then
-    /// re-pulls the server copy so a change made elsewhere lands
-    /// mid-session. While a change cannot be sent the pull is skipped, so
-    /// the user's own change always wins over a stale server value.
+    /// On return to the foreground: pulls the server's copy so a change
+    /// made elsewhere lands mid-session, then sends a change still unsent.
     public func reconcile() async {
-        if hasUnsentChange {
-            guard await pushUnsent() else { return }
-        }
-        await pullFromServer()
+        await sync()
     }
 
     /// The feed queue's question when the server has refused a flag add
     /// (`RssUnsentSettings`): sends a settings change still waiting, which
     /// may hold the very flag, and says whether it went.
+    ///
+    /// With nothing waiting it still answers "sent" for a minute after the
+    /// server took a flag list from this device: the push may have landed
+    /// between the refusal and this question, and then the flag is on the
+    /// server though nothing is unsent (#2441). Answered so wrongly, the
+    /// queue sends the add once more and takes the second refusal as final.
     func sendUnsentForFeedQueue() async -> RssUnsentSettings {
-        guard !stopped, hasUnsentChange else { return .nothingUnsent }
+        guard !stopped else { return .nothingUnsent }
+        guard preferences.hasUnsentChanges else {
+            if let flagListTakenAt, ContinuousClock.now - flagListTakenAt < Self.flagListRecency {
+                return .sent
+            }
+            return .nothingUnsent
+        }
         return await pushUnsent() ? .sent : .stillUnsent
     }
 
-    /// Sends the settings as they are now while a change is unsent; joins a
-    /// push already in flight. True once nothing is left unsent.
+    /// Sends the keys this device has changed and the server has not taken;
+    /// joins a push already in flight. True once nothing is left unsent.
     @discardableResult
     func pushUnsent() async -> Bool {
         if let pushing { return await pushing.value }
         guard !stopped else { return false }
-        guard hasUnsentChange else { return true }
-        guard preferences.appPreferencesPayload() != refused else { return false }
+        guard preferences.hasUnsentChanges else { return true }
         // Main-actor work, like this method: the task clears itself before
         // anyone waiting on it resumes, so no caller joins a finished push.
         let task = Task {
-            var outcome = await self.sendNow()
-            // An edit made while the push was out (its debounce may have
-            // ended then, and joined this push) goes in another, at once.
-            while outcome == .changedSince {
-                outcome = await self.sendNow()
-            }
+            let settled = await self.sendUntilSettled()
             self.pushing = nil
-            return outcome == .sent
+            return settled
         }
         pushing = task
         return await task.value
     }
 
-    /// How one request of a push went.
-    private enum PushOutcome {
-        /// The server took the settings, and they have not changed since.
-        case sent
-        /// The server took them, and they changed while the request was out.
-        case changedSince
-        /// The request did not reach the server, or the server failed.
-        case failed
-        /// The server refused the map (a 400).
-        case refused
-        /// The session ended first.
-        case stopped
+    // MARK: - Requests
+
+    private func sync() async {
+        await pull()
+        await pushUnsent()
     }
 
-    private func sendNow() async -> PushOutcome {
-        // After `stop()` the settings may already be the next account's.
-        guard !stopped else { return .stopped }
-        // The settings as they are now, not as they were at the edit: a
-        // retry must not send back something changed since.
-        let payload = preferences.appPreferencesPayload()
+    /// Fetches the account's row and takes it (`Preferences.take`). True
+    /// when the server answered.
+    @discardableResult
+    private func pull() async -> Bool {
+        guard !stopped else { return false }
+        let row: SyncedSettingsRow
         do {
-            try await client.saveAppPreferences(payload)
+            row = try await client.fetchSyncedSettings()
+        } catch {
+            CabalmailLog.warn("PreferencesSync", "settings pull failed; it goes again later: "
+                + error.localizedDescription)
+            return false
+        }
+        // The fetch may have raced a sign-out; this account's values must
+        // not land in the next account's (already re-activated) scope.
+        guard !stopped else { return false }
+        preferences.take(row)
+        return true
+    }
+
+    /// One push: requests until nothing is unsent, or until one fails, is
+    /// refused, or the session ends.
+    private func sendUntilSettled() async -> Bool {
+        var newerRows = 0
+        while !stopped {
+            guard let changes = await changesToSend() else { return !preferences.hasUnsentChanges }
+            guard changes != refused else { return false }
+            switch await send(changes) {
+            case .taken:
+                // Around again, for an edit made while the request was out.
+                continue
+            case .refused:
+                // Around again: an edit made while the request was out has
+                // changed what is unsent, and gets its own request.
+                continue
+            case .newerRow:
+                newerRows += 1
+                guard newerRows <= Self.newerRowLimit else { return false }
+            case .failed:
+                return false
+            }
+        }
+        return false
+    }
+
+    /// The unsent keys to send now, or nil when there is nothing to send
+    /// or the row could not be read first. Nothing is sent before this
+    /// device has read the row. (Nor can it be, after a build that
+    /// recorded only that something was unsent: the pull is what says
+    /// which keys.)
+    private func changesToSend() async -> [String: String]? {
+        let changes = preferences.unsentChanges()
+        if preferences.hasSettingsRow, !changes.isEmpty { return changes }
+        guard preferences.hasUnsentChanges else { return nil }
+        guard await pull(), preferences.hasSettingsRow else { return nil }
+        let afterThePull = preferences.unsentChanges()
+        return afterThePull.isEmpty ? nil : afterThePull
+    }
+
+    /// How one request of a push went.
+    private enum Answer {
+        /// The server took the changes.
+        case taken
+        /// The server refused them (a 400).
+        case refused
+        /// The row had moved on (a 409); it has been taken, and the
+        /// changes go again on its version.
+        case newerRow
+        /// The request did not reach the server, the server failed, or
+        /// the session ended first.
+        case failed
+    }
+
+    private func send(_ changes: [String: String]) async -> Answer {
+        let result: SyncedSettingsSaveResult
+        do {
+            result = try await client.saveSyncedSettings(
+                changes, expectedVersion: preferences.settingsVersion
+            )
         } catch CabalmailError.http(status: 400, let body) {
-            refused = payload
+            refused = changes
             CabalmailLog.warn("PreferencesSync", "the server refused the settings; "
                 + "they go again once they change: " + body)
             return .refused
@@ -204,11 +269,17 @@ public final class PreferencesSyncCoordinator {
                 + error.localizedDescription)
             return .failed
         }
-        guard !stopped else { return .stopped }
-        lastSynced = payload
-        guard preferences.appPreferencesPayload() == payload else { return .changedSince }
-        hasUnsentChange = false
-        return .sent
+        // After `stop()` the settings may already be the next account's.
+        guard !stopped else { return .failed }
+        switch result {
+        case .saved(let version):
+            if changes[SettingsSyncLedger.flagPaletteKey] != nil { flagListTakenAt = .now }
+            preferences.settingsTaken(changes, version: version)
+            return .taken
+        case .stale(let row):
+            preferences.take(row)
+            return .newerRow
+        }
     }
 
     /// Sends a change still unsent each time the connection comes back.
@@ -235,29 +306,12 @@ public final class PreferencesSyncCoordinator {
         #endif
     }
 
-    /// Fetches the server's `app` map and applies it. A missing/empty map (the
-    /// user has never synced) leaves the local defaults in place.
-    private func pullFromServer() async {
-        guard let remote = try? await client.fetchAppPreferences(), !remote.isEmpty else { return }
-        // The fetch may have raced a sign-out; this account's values must
-        // not land in the next account's (already re-activated) scope.
-        guard !stopped else { return }
-        // Nor over an edit made while the fetch was out, which the server
-        // has not had yet.
-        guard !hasUnsentChange else { return }
-        preferences.applyRemote(remote)
-        // Record the applied set so the value we just wrote in doesn't read as
-        // a local edit and echo straight back out.
-        lastSynced = preferences.appPreferencesPayload()
-    }
-
     private func scheduleSave() {
-        let payload = preferences.appPreferencesPayload()
-        // Applying a server pull can fire the observer via the store write;
-        // skip when nothing actually changed relative to the last sync.
-        if payload == lastSynced { return }
-        hasUnsentChange = true
         saveTask?.cancel()
+        saveTask = nil
+        // An edit that put a setting back to what the server holds leaves
+        // nothing to send.
+        guard preferences.hasUnsentChanges else { return }
         let debounce = saveDebounce
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: debounce)

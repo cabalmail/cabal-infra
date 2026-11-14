@@ -4,8 +4,8 @@ import CabalmailKit
 
 /// A settings change the server has not taken (#2421): `PreferencesSyncCoordinator`
 /// sends it again on return to the foreground, when the connection comes
-/// back, at the next session's start (before the pull that would overwrite
-/// it), and when the feed queue asks before dropping a flag add the server
+/// back, at the next session's start (whose pull leaves it alone), and
+/// when the feed queue asks before dropping a flag add the server
 /// refused. The setup and helpers are `PreferencesSyncTestCase`'s;
 /// `testAnEditIsPushedOnItsOwn` covers the debounce.
 @MainActor
@@ -42,8 +42,8 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
 
         let seen = await calls()
         XCTAssertEqual(seen, ["/get_preferences accepted", "/set_preferences offline",
-                              "/set_preferences accepted", "/get_preferences accepted"],
-                       "the unsent change went first, then the pull")
+                              "/get_preferences accepted", "/set_preferences accepted"],
+                       "the pull left the unsent flag alone, and then it went")
         let slots = await server.paletteSlots
         XCTAssertEqual(slots, [newFlag.slot])
         XCTAssertFalse(preferences.hasUnsentChanges)
@@ -71,7 +71,7 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
 
     /// Before: the unsent mark lived in the coordinator, the next launch
     /// pulled first, and the server's empty list replaced the new flag.
-    func testAnUnsentChangeOutlivesTheSessionAndGoesBeforeThePull() async throws {
+    func testAnUnsentChangeOutlivesTheSessionAndThePullLeavesIt() async throws {
         let first = launchPreferences()
         let firstSync = coordinator(first)
         await firstSync.start()
@@ -86,7 +86,7 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
         await sync.start()
 
         let seen = await calls()
-        XCTAssertEqual(Array(seen.suffix(2)), ["/set_preferences accepted", "/get_preferences accepted"])
+        XCTAssertEqual(Array(seen.suffix(2)), ["/get_preferences accepted", "/set_preferences accepted"])
         XCTAssertEqual(relaunched.flagPalette, [newFlag], "the pull did not put the server's older list over it")
         let slots = await server.paletteSlots
         XCTAssertEqual(slots, [newFlag.slot])
@@ -94,9 +94,9 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
     }
 
     /// #2437 as filed: the flag reached the server, then was deleted while
-    /// the settings push failed, and the app was quit. The launch's push
-    /// carries the emptied list, and the pull after it leaves the flag
-    /// deleted. Before, the launch's push left `flag_palette` out (its gate
+    /// the settings push failed, and the app was quit. The launch's pull
+    /// leaves the flag deleted, and its push carries the emptied list.
+    /// Before, the launch's push left `flag_palette` out (its gate
     /// started each launch closed), and the pull brought the flag back.
     func testDeletingTheLastFlagWhileThePushFailsSurvivesARelaunch() async throws {
         let first = launchPreferences()
@@ -117,20 +117,22 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
         await sync.start()
 
         let seen = await calls()
-        XCTAssertEqual(Array(seen.suffix(2)), ["/set_preferences accepted", "/get_preferences accepted"])
+        XCTAssertEqual(Array(seen.suffix(2)), ["/get_preferences accepted", "/set_preferences accepted"])
         let slots = await server.paletteSlots
         XCTAssertEqual(slots, [], "the launch's push carried the emptied list")
         XCTAssertEqual(relaunched.flagPalette, [], "the pull did not bring the flag back")
         XCTAssertFalse(relaunched.hasUnsentChanges)
     }
 
-    /// A launch whose own push fails does not pull, and the connection's
-    /// first value (the connection as it is) is not a return: one attempt,
-    /// until the connection really comes back.
-    func testAFailedPushAtStartHoldsThePull() async throws {
+    /// A launch whose own push fails still pulls: what another device
+    /// changed lands, and the unsent flag stays. Before, the pull waited
+    /// for the push, for as long as it failed. And the connection's first
+    /// value (the connection as it is) is not a return: one attempt, until
+    /// the connection really comes back.
+    func testAFailedPushAtStartDoesNotHoldThePull() async throws {
         let preferences = launchPreferences()
         preferences.flagPalette = [newFlag]
-        preferences.hasUnsentChanges = true
+        await server.anotherDeviceWrites(["theme": "dark"])
         await server.fail(.setPreferences)
         let (connection, link) = AsyncStream.makeStream(of: Bool.self)
         link.yield(true)
@@ -140,8 +142,11 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
         try await Task.sleep(for: .milliseconds(300))
 
         let seen = await calls()
-        XCTAssertEqual(seen, ["/set_preferences offline"], "no pull, and no second attempt for the first value")
+        XCTAssertEqual(seen, ["/get_preferences accepted", "/set_preferences offline"],
+                       "one attempt: no second for the connection's first value")
+        XCTAssertEqual(preferences.theme, .dark, "the other device's change landed")
         XCTAssertEqual(preferences.flagPalette, [newFlag])
+        XCTAssertTrue(preferences.hasUnsentChanges)
 
         await server.reconnect()
         link.yield(false)
@@ -152,9 +157,9 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
     }
 
     /// The push of a session that has ended answers into nothing: by then
-    /// the store's active scope may be another account's, whose own mark
-    /// must stand. The next account holds the same settings, so nothing
-    /// but the session's end tells the two apart.
+    /// the store's active scope may be another account's, whose own unsent
+    /// change must stand. The next account holds the same settings, so
+    /// nothing but the session's end tells the two apart.
     func testAPushStillOutWhenTheSessionEndsLeavesTheNextAccountsMark() async throws {
         launchPreferences(username: "bob").flagPalette = [newFlag]
         let preferences = launchPreferences()
@@ -168,12 +173,13 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
 
         sync.stop()
         preferences.activate(controlDomain: "cabalmail.example", username: "bob")
-        preferences.hasUnsentChanges = true
+        XCTAssertEqual(Set(preferences.unsentChanges().keys), ["flag_palette"], "bob's own unsent flag")
         await server.release(.setPreferences)
         let sent = await pushing.value
 
         XCTAssertFalse(sent)
-        XCTAssertTrue(preferences.hasUnsentChanges, "the next account's mark stands")
+        XCTAssertEqual(Set(preferences.unsentChanges().keys), ["flag_palette"],
+                       "the next account's unsent change stands")
     }
 
     /// A push carries the settings as they were when it left; an edit made
@@ -201,6 +207,8 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
         XCTAssertEqual(pushes, [.accepted, .accepted])
         let theme = await server.app["theme"]
         XCTAssertEqual(theme, "dark")
+        let maps = await server.sentMaps
+        XCTAssertEqual(maps.map { Set($0.keys) }, [["flag_palette"], ["theme"]], "each carried its own change")
     }
 
     /// Before, a pull out while the user edited applied the server's copy
@@ -219,7 +227,10 @@ final class PreferencesSyncRetryTests: PreferencesSyncTestCase {
         await reconciling.value
 
         XCTAssertEqual(preferences.flagPalette, [newFlag])
-        XCTAssertTrue(preferences.hasUnsentChanges)
+        // And the foreground's push, which follows its pull, has sent it.
+        let slots = await server.paletteSlots
+        XCTAssertEqual(slots, [newFlag.slot])
+        XCTAssertFalse(preferences.hasUnsentChanges)
     }
 
     // MARK: - The feed queue (the issue's steps)
