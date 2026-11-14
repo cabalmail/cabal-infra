@@ -1,4 +1,12 @@
-'''Persists the current user's preferences (theme/accent/density/name/app).'''
+'''Persists the current user's preferences (theme/accent/density/name/app).
+
+Every write counts the row's preferences version up by one, and a request
+may say which version it was built on (`expectedVersion`, as set_rules
+has it): when the row has moved on since, nothing is written and the
+answer is a 409 carrying the row as it is now. A request without
+`expectedVersion` is written as it always was, which is what every build
+that predates the version sends.
+'''
 import json
 import os
 import boto3  # pylint: disable=import-error
@@ -18,6 +26,23 @@ table = ddb.Table(TABLE_NAME)
 # from any cause, the fallback at the latest.
 RULES_TOPIC_ARN = os.environ.get('USER_RULES_TOPIC_ARN', '')
 
+# Counts the writes this Lambda has made to the row. Its own attribute and
+# not `version`: the row also holds the navigation cursor (set_nav_state),
+# which must not move it. A row written only by builds that predate it has
+# none, and reads as version 0.
+VERSION_ATTRIBUTE = 'prefs_version'
+
+# What a row that lacks a flat key answers for it. get_preferences holds
+# the same table (the two Lambdas ship without a shared module); a 409
+# answers the row as get_preferences would, so a client reads both with
+# one decoder. test_preferences_version.py holds the two tables equal.
+DEFAULTS = {
+    'theme': 'light',
+    'accent': 'forest',
+    'density': 'compact',
+    'name': '',
+}
+
 ALLOWED = {
     'theme':   {'light', 'dark'},
     'accent':  {'ink', 'oxblood', 'forest', 'azure', 'amber', 'plum'},
@@ -31,11 +56,20 @@ ALLOWED = {
 # means "no display name".
 MAX_NAME_LENGTH = 100
 
+# The Default From address is one of the account's own addresses, not a
+# display name, so it has its own bound: 320 code points, the longest
+# address SMTP's limits allow (a 64-octet local part, `@`, a 255-octet
+# domain). Held to the display name's 100 it refused an address the
+# account could hold and a client could pick, and with it that device's
+# whole map (#2451).
+MAX_ADDRESS_LENGTH = 320
+
 # Apple-client preferences, namespaced under `app` so they never collide with
 # the flat theme/accent/density fields the React app owns. The enum-valued keys
 # mirror the Swift `Preferences` enums exactly (see
 # apple/CabalmailKit/Sources/CabalmailKit/Settings/Preferences.swift); the two
-# free-text keys reuse the display-name/signature validators below.
+# free-text keys (the Default From address and the signature) have their
+# own validators below.
 APP_ALLOWED = {
     'mark_as_read':             {'manual', 'on_open'},
     'load_remote_content':      {'off', 'ask', 'always'},
@@ -131,6 +165,21 @@ def _validate_name(value):
         return None
     cleaned = value.strip()
     if len(cleaned) > MAX_NAME_LENGTH:
+        return None
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in cleaned):
+        return None
+    return cleaned
+
+
+def _validate_address(value):
+    '''Returns the trimmed Default From address, or None if the value is
+    invalid. Empty means "no default". Control characters are refused as
+    in a display name. Whether the address is one of the caller's own is
+    not checked here.'''
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if len(cleaned) > MAX_ADDRESS_LENGTH:
         return None
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in cleaned):
         return None
@@ -235,6 +284,69 @@ def _stored_palette(written):
         return None
 
 
+def _row_version(item):
+    '''The preferences version a row holds: 0 for a row with none, or no
+    row. DynamoDB answers the number as a Decimal.'''
+    try:
+        return int(item.get(VERSION_ATTRIBUTE, 0))
+    except (AttributeError, TypeError, ValueError):
+        return 0
+
+
+def _written_version(written):
+    '''The version a write left on the row, from its `ALL_OLD` answer:
+    one more than the row held, and 1 for a row that did not exist (the
+    answer then carries no item).'''
+    try:
+        return _row_version(written.get('Attributes') or {}) + 1
+    except AttributeError:
+        return 1
+
+
+def _expected_version(body):
+    '''The version the request says it was built on, or None when it says
+    none (every build that predates the version). Raises ValueError with
+    a client-facing message on anything but a non-negative integer.'''
+    if not isinstance(body, dict) or 'expectedVersion' not in body:
+        return None
+    expected = body['expectedVersion']
+    if isinstance(expected, bool) or not isinstance(expected, int) or expected < 0:
+        raise ValueError('expectedVersion must be a non-negative integer.')
+    return expected
+
+
+def _lost_race(err):
+    '''Whether a write failed its version condition. Read off the error's
+    shape and not its class, so this file imports nothing from botocore.'''
+    response = getattr(err, 'response', None)
+    if not isinstance(response, dict):
+        return False
+    return (response.get('Error') or {}).get('Code') == 'ConditionalCheckFailedException'
+
+
+def _conflict_response(user):
+    '''The 409 for a request built on an older row: the row as it is now,
+    in get_preferences' shape, with its version. Read consistently, after
+    the refused write, so the version and the values are one row's. A
+    client takes it as its pull, keeps the keys it has changed itself, and
+    sends again on this version.'''
+    try:
+        item = table.get_item(Key={'user': user}, ConsistentRead=True).get('Item', {})
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'Error': str(err)})
+        }
+    current = {k: item.get(k, default) for k, default in DEFAULTS.items()}
+    current['app'] = item.get('app', {})
+    current['version'] = _row_version(item)
+    current['Error'] = 'Preferences changed on another device; merge and send again.'
+    return {
+        'statusCode': 409,
+        'body': json.dumps(current)
+    }
+
+
 # pylint: disable-next=too-many-return-statements,too-many-branches
 def _validate_app(value):
     '''Returns the validated `app` preference map, or None if it is invalid.
@@ -251,7 +363,7 @@ def _validate_app(value):
                 return None
             cleaned[key] = val
         elif key == 'default_from_address':
-            address = _validate_name(val)
+            address = _validate_address(val)
             if address is None:
                 return None
             cleaned[key] = address
@@ -321,6 +433,39 @@ def _build_updates(body):
     return updates
 
 
+def _write(user, pieces, expected):
+    '''The one write of a request: the SETs, and the version counted up by
+    one in the same update, so the two cannot come apart. With `expected`
+    the write is conditional on the row still being at that version (0: on
+    its having none), and a row that has moved on raises DynamoDB's
+    ConditionalCheckFailedException, writing nothing.
+
+    Asks for the row as it was (`ALL_OLD`): the version it held gives the
+    new one, and its palette tells the handler whether the slots changed.
+    ALL_OLD and not UPDATED_OLD: DynamoDB documents the first for any
+    update and does not say what the second returns for a member of a map.
+    It costs no read.'''
+    sets, names, values = pieces
+    names = dict(names)
+    values = dict(values)
+    names['#pv'] = VERSION_ATTRIBUTE
+    values[':one'] = 1
+    condition = {}
+    if expected == 0:
+        condition['ConditionExpression'] = 'attribute_not_exists(#pv)'
+    elif expected is not None:
+        condition['ConditionExpression'] = '#pv = :ev'
+        values[':ev'] = expected
+    return table.update_item(
+        Key={'user': user},
+        UpdateExpression='SET ' + ', '.join(sets) + ' ADD #pv :one',
+        ExpressionAttributeNames=names,
+        ExpressionAttributeValues=values,
+        ReturnValues='ALL_OLD',
+        **condition,
+    )
+
+
 def _build_expression(flat, app):
     '''Builds the UpdateExpression pieces for the flat keys and the nested
     `app` keys. Every name is aliased - `name` is a DynamoDB reserved word,
@@ -368,6 +513,7 @@ def handler(event, _context):
         }
     try:
         updates = _build_updates(body)
+        expected = _expected_version(body)
     except ValueError as err:
         return {
             'statusCode': 400,
@@ -382,33 +528,29 @@ def handler(event, _context):
     # concurrent multi-device edits are last-write-wins per key. A replace
     # here would let one stale device silently wipe every newer setting.
     app = updates.pop('app', None)
-    sets, names, values = _build_expression(updates, app)
+    pieces = _build_expression(updates, app)
     saves_palette = bool(app) and 'flag_palette' in app
     written = None
     try:
         if app:
+            # Before the version check and outside it: it changes no value
+            # and does not count as a write, so a refused request leaves at
+            # most an empty map behind.
             _ensure_app_map(user)
-        # `{"app": {}}` validates to an empty merge - nothing to write. (The
-        # old wholesale replace would have wiped the map here; there is no
-        # legitimate caller for that.)
-        if sets:
-            written = table.update_item(
-                Key={'user': user},
-                UpdateExpression='SET ' + ', '.join(sets),
-                ExpressionAttributeNames=names,
-                ExpressionAttributeValues=values,
-                # A palette write also asks for the row as it was, in the
-                # same request, to tell below whether the slots changed.
-                # ALL_OLD and not UPDATED_OLD: DynamoDB documents the
-                # first for any update and does not say what the second
-                # returns for a member of a map. It costs no read.
-                ReturnValues='ALL_OLD' if saves_palette else 'NONE',
-            )
+        # `{"app": {}}` validates to an empty merge - nothing to write, and
+        # no version in the answer. (The old wholesale replace would have
+        # wiped the map here; there is no legitimate caller for that.)
+        if pieces[0]:
+            written = _write(user, pieces, expected)
     except Exception as err:  # pylint: disable=broad-exception-caught
+        if _lost_race(err):
+            return _conflict_response(user)
         return {
             'statusCode': 500,
             'body': json.dumps({'Error': str(err)})
         }
+    if written is not None:
+        updates['version'] = _written_version(written)
     if app is not None:
         updates['app'] = app
         if (saves_palette and RULES_TOPIC_ARN

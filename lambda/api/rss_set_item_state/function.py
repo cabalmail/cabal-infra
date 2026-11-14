@@ -132,7 +132,12 @@ def palette_slots(user):
     '''The slots in the caller's palette, read as set_flag reads it: an
     entry's `enabled` is not read (docs/2.x/flag-palette-enabled-removal.md),
     and a missing or malformed palette has no slots.'''
-    item = preferences.get_item(Key={'user': user}).get('Item', {})
+    # A consistent read: refused a flag add, the feed queue has the unsent
+    # settings pushed and sends the batch again at once, and the palette as
+    # it was before that push would refuse the add a second time, which
+    # the queue takes as final (#2442).
+    item = preferences.get_item(
+        Key={'user': user}, ConsistentRead=True).get('Item', {})
     raw = item.get('app', {}).get('flag_palette', '[]')
     try:
         entries = json.loads(raw)

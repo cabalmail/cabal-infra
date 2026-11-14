@@ -74,9 +74,13 @@ locals {
 # v9 (user-mail-rules Phase 2b): var.sinkhole joins the input so flipping
 #     the flag replaces the task def and picks up (or drops) the
 #     conditional SINKHOLE_ENABLED env var, same as smtp-out's marker.
+# v10 (issue #2450): the container healthCheck also looks for sendmail.
+#     Until now it probed Dovecot's port only, so a sendmail that
+#     supervisord had given up on (FATAL, never started again) left the
+#     task healthy while inbound mail waited on smtp-in.
 resource "terraform_data" "imap_taskdef_revision_marker" {
   input = join("", [
-    var.healthcheck_ping_param != "" ? "imap-taskdef-v9+hc" : "imap-taskdef-v9",
+    var.healthcheck_ping_param != "" ? "imap-taskdef-v10+hc" : "imap-taskdef-v10",
     var.sinkhole ? "+sinkhole" : "",
   ])
 }
@@ -121,10 +125,32 @@ resource "aws_ecs_task_definition" "imap" {
     # used; startPeriod covers the entrypoint's pre-listen work (cert
     # render, DynamoDB config generation, user sync), matching the
     # service's 120s grace period.
+    #
+    # The second half looks for sendmail (issue #2450). supervisord gives
+    # up on a program that exits within startsecs of its start four times
+    # running and never starts it again; reconfigure.sh restarts sendmail
+    # by killing it, so a train of reconfigure messages could leave this
+    # tier without sendmail, and with it without local delivery, while
+    # Dovecot went on answering. Three things about the shape:
+    #   - It is a process check, not a connect to port 25. This tier's
+    #     sendmail logs at the default level, so a connect every 10s
+    #     would be a log line every 10s. A sendmail that is running but
+    #     not listening is not what this looks for.
+    #   - It is skipped until /run/sendmail-ready exists. Dovecot starts
+    #     first on this tier and sendmail's preparation runs behind it
+    #     (docs/0.10.x/imap-deploy-downtime-plan.md, phase 3); the task
+    #     must go healthy on Dovecot alone, as before.
+    #   - It looks twice, 3s apart. Each restart leaves about a second
+    #     with no sendmail process (sendmail-wrapper.sh sleeps 1s before
+    #     the exec, and until the exec the process is named for the
+    #     wrapper), and that second must not fail a check. A sendmail
+    #     run by a delivery helper also satisfies pgrep; one can delay a
+    #     verdict by a check, not prevent it.
+    # timeout covers the 5s connect plus the 3s wait.
     healthCheck = {
-      command     = ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/127.0.0.1/143'"]
+      command     = ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/127.0.0.1/143' && { [ ! -f /run/sendmail-ready ] || pgrep -x sendmail >/dev/null || { sleep 3; pgrep -x sendmail >/dev/null; }; }"]
       interval    = 10
-      timeout     = 5
+      timeout     = 10
       retries     = 3
       startPeriod = 120
     }
@@ -421,6 +447,9 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   #       submission listeners are gone, which detached both smtp-out
   #       target groups from the NLB and ended its health checks
   #       (Target.NotInUse); see the imap marker's v7 note.
+  #   v6 (issue #2450): the container healthCheck also looks for sendmail,
+  #       which Dovecot's submission service relays to; see the imap
+  #       marker's v10 note.
   # The +sinkhole suffix is the var.sinkhole hook described above; the +hc
   # suffix is the analogous var.healthcheck_ping_param hook (see the imap
   # marker) that keeps the HEALTHCHECK_PING_URL secret in step with whether
@@ -428,7 +457,7 @@ resource "terraform_data" "smtp_out_taskdef_revision_marker" {
   # the queue/sinkhole work after monitoring was removed, so appending +hc is a
   # no-op for the current (monitoring-off) state and only future-proofs this
   # tier against a re-enable.
-  input = "${var.sinkhole ? "smtp-queue-mount-v5+sinkhole" : "smtp-queue-mount-v5"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
+  input = "${var.sinkhole ? "smtp-queue-mount-v6+sinkhole" : "smtp-queue-mount-v6"}${var.healthcheck_ping_param != "" ? "+hc" : ""}"
 }
 
 resource "aws_ecs_task_definition" "smtp_out" {
@@ -462,9 +491,18 @@ resource "aws_ecs_task_definition" "smtp_out" {
     # NLB no longer health-checks the submission/starttls target groups
     # (no listener -> Target.NotInUse). See the imap task def for the
     # full rationale. interval mirrors the 30s the NLB probes used;
-    # timeout allows for the two sequential 5s connect attempts.
+    # timeout allows for the two sequential 5s connect attempts and the
+    # 3s wait below.
+    #
+    # The last part looks for sendmail (issue #2450), which Dovecot's
+    # submission service hands every message to on 127.0.0.1:25: with
+    # sendmail given up on by supervisord, both ports would still accept
+    # a connection and every send would fail. Same process check, looked
+    # for twice, as on the imap tier, and for the same reasons. No
+    # /run/sendmail-ready guard: on this tier the entrypoint writes that
+    # file before supervisord starts.
     healthCheck = {
-      command     = ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/127.0.0.1/465' && timeout 5 bash -c '</dev/tcp/127.0.0.1/587'"]
+      command     = ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/127.0.0.1/465' && timeout 5 bash -c '</dev/tcp/127.0.0.1/587' && { pgrep -x sendmail >/dev/null || { sleep 3; pgrep -x sendmail >/dev/null; }; }"]
       interval    = 30
       timeout     = 15
       retries     = 3
