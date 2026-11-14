@@ -782,6 +782,22 @@ secrets are missing. Because `app-build` skips `main` and `stage` runs,
 such a run then builds nothing for a device. Build and test jobs never
 require secrets.
 
+`kit-test`'s two simulator legs run their test command through
+`.github/scripts/xcodebuild-test.sh --retry-hung-runner`, which runs it a
+second time in one case only: xcodebuild failed with "The test runner hung
+before establishing connection" for the bare `xctest` runner, and its raw
+log shows no test suite or test case starting
+(`.github/scripts/runner-hung-before-tests.py` decides). That failure comes
+from the simulator, not the code: xcodebuild boots a new device only when
+testing starts, the first boot keeps the three-core runner saturated for
+minutes, and the runner's connection to the device is sometimes refused
+three times running. The second run uses the same device, which is booted
+by then. It is never run a third time, a failed test is never run again,
+and a run that retried carries a "Test runner never connected" warning
+annotation, so the retries can be counted. Don't boot the device ahead of
+the build to avoid this: the build then runs under the same load and takes
+4 to 15 minutes in place of one.
+
 Manual signing installs a pre-created provisioning profile from a GitHub
 secret via `.github/actions/install-provisioning-profile` (a small
 composite action) and passes the profile's UUID to `xcodebuild` as

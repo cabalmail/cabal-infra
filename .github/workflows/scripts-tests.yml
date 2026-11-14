@@ -19,11 +19,14 @@ name: Scripts Tests
 # word for word, so those two source files are listed too.
 #
 # And one drives select-sim-pair.jq, the jq program that picks apple.yml's
-# simulator runtime and device type, so that file is listed as well.
+# simulator runtime and device type, so that file is listed as well. Two more
+# pin the one retry apple.yml's Kit simulator jobs are allowed:
+# runner-hung-before-tests.py, which decides whether a failed run started a
+# test at all, and xcodebuild-test.sh, which runs the command again.
 #
 # The suites are stdlib-only (scripts/apple-release-dashboard.py imports its
 # third-party ASC deps lazily), so no pip install is needed — just a pinned
-# interpreter, git, and jq, all provided by the runner.
+# interpreter, git, bash and jq, all provided by the runner.
 
 on:
   pull_request:
@@ -37,6 +40,8 @@ on:
       - '.github/scripts/set-testflight-notes.py'
       - '.github/scripts/mail-probe.py'
       - '.github/scripts/select-sim-pair.jq'
+      - '.github/scripts/xcodebuild-test.sh'
+      - '.github/scripts/runner-hung-before-tests.py'
       # test_apple_promotion_verdict.py: the script, and the apple.yml job
       # names and kit-test matrix it depends on.
       - '.github/scripts/apple-promotion-verdict.py'
@@ -63,6 +68,8 @@ on:
       - '.github/scripts/set-testflight-notes.py'
       - '.github/scripts/mail-probe.py'
       - '.github/scripts/select-sim-pair.jq'
+      - '.github/scripts/xcodebuild-test.sh'
+      - '.github/scripts/runner-hung-before-tests.py'
       # test_apple_promotion_verdict.py: the script, and the apple.yml job
       # names and kit-test matrix it depends on.
       - '.github/scripts/apple-promotion-verdict.py'

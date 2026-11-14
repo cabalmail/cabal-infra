@@ -19,6 +19,8 @@ on:
       - '.github/workflows/apple.yml'
       - '.github/scripts/resolve-sim-destination.sh'
       - '.github/scripts/select-sim-pair.jq'
+      - '.github/scripts/xcodebuild-test.sh'
+      - '.github/scripts/runner-hung-before-tests.py'
   # The PR gate: every PR touching Apple code builds and tests before merge,
   # so a regression is caught on its own PR instead of on the stage push
   # after it lands. A PR run stops at the test and build jobs: `approval`
@@ -32,6 +34,8 @@ on:
       - '.github/workflows/apple.yml'
       - '.github/scripts/resolve-sim-destination.sh'
       - '.github/scripts/select-sim-pair.jq'
+      - '.github/scripts/xcodebuild-test.sh'
+      - '.github/scripts/runner-hung-before-tests.py'
 
 # A new push to a PR supersedes the run on its previous head, so that run is
 # cancelled. Push runs on main/stage are never cancelled: they end in an
@@ -286,9 +290,27 @@ jobs:
         # has two library products (CabalmailKit and CabalmailShared), and
         # Xcode then gives only the -Package scheme a test action. It runs
         # the same CabalmailKitTests, so the -skip-testing names above hold.
+        #
+        # One more run when the runner never connected (#2436), on the
+        # simulator legs only. xcodebuild boots a shut-down simulator when
+        # testing starts, and a new device's first boot keeps the runner's
+        # three cores saturated for minutes (load averages of 250 to 570,
+        # measured). These suites have no app to install first, so their
+        # bare `xctest` runner is launched straight into that; xcodebuild's
+        # connection to the device's service hub is then sometimes refused,
+        # and after three refusals it fails with "The test runner hung
+        # before establishing connection" about 13 minutes in, having run
+        # nothing. xcodebuild-test.sh runs the command a second time for
+        # exactly that failure (runner-hung-before-tests.py decides: that
+        # error, from `xctest`, and no test started), on the same device,
+        # which is booted by then. It never runs a third time, and a retry
+        # leaves a warning annotation on the run. Booting the device before
+        # the build was tried and is worse: the build then runs under the
+        # same load and takes 4 to 15 minutes in place of one.
         run: |
           set -o pipefail
           SKIP_ARGS=""
+          RETRY=""
           if [ "${{ matrix.platform }}" = "visionOS" ]; then
             SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorFileDropTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests"
             echo "::notice title=visionOS 27 carve-out::Skipping RichTextEditorBridgeHealthTests, RichTextEditorControllerTests and RichTextEditorFileDropTests on visionOS: WKWebView creation wedged the visionOS 27.0 simulator pre-test (see workflow comment). Covered by the macOS and iOS legs."
@@ -296,7 +318,11 @@ jobs:
             SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorFileDropTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests/testRealEditorPageBootsInThisRunner"
             echo "::notice title=Simulator WebContent carve-out::Skipping the WKWebView-backed editor tests on ${{ matrix.platform }}: freshly created CI simulators never launch a WebContent process under a hostless runner (see workflow comment). Covered by the macOS leg."
           fi
-          gtimeout -v --kill-after=2m 30m \
+          if [ "${{ matrix.platform }}" != "macOS" ]; then
+            RETRY="--retry-hung-runner"
+          fi
+          "$GITHUB_WORKSPACE/.github/scripts/xcodebuild-test.sh" $RETRY "$RUNNER_TEMP/xcodebuild-raw-test.log" \
+            gtimeout -v --kill-after=2m 30m \
             xcodebuild test \
             -scheme CabalmailKit-Package \
             -destination '${{ steps.dest.outputs.destination }}' \
@@ -306,9 +332,7 @@ jobs:
             $SKIP_ARGS \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            2>&1 | tee "$RUNNER_TEMP/xcodebuild-raw-test.log" \
-            | xcbeautify --renderer github-actions
+            CODE_SIGN_IDENTITY=""
 
       - name: Surface raw xcodebuild output on failure
         if: failure()
