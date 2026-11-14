@@ -172,7 +172,10 @@ public final class SessionManager {
 
     /// Hands the app-root `Preferences` to the session lifecycle at launch,
     /// before any sign-in or restore, so `wireSession` can start a
-    /// `PreferencesSyncCoordinator` for the signed-in user. Idempotent.
+    /// `PreferencesSyncCoordinator` for the signed-in user. Idempotent, and
+    /// called by every scene that can restore a session (the main window's
+    /// root and the compose window). A session that was wired before any
+    /// scene called this starts its settings sync here instead (#2441).
     func usePreferences(_ preferences: Preferences) {
         self.preferences = preferences
         // Pre-activate the persisted last session's account scope so the
@@ -181,6 +184,9 @@ public final class SessionManager {
         // network. `wireSession` re-activates with the confirmed username;
         // for the normal restore path that's the same scope and a no-op.
         preferences.activate(controlDomain: controlDomain, username: lastUsername)
+        if let client, prefsCoordinator == nil {
+            startSettingsSync(client: client, preferences: preferences, username: lastUsername)
+        }
         // Existing installs signed in long ago and the setter above never
         // re-fires for them; re-publish at launch so the embedded Safari
         // extension learns the domain without a fresh sign-in.
@@ -381,21 +387,9 @@ extension SessionManager {
         // or push of its still in flight must not land in, or clear the
         // unsent mark of, the scope activated below.
         prefsCoordinator?.stop()
+        prefsCoordinator = nil
         if let preferences {
-            // Swap the local settings cache to this account's scoped keys
-            // before the server pull below: the previous account's values
-            // (default From address included) must never carry over, even
-            // when this account has no server copy yet or the pull fails
-            // offline. No-op when the same account signs back in.
-            preferences.activate(controlDomain: controlDomain, username: username)
-            let coordinator = PreferencesSyncCoordinator(client: newClient, preferences: preferences)
-            self.prefsCoordinator = coordinator
-            // Non-blocking: the initial server pull (the server's value
-            // for every setting but one changed here and not yet sent)
-            // shouldn't hold up the UI flipping to signed-in; the applied
-            // values land a moment later. The feed queue's question about
-            // unsent settings is answered from here on (the init).
-            Task { await coordinator.start() }
+            startSettingsSync(client: newClient, preferences: preferences, username: username)
         }
         observeSessionInvalidation()
         // Before the status flips, so the first Settings render already
@@ -419,6 +413,26 @@ extension SessionManager {
         pollers.startFeedRefreshPolling()
         if let replaced, replaced !== newClient { letGo(of: replaced) }
         await pushSessionToWatch(client: newClient, username: username)
+    }
+
+    /// Starts the session's settings sync: from `wireSession`, or from
+    /// `usePreferences(_:)` for a session wired before the app's
+    /// `Preferences` were handed in.
+    private func startSettingsSync(client: CabalmailClient, preferences: Preferences, username: String) {
+        // Swap the local settings cache to this account's scoped keys
+        // before the server pull below: the previous account's values
+        // (default From address included) must never carry over, even
+        // when this account has no server copy yet or the pull fails
+        // offline. No-op when the same account signs back in.
+        preferences.activate(controlDomain: controlDomain, username: username)
+        let coordinator = PreferencesSyncCoordinator(client: client, preferences: preferences)
+        prefsCoordinator = coordinator
+        // Non-blocking: the initial server pull (the server's value
+        // for every setting but one changed here and not yet sent)
+        // shouldn't hold up the UI flipping to signed-in; the applied
+        // values land a moment later. The feed queue's question about
+        // unsent settings is answered from here on (the init).
+        Task { await coordinator.start() }
     }
 }
 

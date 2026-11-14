@@ -2162,9 +2162,13 @@ even when the reset left the name as it was. Leaving settles the name,
 and a later visit to the same editor opens on the name the flag has
 then.
 
-All of this has known corners, each with its issue. A session wired
-from a compose window alone has no coordinator, so an edit made in it
-is owed and waits for a session that has one (#2441). A device running
+Every scene that can restore a session hands the app's `Preferences`
+to it first (`AppState.usePreferences`): the main window's root and the
+compose window, which the system can restore at launch or open for a
+`mailto:` link before any main window exists. A session wired before
+any of them did starts its coordinator when the first one does.
+
+All of this has known corners, each with its issue. A device running
 a build that sends the whole map can still put its older values over
 the row, whatever newer builds do; the server takes such a push as it
 always did (see [settings-sync.md](settings-sync.md)). While the flag
