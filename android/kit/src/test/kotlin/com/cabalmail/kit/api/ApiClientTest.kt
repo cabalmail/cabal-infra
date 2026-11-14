@@ -9,6 +9,8 @@ import com.cabalmail.kit.auth.SignInResult
 import com.cabalmail.kit.auth.SignUpResult
 import com.cabalmail.kit.models.ComposeFields
 import com.cabalmail.kit.models.NavState
+import com.cabalmail.kit.models.Preferences
+import com.cabalmail.kit.models.PreferencesSaveResult
 import com.cabalmail.kit.models.PreferencesUpdate
 import com.cabalmail.kit.models.SendOutcome
 import io.ktor.client.HttpClient
@@ -481,9 +483,72 @@ class ApiClientTest {
         runTest {
             val server = Server(HttpStatusCode.OK to """{"app": {}}""")
 
-            server.api.setPreferences(PreferencesUpdate(app = mapOf("mark_as_read" to "manual")))
+            val result = server.api.setPreferences(PreferencesUpdate(app = mapOf("mark_as_read" to "manual")))
 
             assertEquals("""{"app":{"mark_as_read":"manual"}}""", server.body(0))
+            // A server from before the version answers none.
+            assertEquals(PreferencesSaveResult.Saved(version = null), result)
+        }
+
+    @Test
+    fun `a preferences update names the version it was built on and takes the next from the answer`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"name": "Chris", "version": 8}""")
+
+            val result = server.api.setPreferences(PreferencesUpdate(name = "Chris"), expectedVersion = 7)
+
+            assertEquals("""{"name":"Chris","expectedVersion":7}""", server.body(0))
+            assertEquals(PreferencesSaveResult.Saved(version = 8), result)
+        }
+
+    @Test
+    fun `a preferences update built on an older row answers the row as it is`() =
+        runTest {
+            val server =
+                Server(
+                    HttpStatusCode.Conflict to
+                        """{"Error": "Preferences changed on another device.", "theme": "dark", "accent": "plum",
+                           "density": "compact", "name": "Chris", "version": 9, "app": {"signature": "Theirs"}}""",
+                )
+
+            val result = server.api.setPreferences(PreferencesUpdate(name = "C"), expectedVersion = 7)
+
+            assertEquals(
+                PreferencesSaveResult.Stale(
+                    Preferences(
+                        theme = "dark",
+                        accent = "plum",
+                        density = "compact",
+                        name = "Chris",
+                        app = mapOf("signature" to "Theirs"),
+                        version = 9,
+                    ),
+                ),
+                result,
+            )
+        }
+
+    @Test
+    fun `a refused preferences update is still an error`() =
+        runTest {
+            val server = Server(HttpStatusCode.BadRequest to """{"Error": "Invalid value for app."}""")
+
+            val refusal =
+                runCatching { server.api.setPreferences(PreferencesUpdate(name = "C"), expectedVersion = 7) }
+                    .exceptionOrNull()
+
+            assertEquals(400, (refusal as CabalmailException.ApiError).httpStatus)
+        }
+
+    @Test
+    fun `the preferences read carries the row's version`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"name": "Chris", "app": {"theme": "dark"}, "version": 4}""")
+
+            val row = server.api.getPreferences()
+
+            assertEquals(4, row.version)
+            assertEquals(mapOf("theme" to "dark"), row.app)
         }
 
     @Test

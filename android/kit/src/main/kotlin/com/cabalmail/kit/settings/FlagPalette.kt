@@ -203,6 +203,38 @@ object FlagPalette {
         return listed + slotsIn(flags).filter { it !in listed }
     }
 
+    /**
+     * One flag list from two that both started as [base]: this device's
+     * ([mine]) and the server's ([theirs]). The list is one value on the
+     * wire, so without this the later write would undo the earlier one,
+     * and a flag another device had just added would read to the server
+     * as deleted.
+     *
+     * Per flag: one this device changed, added or deleted is as this
+     * device has it, and every other is as the server has it. Where both
+     * changed the same flag, this device's wins, as its whole list did
+     * before. The order is this device's when it reordered the flags it
+     * shares with [base], and otherwise the server's; flags the chosen
+     * order does not hold follow it, in the other list's order.
+     */
+    fun merged(
+        base: List<FlagPaletteEntry>,
+        mine: List<FlagPaletteEntry>,
+        theirs: List<FlagPaletteEntry>,
+    ): List<FlagPaletteEntry> {
+        val was = base.associateBy { it.slot }
+        val here = mine.associateBy { it.slot }
+        val there = theirs.associateBy { it.slot }
+        val kept =
+            (here.keys + there.keys).associateWith { slot ->
+                if (here[slot] != was[slot]) here[slot] else there[slot]
+            }
+        val shared = was.keys.intersect(here.keys)
+        val reordered = mine.map { it.slot }.filter { it in shared } != base.map { it.slot }.filter { it in shared }
+        val (lead, rest) = if (reordered) mine to theirs else theirs to mine
+        return (lead + rest).map { it.slot }.distinct().mapNotNull { kept[it] }
+    }
+
     private fun carries(
         flags: List<String>,
         slot: String,
