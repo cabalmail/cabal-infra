@@ -193,6 +193,35 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         XCTAssertEqual(trail, ["InitiateAuth USER_PASSWORD_AUTH", "API GET /prod/get_preferences"])
     }
 
+    /// A session wired before any scene had handed the app's `Preferences`
+    /// in gets its settings sync when they arrive (#2441). A compose window
+    /// the system restores at launch, or opens for a `mailto:` link, restores
+    /// the session itself; before, that process had no settings sync at
+    /// all, even after a main window opened in it, so nothing was pulled or
+    /// pushed and the feed queue had nobody to ask about unsent settings.
+    func testPreferencesHandedInAfterTheSessionIsWiredStartItsSettingsSync() async throws {
+        await SignOutSuiteSteps.signIn(harness)
+        XCTAssertNil(harness.appState.prefsCoordinator, "wired with no settings to sync")
+        let cognito = harness.cognito
+        let before = await cognito.trail.count
+        let preferences = Preferences(store: InMemoryPreferenceStore())
+
+        harness.appState.usePreferences(preferences)
+
+        let coordinator = try XCTUnwrap(harness.appState.prefsCoordinator)
+        XCTAssertNotNil(preferences.accountScope, "activated for the signed-in account")
+        try await waitUntilOnMainActor {
+            await cognito.trail.dropFirst(before).contains("API GET /prod/get_preferences")
+        }
+        XCTAssertNotNil(preferences.onLocalChange)
+        // Every scene that can restore a session hands them in; the second
+        // and later calls change nothing.
+        harness.appState.usePreferences(preferences)
+        XCTAssertTrue(harness.appState.prefsCoordinator === coordinator)
+        let pulls = await cognito.trail.dropFirst(before).filter { $0 == "API GET /prod/get_preferences" }.count
+        XCTAssertEqual(pulls, 1)
+    }
+
     /// A sign-in over a wired session (#1826) stops the replaced session's
     /// settings sync before it activates the new account's settings (#2444,
     /// item 3): asked afterwards, the old coordinator sends nothing, so a
