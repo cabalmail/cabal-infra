@@ -212,7 +212,7 @@ final class ApiClientDecodeFailureTests: XCTestCase {
         Endpoint("listMyDomains", .lenient) { _ = try await $0.listMyDomains() },
         Endpoint("fetchBimiURL", .lenient) { _ = try await $0.fetchBimiURL(senderDomain: "example.com") },
         Endpoint("fetchDisplayName", .lenient) { _ = try await $0.fetchDisplayName() },
-        Endpoint("fetchAppPreferences", .lenient) { _ = try await $0.fetchAppPreferences() },
+        Endpoint("fetchSyncedSettings", .strict("get_preferences")) { _ = try await $0.fetchSyncedSettings() },
         Endpoint("loadNavState", .lenient) { _ = try await $0.loadNavState() },
         Endpoint("listRules", .strict("get_rules")) { _ = try await $0.listRules() },
         Endpoint("setRules", .strict("set_rules")) { _ = try await $0.setRules([], expectedVersion: 1) },

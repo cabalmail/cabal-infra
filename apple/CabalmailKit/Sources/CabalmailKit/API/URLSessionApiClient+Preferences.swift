@@ -18,21 +18,40 @@ extension URLSessionApiClient {
         _ = try await send(request, expectedStatuses: 200..<300)
     }
 
-    public func fetchAppPreferences() async throws -> [String: String] {
+    public func fetchSyncedSettings() async throws -> SyncedSettingsRow {
         let request = try await get("/get_preferences")
         let data = try await send(request, expectedStatuses: 200..<300)
-        struct Payload: Decodable { let app: [String: String]? }
-        let decoded = try? JSONDecoder().decode(Payload.self, from: data)
-        // A missing `app` key (older Lambda deployment, or a user who has
-        // only ever used the web client) reads as "no synced preferences".
-        return decoded?.app ?? [:]
+        return try decodeReply(SyncedSettingsPayload.self, from: data, for: request).row
     }
 
-    public func saveAppPreferences(_ prefs: [String: String]) async throws {
-        // Wrap in the `app` envelope: set_preferences merges per top-level
-        // key, so this replaces only the `app` map and leaves `name` and the
-        // web client's theme/accent/density untouched.
-        let request = try await put("/set_preferences", json: ["app": prefs])
-        _ = try await send(request, expectedStatuses: 200..<300)
+    public func saveSyncedSettings(
+        _ changes: [String: String], expectedVersion: Int?
+    ) async throws -> SyncedSettingsSaveResult {
+        // Wrap in the `app` envelope: set_preferences merges per key, so
+        // this writes only these members of the `app` map and leaves
+        // `name` and the web client's theme/accent/density untouched.
+        var body: [String: Any] = ["app": changes]
+        if let expectedVersion { body["expectedVersion"] = expectedVersion }
+        let request = try await put("/set_preferences", json: body)
+        do {
+            let data = try await send(request, expectedStatuses: 200..<300)
+            // A server that predates the version answers none.
+            let answered = try? JSONDecoder().decode(SyncedSettingsPayload.self, from: data)
+            return .saved(version: answered?.version)
+        } catch CabalmailError.http(409, let body) {
+            // The row as it is now, in `/get_preferences`' shape.
+            return .stale(try decodeReply(SyncedSettingsPayload.self, from: Data(body.utf8), for: request).row)
+        }
     }
+}
+
+/// `/get_preferences`' reply, and the body of `/set_preferences`' 409: the
+/// part of the row the Apple clients read.
+private struct SyncedSettingsPayload: Decodable {
+    /// Absent for a user who has only ever used the web client.
+    let app: [String: String]?
+    /// Absent from a server that predates the version.
+    let version: Int?
+
+    var row: SyncedSettingsRow { SyncedSettingsRow(app: app ?? [:], version: version) }
 }

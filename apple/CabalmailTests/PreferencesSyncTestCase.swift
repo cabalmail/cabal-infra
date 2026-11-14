@@ -3,10 +3,11 @@ import CabalmailKit
 @testable import CabalmailUI
 
 /// What the `PreferencesSyncCoordinator` suites share: a client from the
-/// app's own factory over `FakeSettingsServer`, which holds the `app` map,
-/// refuses a map with a value stage refuses, and refuses a flag add its
-/// palette does not list, as stage does; an account's settings as a launch
-/// loads them; and coordinators that stop at the end of each test.
+/// app's own factory over `FakeSettingsServer`, which holds the `app` map
+/// and its version, refuses a write built on an older version, refuses a
+/// map with a value stage refuses, and refuses a flag add its palette does
+/// not list, as stage does; an account's settings as a launch loads them;
+/// and coordinators that stop at the end of each test.
 ///
 /// Most tests use a debounce too long to fire and make the debounced push
 /// themselves (`pushUnsent()`), so they know when it has ended; the tests

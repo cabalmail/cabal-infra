@@ -108,13 +108,13 @@ final class PreferencesSyncOnePushTests: PreferencesSyncTestCase {
         let pushing = Task.immediate { await sync.pushUnsent() }
         sync.stop()
         preferences.activate(controlDomain: "cabalmail.example", username: "bob")
-        preferences.hasUnsentChanges = true
+        XCTAssertEqual(preferences.unsentChanges(), ["theme": "light"], "bob's own unsent change")
         let sent = await pushing.value
 
         XCTAssertFalse(sent)
         let pushes = await server.calls(to: .setPreferences).count
         XCTAssertEqual(pushes, 0, "bob's settings did not go through alice's session")
-        XCTAssertTrue(preferences.hasUnsentChanges, "bob's mark stands")
+        XCTAssertEqual(preferences.unsentChanges(), ["theme": "light"], "bob's unsent change stands")
     }
 
     // MARK: - The feed queue
@@ -147,20 +147,20 @@ final class PreferencesSyncOnePushTests: PreferencesSyncTestCase {
     /// The hook is in place from the coordinator's init, so a drain that
     /// runs before `start()` (the app starts both side by side) already asks
     /// it (#2444, item 4). The flag came from a session that could not send
-    /// it.
+    /// it, on a device that had not read the account's row: the push reads
+    /// it first.
     func testTheFeedQueueAsksBeforeTheSessionHasStarted() async throws {
         let (engine, rssStore) = try await feedItemOnTheDevice()
         let preferences = launchPreferences()
         preferences.flagPalette = [newFlag]
-        preferences.hasUnsentChanges = true
         _ = coordinator(preferences)
         try await engine.setFlag(item, slot: newFlag.slot, true)
 
         try await engine.drainPending()
 
         let seen = await calls()
-        XCTAssertEqual(seen, ["/rss_set_item_state refused", "/set_preferences accepted",
-                              "/rss_set_item_state accepted"])
+        XCTAssertEqual(seen, ["/rss_set_item_state refused", "/get_preferences accepted",
+                              "/set_preferences accepted", "/rss_set_item_state accepted"])
         let flags = try await rssStore.item(feedId: item.feedId, sortKey: item.sortKey)?.flags
         XCTAssertEqual(flags, [newFlag.slot])
     }

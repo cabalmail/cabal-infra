@@ -116,7 +116,9 @@ enum RequestReplayRows {
             try await $0.setFavorite(address: "u@s.cabalmail.example", favorite: true)
         },
         ApiRow("set_preferences", .sentAgain) { try await $0.updateDisplayName("Name") },
-        ApiRow("set_preferences", .sentAgain) { try await $0.saveAppPreferences(["k": "v"]) },
+        ApiRow("set_preferences", .sentAgain) {
+            _ = try await $0.saveSyncedSettings(["k": "v"], expectedVersion: 1)
+        },
         ApiRow("set_nav_state", .sentAgain) { try await $0.saveNavState(NavState(folder: "INBOX", clientID: "A")) },
         ApiRow("set_rules", .sentOnce) { _ = try await $0.setRules([], expectedVersion: 1) },
         ApiRow("push_register", .sentAgain) {
@@ -192,7 +194,7 @@ enum RequestReplayRows {
         ApiRow("fetch_inline_image", .sentAgain) {
             _ = try await $0.fetchInlineImageURL(host: "h", folder: "INBOX", id: 1, contentId: "c", markSeen: false)
         },
-        ApiRow("get_preferences", .sentAgain) { _ = try await $0.fetchAppPreferences() },
+        ApiRow("get_preferences", .sentAgain) { _ = try await $0.fetchSyncedSettings() },
         ApiRow("get_nav_state", .sentAgain) { _ = try await $0.loadNavState() },
         ApiRow("get_rules", .sentAgain) { _ = try await $0.listRules() },
         ApiRow("rss_list_subscriptions", .sentAgain) { _ = try await $0.listSubscriptions() },
