@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12) and is on `stage`, and then for the fix of #2439 and #2440 (#2446, merged 2026-11-13); the filter and the fixes ship in that release, with #2447's fix of #2437 (merged 2026-11-13); on 2026-11-13 the maintainer held it once more, for the fix of #2450's trigger (#2457, merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Not started (2026-11-08) |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -463,8 +463,8 @@ and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
 **Status:** Server in prod (2026-11-11); Apple merged (2026-11-12),
-the per-flag filter waiting for its release; Android not started. The
-unified flags plan
+the per-flag filter in prod with 1.53.0 (2026-11-13); Android not
+started. The unified flags plan
 shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
 are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
@@ -476,14 +476,14 @@ Its gate cleared on 2026-11-11 with 1.50.0, and its downgrade drill ran
 on a simulator against stage; `flags-and-cross-media.md` has what was
 built and run. On Apple the rest of 2b is two PRs: #2420 (items 3, 4
 and 6: the menus, the rows and the toggle; merged 2026-11-12), and
-the per-flag filter (item 5), merged as #2425 (2026-11-12) and on
-`stage` for the release after 1.52.0, which the maintainer held for a
-fix of #2421; the fix merged as #2435 (2026-11-12) and is on `stage`
-with it. The maintainer held it for the fix of #2439 and #2440 too
-(#2446, merged 2026-11-13), and #2447's fix of #2437 merged the same
-day and rides that release. On 2026-11-13 the maintainer held it once
-more, for the fix of #2450's trigger (#2457, merged 2026-11-13 and
-checked on stage the same day), a fault on the mail tier older than
+the per-flag filter (item 5), merged as #2425 (2026-11-12) and shipped
+in 1.53.0 (2026-11-13), the release after 1.52.0, which the maintainer
+held for a fix of #2421; the fix merged as #2435 (2026-11-12) and
+shipped with it. The maintainer held it for the fix of #2439 and #2440
+too (#2446, merged 2026-11-13), and #2447's fix of #2437 merged the same
+day and shipped in that release. On 2026-11-13 the maintainer held it
+once more, for the fix of #2450's trigger (#2457, merged, checked on
+stage and shipped on 2026-11-13), a fault on the mail tier older than
 these PRs and already in prod. The filter's shape was answered again on
 2026-11-12, and its Any flag row needed a third server PR in prod
 before it merged: #2424 (item 6 of 2a), merged on 2026-11-12, passed
@@ -649,8 +649,9 @@ merged:
   clients.
 - #2040: VoiceOver reads each rule's switch as a switch.
 
-What is left is this plan's own order: Phase 2 shipped, then the
-Terraform and server work in prod, plus the storage decision.
+What is left is this plan's own order. Phase 2 has shipped on Apple
+(the last of it in 1.53.0, 2026-11-13), so that is the Terraform and
+server work in prod, plus the storage decision.
 
 ### 4a. Server and infrastructure
 
