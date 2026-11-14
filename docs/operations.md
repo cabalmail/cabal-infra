@@ -74,6 +74,10 @@ The address-suggesting browser extension (Chrome + Safari) lets users mint a fre
 
 Users can author ordered mail-handling rules (file, flag, mark read, forward, auto-reply, delete) in the native clients' Settings; the imap tier compiles them into per-user procmail and applies them to every arriving message ahead of default delivery. User input never becomes procmail syntax directly — a hardened compiler validates, escapes, and sandboxes everything, and a golden-file self-test gates the image build and container start. See [Mail rules](./mail-rules.md) for the user-facing behavior, the limits, the "why didn't my rule fire" checklist, and where the compiled rules, logs, metrics, and alarms live.
 
+# Synced settings
+
+A user's settings (reading and composing behaviour, the flag list, each list's remembered filter) follow the account between devices through one row per user, behind `/get_preferences` and `/set_preferences`. The server merges each write per key and counts a version on the row; a write may say which version it was built on, and is refused with the current row when the row has moved on. [Synced settings](./settings-sync.md) is the contract for a client of the two endpoints.
+
 # Durable relay queues
 
 Both SMTP tiers keep sendmail's deferred-mail queue on shared EFS, so a task replacement cannot destroy queued mail — a sibling or successor task drains whatever was left behind. The roughly-15-minute sendmail restart cadence in the tier logs is the intentional reconfiguration fallback, not a crash loop. See [Durable relay queues](./mail-queues.md).

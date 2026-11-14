@@ -74,6 +74,10 @@ class FakeTable:
         self.key_names = key_names
         self.indexes = indexes or {}
         self.rows = {}
+        # Rows as a read that does not ask to be consistent still answers
+        # them, by key: the row before a write that has just landed (None
+        # for a row that write created). Empty means no lag.
+        self.lagging = {}
         self.updates = []
         self.deletes = []
         self.puts = []
@@ -89,8 +93,11 @@ class FakeTable:
         self.puts.append(dict(Item))
         return {}
 
-    def get_item(self, Key=None, **_kw):  # pylint: disable=invalid-name,redefined-outer-name
-        row = self.rows.get(self._key(Key))
+    def get_item(self, Key=None, ConsistentRead=False, **_kw):  # pylint: disable=invalid-name,redefined-outer-name
+        key = self._key(Key)
+        row = self.rows.get(key)
+        if not ConsistentRead and key in self.lagging:
+            row = self.lagging[key]
         return {'Item': dict(row)} if row is not None else {}
 
     def delete_item(self, Key=None, ConditionExpression=None,  # pylint: disable=invalid-name,redefined-outer-name
@@ -277,6 +284,7 @@ def reset_tables():
     for name, (keys, indexes) in SCHEMAS.items():
         table = TABLES.setdefault(name, FakeTable(keys, indexes))
         table.rows.clear()
+        table.lagging.clear()
         table.updates.clear()
         table.deletes.clear()
         table.puts.clear()
