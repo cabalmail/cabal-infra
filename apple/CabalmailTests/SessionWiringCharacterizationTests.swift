@@ -236,8 +236,13 @@ final class SessionWiringCharacterizationTests: XCTestCase {
 
         await SignOutSuiteSteps.signIn(harness, idToken: "ID-2")
         XCTAssertFalse(harness.appState.prefsCoordinator === replaced)
-        // The new session's start has run its pull and taken the observer.
-        try await waitUntilOnMainActor { preferences.onLocalChange != nil }
+        // The new session's start has taken the observer and sent its pull,
+        // one for each of the two sessions.
+        let cognito = harness.cognito
+        try await waitUntilOnMainActor {
+            await cognito.trail.filter { $0 == "API GET /prod/get_preferences" }.count >= 2
+        }
+        XCTAssertNotNil(preferences.onLocalChange)
         preferences.signature = "Unsent"
         XCTAssertTrue(preferences.hasUnsentChanges)
         let before = await harness.cognito.trail.count

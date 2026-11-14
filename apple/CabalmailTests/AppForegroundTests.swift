@@ -20,8 +20,14 @@ final class AppForegroundTests: XCTestCase {
         preferences = Preferences(store: InMemoryPreferenceStore())
         harness.appState.usePreferences(preferences)
         await SignOutSuiteSteps.signIn(harness)
-        // The session's own first pull of the preferences.
-        try await waitUntilOnMainActor { self.preferences.onLocalChange != nil }
+        // The session's own first pull of the preferences. Its request is
+        // what says the pull has gone: the edit observer is attached before
+        // it is sent, so waiting for the observer let that pull land in the
+        // middle of a test and be counted as the foreground's.
+        let cognito = harness.cognito
+        try await waitUntilOnMainActor {
+            await cognito.trail.contains("API GET /prod/get_preferences")
+        }
     }
 
     override func tearDown() async throws {
