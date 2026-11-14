@@ -29,6 +29,10 @@ import kotlinx.coroutines.launch
  * - Every local [update] writes DataStore immediately and pushes the full
  *   synced payload on a short debounce; the server merges per key.
  * - Local-only fields (dynamic color, default sort) never leave the device.
+ * - The typed values (a flag's name, the signature, the display name) are
+ *   held to what the server takes ([ServerTextRules]) on every write and
+ *   every read of the store, so none of them can make the server refuse
+ *   the request that carries them all (#2453).
  */
 @OptIn(FlowPreview::class)
 class PreferencesRepository(
@@ -89,7 +93,7 @@ class PreferencesRepository(
     /** Applies a local change and schedules the server push. */
     suspend fun update(transform: (AppPreferences) -> AppPreferences) {
         val next =
-            transform(decode(dataStore.data.first())).let {
+            accepted(transform(decode(dataStore.data.first()))).let {
                 // A palette that has existed must keep syncing even once
                 // emptied, or a deletion could never reach the server.
                 if (it.flagPalette.isNotEmpty()) it.copy(flagPaletteSyncable = true) else it
@@ -114,7 +118,21 @@ class PreferencesRepository(
         runCatching { api().setPreferences(PreferencesWire.toUpdate(current)) }
     }
 
-    private fun decode(store: Preferences): AppPreferences {
+    /**
+     * [value] with its typed values as the server takes them. Applied to
+     * what a write is about to store, and to what the store holds, which
+     * mends a value an older build stored at the next launch.
+     */
+    private fun accepted(value: AppPreferences): AppPreferences =
+        value.copy(
+            displayName = ServerTextRules.displayName(value.displayName),
+            signature = ServerTextRules.signature(value.signature),
+            flagPalette = FlagPalette.accepted(value.flagPalette),
+        )
+
+    private fun decode(store: Preferences): AppPreferences = accepted(decodeStored(store))
+
+    private fun decodeStored(store: Preferences): AppPreferences {
         val defaults = AppPreferences()
         return AppPreferences(
             displayName = store[Keys.DISPLAY_NAME] ?: defaults.displayName,
