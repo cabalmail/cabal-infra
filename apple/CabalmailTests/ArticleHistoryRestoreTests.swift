@@ -46,6 +46,8 @@ final class ArticleHistoryRestoreTests: XCTestCase {
     private var model: FeedItemDetailViewModel!
     private var coordinator: ArticleWebCoordinator!
     private var view: WKWebView!
+    /// How many pages the coordinator has reported restored (`goBack`).
+    private var restoredPages = 0
 
     override func setUp() async throws {
         try await super.setUp()
@@ -56,7 +58,11 @@ final class ArticleHistoryRestoreTests: XCTestCase {
         coordinator = ArticleWebCoordinator(
             onFailure: { _ in },
             onLeftReader: { [unowned self] in model.leftReaderThroughLink(); render() },
-            onRestoredPage: { [unowned self] in model.restoredPage(showingReader: $0); render() })
+            onRestoredPage: { [unowned self] in
+                model.restoredPage(showingReader: $0)
+                restoredPages += 1
+                render()
+            })
         let configuration = WKWebViewConfiguration()
         configuration.setURLSchemeHandler(Pages(), forURLScheme: "httpx")
         coordinator.webSchemes.insert("httpx")
@@ -96,7 +102,7 @@ final class ArticleHistoryRestoreTests: XCTestCase {
         try await followTheLink()
         try await expect(.original, on: "other")
         XCTAssertFalse(model.effectiveReaderMode, "precondition: the link out of the reader opened the page as served")
-        view.goBack()
+        try await goBack()
         try await expect(.reader, on: "article")
         XCTAssertTrue(model.effectiveReaderMode, "the toggle reads original over the reader rendering")
 
@@ -117,7 +123,7 @@ final class ArticleHistoryRestoreTests: XCTestCase {
 
         try await followTheLink()
         try await expect(.original, on: "other")
-        view.goBack()
+        try await goBack()
         try await expect(.original, on: "article")
         XCTAssertFalse(model.effectiveReaderMode, "the toggle reads reader over the publisher's layout")
 
@@ -138,6 +144,20 @@ final class ArticleHistoryRestoreTests: XCTestCase {
             "document.querySelector('a[href$=\"/other\"]').click(); true", contentWorld: .defaultClient)
     }
 
+    /// Goes back and waits for the coordinator to report the page that came
+    /// back. WebKit puts that page on screen at the navigation's commit, and
+    /// only then does the coordinator ask it what it is (`adoptRestoredPage`,
+    /// a script round trip); the answer sets the toggle. So the page reads
+    /// as restored before the coordinator and the model have caught up, and
+    /// a toggle in that gap is overwritten when the answer lands: the page
+    /// never changes, and the step that waits for it times out (#2430).
+    private func goBack(file: StaticString = #filePath, line: UInt = #line) async throws {
+        let reported = restoredPages
+        view.goBack()
+        try await settle("went back, and the coordinator never reported the page that came back",
+                         file: file, line: line) { restoredPages > reported }
+    }
+
     private enum Styling { case reader, original }
 
     /// Waits for the page named `heading` in `styling`: the reader's
@@ -147,12 +167,31 @@ final class ArticleHistoryRestoreTests: XCTestCase {
                         file: StaticString = #filePath, line: UInt = #line) async throws {
         let want = "\(heading)/\(styling == .reader ? 17 : 16)"
         var seen = ""
-        for _ in 0..<400 {
+        try await settle("waited for \(want), the page reads \(seen)", file: file, line: line) {
             seen = await face()
-            if seen == want, !view.isLoading { return }
+            return seen == want && !view.isLoading
+        }
+    }
+
+    /// Thrown by a step whose wait ran out, after it has recorded the
+    /// failure: the steps after it would run against a page one step behind
+    /// and fail for that reason alone.
+    private struct StepTimedOut: Error {}
+
+    /// Polls `condition` until it holds, and fails with `failure` and stops
+    /// the test if it has not by `defaultWaitTimeout`. That ceiling bounds a
+    /// failure, as `waitUntil`'s does: a condition that holds ends the wait
+    /// on the next poll.
+    private func settle(_ failure: @autoclosure () -> String, file: StaticString, line: UInt,
+                        until condition: () async -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(defaultWaitTimeout)
+        while await !condition() {
+            guard Date() < deadline else {
+                XCTFail(failure(), file: file, line: line)
+                throw StepTimedOut()
+            }
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTFail("waited for \(want), the page reads \(seen)", file: file, line: line)
     }
 
     private func face() async -> String {
