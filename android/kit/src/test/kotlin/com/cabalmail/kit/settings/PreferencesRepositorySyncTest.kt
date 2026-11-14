@@ -170,6 +170,28 @@ class PreferencesRepositorySyncTest {
         }
 
     @Test
+    fun `each device adds a flag and the server ends with both`() =
+        runTest {
+            // Both apps give a new flag the first free slot, so the two
+            // arrive on the same one.
+            accountsSettings()
+            val repository = launch()
+            repository.refreshFromServer()
+            val slot = FlagPalette.firstFreeSlot(repository.current().flagPalette)!!
+            val addedOnA = FlagPaletteEntry(slot = slot, label = "Added on A", color = "teal")
+            server.anotherDeviceWrites(app = mapOf("flag_palette" to FlagPalette.encode(listOf(urgent, addedOnA))))
+
+            repository.update { it.copy(flagPalette = it.flagPalette + FlagPaletteEntry(slot, "New flag", "red")) }
+            repository.pushToServer()
+
+            assertEquals(listOf("Urgent", "Added on A", "New flag"), labelsOnTheServer())
+            assertEquals(
+                listOf("cabal-flag-02", "cabal-flag-01", "cabal-flag-03"),
+                repository.current().flagPalette.map { it.slot },
+            )
+        }
+
+    @Test
     fun `a push gives up when the row keeps moving, and the change waits`() =
         runTest {
             val repository = launch()

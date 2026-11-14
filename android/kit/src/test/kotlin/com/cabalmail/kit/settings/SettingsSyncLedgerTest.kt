@@ -61,12 +61,39 @@ class SettingsSyncLedgerTest {
             listOf(flag(1, "Mine")),
             FlagPalette.merged(base, listOf(flag(1, "Mine")), listOf(flag(1, "Theirs"))),
         )
-        assertEquals(
-            listOf(flag(1, "Later"), flag(2, "Mine")),
-            FlagPalette.merged(base, base + flag(2, "Mine"), base + flag(2, "Theirs")),
-        )
         // Deleted here, renamed there: the delete is this device's change.
         assertEquals(emptyList<FlagPaletteEntry>(), FlagPalette.merged(base, emptyList(), listOf(flag(1, "Theirs"))))
+    }
+
+    @Test
+    fun `a flag added on each side to the same free slot is two flags`() {
+        // Both apps give a new flag the first free slot, so the two flags
+        // arrive on the same one. Seen on stage with two Apple simulators:
+        // the second device's "New flag" replaced the first's flag.
+        val base = listOf(flag(1, "Later"), flag(2, "Work"))
+        val theirs = base + flag(3, "Theirs", "teal")
+        assertEquals("cabal-flag-03", FlagPalette.firstFreeSlot(base), "what both apps pick")
+        assertEquals(
+            base + flag(3, "Theirs", "teal") + flag(4, "New flag"),
+            FlagPalette.merged(base, base + flag(3, "New flag"), theirs),
+        )
+        // Two added here, one there: each of this device's gets a slot of
+        // its own, past the ones either list uses.
+        assertEquals(
+            base + flag(3, "Theirs", "teal") + flag(5, "Mine 1") + flag(4, "Mine 2"),
+            FlagPalette.merged(base, base + flag(3, "Mine 1") + flag(4, "Mine 2"), theirs),
+        )
+        // The same flag added on both sides is one flag.
+        assertEquals(theirs, FlagPalette.merged(base, theirs, theirs))
+    }
+
+    @Test
+    fun `with no slot left this device's new flag takes the slot`() {
+        val base = (1..19).map { flag(it, "F$it") }
+        assertEquals(
+            flag(20, "Mine"),
+            FlagPalette.merged(base, base + flag(20, "Mine"), base + flag(20, "Theirs")).last(),
+        )
     }
 
     @Test

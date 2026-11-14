@@ -216,6 +216,13 @@ object FlagPalette {
      * before. The order is this device's when it reordered the flags it
      * shares with [base], and otherwise the server's; flags the chosen
      * order does not hold follow it, in the other list's order.
+     *
+     * Two flags added on the two sides are two flags, though both apps
+     * give a new flag the first free slot and so the same one
+     * ([firstFreeSlot]). The server's keeps the slot, which may already
+     * be on messages, and this device's moves to the next slot neither
+     * list uses. With no slot left, this device's takes the slot, as a
+     * changed flag does.
      */
     fun merged(
         base: List<FlagPaletteEntry>,
@@ -223,16 +230,41 @@ object FlagPalette {
         theirs: List<FlagPaletteEntry>,
     ): List<FlagPaletteEntry> {
         val was = base.associateBy { it.slot }
-        val here = mine.associateBy { it.slot }
         val there = theirs.associateBy { it.slot }
+        val moved = movingNewFlags(mine, there, was)
+        val here = moved.associateBy { it.slot }
         val kept =
             (here.keys + there.keys).associateWith { slot ->
                 if (here[slot] != was[slot]) here[slot] else there[slot]
             }
         val shared = was.keys.intersect(here.keys)
-        val reordered = mine.map { it.slot }.filter { it in shared } != base.map { it.slot }.filter { it in shared }
-        val (lead, rest) = if (reordered) mine to theirs else theirs to mine
+        val reordered = moved.map { it.slot }.filter { it in shared } != base.map { it.slot }.filter { it in shared }
+        val (lead, rest) = if (reordered) moved to theirs else theirs to moved
         return (lead + rest).map { it.slot }.distinct().mapNotNull { kept[it] }
+    }
+
+    /**
+     * [mine] with each flag it added on a keyword slot where the server's
+     * list ([there]) added a different one moved to a slot neither list
+     * uses, for as long as there is one.
+     */
+    private fun movingNewFlags(
+        mine: List<FlagPaletteEntry>,
+        there: Map<String, FlagPaletteEntry>,
+        was: Map<String, FlagPaletteEntry>,
+    ): List<FlagPaletteEntry> {
+        val used = (mine.map { it.slot } + there.keys).toMutableSet()
+        return mine.map { entry ->
+            val other = there[entry.slot]
+            val collides = entry.slot !in was && other != null && other != entry && entry.slot in SLOTS
+            val free = if (collides) SLOTS.firstOrNull { it !in used } else null
+            if (free == null) {
+                entry
+            } else {
+                used += free
+                entry.copy(slot = free)
+            }
+        }
     }
 
     private fun carries(
