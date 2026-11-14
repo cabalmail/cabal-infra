@@ -29,6 +29,9 @@ sys.path.insert(0, _SHARED)
 # Scripted per-test: the preferences row's Item, or an exception to raise.
 PREFS_ITEM = {}
 PREFS_ERROR = None
+# The row as a read that does not ask to be consistent still answers it
+# (the row before a write that has just landed), or None for no lag.
+PREFS_LAGGING_ITEM = None
 
 
 class _FakeSSMExceptions:
@@ -46,11 +49,14 @@ class _FakeSSM:
 
 
 class _FakeTable:
-    def get_item(self, Key=None, **_kwargs):  # pylint: disable=invalid-name
+    def get_item(self, Key=None, ConsistentRead=False, **_kwargs):  # pylint: disable=invalid-name
         if PREFS_ERROR is not None:
             raise PREFS_ERROR
         assert Key == {'user': 'tester'}
-        return {'Item': PREFS_ITEM} if PREFS_ITEM else {}
+        item = PREFS_ITEM
+        if PREFS_LAGGING_ITEM is not None and not ConsistentRead:
+            item = PREFS_LAGGING_ITEM
+        return {'Item': item} if item else {}
 
 
 class _FakeResource:
@@ -155,14 +161,31 @@ class SetFlagPaletteTest(unittest.TestCase):
     '''The keyword gate in front of the UID STORE.'''
 
     def setUp(self):
-        global PREFS_ITEM, PREFS_ERROR  # pylint: disable=global-statement
+        global PREFS_ITEM, PREFS_ERROR, PREFS_LAGGING_ITEM  # pylint: disable=global-statement
         PREFS_ITEM = _palette_item([
             {'slot': 'cabal-flag-01', 'label': 'Urgent', 'color': 'red'},
             {'slot': 'cabal-flag-02', 'label': 'Off', 'color': 'gray',
              'enabled': False},
         ])
         PREFS_ERROR = None
+        PREFS_LAGGING_ITEM = None
         STORES.clear()
+
+    def test_a_flag_just_added_to_the_palette_sets(self):
+        # #2442: the client pushes its settings and sets the flag one round
+        # trip later. A read that is not consistent may still answer the
+        # palette as it was before that push.
+        global PREFS_ITEM, PREFS_LAGGING_ITEM  # pylint: disable=global-statement
+        PREFS_LAGGING_ITEM = PREFS_ITEM
+        PREFS_ITEM = _palette_item([
+            {'slot': 'cabal-flag-01', 'label': 'Urgent', 'color': 'red'},
+            {'slot': 'cabal-flag-03', 'label': 'New', 'color': 'teal'},
+        ])
+        response = set_flag.handler(_event('cabal-flag-03'), None)
+        self.assertEqual(response['statusCode'], 200)
+        self.assertEqual(STORES, [('add', (1, 2), 'cabal-flag-03')])
+        # And one just deleted is refused, though the older row lists it.
+        self.assertEqual(set_flag.handler(_event('cabal-flag-02'), None)['statusCode'], 400)
 
     def test_system_flags_pass_without_a_palette_read(self):
         global PREFS_ERROR  # pylint: disable=global-statement

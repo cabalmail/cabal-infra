@@ -87,6 +87,34 @@ object FlagPalette {
     /** Encodes for the wire: `{slot, label, color}` an entry, in palette order. */
     fun encode(entries: List<FlagPaletteEntry>): String = Json.encodeToString(entries)
 
+    /**
+     * What Settings names a new flag before the user names it, and the
+     * name a flag of the user's own gets back when it is stored with an
+     * empty one. The app shows its localized string for a new flag; this
+     * is what a stored value falls back to where no resources are in reach.
+     */
+    const val NEW_FLAG_LABEL = "New flag"
+
+    /**
+     * The name an entry has before the user gives it one: the built-in
+     * flag's own for its entry ("Flagged"), [NEW_FLAG_LABEL] for any other.
+     */
+    fun defaultLabel(slot: String): String = if (slot == SYSTEM_SLOT) DEFAULT_SYSTEM_ENTRY.label else NEW_FLAG_LABEL
+
+    /**
+     * [entries] with every name as the server takes it
+     * ([ServerTextRules.flagLabel]); a name that comes out empty is the
+     * entry's default one ([defaultLabel]). The flag editor writes no such
+     * name, so this names an entry that got one another way: builds up to
+     * 1.53.0 stored a cleared name as it was typed (#2453).
+     */
+    fun accepted(entries: List<FlagPaletteEntry>): List<FlagPaletteEntry> =
+        entries.map { entry ->
+            val label = ServerTextRules.flagLabel(entry.label)
+            val named = label.ifEmpty { defaultLabel(entry.slot) }
+            if (named == entry.label) entry else entry.copy(label = named)
+        }
+
     /** The lowest keyword slot not yet used, or null once all 20 are. */
     fun firstFreeSlot(entries: List<FlagPaletteEntry>): String? =
         SLOTS.firstOrNull { slot -> entries.none { it.slot == slot } }

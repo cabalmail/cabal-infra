@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -184,15 +185,26 @@ private fun FlagEditorDialog(
 ) {
     val isSystemEntry = FlagPaletteEdits.isSystemEntry(entry.slot)
     var confirmingDelete by rememberSaveable { mutableStateOf(false) }
+    // The name field never writes an empty name (see FlagNameField). Read
+    // through `seeing` at each composition, so a name that changed by
+    // another route (Reset to default below, a pull) shows at once.
+    var typedName by remember(entry.slot) { mutableStateOf(FlagNameField.opening(entry.label)) }
+    val name = typedName.seeing(entry.label)
+    val leave = {
+        name.leaving()?.let { onChange(entry.copy(label = it)) }
+        onDismiss()
+    }
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = leave,
         title = { Text(stringResource(R.string.flags_edit)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    value = entry.label,
+                    value = name.text,
                     onValueChange = { value ->
-                        onChange(entry.copy(label = value.take(FlagPalette.MAX_LABEL_LENGTH)))
+                        val (next, written) = name.typed(value)
+                        typedName = next
+                        written?.let { onChange(entry.copy(label = it)) }
                     },
                     label = { Text(stringResource(R.string.flags_name)) },
                     singleLine = true,
@@ -223,7 +235,7 @@ private fun FlagEditorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.rules_done)) }
+            TextButton(onClick = leave) { Text(stringResource(R.string.rules_done)) }
         },
     )
     if (confirmingDelete) {

@@ -39,7 +39,11 @@ def _palette_slots(user):
     (docs/2.x/flag-palette-enabled-removal.md). Raises on a read failure —
     unlike compose.py's display-name lookup this must fail closed: a
     transient error must not let an unvetted keyword through.'''
-    item = _preferences_table.get_item(Key={'user': user}).get('Item', {})
+    # A consistent read: a client that was refused a flag pushes its unsent
+    # settings and tries again at once, and the palette as it was before
+    # that push would refuse the flag a second time (#2442).
+    item = _preferences_table.get_item(
+        Key={'user': user}, ConsistentRead=True).get('Item', {})
     raw = item.get('app', {}).get('flag_palette', '[]')
     try:
         entries = json.loads(raw)

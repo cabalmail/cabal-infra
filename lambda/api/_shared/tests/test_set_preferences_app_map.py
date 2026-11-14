@@ -205,8 +205,10 @@ class FlagPalette(unittest.TestCase):
             '[{"color":"red","label":"Urgent","slot":"\\\\Flagged"},'
             '{"color":"teal","label":"Later","slot":"cabal-flag-03"}]')
         self.assertEqual(json.loads(stored), sent)
-        # What the handler answered is what it wrote.
-        self.assertEqual(TABLE.updates[1]['ExpressionAttributeValues'], {':a0': stored})
+        # What the handler answered is what it wrote (beside the one the
+        # write counts the row's version up by).
+        self.assertEqual(TABLE.updates[1]['ExpressionAttributeValues'],
+                         {':a0': stored, ':one': 1})
 
     def test_system_slot_takes_the_same_fields_as_a_keyword_slot(self):
         self.assertEqual(save_palette([entry('\\Flagged', enabled=False)])[0], 200)
@@ -382,12 +384,15 @@ class PalettePublish(unittest.TestCase):
         save_palette([entry('\\Flagged', 'Urgent', 'red'), entry('cabal-flag-01')])
         self.assertEqual(self.published(), 0)
 
-    def test_a_map_without_the_palette_publishes_nothing_and_asks_for_nothing(self):
+    def test_a_map_without_the_palette_publishes_nothing(self):
+        # Every write asks for the row as it was now, for the version it
+        # held (test_preferences_version.py), so the old list is in hand
+        # here too; a map that does not carry the list still publishes
+        # nothing.
         save_palette([entry('cabal-flag-01')])
         self.published()
         self.assertEqual(call({'theme': 'dark'})[0], 200)
         self.assertEqual(self.published(), 0)
-        self.assertEqual(TABLE.updates[-1]['ReturnValues'], 'NONE')
         # The list is still what it was: the next write of it is no change.
         save_palette([entry('cabal-flag-01')])
         self.assertEqual(self.published(), 0)

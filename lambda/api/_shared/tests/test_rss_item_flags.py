@@ -232,6 +232,21 @@ class SetFlags(unittest.TestCase):
         self.assertEqual((got, body['code'], body['flags']), (400, 'flag_not_in_palette', [NEVER, GONE]))
         self.assertEqual(self.state.rows, {})
 
+    def test_a_slot_just_added_to_the_palette_can_be_added(self):
+        # #2442: refused a flag add, the feed queue has the unsent settings
+        # pushed and sends the batch again at once. A read that is not
+        # consistent may still answer the palette as it was before that
+        # push, and a second refusal is final for the queue.
+        prefs = self.tables['cabal-user-preferences']
+        prefs.lagging[(USER,)] = dict(prefs.rows[(USER,)])
+        prefs.rows[(USER,)] = {'user': USER, 'app': {'flag_palette': json.dumps(
+            [{'slot': NEVER, 'label': 'New', 'color': 'teal'}])}}
+        # One just deleted is refused, though the older row lists it.
+        self.refused(entry(add_flags=[LATER]), 400, 'flag_not_in_palette', [LATER])
+        status, body = call(self.mod, body={'items': [entry(add_flags=[NEVER])]})
+        self.assertEqual((status, body), (200, {'updated': 1}))
+        self.assertEqual(self.row()['flags'], {NEVER})
+
     def test_an_entry_stored_as_disabled_can_be_added(self):
         # `enabled` is deprecated and read by nothing: a slot is in the
         # palette or it is not (docs/2.x/flag-palette-enabled-removal.md).
