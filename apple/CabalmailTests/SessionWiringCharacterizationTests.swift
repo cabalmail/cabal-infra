@@ -3,12 +3,13 @@ import Observation
 import CabalmailKit
 @testable import CabalmailUI
 
-/// Workstream 0.8 characterization suite: what `AppState.wireSession` builds
-/// and starts once a sign-in has tokens, what `refreshWatchSession()` hands
-/// the watch, and what a second sign-in after a sign-out builds afresh. The
-/// rearchitecture (workstream 1.3) moves all of this into a per-account
-/// session manager; these record it as it is today, through the
-/// `SessionEnvironment` seam (`SessionHarness`), so the move shows any change.
+/// Workstream 0.8 characterization suite: what `SessionManager.wireSession`
+/// builds and starts once a sign-in has tokens, what `refreshWatchSession()`
+/// hands the watch, and what a second sign-in after a sign-out builds afresh.
+/// The rearchitecture (workstream 1.3) has since moved all of this out of
+/// `AppState` and into the per-account session manager; these record it as it
+/// is today, through the `SessionEnvironment` seam (`SessionHarness`), so a
+/// further move shows any change.
 ///
 /// Protects the #1703 contract that the session observer is listening by the
 /// time the app reads as signed in (a signal in the gap was dropped and the

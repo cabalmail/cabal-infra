@@ -186,11 +186,12 @@ final class MailEventSearchSurfaceTests: XCTestCase {
 
     // MARK: - One search model, two windows
 
-    /// Every window shows the one search model (`AppState.sharedSearchModel`),
-    /// so both windows' lists apply the same reactions, each from its own
-    /// place and for its own window, whichever applies first. Two iPad
-    /// windows at compact width, each reading the archived result: the one
-    /// that archived moves on, the other lets go.
+    /// Two windows' lists over one search model (a model is the window's,
+    /// `SceneNavigator.searchModel`, shared by that window's layout trees
+    /// rather than by the process, #1654) apply the same reactions, each
+    /// from its own place and for its own window, whichever applies first.
+    /// Two iPad windows at compact width, each reading the archived result:
+    /// the one that archived moves on, the other lets go.
     func testOneSearchModelInTwoCompactWindowsMovesOnlyTheOriginsReader() async throws {
         for windowAFirst in [true, false] {
             let imap = FakeImapClient()
