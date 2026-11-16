@@ -5,6 +5,156 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.54.0] - 2026-11-16
+
+### Added
+- **A version on the synced-settings row, and a write that can say which
+  version it was built on.** `set_preferences` counts every write to a
+  user's settings, and `get_preferences` and each accepted write answer
+  the count as `version`. A request may carry `expectedVersion`: when the
+  row has moved on since, nothing is written and the answer is a 409
+  holding the row as it is, for the client to merge and send again. A
+  request without it is written as before, so builds in the field see no
+  change; no client sends it yet. This is the server half of the fix for
+  a device putting its older copy of the settings over the account's
+  (#2452, #2464). The contract is in `docs/settings-sync.md`.
+
+### Changed
+- **Two Apple-client test comments now name the type that owns the member.**
+  The mail-event search suite credited the search model to
+  `AppState.sharedSearchModel` and called it process-wide, fourteen minutes
+  before that model moved to `SceneNavigator` as one per window; the
+  session-wiring suite credited `wireSession` to `AppState`, which handed it to
+  `SessionManager` two days later, and still described that move as pending.
+  Comments only, no code change.
+
+### Fixed
+- Android: **Older settings replacing the account's.** Every settings
+  change sent the device's whole set of synced settings and the display
+  name, so a device that had not seen a change made on another one put
+  its older copy back, and a device new to the account whose first sync
+  had failed emptied the account's display name, signature and Default
+  From with its first change. A device now sends only the settings
+  changed on it, sends nothing until it has read the account's, and
+  tells the server which version of them it was working from; when
+  another device has changed them since, it takes those changes in and
+  sends again, and two edits of the flag list on two devices are merged
+  (#2452, #2464). A change that could not be sent is kept and goes at
+  the next change or launch, where it used to be dropped. And the
+  settings on a device belong to one account: when another account signs
+  in they start from that account's own, where the flag list, signature,
+  Default From and folder filters of the last account used to stay and
+  reach the new account's settings (#2471). Against a server that
+  predates the version check the app still sends only its own changes.
+- Android: **Settings sync stopped by an emptied flag name.** Clearing a
+  flag's name in Settings stored the empty name, and the server refuses
+  a flag with no name together with everything else in the same request,
+  which on Android is every synced setting and the display name. Nothing
+  said so, and each later change was lost at the next launch. A signature
+  over 2,000 characters or a display name over 100 did the same. The
+  flag editor no longer writes an empty name (leaving it with the field
+  cleared gives the flag back the name it opened with), names are cut to
+  what the server counts rather than at 32 UTF-16 units, the signature
+  and the display name are cut to the server's limits when they are
+  saved, and a value an older build stored is mended when the app next
+  reads it (#2453).
+- **A flaky Apple app-layer test of the settings pull at foreground.**
+  `AppForegroundTests` waited for the settings sync's edit observer as
+  the sign that the session's first pull had gone. Since the sync started
+  attaching the observer before that pull, the pull could land inside
+  `testReturningToTheForegroundReconcilesThePreferencesOnce` and be
+  counted as the foreground's, which failed a stage run of the Mac
+  app-layer suite. The setup now waits for the pull's request itself.
+  Test only.
+- Apple: **No settings sync when the app starts in a compose window.** A
+  compose window that the system restored at launch, or opened for a
+  `mailto:` link, restored the session without the app's settings, so
+  for as long as that process ran nothing was pulled from or pushed to
+  the server, even after a main window opened, and a flag added in
+  Settings could be dropped from a feed item it was put on. The compose
+  window now hands the settings to the session as the main window does,
+  and a session that was started without them begins syncing when they
+  arrive (#2441).
+- Apple: **One device's older settings replacing the account's.** Every
+  settings change sent the device's whole set of synced settings, so a
+  device that had not yet seen a change made on another one put its
+  older copy back: a renamed flag, the signature, a folder's remembered
+  filter. On a device new to the account whose first sync had failed,
+  the first change (a tap on a folder's Unread pill was enough) emptied
+  the account's signature and Default From and reset nine more settings.
+  A device now sends only the settings changed on it, sends nothing
+  until it has read the account's, and tells the server which version of
+  them it was working from; when another device has changed them since,
+  it takes those changes in and sends again, and two edits of the flag
+  list on two devices are merged (#2452, #2464). Also: a setting changed
+  in the moment a session starts is no longer lost, a settings sync is
+  no longer held while one change cannot be sent, and a second account
+  signed in on the same device no longer sends keys the first one had
+  set (#2441, #2451). Needs the server from this release's API change to
+  check versions; against an older server the device still sends only
+  its own changes. Devices on 1.53.0 or older keep the old behaviour
+  until they update.
+- **Flaky article back-and-forward tests.** `ArticleHistoryRestoreTests`
+  went back and then toggled the reader as soon as the restored page read
+  as on screen, but the article view's coordinator only then asks that page
+  what it is, and its answer sets the toggle. On a loaded CI runner the
+  toggle landed before the answer and was overwritten by it, so the page
+  never changed and the next two waits ran out (#2430). The tests now wait
+  for the coordinator's report of the restored page before going on, and a
+  step whose wait runs out stops the test instead of failing the steps
+  after it.
+- **A Default From address over 100 characters refused with the device's
+  whole settings map.** `set_preferences` held the Default From address
+  to the display name's bound of 100 code points, though an account can
+  hold a longer address and an app can pick it; every settings push from
+  that device was then answered 400. The address has its own bound now,
+  320 code points, the longest address SMTP's limits allow (#2451).
+- **Kit simulator test jobs failing before any test ran.** `apple.yml`'s
+  "Test CabalmailKit (iOS)" job now and then failed about 13 minutes in with
+  "The test runner hung before establishing connection", having run
+  nothing, which turned `apple-gate` red and, on a `stage` or `main` push,
+  skipped the TestFlight uploads (#2436). xcodebuild boots a new simulator
+  only when testing starts, and that first boot keeps the three-core runner
+  saturated for minutes, so the suite's bare `xctest` runner was sometimes
+  refused by the device's service hub three times running. The Kit
+  simulator legs now run their test command once more when exactly that
+  happened. `runner-hung-before-tests.py` accepts only that error with no
+  test started, so a run that produced a result is never repeated, and
+  `xcodebuild-test.sh` never tries a third time and leaves a warning
+  annotation on a run that retried.
+- **Reads of the settings row that could miss a write made a moment
+  earlier.** `get_preferences`, and the flag-list checks in `set_flag`
+  and `rss_set_item_state`, read the row with an eventually consistent
+  read, while the Apple apps read straight after they write: a settings
+  pull right after a push, and a flag put on a feed item right after the
+  push that created it. A read of the older row could put the older
+  settings back, or refuse the flag a second time. All three now read
+  consistently (#2442).
+- **Reconfigure messages arriving back to back can no longer stop
+  sendmail on a mail tier.** `reconfigure.sh` restarts sendmail by
+  killing it, a pass takes about five seconds, and supervisord counts an
+  exit within five seconds of a start as a failed start and gives up
+  after four in a row. Stage logged three in a row three times; prod's
+  closest calls cleared the five seconds by 25 ms, in trains of up to
+  ten restarts set off by rule saves. Two changes: the script now waits
+  until the sendmail supervisord started has been up 15 seconds before
+  killing it, so a kill can never be a failed start; and a pass started
+  by a queue message restarts sendmail only when a file sendmail reads
+  has changed since it started, which a rule save, a flag change or a
+  confirmed address never does. The 15-minute fallback pass restarts
+  sendmail regardless, as before (#2450).
+- **A mail tier left without sendmail is now replaced.** supervisord
+  stops restarting a program that exits within five seconds of its start
+  four times running, and `reconfigure.sh` restarts sendmail by killing
+  it, so reconfigure messages arriving back to back could leave a tier
+  with no sendmail at all. Nothing would have noticed on the IMAP tier,
+  whose health check looked at Dovecot's port only, or on smtp-out,
+  whose check looked at the submission ports. Both container health
+  checks now also look for a sendmail process, so ECS replaces such a
+  task; on the IMAP tier that part waits until sendmail's startup
+  preparation has finished, so a deploy goes healthy as soon as before.
+  The trains themselves are not prevented by this change (#2450).
+
 ## [1.53.0] - 2026-11-13
 
 ### Added
