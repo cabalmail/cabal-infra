@@ -73,8 +73,14 @@ public struct ComposeWindowScene: Scene {
                 // this scene, in which case the main window's `.task` —
                 // the usual `restoreIfPossible` call site — may not have
                 // run. Idempotent, so calling it again is a no-op when
-                // the main window already restored the session.
-                .task { await appState.restoreIfPossible() }
+                // the main window already restored the session. The
+                // settings go in first, as at the main window's root, or
+                // the session this wires would have no settings sync
+                // (#2441).
+                .task {
+                    appState.usePreferences(preferences)
+                    await appState.restoreIfPossible()
+                }
         }
         // Give the macOS compose window a sensible starting size so it
         // doesn't inherit the main mail window's geometry. iPadOS and

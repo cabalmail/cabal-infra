@@ -157,6 +157,7 @@ COPY shared/generate-config.sh             /usr/local/bin/generate-config.sh
 COPY shared/sync-users.sh                  /usr/local/bin/sync-users.sh
 COPY shared/reconfigure.sh                 /usr/local/bin/reconfigure.sh
 COPY shared/sendmail-wrapper.sh            /usr/local/bin/sendmail-wrapper.sh
+COPY shared/sendmail-restart-lib.sh        /usr/local/bin/sendmail-restart-lib.sh
 COPY shared/prepare-sendmail.sh            /usr/local/bin/prepare-sendmail.sh
 
 # Static + dynamic alias assembly (imap only): called by both

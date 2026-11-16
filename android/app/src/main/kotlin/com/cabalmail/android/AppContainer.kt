@@ -184,7 +184,13 @@ class AppContainer(
 
     /** Preferences: DataStore cache + server sync (plan §6.3). */
     val preferences: PreferencesRepository by lazy {
-        PreferencesRepository(appContext.settingsDataStore, appScope) { requireApi() }
+        PreferencesRepository(
+            appContext.settingsDataStore,
+            appScope,
+            // The settings store is one per device; this is what tells it
+            // whose synced settings it holds (#2471).
+            account = { requireAuth().currentUsername()?.let { "$it@${configService.controlDomain.value}" } },
+        ) { requireApi() }
     }
 
     val navCursor: NavCursor by lazy {

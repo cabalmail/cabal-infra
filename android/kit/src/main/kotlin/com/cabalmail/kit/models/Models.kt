@@ -266,7 +266,30 @@ data class Preferences(
     val density: String = "compact",
     val name: String = "",
     val app: Map<String, String> = emptyMap(),
+    /**
+     * How many writes the row has taken: what a write sends back as its
+     * `expectedVersion` (`docs/settings-sync.md`). Null from a server that
+     * predates it.
+     */
+    val version: Int? = null,
 )
+
+/** How `/set_preferences` answered a write. */
+sealed interface PreferencesSaveResult {
+    /** Written. [version] is the row's new version, or null from a server that predates it. */
+    data class Saved(
+        val version: Int?,
+    ) : PreferencesSaveResult
+
+    /**
+     * Not written: the row had moved on from the version the write named
+     * (HTTP 409). [row] is the row as it is now, to merge into and send
+     * again on.
+     */
+    data class Stale(
+        val row: Preferences,
+    ) : PreferencesSaveResult
+}
 
 /**
  * Partial preferences update — only non-null fields go on the wire, and the

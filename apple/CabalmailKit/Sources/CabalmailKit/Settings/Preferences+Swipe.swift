@@ -42,8 +42,8 @@ extension Preferences {
 
     /// The `app`-map entries the payload carries for the swipe bindings:
     /// all four, once any is syncable (the server accepts them as a set).
-    func swipeWireEntries() -> [String: String] {
-        guard !swipeBindingsAreDefault || swipeBindingsSyncable else { return [:] }
+    func swipeWireEntries(gated: Bool = true) -> [String: String] {
+        guard !gated || !swipeBindingsAreDefault || swipeBindingsSyncable else { return [:] }
         return [
             Self.swipeLeadingWireKey: swipeLeading.rawValue,
             Self.swipeTrailingWireKey: swipeTrailing.rawValue,

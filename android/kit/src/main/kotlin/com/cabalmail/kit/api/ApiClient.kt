@@ -19,6 +19,7 @@ import com.cabalmail.kit.models.MyDomains
 import com.cabalmail.kit.models.NavState
 import com.cabalmail.kit.models.PoolUser
 import com.cabalmail.kit.models.Preferences
+import com.cabalmail.kit.models.PreferencesSaveResult
 import com.cabalmail.kit.models.PreferencesUpdate
 import com.cabalmail.kit.models.PushEnvelope
 import com.cabalmail.kit.models.RssCatalog
@@ -124,12 +125,31 @@ class ApiClient(
         path: String,
         query: Map<String, String> = emptyMap(),
         body: JsonObject? = null,
-    ): String =
+    ): String = reply(method, path, query, body).text
+
+    /** A response's status and body. */
+    private class Reply(
+        val status: Int,
+        val text: String,
+    )
+
+    /**
+     * [call], answering the status too. A response with status [alsoTaken]
+     * is answered like a success instead of thrown: for an endpoint whose
+     * refusal carries a body the caller reads.
+     */
+    private suspend fun reply(
+        method: HttpMethod,
+        path: String,
+        query: Map<String, String> = emptyMap(),
+        body: JsonObject? = null,
+        alsoTaken: Int? = null,
+    ): Reply =
         // One signal for the whole call, so every way a request can die of an
         // expired session reaches the UI — including the common one, where
         // minting the token throws before a request is ever sent.
         try {
-            attempt(method, path, query, body)
+            attempt(method, path, query, body, alsoTaken)
         } catch (expired: CabalmailException.AuthExpired) {
             onAuthExpired?.invoke()
             throw expired
@@ -140,7 +160,8 @@ class ApiClient(
         path: String,
         query: Map<String, String>,
         body: JsonObject?,
-    ): String {
+        alsoTaken: Int?,
+    ): Reply {
         var token = authService.currentIdToken()
         var response = execute(method, path, query, body, token)
         if (response.status == HttpStatusCode.Unauthorized) {
@@ -153,10 +174,10 @@ class ApiClient(
             }
         }
         val text = response.bodyAsText()
-        if (!response.status.isSuccess()) {
+        if (!response.status.isSuccess() && response.status.value != alsoTaken) {
             throw mapError(response.status.value, text, response.headers["Retry-After"])
         }
-        return text
+        return Reply(response.status.value, text)
     }
 
     private suspend fun execute(
@@ -864,11 +885,45 @@ class ApiClient(
 
     // ------------------------------------------- preferences and nav state
 
+    /**
+     * The account's settings row with its version. A reply that does not
+     * decode throws: read as an empty row it would be taken for the
+     * account's settings.
+     */
     suspend fun getPreferences(): Preferences = decode(call(HttpMethod.Get, "get_preferences"))
 
-    /** Sends only the non-null fields; the server merges per key. */
-    suspend fun setPreferences(update: PreferencesUpdate) {
-        call(HttpMethod.Put, "set_preferences", body = bodyJson.encodeToJsonElement(update).jsonObject)
+    /**
+     * Sends only the non-null fields; the server merges per key, so a key
+     * that is not sent keeps its value. With [expectedVersion] the write
+     * lands only if the row is still at that version; otherwise nothing is
+     * written and the answer is [PreferencesSaveResult.Stale] with the row
+     * as it is (`docs/settings-sync.md`).
+     */
+    suspend fun setPreferences(
+        update: PreferencesUpdate,
+        expectedVersion: Int? = null,
+    ): PreferencesSaveResult {
+        val fields = bodyJson.encodeToJsonElement(update).jsonObject
+        val body =
+            if (expectedVersion == null) {
+                fields
+            } else {
+                JsonObject(fields + buildJsonObject { put("expectedVersion", expectedVersion) })
+            }
+        val reply = reply(HttpMethod.Put, "set_preferences", body = body, alsoTaken = HttpStatusCode.Conflict.value)
+        if (reply.status == HttpStatusCode.Conflict.value) {
+            return PreferencesSaveResult.Stale(decode(reply.text))
+        }
+        // A server that predates the version answers none.
+        val answered =
+            runCatching {
+                json
+                    .parseToJsonElement(reply.text)
+                    .jsonObject["version"]
+                    ?.jsonPrimitive
+                    ?.int
+            }
+        return PreferencesSaveResult.Saved(answered.getOrNull())
     }
 
     /** The stored resume cursor, or null when none has been saved. */

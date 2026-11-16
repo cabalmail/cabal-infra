@@ -40,4 +40,15 @@ if [ "${TIER:-}" = "smtp-out" ] || [ "${TIER:-}" = "smtp-in" ]; then
   chmod 0700 /var/spool/mqueue 2>/dev/null || true
 fi
 
+# Record what this sendmail is about to read, so that reconfigure.sh can
+# tell a queue message that changed nothing sendmail reads from one that
+# needs a restart (issue #2450; sendmail-restart-lib.sh has the why and
+# the ordering). If the record cannot be written there is none, and
+# reconfigure.sh then restarts on every message, as it did before.
+# shellcheck source=docker/shared/sendmail-restart-lib.sh
+if . /usr/local/bin/sendmail-restart-lib.sh; then
+  sendmail_record_loaded_inputs \
+    || echo "[sendmail-wrapper] could not record sendmail's inputs; every reconfigure message will restart it"
+fi
+
 exec /usr/sbin/sendmail -bD -q15m

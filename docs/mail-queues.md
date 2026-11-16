@@ -11,10 +11,12 @@ Why it matters on each tier:
 
 - Supervisord gives sendmail `stopwaitsecs=110` inside the tiers' 120-second ECS stop grace, so an in-flight delivery attempt can finish before the task dies; anything still queued is drained by a sibling or successor task.
 - `reconfigure.sh` restarts sendmail on a fallback interval (`RECONFIGURE_INTERVAL`, default 900 s) as a safety net for missed SNS/SQS reconfiguration events. A sendmail restart roughly every 15 minutes in the tier logs is **by design**, not a crash loop — and each restart also kicks the queue runner.
+- A reconfiguration event restarts sendmail only when it changed a file sendmail reads: a new or revoked address does, a rule save, a flag change or a confirmed address does not (`Nothing sendmail reads has changed; not restarting it.` in the tier log). `sendmail-wrapper.sh` records a digest of those files each time it starts sendmail, and `reconfigure.sh` compares against it.
+- `reconfigure.sh` never kills a sendmail that supervisord started less than 15 seconds ago; it waits until it is that old (`waiting until it has been up 15s` in the tier log). In a burst of address changes, restarts are therefore about 15 seconds apart, and a change after the first can take that much longer to reach sendmail.
 
 ## If sendmail stops
 
-Supervisord restarts sendmail whenever it exits, with one exception: a program that exits within `startsecs` (5 s) of its start four times running is given up on (`gave up: sendmail entered FATAL state` in the tier log) and is not started again. `reconfigure.sh` restarts sendmail by killing it, so restarts that come back to back are how a tier could get there. Each tier has a signal that turns a missing sendmail into a task replacement:
+Supervisord restarts sendmail whenever it exits, with one exception: a program that exits within `startsecs` (5 s) of its start four times running is given up on (`gave up: sendmail entered FATAL state` in the tier log) and is not started again. `reconfigure.sh` restarts sendmail by killing it, and the 15-second wait above is what keeps its kills from ever counting as such an exit; a sendmail that cannot start for some other reason can still get there. Each tier has a signal that turns a missing sendmail into a task replacement:
 
 - **imap**: the container health check connects to Dovecot's port 143 and, once `/run/sendmail-ready` exists, looks for a sendmail process. Three failed checks, ten seconds apart, mark the task unhealthy and ECS replaces it. Mail that arrives meanwhile waits in smtp-in's queue.
 - **smtp-out**: the container health check connects to both submission ports and looks for a sendmail process, every 30 seconds.

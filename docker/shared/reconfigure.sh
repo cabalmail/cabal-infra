@@ -22,6 +22,12 @@ set -euo pipefail
 QUEUE_URL="${SQS_QUEUE_URL:-}"
 FALLBACK_INTERVAL="${RECONFIGURE_INTERVAL:-900}"
 
+# sendmail_inputs_changed and sendmail_restart: when a pass restarts
+# sendmail, and how it does so without supervisord counting the restart
+# as a failed start (issue #2450).
+# shellcheck source=docker/shared/sendmail-restart-lib.sh
+. /usr/local/bin/sendmail-restart-lib.sh
+
 echo "[reconfigure] Starting config watch loop (tier: $TIER)"
 
 if [ -n "$QUEUE_URL" ]; then
@@ -33,7 +39,13 @@ fi
 # ── Regeneration function ──────────────────────────────────────
 # Re-runs generate-config.sh (DynamoDB scan), rebuilds the hash
 # databases sendmail reads, and signals daemons to reload.
+#
+# $1 says what started the pass: "sqs" (a queue message) or "periodic"
+# (the fallback interval). It decides only whether sendmail is restarted
+# at the end; everything before that runs the same either way.
 regenerate() {
+  local trigger="${1:-periodic}"
+
   # Converge OS accounts on the Cognito pool before anything reads them.
   # Same tier gate as entrypoint.sh: imap delivers locally via procmail and
   # smtp-out resolves submission auth against the passwd db, so both need
@@ -93,13 +105,22 @@ regenerate() {
   # subdomain is added the IMAP tier fails to recognise it as local
   # and bounces the message back via MX → smtp-in → imap → loop.
   #
-  # We kill sendmail and rely on supervisord's autorestart to bring
-  # it back up.  supervisorctl is not configured (no unix_http_server
-  # / supervisorctl section in supervisord.conf), and the wrapper
-  # already pkills any stale daemon and removes the stale PID file
-  # before exec'ing sendmail, so a plain pkill is safe.
-  echo "[reconfigure] Killing sendmail; supervisord will restart it..."
-  pkill -x sendmail 2>/dev/null || true
+  # A pass started by a queue message restarts it only when a file it
+  # reads has changed since it started. A rule save, a flag change or a
+  # confirmed address changes none of them (procmail reads its own files
+  # at every delivery), and those are most of the messages. The fallback
+  # pass restarts it regardless, as it always has: that restart is the
+  # safety net, this comparison included.
+  #
+  # sendmail_restart kills sendmail and relies on supervisord's
+  # autorestart to bring it back up, and first waits until the running
+  # sendmail is old enough that supervisord cannot count the kill as a
+  # failed start. See sendmail-restart-lib.sh.
+  if [ "$trigger" = "sqs" ] && ! sendmail_inputs_changed; then
+    echo "[reconfigure] Nothing sendmail reads has changed; not restarting it."
+  else
+    sendmail_restart
+  fi
 
   # For SMTP-OUT, also reload OpenDKIM tables
   if [ "$TIER" = "smtp-out" ]; then
@@ -230,20 +251,20 @@ while true; do
         --region "$AWS_REGION" 2>/dev/null || true
 
       drain_queue
-      regenerate
+      regenerate sqs
       continue
     fi
 
     # Periodic fallback — safety net for lost SQS messages
     if [ "$ELAPSED" -ge "$FALLBACK_INTERVAL" ]; then
       echo "[reconfigure] Periodic fallback regeneration (every ${FALLBACK_INTERVAL}s)..."
-      regenerate
+      regenerate periodic
     fi
   else
     # ── Periodic-only mode (no SQS queue configured) ─────────
     if [ "$ELAPSED" -ge "$FALLBACK_INTERVAL" ]; then
       echo "[reconfigure] Periodic regeneration (every ${FALLBACK_INTERVAL}s)..."
-      regenerate
+      regenerate periodic
     fi
     sleep 60
   fi

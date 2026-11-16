@@ -3,12 +3,13 @@ import Observation
 import CabalmailKit
 @testable import CabalmailUI
 
-/// Workstream 0.8 characterization suite: what `AppState.wireSession` builds
-/// and starts once a sign-in has tokens, what `refreshWatchSession()` hands
-/// the watch, and what a second sign-in after a sign-out builds afresh. The
-/// rearchitecture (workstream 1.3) moves all of this into a per-account
-/// session manager; these record it as it is today, through the
-/// `SessionEnvironment` seam (`SessionHarness`), so the move shows any change.
+/// Workstream 0.8 characterization suite: what `SessionManager.wireSession`
+/// builds and starts once a sign-in has tokens, what `refreshWatchSession()`
+/// hands the watch, and what a second sign-in after a sign-out builds afresh.
+/// The rearchitecture (workstream 1.3) has since moved all of this out of
+/// `AppState` and into the per-account session manager; these record it as it
+/// is today, through the `SessionEnvironment` seam (`SessionHarness`), so a
+/// further move shows any change.
 ///
 /// Protects the #1703 contract that the session observer is listening by the
 /// time the app reads as signed in (a signal in the gap was dropped and the
@@ -184,9 +185,42 @@ final class SessionWiringCharacterizationTests: XCTestCase {
 
         XCTAssertNotNil(preferences.accountScope)
         XCTAssertNotNil(harness.appState.prefsCoordinator)
-        try await waitUntilOnMainActor { preferences.onLocalChange != nil }
+        // The observer is attached before the session's first pull is
+        // sent, so it is the pull itself that says the start has run.
+        let cognito = harness.cognito
+        try await waitUntilOnMainActor { await cognito.trail.count == 2 }
+        XCTAssertNotNil(preferences.onLocalChange)
         let trail = await harness.cognito.trail
         XCTAssertEqual(trail, ["InitiateAuth USER_PASSWORD_AUTH", "API GET /prod/get_preferences"])
+    }
+
+    /// A session wired before any scene had handed the app's `Preferences`
+    /// in gets its settings sync when they arrive (#2441). A compose window
+    /// the system restores at launch, or opens for a `mailto:` link, restores
+    /// the session itself; before, that process had no settings sync at
+    /// all, even after a main window opened in it, so nothing was pulled or
+    /// pushed and the feed queue had nobody to ask about unsent settings.
+    func testPreferencesHandedInAfterTheSessionIsWiredStartItsSettingsSync() async throws {
+        await SignOutSuiteSteps.signIn(harness)
+        XCTAssertNil(harness.appState.prefsCoordinator, "wired with no settings to sync")
+        let cognito = harness.cognito
+        let before = await cognito.trail.count
+        let preferences = Preferences(store: InMemoryPreferenceStore())
+
+        harness.appState.usePreferences(preferences)
+
+        let coordinator = try XCTUnwrap(harness.appState.prefsCoordinator)
+        XCTAssertNotNil(preferences.accountScope, "activated for the signed-in account")
+        try await waitUntilOnMainActor {
+            await cognito.trail.dropFirst(before).contains("API GET /prod/get_preferences")
+        }
+        XCTAssertNotNil(preferences.onLocalChange)
+        // Every scene that can restore a session hands them in; the second
+        // and later calls change nothing.
+        harness.appState.usePreferences(preferences)
+        XCTAssertTrue(harness.appState.prefsCoordinator === coordinator)
+        let pulls = await cognito.trail.dropFirst(before).filter { $0 == "API GET /prod/get_preferences" }.count
+        XCTAssertEqual(pulls, 1)
     }
 
     /// A sign-in over a wired session (#1826) stops the replaced session's
@@ -203,9 +237,15 @@ final class SessionWiringCharacterizationTests: XCTestCase {
 
         await SignOutSuiteSteps.signIn(harness, idToken: "ID-2")
         XCTAssertFalse(harness.appState.prefsCoordinator === replaced)
-        // The new session's start has run its pull and taken the observer.
-        try await waitUntilOnMainActor { preferences.onLocalChange != nil }
-        preferences.hasUnsentChanges = true
+        // The new session's start has taken the observer and sent its pull,
+        // one for each of the two sessions.
+        let cognito = harness.cognito
+        try await waitUntilOnMainActor {
+            await cognito.trail.filter { $0 == "API GET /prod/get_preferences" }.count >= 2
+        }
+        XCTAssertNotNil(preferences.onLocalChange)
+        preferences.signature = "Unsent"
+        XCTAssertTrue(preferences.hasUnsentChanges)
         let before = await harness.cognito.trail.count
 
         let answer = await replaced.sendUnsentForFeedQueue()
