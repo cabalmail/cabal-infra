@@ -409,14 +409,14 @@ jobs:
       # check that quietly did not run is the failure the step exists to
       # prevent. Pinned to the same version linux.yml installs; a test in
       # linux/xtask/tests/workflow_contract.rs fails if the two drift.
-      uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2  # v2.90.2
+      uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39  # v2.90.3
       with:
         tool: cargo-deny@0.20.2
     - name: install-cargo-llvm-cov
       # Same bargain as cargo-deny: the gate's coverage step runs this binary,
       # and a missing one is fatal wherever CI is set. Pinned to the version
       # linux.yml installs, held there by the same contract test.
-      uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2  # v2.90.2
+      uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39  # v2.90.3
       with:
         tool: cargo-llvm-cov@0.9.1
     - name: cache-cargo
