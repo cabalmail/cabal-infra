@@ -1,11 +1,14 @@
 import Foundation
 import CabalmailKit
 
-/// How a whole address is drawn in a *menu row* — the compose From menu's
-/// per-address buttons and the Default From picker's rows.
+/// How a whole address is drawn in a *menu row* — the Default From picker's
+/// rows. (The compose From picker's rows drew through it too while that
+/// picker was a menu; it opens a filtered list now, `FromAddressList`, whose
+/// rows wrap on every platform and are searched by its filter field rather
+/// than by type-to-select.)
 ///
 /// A pure rule rather than an inline `#if` at each call site so it can be
-/// tested directly, and so the two menus can't drift apart.
+/// tested directly, and so a menu that draws an address can't drift from it.
 ///
 /// Everywhere else an address is drawn through `AddressDisplay.wrappable`,
 /// whose zero-width spaces give the layout engine a legal break instead of

@@ -3,6 +3,11 @@ import CabalmailKit
 
 /// From-address picker surfaced at the top of the compose sheet.
 ///
+/// The field opens `FromAddressList`, a filter field over the addresses: a
+/// popover on iPadOS, macOS and visionOS, a sheet on iPhone. It used to open
+/// a `Menu`, which can't hold a text field, and a user who mints an address
+/// per contact has more of them than a menu can usefully be scrolled through.
+///
 /// Ordering (deliberate, per `docs/README.md`):
 ///
 /// 1. **Create new address…** — always first. Minting a per-contact
@@ -10,9 +15,10 @@ import CabalmailKit
 ///    ahead of the existing list also keeps the default-zero-state rule
 ///    ("no preselection") visually coherent: if the user hasn't picked an
 ///    address yet, creating one is the nearest thing to click.
-/// 2. Existing addresses: **Favorites** section on top (when non-empty),
-///    then **All addresses** inclusive. (The sidebar address list is one
-///    list under a Favorites pill instead; a picker wants both at once.)
+/// 2. Existing addresses: **Favorites** section on top (when any match the
+///    filter), then **All addresses** inclusive. (The sidebar address list
+///    is one list under a Favorites pill instead; a picker wants both at
+///    once.)
 ///
 /// Send remains disabled (`ComposeViewModel.canSend`) until the user has
 /// either picked an existing address or completed the inline creation flow.
@@ -20,43 +26,50 @@ struct FromPicker: View {
     @Bindable var model: ComposeViewModel
     let onCreateAddress: () -> Void
 
+    @State private var isChoosing = false
+    /// Set by the list's Create row, and acted on once the list has gone:
+    /// the new-address sheet is presented from the compose surface, and on
+    /// iPhone the list is a sheet over that surface, which can't present a
+    /// second one until the first has finished leaving.
+    @State private var createsOnDismiss = false
+
     var body: some View {
-        Menu {
-            Button {
-                onCreateAddress()
-            } label: {
-                Label("Create new address…", systemImage: "plus.circle")
-            }
-            if !model.availableAddresses.isEmpty {
-                Divider()
-                if !favoriteAddresses.isEmpty {
-                    // Menu sections: the system draws these, at its own size.
-                    // swiftlint:disable:next string_titled_section
-                    Section("Favorites") {
-                        ForEach(favoriteAddresses) { addressButton($0) }
-                    }
-                    // swiftlint:disable:next string_titled_section
-                    Section("All addresses") {
-                        ForEach(sortedAddresses) { addressButton($0) }
-                    }
-                } else {
-                    ForEach(sortedAddresses) { addressButton($0) }
-                }
-            }
+        Button {
+            isChoosing = true
         } label: {
             HStack {
                 fromLabel
                     .foregroundStyle(model.fromAddress == nil ? .secondary : .primary)
                 Spacer()
-                if FromPickerChevronPolicy.labelDrawsChevron(on: .current) {
-                    Image(systemName: "chevron.down")
-                        .appFont(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                // A button draws no disclosure of its own on any platform,
+                // so this is the control's only chevron (#1167 was a second
+                // one, from the menu style the Mac used to draw this with).
+                Image(systemName: "chevron.down")
+                    .appFont(.caption)
+                    .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
         }
         .accessibilityIdentifier("compose.from")
+        .popover(isPresented: $isChoosing, arrowEdge: .bottom) {
+            FromAddressList(
+                addresses: model.availableAddresses,
+                selected: model.fromAddress,
+                onPick: { address in
+                    model.fromAddress = address.address
+                    isChoosing = false
+                },
+                onCreateAddress: {
+                    createsOnDismiss = true
+                    isChoosing = false
+                }
+            )
+            .onDisappear {
+                guard createsOnDismiss else { return }
+                createsOnDismiss = false
+                onCreateAddress()
+            }
+        }
     }
 
     /// The field's own label: the address mail will be sent from.
@@ -65,8 +78,7 @@ struct FromPicker: View {
     /// other surface that shows a whole address: the token has no legal break,
     /// so a row narrow enough to wrap it hyphenates and draws a character the
     /// address does not contain (#1597 — `…@longsubdomain-` / `probe0916…` in
-    /// this label on iPhone, `pouls-f0k` for `poulsf0k` in the menu rows). The
-    /// raw address stays what VoiceOver reads.
+    /// this label on iPhone). The raw address stays what VoiceOver reads.
     @ViewBuilder
     private var fromLabel: some View {
         if let fromAddress = model.fromAddress {
@@ -75,34 +87,5 @@ struct FromPicker: View {
         } else {
             Text("Select an address…")
         }
-    }
-
-    private func addressButton(_ address: Address) -> some View {
-        Button {
-            model.fromAddress = address.address
-        } label: {
-            // Menu rows go through `AddressMenuTitlePolicy`, not `wrappable`
-            // directly: on macOS the zero-width spaces defeat the menu's
-            // type-to-select and highlight the wrong address (#1702).
-            if address.address == model.fromAddress {
-                Label(menuTitle(address), systemImage: "checkmark")
-                    .accessibilityLabel(address.address)
-            } else {
-                Text(menuTitle(address))
-                    .accessibilityLabel(address.address)
-            }
-        }
-    }
-
-    private func menuTitle(_ address: Address) -> String {
-        AddressMenuTitlePolicy.rowTitle(address.address, on: .current)
-    }
-
-    private var favoriteAddresses: [Address] {
-        model.availableAddresses.filter { $0.favorite }.sorted { $0.address < $1.address }
-    }
-
-    private var sortedAddresses: [Address] {
-        model.availableAddresses.sorted { $0.address < $1.address }
     }
 }

@@ -12,6 +12,8 @@ import XCTest
 //   `fghijklmnopqrstuvwx@longsubdomain-` / `probe0916.cabal-mail.com`.
 // - `FromPicker`'s menu rows, the plain one and the checked `Label`:
 //   `7.te876d@pouls-f0k.cabal-mail.io` for an address with no hyphen there.
+//   The picker opens a filtered list (`FromAddressList`) instead of a menu
+//   now, and its rows wrap the same way, so the rule follows them there.
 // - The Settings ▸ Composing Default From picker rows: `…poulsf0k.ca-` /
 //   `bal-mail.io`.
 // - `RuleEditorExtras`' forward-address list: `…@longsubdomain-` /
@@ -21,7 +23,7 @@ import XCTest
 // things, because none of these views has a seam for either rule:
 //
 // 1. No raw address reaches a `Text` or `Label` in these files, and each site
-//    draws either the wrappable address or — for the three *menu rows*, since
+//    draws either the wrappable address or — for the *menu rows*, since
 //    #1702 — `AddressMenuTitlePolicy`'s title, which is the wrappable one
 //    everywhere except macOS. The zero-width spaces are what AppKit compares
 //    typed characters against, so in an `NSMenuItem` title they defeated
@@ -40,10 +42,11 @@ import XCTest
 final class AddressPickerWrapSourceScanTests: XCTestCase {
 
     /// Each file, with the wrappable draws and raw labels it must carry. The
-    /// two menu-holding files draw fewer than they did before #1702: the From
-    /// menu's two rows and the Default From picker's row take their title from
-    /// `AddressMenuTitlePolicy` instead, which is the wrappable string on every
-    /// platform whose rows wrap.
+    /// Default From picker is a menu, and its row takes its title from
+    /// `AddressMenuTitlePolicy` (#1702), which is the wrappable string on
+    /// every platform whose rows wrap. The compose From picker's rows were
+    /// menu rows too until they moved into `FromAddressList`, a list, whose
+    /// rows wrap on every platform and draw the wrappable address directly.
     private struct Expectation {
         let wrappable: Int
         let menuTitles: Int
@@ -52,9 +55,10 @@ final class AddressPickerWrapSourceScanTests: XCTestCase {
 
     private static let expected: [String: Expectation] = [
         "CabalmailUI/Compose/FromPicker.swift": Expectation(
-            wrappable: 1,
-            menuTitles: 2,
-            rawLabels: [".accessibilityLabel(fromAddress)", ".accessibilityLabel(address.address)"]
+            wrappable: 1, menuTitles: 0, rawLabels: [".accessibilityLabel(fromAddress)"]
+        ),
+        "CabalmailUI/Compose/FromAddressList.swift": Expectation(
+            wrappable: 1, menuTitles: 0, rawLabels: [".accessibilityLabel(address.address)"]
         ),
         "CabalmailUI/Rules/RuleEditorExtras.swift": Expectation(
             wrappable: 1, menuTitles: 0, rawLabels: [".accessibilityLabel(address)"]
@@ -126,6 +130,9 @@ final class AddressPickerWrapSourceScanTests: XCTestCase {
     /// Floor: a mis-rooted read finds nothing and passes everything above.
     func testTheSourcesAreReadable() throws {
         XCTAssertTrue(try Self.source("CabalmailUI/Compose/FromPicker.swift").contains("struct FromPicker: View"))
+        XCTAssertTrue(
+            try Self.source("CabalmailUI/Compose/FromAddressList.swift").contains("struct FromAddressList: View")
+        )
         XCTAssertTrue(try Self.source("CabalmailUI/Rules/RuleEditorExtras.swift").contains("struct ForwardAddressList"))
         XCTAssertTrue(
             try Self.source("CabalmailUI/Settings/SettingsDetailViews.swift").contains(#"Picker("Default From""#)

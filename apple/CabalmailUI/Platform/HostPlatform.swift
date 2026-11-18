@@ -114,4 +114,14 @@ public enum HostPlatform {
     var offersAppTextSize: Bool {
         self == .macOS
     }
+
+    /// Whether a picker's filter field takes focus as the picker opens, so
+    /// typing narrows the list at once: the Mac, where typing into an open
+    /// menu is already how one is searched, and no software keyboard rises.
+    /// On iOS and visionOS a focused field raises a keyboard over the rows
+    /// the user may only want to tap, so the field waits for a tap of its
+    /// own (`FromAddressList`).
+    var focusesPickerFilterOnOpen: Bool {
+        self == .macOS
+    }
 }
