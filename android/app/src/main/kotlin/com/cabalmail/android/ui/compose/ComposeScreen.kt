@@ -19,9 +19,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Warning
@@ -59,15 +62,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.theme.ColorTokens
+import com.cabalmail.kit.compose.FromAddressFilter
 import com.cabalmail.kit.models.Address
 import com.cabalmail.kit.models.DraftAttachment
 
@@ -357,6 +368,15 @@ private fun transparentFieldColors() =
  * The From picker: no preselection by default (Send stays disabled until
  * an address is chosen), favorites first, and "Create new address…" as
  * the last item — the on-the-fly From that is the point of the product.
+ *
+ * The field is an editable exposed dropdown, Material's pattern for a menu
+ * that filters as you type, because someone who mints an address per
+ * contact has more of them than a menu can usefully be scrolled through.
+ * While it has focus it holds the filter, and the menu narrows to what
+ * [FromAddressFilter] keeps (address or comment, as on the other clients);
+ * once focus leaves it shows the chosen address again. Done on the
+ * keyboard picks the first match. Create new address… stays in the menu
+ * whatever the filter, so an address that isn't there yet is one tap away.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -367,34 +387,75 @@ private fun FromPicker(
     onCreateNew: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var filtering by remember { mutableStateOf(false) }
+    var filter by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
+    val matches = remember(addresses, filter) { FromAddressFilter.apply(addresses.orEmpty(), filter) }
+    val close = {
+        expanded = false
+        focusManager.clearFocus()
+    }
+    val pick = { address: String ->
+        close()
+        onSelect(address)
+    }
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
         modifier = Modifier.fillMaxWidth(),
     ) {
         OutlinedTextField(
-            value = selected ?: "",
-            onValueChange = {},
-            readOnly = true,
+            value = if (filtering) filter else selected.orEmpty(),
+            onValueChange = {
+                filter = it
+                expanded = true
+            },
             label = { Text(stringResource(R.string.compose_from)) },
-            placeholder = { Text(stringResource(R.string.compose_from_placeholder)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            placeholder = {
+                Text(
+                    stringResource(if (filtering) R.string.compose_from_filter else R.string.compose_from_placeholder),
+                )
+            },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(
+                    expanded = expanded,
+                    modifier = Modifier.menuAnchor(MenuAnchorType.SecondaryEditable),
+                )
+            },
             singleLine = true,
+            keyboardOptions =
+                KeyboardOptions(
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Done,
+                ),
+            keyboardActions = KeyboardActions(onDone = { matches.firstOrNull()?.let { pick(it.address) } }),
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    .onFocusChanged { state ->
+                        filtering = state.isFocused
+                        if (!state.isFocused) filter = ""
+                    }.menuAnchor(MenuAnchorType.PrimaryEditable),
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = close) {
             if (addresses == null) {
                 DropdownMenuItem(
                     text = { CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp)) },
                     onClick = {},
                     enabled = false,
                 )
+            } else if (matches.isEmpty() && filter.isNotBlank()) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.compose_from_no_match, filter.trim())) },
+                    onClick = {},
+                    enabled = false,
+                )
             }
-            addresses.orEmpty().filterNot { it.suspended }.forEach { address ->
+            matches.forEach { address ->
+                val isSelected = address.address == selected
                 DropdownMenuItem(
                     text = {
                         Column {
@@ -413,10 +474,17 @@ private fun FromPicker(
                             }
                         }
                     },
-                    onClick = {
-                        expanded = false
-                        onSelect(address.address)
-                    },
+                    // Trailing, so the chosen row's address starts where the
+                    // others' do. While the field holds the filter, this is
+                    // where the chosen address still shows.
+                    trailingIcon =
+                        if (isSelected) {
+                            { Icon(Icons.Filled.Check, contentDescription = null) }
+                        } else {
+                            null
+                        },
+                    onClick = { pick(address.address) },
+                    modifier = Modifier.semantics { this.selected = isSelected },
                 )
             }
             if (addresses != null) {
@@ -430,7 +498,7 @@ private fun FromPicker(
                     )
                 },
                 onClick = {
-                    expanded = false
+                    close()
                     onCreateNew()
                 },
             )
