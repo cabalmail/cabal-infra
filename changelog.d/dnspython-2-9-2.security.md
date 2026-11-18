@@ -1,0 +1,1 @@
+- **dnspython 2.9.2 in the API Lambdas.** Bumps the pinned `dnspython` from 2.9.0 to 2.9.2 in every `lambda/api/*/requirements.txt` to resolve CVE-2026-128089 (excessive memory and CPU use).
