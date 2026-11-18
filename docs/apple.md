@@ -2032,9 +2032,12 @@ best-effort expunges the Drafts copy once delivery succeeds.
   `In-Reply-To` / `References` threading, reply-all deduplication /
   self-exclusion, and the "default From to the original's addressee" rule
   that makes the on-the-fly-From idiom reusable across a whole thread.
-- `CabalmailUI/Compose/ComposeView.swift` renders the SwiftUI form. From
-  picker's first menu item is always "**Create new address…**" (matches
-  `docs/README.md`'s primary-action framing). Attachments land via
+- `CabalmailUI/Compose/ComposeView.swift` renders the SwiftUI form. The
+  From field (`FromPicker`) opens `FromAddressList`, a popover (a sheet on
+  iPhone) whose filter field narrows the addresses by address or comment
+  (`FromAddressFilter`, the address sidebar's matching); its first row is
+  always "**Create new address…**" (matches `docs/README.md`'s
+  primary-action framing). Attachments land via
   `PhotosPicker` (images) and `fileImporter` (arbitrary documents);
   mime-type derived from `UTType` for file imports.
 - `CabalmailUI/Compose/ComposeSnapshot.swift` is what a
