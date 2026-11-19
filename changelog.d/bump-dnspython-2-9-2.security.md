@@ -1,1 +1,0 @@
-- **dnspython 2.9.2.** Bumped the bundled `dnspython` in every API Lambda from 2.9.0 to 2.9.2, which fixes excessive memory and CPU use on crafted DNS responses (CVE-2026-128089).
