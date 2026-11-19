@@ -39,14 +39,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.mail.FlagChips
+import com.cabalmail.android.ui.mail.FlagMenuItem
 import com.cabalmail.android.ui.mail.HtmlBody
 import com.cabalmail.android.ui.mail.LinkMenuSheet
 import com.cabalmail.android.ui.mail.LinkMenuTarget
+import com.cabalmail.android.ui.mail.ReaderFlagButton
+import com.cabalmail.android.ui.theme.FlagMenu
 import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.ui.theme.LocalFlagPalette
-import com.cabalmail.android.ui.theme.starTogglePainter
-import com.cabalmail.android.ui.theme.text
-import com.cabalmail.android.ui.theme.tint
 import com.cabalmail.kit.models.readerModeHtml
 import com.cabalmail.kit.models.upgradeInsecureRequests
 
@@ -91,12 +92,12 @@ fun FeedItemDetailScreen(
                 },
                 actions = {
                     if (item != null) {
-                        // A feed item's one flag is the built-in flag, so the
-                        // button takes that flag's name and color from
-                        // Settings > Flags.
-                        val flag = FlagToggle.systemFlag(LocalFlagPalette.current)
-                        val favoriteTint = if (item.isFavorite) flag.tint() else MaterialTheme.colorScheme.onSurface
-                        val favoriteLabel = flag.title(item.isFavorite)
+                        // The star toggles the default flag, the first entry
+                        // of Settings > Flags, under its name and in its
+                        // color, as the mail reader's does.
+                        val palette = LocalFlagPalette.current
+                        val flag = FlagToggle.defaultFlag(palette)
+                        val isFlagSet = item.carries(flag.slot)
                         IconButton(onClick = { viewModel.setRead(!item.isRead) }) {
                             Icon(
                                 Icons.Default.Email,
@@ -106,18 +107,34 @@ fun FeedItemDetailScreen(
                                     ),
                             )
                         }
-                        IconButton(onClick = { viewModel.setFavorite(!item.isFavorite) }) {
-                            Icon(
-                                starTogglePainter(item.isFavorite),
-                                contentDescription = favoriteLabel.text(),
-                                tint = favoriteTint,
-                            )
-                        }
+                        ReaderFlagButton(
+                            flag = flag,
+                            isSet = isFlagSet,
+                            onToggle = { viewModel.setFlag(flag.slot, !isFlagSet) },
+                            // The color its neighbors in this bar draw in.
+                            unsetTint = MaterialTheme.colorScheme.onSurface,
+                        )
                         IconButton(onClick = { menuOpen = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.feed_more))
                         }
                         val readerAvailable = readerScriptAvailable()
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            // Flags: one check-marked item per flag in the
+                            // order of Settings > Flags, the built-in one
+                            // included, plus any flag the item carries whose
+                            // entry was deleted (FlagMenu.rows). Not shown
+                            // when the default flag is all there is: the star
+                            // beside the menu already toggles it.
+                            FlagMenu
+                                .rows(palette, item.paletteFlags)
+                                .takeUnless { FlagMenu.isOnlyTheDefault(it, palette) }
+                                .orEmpty()
+                                .forEach { row ->
+                                    FlagMenuItem(row) {
+                                        menuOpen = false
+                                        viewModel.setFlag(row.slot, !row.isOn)
+                                    }
+                                }
                             // In the article view the toggle needs the vendored script.
                             if (!state.showingArticle || readerAvailable) {
                                 DropdownMenuItem(
@@ -269,6 +286,9 @@ fun FeedItemDetailScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // The item's flags by name, as the mail reader's
+                        // header shows a message's.
+                        FlagChips(flags = item.paletteFlags, palette = LocalFlagPalette.current)
                     }
                     HorizontalDivider()
                     if (item.bodyHtml.isBlank()) {

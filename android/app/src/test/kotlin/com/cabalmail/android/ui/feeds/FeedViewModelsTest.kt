@@ -27,6 +27,7 @@ import com.cabalmail.kit.rss.InMemoryRssStore
 import com.cabalmail.kit.rss.RssClient
 import com.cabalmail.kit.rss.RssSyncEngine
 import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.FlagCriterion
 import com.cabalmail.kit.settings.MarkAsRead
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -244,6 +245,122 @@ class FeedViewModelsTest {
             advanceUntilIdle()
             assertEquals(1, client.subscriptionUpdates.size, "re-selecting the active pill writes nothing")
             assertTrue(preferenceWrites.isEmpty())
+        }
+
+    private fun FeedItemListViewModel.shown() = state.value.items.map { it.itemId }
+
+    @Test
+    fun `a flag picked from the Flagged pill narrows the list for the visit and writes nothing`() =
+        runTest(dispatcher) {
+            val later = "cabal-flag-01"
+            store.upsertSubscription(subscription.copy(defaultFilter = RssItemFilter.UNREAD))
+            store.upsertItems(
+                listOf(
+                    item(1).copy(flags = setOf(later), isRead = true, isReadExplicit = true),
+                    item(2, isFavorite = true),
+                    item(3).copy(flags = setOf(later, "cabal-flag-02")),
+                    item(4),
+                ),
+            )
+            val model = listModel(RssItemScope.Subscription("s1"))
+            advanceUntilIdle()
+            assertEquals(listOf("i2", "i3", "i4"), model.shown(), "the remembered Unread pill, oldest first")
+            val epoch = model.state.value.listEpoch
+
+            model.pickFlag(FlagCriterion.Slot(later))
+            advanceUntilIdle()
+
+            assertEquals(listOf("i1", "i3"), model.shown(), "the pick alone: read or not")
+            assertEquals(epoch + 1, model.state.value.listEpoch, "a fresh list, from the top")
+            assertEquals(RssItemFilter.UNREAD, model.state.value.filter, "the remembered pill is untouched")
+            assertFalse(model.state.value.unreadLit)
+            assertTrue(client.subscriptionUpdates.isEmpty(), "a pick stores nothing")
+            assertTrue(preferenceWrites.isEmpty())
+
+            model.pickFlag(FlagCriterion.AnyFlag)
+            advanceUntilIdle()
+            assertEquals(listOf("i1", "i2", "i3"), model.shown(), "the built-in flag or any other")
+
+            // A sync, or the reader closing, reads the same list again.
+            model.reload()
+            advanceUntilIdle()
+            assertEquals(listOf("i1", "i2", "i3"), model.shown())
+            assertEquals(FlagCriterion.AnyFlag, model.state.value.flagPick)
+            assertTrue(client.subscriptionUpdates.isEmpty())
+        }
+
+    @Test
+    fun `a pill chosen over a pick ends the pick, and Clear filter is written as All`() =
+        runTest(dispatcher) {
+            val later = "cabal-flag-01"
+            store.upsertSubscription(subscription.copy(defaultFilter = RssItemFilter.UNREAD))
+            store.upsertItems(listOf(item(1).copy(flags = setOf(later), isRead = true, isReadExplicit = true), item(2)))
+            val model = listModel(RssItemScope.Subscription("s1"))
+            advanceUntilIdle()
+            model.pickFlag(FlagCriterion.Slot(later))
+            advanceUntilIdle()
+            assertEquals(listOf("i1"), model.shown())
+
+            // Unread, tapped over the pick, though Unread is what the feed remembers.
+            model.setFilter(FeedFlagWords.unreadTap(model.state.value.filter, model.state.value.flagPick))
+            advanceUntilIdle()
+
+            assertEquals(null, model.state.value.flagPick)
+            assertEquals(listOf("i2"), model.shown())
+            assertTrue(model.state.value.unreadLit)
+            assertTrue(client.subscriptionUpdates.isEmpty(), "Unread was already the feed's pill")
+
+            model.pickFlag(FlagCriterion.Slot(later))
+            advanceUntilIdle()
+            model.setFilter(RssItemFilter.ALL)
+            advanceUntilIdle()
+
+            assertEquals(null, model.state.value.flagPick)
+            assertEquals(listOf("i1", "i2"), model.shown())
+            assertEquals(
+                listOf("s1" to RssSubscriptionUpdate(defaultFilter = RssItemFilter.ALL)),
+                client.subscriptionUpdates,
+                "Clear filter is recorded as All, as every route to All is",
+            )
+        }
+
+    @Test
+    fun `a pick takes the feed list over without changing the pill the feed remembers`() {
+        val remembered = FeedItemListUiState(scope = RssItemScope.All, filter = RssItemFilter.FAVORITE)
+        val picked = remembered.copy(flagPick = FlagCriterion.Slot("cabal-flag-01"))
+
+        assertTrue(remembered.builtInFlagLit)
+        assertFalse(picked.builtInFlagLit, "the built-in flag is not what the list shows")
+        assertEquals(RssItemFilter.FAVORITE, picked.filter)
+        assertEquals(RssItemFilter.ALL, picked.query(limit = 10, offset = 0).filter, "the pick is the one criterion")
+        assertEquals(RssItemFilter.FAVORITE, remembered.query(limit = 10, offset = 0).filter)
+        assertFalse(
+            FeedItemListUiState(
+                RssItemScope.All,
+                filter = RssItemFilter.UNREAD,
+                flagPick = FlagCriterion.AnyFlag,
+            ).unreadLit,
+        )
+    }
+
+    @Test
+    fun `a pick on All Feeds writes no preference, and the built-in flag's row is the remembered filter`() =
+        runTest(dispatcher) {
+            store.upsertSubscription(subscription)
+            store.upsertItems(listOf(item(1).copy(flags = setOf("cabal-flag-01")), item(2, isFavorite = true)))
+            val model = listModel(RssItemScope.All)
+            advanceUntilIdle()
+
+            model.pickFlag(FlagCriterion.Slot("cabal-flag-01"))
+            advanceUntilIdle()
+            assertEquals(listOf("i1"), model.shown())
+            assertTrue(preferenceWrites.isEmpty())
+
+            model.setFilter(RssItemFilter.FAVORITE)
+            advanceUntilIdle()
+            assertEquals(listOf("i2"), model.shown())
+            assertTrue(model.state.value.builtInFlagLit)
+            assertEquals(RssItemFilter.FAVORITE, preferenceWrites.single().feedsAllFilter)
         }
 
     @Test

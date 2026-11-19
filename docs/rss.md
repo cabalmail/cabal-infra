@@ -67,9 +67,65 @@ Item HTML is stored as feedparser sanitizes it; clients still render it in
 the same sandboxed body view they use for mail. Bodies over 300 KB spill
 to the `rss-cache` bucket's `items/` prefix and are inlined by the API.
 
+### Feed rules at ingest
+
+When a fetch inserts at least one item, the worker applies the
+subscribers' feed rules to the new items (the rules themselves are
+described in [mail-rules.md](mail-rules.md), "Feed rules"). A fetch that
+inserts nothing, which is most of them, does none of this.
+
+1. One query on the subscription table's plain `by_feed` index
+   (`feed_id`, then `user`; keys only) lists the feed's subscribers.
+2. Their rules rows are read from `cabal-user-rules` in batches of 100,
+   asking only for `feedRules`.
+3. For each subscriber who has enabled feed rules, each new item is
+   evaluated. A subscriber's flag palette is read from
+   `cabal-user-preferences` once, and only if a matching rule of theirs
+   sets a custom flag.
+4. Each outcome is one `UpdateItem` on the subscriber's state row for
+   the item, in the shape `/rss_set_item_state` writes (`is_read`,
+   `is_favorite` with `favorite_key`, `flags` by `ADD`, and the
+   `updated_key` stamp), so the state sync carries it to every device.
+   The stamp is the time of the write, not of the fetch, so it cannot
+   land behind a device's sync cursor. `is_read` is written only where
+   the row has none, so a mark the user made by hand stands.
+
+This runs after the fetch has recorded its success on the feed row, and
+it is best effort throughout: a refused or failed lookup is logged and
+counted and the fetch still succeeds, one subscriber's failed write does
+not stop the next subscriber's, and nothing here can back a feed off or
+dead-letter it. It also has a time budget (`RULES_BUDGET_SECONDS`,
+default 45, and never past fifteen seconds before the function's
+timeout), and its DynamoDB calls use short timeouts and two attempts, so
+one stalled request cannot outlast that reserve. Evaluations the budget
+cuts off are logged and not retried, because on the next fetch those
+items are no longer new; for the same reason, items inserted by a fetch
+that then failed before recording its success get no rules.
+
+Two races are accepted. A feed's very first fetch is queued as its
+first subscriber subscribes, and can list subscribers before that row
+is visible, in which case the backlog gets no rules. And a subscriber
+who unsubscribes while the pass is running can be left with state rows
+for the feed, which they would see again only by re-subscribing while
+the feed still has another subscriber.
+
+A fetch that had subscribers to consider logs one extra line:
+
+```
+[rss-fetch] <feed_id> feed-rules rule_subscribers=3 rule_read_calls=2 rules_evaluated=6 rule_matches=2 rule_writes=2 rule_skips=0 rule_failures=0 rule_unfinished=0 rule_ms=41
+```
+
+`rule_read_calls` counts DynamoDB read requests (the index query's
+pages, the rules batches and any palette reads), `rule_skips` rules that
+matched but named a custom flag no longer in the palette, and
+`rule_unfinished` rule evaluations the time budget cut off (or, when
+there was no time even to list subscribers, the number of new items). No
+line names a subscriber.
+
 Metrics are CloudWatch EMF under `Cabal/Rss` (`FeedsDue`, `FeedsClaimed`,
 `FeedsEnqueued`, `Fetched`, `NotModified`, `Failed`, `DeadLettered`,
-`ItemsNew`, `ItemsUpdated`, `BytesFetched`); logs at
+`ItemsNew`, `ItemsUpdated`, `BytesFetched`, and for feed rules
+`RulesEvaluated`, `RuleMatches`, `RuleFailures`); logs at
 `/cabal/lambda/rss_schedule` and `/cabal/lambda/rss_fetch`, prefixed
 `[rss-schedule]` / `[rss-fetch]`. Undeliverable fetches land in
 `cabal-rss-fetch-dlq`.
@@ -187,4 +243,12 @@ exist when it writes.
   `consecutive_failure_count` on the row (or the `feed` summary in
   `/rss_list_subscriptions`), then the worker log. A dead-lettered feed
   revives on the next subscribe.
+- **A feed rule did not fire**: find the fetch that inserted the item in
+  the worker log and read its `feed-rules` line. `rule_failures` above
+  zero means a lookup or a write failed (the line before it has the
+  error); `rule_skips` means a matching rule named a custom flag that is
+  no longer in the subscriber's palette; `rule_unfinished` means the
+  time budget ran out. No `feed-rules` line at all means the fetch found
+  no subscriber, or inserted nothing: rules never apply to an item the
+  feed already held.
 - **Quiesce** pauses the schedule; nothing else RSS-specific is needed.

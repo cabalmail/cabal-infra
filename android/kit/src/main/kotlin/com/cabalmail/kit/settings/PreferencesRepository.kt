@@ -11,6 +11,7 @@ import com.cabalmail.kit.CabalmailException
 import com.cabalmail.kit.api.ApiClient
 import com.cabalmail.kit.models.PreferencesSaveResult
 import com.cabalmail.kit.models.RssItemFilter
+import com.cabalmail.kit.rss.RssUnsentSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
@@ -175,6 +176,25 @@ class PreferencesRepository(
             pull()
             push()
         }
+
+    /**
+     * Sends what this device owes the server now, for the feed queue, and
+     * says what became of the flag list. The server refuses a flag put on
+     * a feed item when the account's flag list does not hold it, which is
+     * also what a flag created here looks like until the settings that
+     * carry it have gone; the queue asks this before it gives such a flag
+     * up ([com.cabalmail.kit.rss.RssSyncEngine.unsentSettingsPush]).
+     */
+    suspend fun sendOwedFlagList(): RssUnsentSettings =
+        syncing.withLock {
+            ensureAccount()
+            if (!owesFlagList()) return@withLock RssUnsentSettings.NOTHING_UNSENT
+            push()
+            if (owesFlagList()) RssUnsentSettings.STILL_UNSENT else RssUnsentSettings.SENT
+        }
+
+    private suspend fun owesFlagList(): Boolean =
+        PreferencesWire.AppKey.FLAG_PALETTE in ledger(dataStore.data.first()).unsent
 
     /** Sends what is owed now. The debounce calls it; internal so a test can, without waiting. */
     internal suspend fun pushToServer() =

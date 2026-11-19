@@ -286,6 +286,33 @@ class ApiClientTest {
         }
 
     @Test
+    fun `a flag pick goes as keyword or any_flag, and neither is sent unasked`() =
+        runTest {
+            val page = """{"envelopes": [], "total_estimate": 0}"""
+            val server = Server(HttpStatusCode.OK to page, HttpStatusCode.OK to page, HttpStatusCode.OK to page)
+            val filters =
+                com.cabalmail.kit.models
+                    .SearchFilters()
+
+            server.api.searchEnvelopes(filters = filters.copy(keyword = "cabal-flag-03"), folder = "INBOX")
+            server.api.searchEnvelopes(filters = filters.copy(anyFlag = true), folder = "INBOX")
+            server.api.searchEnvelopes(filters = filters.copy(flagged = true), folder = "INBOX")
+
+            val one = server.requests[0].url.parameters
+            assertEquals("cabal-flag-03", one["keyword"])
+            assertNull(one["any_flag"])
+            assertNull(one["flagged"], "one flag of the user's own is the one criterion")
+            val any = server.requests[1].url.parameters
+            assertEquals("1", any["any_flag"])
+            assertNull(any["keyword"])
+            assertNull(any["flagged"])
+            val builtIn = server.requests[2].url.parameters
+            assertEquals("1", builtIn["flagged"])
+            assertNull(builtIn["keyword"])
+            assertNull(builtIn["any_flag"])
+        }
+
+    @Test
     fun `listMessages encodes the REVERSE sort order with trailing space`() =
         runTest {
             val server = Server(HttpStatusCode.OK to """{"message_ids": [3, 2, 1], "total": 3}""")

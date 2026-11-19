@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -79,6 +79,7 @@ import com.cabalmail.android.ui.theme.FlagMenu
 import com.cabalmail.android.ui.theme.FlagMenuRow
 import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.ui.theme.UiLabel
+import com.cabalmail.android.ui.theme.starTogglePainter
 import com.cabalmail.android.ui.theme.text
 import com.cabalmail.kit.compose.ReplyBuilder
 import com.cabalmail.kit.models.Attachment
@@ -244,25 +245,12 @@ fun MessageDetailScreen(
                     // its color.
                     val defaultFlag = FlagToggle.defaultFlag(preferences.flagPalette)
                     val flagIsSet = defaultFlag.isSetIn(state.envelope?.flags.orEmpty())
-                    IconButton(
-                        onClick = { viewModel.setFlag(defaultFlag.slot, !flagIsSet) },
+                    ReaderFlagButton(
+                        flag = defaultFlag,
+                        isSet = flagIsSet,
+                        onToggle = { viewModel.setFlag(defaultFlag.slot, !flagIsSet) },
                         enabled = !state.busy,
-                    ) {
-                        val flagToggle = readerFlagToggle(defaultFlag, flagIsSet)
-                        if (flagToggle.filledStar) {
-                            Icon(
-                                Icons.Default.Star,
-                                contentDescription = flagToggle.label.text(),
-                                tint = flagColor(flagToggle.color),
-                            )
-                        } else {
-                            Icon(
-                                painterResource(R.drawable.ic_star_border),
-                                contentDescription = flagToggle.label.text(),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                    )
                     DisposeSplitButton(
                         folder = viewModel.folderName,
                         preferredAction = preferences.disposeAction,
@@ -534,32 +522,34 @@ private fun MessageHeader(
             )
         }
         HeaderChips(envelope = envelope)
-        FlagChips(envelope = envelope, palette = palette)
+        FlagChips(flags = envelope.flags, palette = palette)
     }
 }
 
 /**
- * Flag chips: color dot + label per flag the message carries, the built-in
+ * Flag chips: color dot + label per flag the item carries, the built-in
  * flag included, in the order of Settings > Flags. A deleted slot's
  * surviving tag shows its slot id in gray, per the palette editor's
- * delete-confirmation copy.
+ * delete-confirmation copy. One view for both readers: [flags] is a
+ * message's flag list, or a feed item's (`RssItem.paletteFlags`).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FlagChips(
-    envelope: Envelope,
+internal fun FlagChips(
+    flags: List<String>,
     palette: List<FlagPaletteEntry>,
+    modifier: Modifier = Modifier,
 ) {
-    val marks = FlagDotMark.marks(envelope.flags, palette, limit = Int.MAX_VALUE)
+    val marks = FlagDotMark.marks(flags, palette, limit = Int.MAX_VALUE)
     if (marks.isEmpty()) {
         return
     }
-    // A message can carry every flag in the palette, so the chips wrap
+    // An item can carry every flag in the palette, so the chips wrap
     // rather than run off the header's edge.
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier.padding(top = 6.dp),
+        modifier = modifier.padding(top = 6.dp),
     ) {
         marks.forEach { mark ->
             Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
@@ -624,11 +614,36 @@ internal data class ReaderFlagToggle(
     val color: String,
 )
 
-/** [flag] is the default flag, and [isSet] whether the open message carries it. */
+/** [flag] is the default flag, and [isSet] whether the open message or feed item carries it. */
 internal fun readerFlagToggle(
     flag: FlagToggle,
     isSet: Boolean,
 ): ReaderFlagToggle = ReaderFlagToggle(label = flag.title(isSet), filledStar = isSet, color = flag.color)
+
+/**
+ * The reader's star button, the mail reader's and the feed reader's: it
+ * sets and clears the default flag, and says and draws what
+ * [readerFlagToggle] answers for the open item. The glyph comes from
+ * [starTogglePainter], so the state reads by shape; the filled star takes
+ * the flag's color and the hollow one [unsetTint].
+ */
+@Composable
+internal fun ReaderFlagButton(
+    flag: FlagToggle,
+    isSet: Boolean,
+    onToggle: () -> Unit,
+    enabled: Boolean = true,
+    unsetTint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
+    val toggle = readerFlagToggle(flag, isSet)
+    IconButton(onClick = onToggle, enabled = enabled) {
+        Icon(
+            starTogglePainter(toggle.filledStar),
+            contentDescription = toggle.label.text(),
+            tint = if (toggle.filledStar) flagColor(toggle.color) else unsetTint,
+        )
+    }
+}
 
 /**
  * What the reader's read toggle says for the message's state (#2171). Its

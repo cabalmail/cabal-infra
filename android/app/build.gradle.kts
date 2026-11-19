@@ -149,8 +149,10 @@ play {
     // code on any track, and uses that plus one when ours is not above it;
     // a code that is already above it is left alone. The same rule makes a
     // re-run publishable: a re-run keeps its run number, which by then is
-    // taken. Two uploads built in the same few minutes can still pick the
-    // same code; the later commit fails, and a re-run picks the next one.
+    // taken. Asking Play opens this run's edit, and Play keeps one open edit
+    // per account, so two uploads must not overlap: android.yml's `upload`
+    // job runs them one at a time (#2505), which also means two of them
+    // cannot ask at once and pick the same code.
     resolutionStrategy.set(
         com.github.triplet.gradle.androidpublisher.ResolutionStrategy.AUTO,
     )

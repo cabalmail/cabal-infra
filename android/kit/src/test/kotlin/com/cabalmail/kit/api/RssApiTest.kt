@@ -15,6 +15,7 @@ import com.cabalmail.kit.models.RssItemStateChange
 import com.cabalmail.kit.models.RssOrderingMode
 import com.cabalmail.kit.models.RssRemoteContentMode
 import com.cabalmail.kit.models.RssSubscriptionUpdate
+import com.cabalmail.kit.rss.RssFlagRefusal
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -260,6 +261,89 @@ class RssApiTest {
             assertEquals("s1", server.body(1)["subscription_id"]?.jsonPrimitive?.content)
             assertEquals("2026-02-02T00:00:00Z", marked.readWatermark)
             assertTrue(server.body(2).isEmpty())
+        }
+
+    @Test
+    fun `set item state sends the flags an entry adds and removes, and no empty list`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"updated":2}""")
+
+            server.api.setItemState(
+                listOf(
+                    RssItemStateChange(
+                        "f1",
+                        "k1",
+                        addFlags = setOf("cabal-flag-03", "cabal-flag-01"),
+                        removeFlags = setOf("cabal-flag-02"),
+                    ),
+                    RssItemStateChange("f1", "k2", isRead = true, removeFlags = setOf("cabal-flag-05")),
+                ),
+            )
+
+            val items = server.body(0)["items"]!!.jsonArray.map { it.jsonObject }
+            assertEquals(setOf("feed_id", "sort_key", "add_flags", "remove_flags"), items[0].keys)
+            assertEquals(
+                listOf("cabal-flag-01", "cabal-flag-03"),
+                items[0]["add_flags"]!!.jsonArray.map { it.jsonPrimitive.content },
+            )
+            assertEquals(listOf("cabal-flag-02"), items[0]["remove_flags"]!!.jsonArray.map { it.jsonPrimitive.content })
+            assertEquals(setOf("feed_id", "sort_key", "is_read", "remove_flags"), items[1].keys)
+        }
+
+    @Test
+    fun `a call refused for a flag it adds is thrown with the slots the server names`() =
+        runTest {
+            val server =
+                Server(
+                    HttpStatusCode.BadRequest to
+                        """{"Error":"Not a flag in the palette: cabal-flag-02, cabal-flag-07.",
+                           "code":"flag_not_in_palette","flags":["cabal-flag-02","cabal-flag-07"]}""",
+                    HttpStatusCode.BadRequest to
+                        """{"Error":"A flag cannot be added and removed at once: cabal-flag-02.",
+                           "code":"flag_conflict","flags":["cabal-flag-02"]}""",
+                    HttpStatusCode.InternalServerError to
+                        """{"Error":"The flag palette could not be read.","code":"palette_unavailable"}""",
+                )
+            val change = listOf(RssItemStateChange("f1", "k1", addFlags = setOf("cabal-flag-02")))
+
+            val refusal = assertThrows<RssFlagRefusal> { server.api.setItemState(change) }
+            assertEquals(setOf("cabal-flag-02", "cabal-flag-07"), refusal.slots)
+            assertEquals("Not a flag in the palette: cabal-flag-02, cabal-flag-07.", refusal.message)
+
+            // Any other answer stays the error it is: only the palette
+            // refusal is one the queue can answer.
+            val conflict = assertThrows<CabalmailException.ApiError> { server.api.setItemState(change) }
+            assertEquals("flag_conflict", conflict.code)
+            assertEquals(listOf("cabal-flag-02"), conflict.flags)
+            val unavailable = assertThrows<CabalmailException.ApiError> { server.api.setItemState(change) }
+            assertEquals(500, unavailable.httpStatus)
+            assertEquals(emptyList<String>(), unavailable.flags)
+        }
+
+    @Test
+    fun `items and state rows carry their flags, and one without any has none`() =
+        runTest {
+            val server =
+                Server(
+                    HttpStatusCode.OK to
+                        """{"items":[{"feed_id":"f1","sort_key":"k1","flags":["cabal-flag-01","cabal-flag-04"]},
+                                     {"feed_id":"f1","sort_key":"k2"},
+                                     {"feed_id":"f1","sort_key":"k3","flags":null}]}""",
+                    HttpStatusCode.OK to
+                        """{"states":[{"feed_id":"f1","sort_key":"k1","flags":["cabal-flag-02"]},
+                                      {"feed_id":"f1","sort_key":"k2","flags":[]},
+                                      {"feed_id":"f1","sort_key":"k3"}],
+                           "next_state_since":"st","has_more":false}""",
+                )
+
+            val items = server.api.listItems(RssItemScope.All).items
+            val states = server.api.syncItemStates("s1", since = "", limit = 100).states
+
+            assertEquals(
+                listOf(setOf("cabal-flag-01", "cabal-flag-04"), emptySet(), emptySet()),
+                items.map { it.flags },
+            )
+            assertEquals(listOf(setOf("cabal-flag-02"), emptySet(), emptySet()), states.map { it.flags })
         }
 
     @Test

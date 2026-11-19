@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.56.0] - 2026-11-19
+
+### Added
+- Android: **Your own flags on feed items.** Any flag in Settings > Flags
+  can be set on a feed item: touch and hold its row for the menu, or use
+  the feed reader's More menu. Rows draw a dot for each flag and the
+  reader names them under the title, as for a message. The feed swipe and
+  the feed reader's star now set and clear the default flag, as mail's
+  do. A flag set offline is queued and sent later, and flags set on other
+  devices arrive with the next sync. A flag the account no longer lists is
+  taken off the item again; one created while Settings could not reach
+  the server is sent first, so the item keeps it. The feed database moves
+  to version 2 by its first real upgrade step, so unsent feed marks
+  survive this update, where any schema change used to drop them; its
+  schema is exported and the step is tested in CI. Queued feed changes are
+  sent one batch at a time, in the order they were made.
+- Android: **Filter a list by any of your flags.** Once Settings > Flags
+  holds a flag of your own, a tap on the Flagged pill above a folder's
+  messages or a feed's items opens a menu: each of your flags, Any flag,
+  and Clear filter. Choosing one of your own flags, or Any flag, shows
+  only what carries it, for the visit: it stays while you open items and
+  come back, and ends when you leave the list, which reopens on the pill
+  it remembers. The built-in flag's row is the Flagged filter the folder
+  or feed has always had, and is remembered as before. A folder's list is
+  searched on the server (`keyword`, `any_flag`); a feed's items are
+  searched on the device. With the built-in flag alone the pill is the
+  toggle it was.
+- **Feed rules on the server.** `/get_rules` and `/set_rules` carry a
+  second list, `feedRules`, beside `rules` in the same row and under the
+  same version. It is optional in a save: a request without it, which is
+  what every client that predates feed rules sends, leaves the stored
+  list untouched. A feed rule has conditions (`feed`, `title`, `author`,
+  `summary`) and the three marks a mail rule can make (`flag`, `flags`,
+  `markRead`). When the `rss_fetch` worker inserts an item it evaluates
+  each subscriber's feed rules against it and writes the outcome to
+  their state row, after the fetch is recorded and best effort, so a
+  rules failure never fails ingestion; a rule that sets a custom flag no
+  longer in the palette is skipped whole, as a mail rule is. A save that
+  changes only the feed rules does not notify the imap tier. No client
+  has an editor for feed rules yet
+  (docs/1.x/cross-media-ux-plan.md, Phase 4; docs/mail-rules.md, "Feed
+  rules").
+- **Subscriber lookup for feed rules.** `cabal-rss-subscription` gains a
+  plain feed-keyed index, `by_feed`, and the `rss_fetch` worker's role
+  gains what it needs to apply a subscriber's feed rules when it inserts
+  an item: a query on that index, reads on `cabal-user-rules` and
+  `cabal-user-preferences`, and updates on `cabal-rss-user-item-state`.
+  Nothing uses them yet; the worker's code follows
+  (docs/1.x/cross-media-ux-plan.md, Phase 4).
+
+### Fixed
+- **A stage Android upload can no longer knock out a prod one that is still
+  building.** Play keeps one open "edit" per account, and the publisher opens
+  its edit when it resolves the version code, minutes before it uploads the
+  bundle. A stage upload that started in those minutes opened a second edit,
+  Play invalidated the first, and the prod upload failed with "This Edit has
+  been deleted", which is how the first 1.55.0 prod build failed to publish
+  (#2505). `android.yml`'s upload job now holds a concurrency group shared by
+  stage and main, so an upload waits for the one in progress instead of
+  starting beside it; neither is cancelled for the other. A new scripts test
+  reads the workflow and fails if the publishing job loses the group, if the
+  group comes to vary with the ref, or if it is set to cancel an upload in
+  progress.
+
 ## [1.55.0] - 2026-11-19
 
 ### Added

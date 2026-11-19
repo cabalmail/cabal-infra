@@ -1,5 +1,7 @@
 package com.cabalmail.android.ui.feeds
 
+import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.UiLabel
 import com.cabalmail.kit.models.RssFolder
 import com.cabalmail.kit.models.RssFolderUpdate
 import com.cabalmail.kit.models.RssItemFilter
@@ -9,6 +11,10 @@ import com.cabalmail.kit.models.RssRemoteContentMode
 import com.cabalmail.kit.models.RssStyling
 import com.cabalmail.kit.models.RssSubscription
 import com.cabalmail.kit.models.RssSubscriptionUpdate
+import com.cabalmail.kit.settings.FeedSwipeAction
+import com.cabalmail.kit.settings.FlagCriterion
+import com.cabalmail.kit.settings.FlagPalette
+import com.cabalmail.kit.settings.FlagPaletteEntry
 import com.cabalmail.kit.settings.LoadRemoteContent
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -124,6 +130,78 @@ class FeedPoliciesTest {
         assertTrue(FeedDetailPolicy.showsReader(wantsReader = true, leftThroughLink = false))
         assertFalse(FeedDetailPolicy.showsReader(wantsReader = false, leftThroughLink = false))
         assertFalse(FeedDetailPolicy.showsReader(wantsReader = false, leftThroughLink = true))
+    }
+
+    @Test
+    fun `the empty Flagged list offers the swipe only while the swipe sets the flag that pill shows`() {
+        val urgent = FlagPaletteEntry(slot = "cabal-flag-01", label = "Urgent", color = "red")
+        val builtIn = FlagPalette.DEFAULT_SYSTEM_ENTRY
+        val flag = FeedSwipeAction.TOGGLE_FAVORITE
+        val read = FeedSwipeAction.TOGGLE_READ
+        val none = FeedSwipeAction.NONE
+
+        // The built-in flag is the default one: with no flag of the user's
+        // own, with one after it (a list that stores no built-in entry
+        // leads with it), and stored first.
+        assertTrue(FeedFlagWords.flaggedPillOffersSwipe(emptyList(), leading = read, trailing = flag))
+        assertTrue(FeedFlagWords.flaggedPillOffersSwipe(listOf(urgent), leading = read, trailing = flag))
+        assertTrue(FeedFlagWords.flaggedPillOffersSwipe(listOf(builtIn, urgent), leading = flag, trailing = none))
+        // Another flag was made the default: the swipe sets that one,
+        // which the Flagged pill does not show.
+        assertFalse(FeedFlagWords.flaggedPillOffersSwipe(listOf(urgent, builtIn), leading = read, trailing = flag))
+        // No edge is bound to the flag swipe.
+        assertFalse(FeedFlagWords.flaggedPillOffersSwipe(emptyList(), leading = read, trailing = none))
+    }
+
+    @Test
+    fun `under a pick the empty list offers the swipe only while the swipe sets the picked flag`() {
+        val urgent = FlagPaletteEntry(slot = "cabal-flag-01", label = "Urgent", color = "red")
+        val later = FlagPaletteEntry(slot = "cabal-flag-02", label = "Later", color = "blue")
+        val flag = FeedSwipeAction.TOGGLE_FAVORITE
+        val read = FeedSwipeAction.TOGGLE_READ
+
+        fun offers(
+            palette: List<FlagPaletteEntry>,
+            pick: FlagCriterion,
+            trailing: FeedSwipeAction = flag,
+        ) = FeedFlagWords.flaggedPillOffersSwipe(palette, leading = read, trailing = trailing, pick = pick)
+
+        // Urgent leads the list, so the swipe sets Urgent.
+        val urgentFirst = listOf(urgent, FlagPalette.DEFAULT_SYSTEM_ENTRY, later)
+        assertTrue(offers(urgentFirst, FlagCriterion.Slot(urgent.slot)))
+        assertFalse(offers(urgentFirst, FlagCriterion.Slot(later.slot)))
+        assertFalse(offers(urgentFirst, FlagCriterion.Slot(FlagPalette.SYSTEM_SLOT)))
+        // Any flag is lit: whichever flag the swipe sets, the item joins the list.
+        assertTrue(offers(urgentFirst, FlagCriterion.AnyFlag))
+        assertTrue(offers(listOf(later), FlagCriterion.AnyFlag))
+        assertFalse(offers(urgentFirst, FlagCriterion.AnyFlag, trailing = FeedSwipeAction.NONE))
+        // The built-in flag leads: a pick of another flag gets the menu's words.
+        assertFalse(offers(listOf(later), FlagCriterion.Slot(later.slot)))
+    }
+
+    @Test
+    fun `the empty list under a pick names the flag, and Unread over a pick is a choice of Unread`() {
+        val later = FlagPaletteEntry(slot = "cabal-flag-02", label = "Later", color = "blue")
+
+        assertEquals(UiLabel.Fixed(R.string.feed_empty_favorite_title), FeedFlagWords.emptyTitle(listOf(later), null))
+        assertEquals(
+            UiLabel.Fixed(R.string.feed_empty_favorite_title),
+            FeedFlagWords.emptyTitle(listOf(later), FlagCriterion.AnyFlag),
+        )
+        assertEquals(
+            UiLabel.Formatted(R.string.feed_empty_flag_title, "Later"),
+            FeedFlagWords.emptyTitle(listOf(later), FlagCriterion.Slot(later.slot)),
+        )
+
+        val pick = FlagCriterion.Slot(later.slot)
+        assertEquals(
+            RssItemFilter.UNREAD,
+            FeedFlagWords.unreadTap(RssItemFilter.UNREAD, pick),
+            "not a toggle back to All",
+        )
+        assertEquals(RssItemFilter.UNREAD, FeedFlagWords.unreadTap(RssItemFilter.FAVORITE, FlagCriterion.AnyFlag))
+        assertEquals(RssItemFilter.ALL, FeedFlagWords.unreadTap(RssItemFilter.UNREAD, pick = null))
+        assertEquals(RssItemFilter.UNREAD, FeedFlagWords.unreadTap(RssItemFilter.ALL, pick = null))
     }
 
     @Test

@@ -25,6 +25,7 @@ class InMemoryRssStore(
         var isRead: Boolean,
         var isFavorite: Boolean,
         var stateIsExplicit: Boolean,
+        var flags: Set<String>,
     )
 
     private val mutex = Mutex()
@@ -142,6 +143,7 @@ class InMemoryRssStore(
                     .filter { it.kind == PendingKind.READ || it.kind == PendingKind.FAVORITE }
                     .map { "${it.feedId}#${it.sortKey}" }
                     .toSet()
+            val queuedFlags = RssStoredFlags.queued(pending)
             for (item in items) {
                 val existing = this.items[item.id]
                 val keepLocalState = item.id in shielded && existing != null
@@ -152,6 +154,7 @@ class InMemoryRssStore(
                         isRead = if (keepLocalState) existing.isRead else item.isRead,
                         isFavorite = if (keepLocalState) existing.isFavorite else item.isFavorite,
                         stateIsExplicit = if (keepLocalState) existing.stateIsExplicit else item.isReadExplicit,
+                        flags = RssStoredFlags.overlaying(queuedFlags[item.id].orEmpty(), item.flags),
                     )
             }
         }
@@ -170,7 +173,8 @@ class InMemoryRssStore(
                         RssItemFilter.UNREAD -> !projected.isRead
                         RssItemFilter.FAVORITE -> projected.isFavorite
                     }
-                }.sortedWith(RssRules.comparator(query.ordering))
+                }.filter { projected -> RssFlagQuery.matches(query.flag, projected) }
+                .sortedWith(RssRules.comparator(query.ordering))
                 .drop(query.offset)
                 .take(query.limit)
                 .toList()
@@ -252,6 +256,7 @@ class InMemoryRssStore(
                 ),
             isReadExplicit = stored.stateIsExplicit,
             isFavorite = stored.isFavorite,
+            flags = stored.flags,
         )
 
     // --------------------------------------------------------- local state
@@ -277,6 +282,25 @@ class InMemoryRssStore(
         enqueue(PendingKind.FAVORITE, feedId, sortKey, isFavorite)
     }
 
+    override suspend fun setFlag(
+        feedId: String,
+        sortKey: String,
+        slot: String,
+        isSet: Boolean,
+    ) = mutex.withLock {
+        writeFlag(feedId, sortKey, slot, isSet)
+        enqueue(PendingKind.FLAG, feedId, sortKey, isSet, slot)
+    }
+
+    private fun writeFlag(
+        feedId: String,
+        sortKey: String,
+        slot: String,
+        isSet: Boolean,
+    ) {
+        items["$feedId#$sortKey"]?.let { it.flags = if (isSet) it.flags + slot else it.flags - slot }
+    }
+
     override suspend fun markAllRead(
         subscriptionId: String,
         watermark: String?,
@@ -300,6 +324,7 @@ class InMemoryRssStore(
 
     override suspend fun applyServerStates(states: List<RssItemState>) =
         mutex.withLock {
+            val queuedFlags = RssStoredFlags.queued(pending)
             for (state in states) {
                 val stored = items["${state.feedId}#${state.sortKey}"] ?: continue
                 if (!hasPendingLocked(PendingKind.READ, state.feedId, state.sortKey)) {
@@ -309,6 +334,8 @@ class InMemoryRssStore(
                 if (!hasPendingLocked(PendingKind.FAVORITE, state.feedId, state.sortKey)) {
                     stored.isFavorite = state.isFavorite
                 }
+                stored.flags =
+                    RssStoredFlags.overlaying(queuedFlags["${state.feedId}#${state.sortKey}"].orEmpty(), state.flags)
             }
         }
 
@@ -338,16 +365,28 @@ class InMemoryRssStore(
             Unit
         }
 
+    override suspend fun dropRefusedFlagAdds(ids: List<Long>): Int =
+        mutex.withLock {
+            val wanted = ids.toSet()
+            val refused = pending.filter { it.id in wanted && it.kind == PendingKind.FLAG && it.value }
+            refused.forEach { writeFlag(it.feedId, it.sortKey, it.slot, isSet = false) }
+            pending.removeAll(refused)
+            refused.size
+        }
+
     private fun enqueue(
         kind: PendingKind,
         feedId: String,
         sortKey: String,
         value: Boolean,
+        slot: String = "",
     ) {
-        // The latest intent for an item wins; drop earlier queued flips of
-        // the same kind so a drain never replays a superseded state.
-        pending.removeAll { it.kind == kind && it.feedId == feedId && it.sortKey == sortKey }
-        pending += PendingMutation(nextPendingId++, kind, feedId, sortKey, subscriptionId = "", value = value)
+        // The latest intent for an item wins (for an item and slot, when
+        // the change is to one flag); drop earlier queued flips of the same
+        // kind so a drain never replays a superseded state.
+        pending.removeAll { it.kind == kind && it.feedId == feedId && it.sortKey == sortKey && it.slot == slot }
+        pending +=
+            PendingMutation(nextPendingId++, kind, feedId, sortKey, subscriptionId = "", value = value, slot = slot)
     }
 
     // -------------------------------------------------------- sync cursors

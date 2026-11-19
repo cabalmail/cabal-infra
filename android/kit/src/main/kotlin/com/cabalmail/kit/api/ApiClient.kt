@@ -52,6 +52,7 @@ import com.cabalmail.kit.models.UploadGrant
 import com.cabalmail.kit.models.UploadGrantList
 import com.cabalmail.kit.models.UsersReply
 import com.cabalmail.kit.rss.RssClient
+import com.cabalmail.kit.rss.RssFlagRefusal
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
 import io.ktor.client.request.put
@@ -67,7 +68,10 @@ import io.ktor.http.encodedPath
 import io.ktor.http.isSuccess
 import io.ktor.http.takeFrom
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.buildJsonArray
@@ -217,8 +221,26 @@ class ApiClient(
                 message = message,
             )
         }
-        return CabalmailException.ApiError(httpStatus = status, message = message, code = obj?.stringOrNull("code"))
+        return CabalmailException.ApiError(
+            httpStatus = status,
+            message = message,
+            code = obj?.stringOrNull("code"),
+            flags = obj?.stringList("flags").orEmpty(),
+        )
     }
+
+    /** [slots] under [key], sorted; nothing when there are none. */
+    private fun JsonObjectBuilder.putSlots(
+        key: String,
+        slots: Set<String>,
+    ) {
+        if (slots.isEmpty()) return
+        put(key, buildJsonArray { slots.sorted().forEach { add(it) } })
+    }
+
+    /** The strings of the array under [key]; null when there is none, or it is not an array. */
+    private fun JsonObject.stringList(key: String): List<String>? =
+        (this[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
 
     private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
 
@@ -445,6 +467,10 @@ class ApiClient(
         }
         if (filters.hasAttachment) {
             query["has_attachment"] = "1"
+        }
+        filters.keyword?.let { query["keyword"] = it }
+        if (filters.anyFlag) {
+            query["any_flag"] = "1"
         }
         limit?.let { query["limit"] = it.toString() }
         cursor?.let { query["cursor"] = it }
@@ -1167,7 +1193,11 @@ class ApiClient(
             call(HttpMethod.Get, "rss_get_item", query = mapOf("feed_id" to feedId, "sort_key" to sortKey)),
         ).item
 
-    /** A null flag is omitted from the entry; the server leaves that flag alone. */
+    /**
+     * A null mark is omitted from the entry, and so is an empty flag list;
+     * the server leaves what an entry does not name alone. A call the
+     * server refuses for a flag it adds is thrown as [RssFlagRefusal].
+     */
     override suspend fun setItemState(changes: List<RssItemStateChange>): Int {
         val body =
             buildJsonObject {
@@ -1181,13 +1211,21 @@ class ApiClient(
                                     put("sort_key", change.sortKey)
                                     change.isRead?.let { put("is_read", it) }
                                     change.isFavorite?.let { put("is_favorite", it) }
+                                    putSlots("add_flags", change.addFlags)
+                                    putSlots("remove_flags", change.removeFlags)
                                 },
                             )
                         }
                     },
                 )
             }
-        val text = call(HttpMethod.Post, "rss_set_item_state", body = body)
+        val text =
+            try {
+                call(HttpMethod.Post, "rss_set_item_state", body = body)
+            } catch (refusal: CabalmailException.ApiError) {
+                if (refusal.code != RssFlagRefusal.CODE) throw refusal
+                throw RssFlagRefusal(refusal.flags.toSet(), refusal.message.orEmpty())
+            }
         return json
             .parseToJsonElement(text)
             .jsonObject["updated"]

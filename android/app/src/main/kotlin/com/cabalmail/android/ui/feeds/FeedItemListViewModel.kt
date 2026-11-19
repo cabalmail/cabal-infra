@@ -18,6 +18,7 @@ import com.cabalmail.kit.rss.ItemQuery
 import com.cabalmail.kit.rss.RssStore
 import com.cabalmail.kit.rss.RssSyncEngine
 import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.FlagCriterion
 import com.cabalmail.kit.settings.MarkAsRead
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +33,13 @@ data class FeedItemListUiState(
     val folder: RssFolder? = null,
     val items: List<RssItem> = emptyList(),
     val filter: RssItemFilter = RssItemFilter.DEFAULT_FOR_FEEDS,
+    /**
+     * A flag picked from the Flagged pill's menu, for this visit: a flag
+     * of the user's own, or any flag. It takes the list over while it is
+     * in force and stores nothing, so [filter] stays the pill the feed
+     * remembers and the list goes back to it when the pick ends.
+     */
+    val flagPick: FlagCriterion? = null,
     val ordering: RssOrderingMode = RssOrderingMode.NEWEST_FIRST,
     val searchQuery: String = "",
     val syncing: Boolean = false,
@@ -55,6 +63,27 @@ data class FeedItemListUiState(
     val listEpoch: Int = 0,
 ) {
     val canSearch: Boolean get() = subscription != null
+
+    /** Whether the Unread pill is lit. A pick takes the list over, so it is not while one is in force. */
+    val unreadLit: Boolean get() = filter == RssItemFilter.UNREAD && flagPick == null
+
+    /** Whether the remembered Flagged filter is what the list shows: the built-in flag, and no pick. */
+    val builtInFlagLit: Boolean get() = filter == RssItemFilter.FAVORITE && flagPick == null
+
+    /** One page of what the list shows: the pick alone while one is in force, else the remembered pill. */
+    fun query(
+        limit: Int,
+        offset: Int,
+    ): ItemQuery =
+        ItemQuery(
+            scope = scope,
+            filter = if (flagPick != null) RssItemFilter.ALL else filter,
+            ordering = ordering,
+            limit = limit,
+            offset = offset,
+            flag = flagPick,
+        )
+
     val canLoadOlder: Boolean get() = subscription != null && !olderExhausted
     val allRead: Boolean get() = items.all { it.isRead }
 
@@ -67,7 +96,7 @@ data class FeedItemListUiState(
 /**
  * One feed list (a feed, a folder, or All Feeds), the Apple
  * `FeedItemListViewModel`. Reads pages from the store; syncs the scope's
- * feeds on demand; applies read and favorite changes optimistically and
+ * feeds on demand; applies read and flag changes optimistically and
  * posts them on the bus; keeps the filter pill sticky on the scope's row
  * or the All Feeds preference. Takes narrow collaborators rather than the
  * container so it unit-tests against the kit's in-memory store.
@@ -147,7 +176,7 @@ class FeedItemListViewModel(
                 if (current.searchQuery.isNotBlank() && feedId != null) {
                     store.search(feedId, current.searchQuery)
                 } else {
-                    store.items(ItemQuery(current.scope, current.filter, current.ordering, PAGE_SIZE, 0))
+                    store.items(current.query(PAGE_SIZE, 0))
                 }
             val searching = current.searchQuery.isNotBlank() && feedId != null
             val olderExhausted = feedId?.let { store.syncState(it).olderExhausted } ?: false
@@ -187,7 +216,7 @@ class FeedItemListViewModel(
         viewModelScope.launch {
             val page =
                 runCatching {
-                    store.items(ItemQuery(current.scope, current.filter, current.ordering, PAGE_SIZE, loaded))
+                    store.items(current.query(PAGE_SIZE, loaded))
                 }.getOrNull() ?: return@launch
             loaded += page.size
             mutableState.update { it.copy(items = it.items + page, hasMoreLocal = page.size == PAGE_SIZE) }
@@ -252,13 +281,14 @@ class FeedItemListViewModel(
     }
 
     /**
-     * The pill: applied at once, then written back to the scope's row (or
-     * the All Feeds preference) when it differs from what is stored.
+     * The pill, or the menu's built-in flag or Clear filter: applied at
+     * once, ending any pick, then written back to the scope's row (or the
+     * All Feeds preference) when it differs from what is stored.
      */
     fun setFilter(filter: RssItemFilter) {
         val current = mutableState.value
-        if (current.filter == filter) return
-        mutableState.update { it.copy(filter = filter) }
+        if (current.filter == filter && current.flagPick == null) return
+        mutableState.update { it.copy(filter = filter, flagPick = null) }
         viewModelScope.launch {
             reload(restart = true)
             when (val scope = current.scope) {
@@ -279,6 +309,18 @@ class FeedItemListViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * A flag of the user's own, or Any flag, picked from the Flagged
+     * pill's menu: the list shows only what carries it, for the visit.
+     * Nothing is written anywhere, so the list reopens on the pill it
+     * remembers.
+     */
+    fun pickFlag(pick: FlagCriterion) {
+        if (mutableState.value.flagPick == pick) return
+        mutableState.update { it.copy(flagPick = pick) }
+        viewModelScope.launch { reload(restart = true) }
     }
 
     /** The ordering, applied at once and stored on the feed's row (single-feed scopes). */
@@ -312,15 +354,25 @@ class FeedItemListViewModel(
         }
     }
 
-    fun setFavorite(
+    /**
+     * Sets or clears one flag of Settings > Flags on an item, by its
+     * palette slot: the built-in flag or one of the user's own. Shown at
+     * once, then written and sent; afterwards the row is what the store
+     * holds, because the server can refuse a flag it no longer lists and
+     * the queue then takes it off the item again.
+     */
+    fun setFlag(
         item: RssItem,
-        isFavorite: Boolean,
+        slot: String,
+        isSet: Boolean,
     ) {
-        val changed = item.copy(isFavorite = isFavorite)
+        val changed = item.withFlag(slot, isSet)
         patch(changed)
         viewModelScope.launch {
-            runCatching { engine().setFavorite(item, isFavorite) }
-            events.post(FeedEvent.ItemChanged(changed))
+            runCatching { engine().setPaletteFlag(item, slot, isSet) }
+            val stored = runCatching { store.item(item.feedId, item.sortKey) }.getOrNull() ?: changed
+            patch(stored)
+            events.post(FeedEvent.ItemChanged(stored))
             refreshPendingMarks()
         }
     }
@@ -363,10 +415,8 @@ class FeedItemListViewModel(
             state.copy(
                 items =
                     state.items.map {
-                        if (it.id ==
-                            changed.id
-                        ) {
-                            it.copy(isRead = changed.isRead, isFavorite = changed.isFavorite)
+                        if (it.id == changed.id) {
+                            it.copy(isRead = changed.isRead, isFavorite = changed.isFavorite, flags = changed.flags)
                         } else {
                             it
                         }

@@ -1,5 +1,6 @@
 package com.cabalmail.kit.models
 
+import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.WireEnum
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -265,6 +266,12 @@ data class RssItem(
     /** Whether [isRead] is the user's own mark rather than the watermark rule. */
     @SerialName("is_read_explicit") val isReadExplicit: Boolean = false,
     @SerialName("is_favorite") val isFavorite: Boolean = false,
+    /**
+     * The flags of the user's own the item carries, as palette slots
+     * (`cabal-flag-01` ... `cabal-flag-20`). The built-in flag is not one
+     * of them: on a feed item it is [isFavorite].
+     */
+    val flags: Set<String> = emptySet(),
 ) {
     /** Stable across feeds; `item_id` alone is not unique. */
     val id: String
@@ -272,6 +279,34 @@ data class RssItem(
 
     val bodyHtml: String
         get() = contentHtml.ifEmpty { summaryHtml }
+
+    /**
+     * The item's flags as Settings > Flags names them: the built-in flag's
+     * slot when the item is a favorite, then its [flags]. A message's flag
+     * list has the same shape, so what draws or toggles a message's flags
+     * (the row's dots, the reader's chips, the flag menu) reads a feed
+     * item's through this.
+     */
+    val paletteFlags: List<String>
+        get() = if (isFavorite) listOf(FlagPalette.SYSTEM_SLOT) + flags.sorted() else flags.sorted()
+
+    /** Whether the item carries the flag in palette slot [slot], the built-in flag's included. */
+    fun carries(slot: String): Boolean = if (slot == FlagPalette.SYSTEM_SLOT) isFavorite else slot in flags
+
+    /**
+     * The item with the flag in palette slot [slot] set or cleared: the
+     * favorite mark for the built-in flag's slot, a member of [flags] for
+     * any other.
+     */
+    fun withFlag(
+        slot: String,
+        isSet: Boolean,
+    ): RssItem =
+        when {
+            slot == FlagPalette.SYSTEM_SLOT -> copy(isFavorite = isSet)
+            isSet -> copy(flags = flags + slot)
+            else -> copy(flags = flags - slot)
+        }
 }
 
 /** One row of the state-sync form of `/rss_list_items`. */
@@ -283,6 +318,8 @@ data class RssItemState(
     @SerialName("is_read") val isRead: Boolean = false,
     @SerialName("is_read_explicit") val isReadExplicit: Boolean = false,
     @SerialName("is_favorite") val isFavorite: Boolean = false,
+    /** The item's flags of the user's own, as palette slots ([RssItem.flags]). */
+    val flags: Set<String> = emptySet(),
     @SerialName("updated_at") val updatedAt: String = "",
 )
 
@@ -369,12 +406,20 @@ data class RssFolderDeleteResult(
     @SerialName("parent_folder_id") val parentFolderId: String = "",
 )
 
-/** One entry of `/rss_set_item_state`; a null flag is not sent. */
+/**
+ * One entry of `/rss_set_item_state`; a null mark is not sent, and neither
+ * is an empty flag list. [addFlags] and [removeFlags] are palette slots of
+ * the user's own flags; the server refuses a slot named in both, and
+ * refuses the whole call for an added slot its palette does not hold
+ * ([com.cabalmail.kit.rss.RssFlagRefusal]).
+ */
 data class RssItemStateChange(
     val feedId: String,
     val sortKey: String,
     val isRead: Boolean? = null,
     val isFavorite: Boolean? = null,
+    val addFlags: Set<String> = emptySet(),
+    val removeFlags: Set<String> = emptySet(),
 )
 
 @Serializable
