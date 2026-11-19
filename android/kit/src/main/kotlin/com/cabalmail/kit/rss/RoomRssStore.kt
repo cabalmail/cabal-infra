@@ -375,7 +375,7 @@ interface RssDao {
         RssPendingRow::class,
     ],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class RssDatabase : RoomDatabase() {
     abstract fun dao(): RssDao

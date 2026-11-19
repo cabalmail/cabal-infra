@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
     alias(libs.plugins.ktlint)
 }
 
@@ -34,6 +35,13 @@ android {
         // Same rationale as app: dependabot owns version currency.
         disable += listOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
     }
+}
+
+// The feed database's schema at each version, exported by Room's compiler
+// and committed: a migration is tested against these files, and a schema
+// change that forgets to raise the version fails the build.
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 kotlin {
