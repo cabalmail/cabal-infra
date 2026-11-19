@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android in review (2026-11-18): the first of its two PRs, flags on feed items, is #2498 (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Started (2026-11-18): the storage decision is answered (`feedRules` beside `rules`). Terraform in review (#2497); server, Apple and Android not started |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -129,7 +129,9 @@ moved most of the code this plan names. The facts a phase depends on:
 - `RssStore` is at schema 7 with #2411 (schema 6 before it). From 1.50.0
   (#2404) `openRecovering` sets aside a file written by a newer schema;
   1.49.0 and earlier delete it.
-  Android's `RoomRssStore` is at version 1 with a destructive fallback.
+  Android's `RoomRssStore` is at version 1 with a destructive fallback
+  until leg L2's first PR (#2498, in review 2026-11-18), which takes it
+  to version 2 by its first real migration.
 
 ### Where the two media already align
 
@@ -467,8 +469,8 @@ and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
 **Status:** Server in prod (2026-11-11); Apple merged (2026-11-12),
-the per-flag filter in prod with 1.53.0 (2026-11-13); Android not
-started. The unified flags plan
+the per-flag filter in prod with 1.53.0 (2026-11-13); Android in
+review (2026-11-18, #2498). The unified flags plan
 shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
 are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
@@ -493,7 +495,9 @@ these PRs and already in prod. The filter's shape was answered again on
 before it merged: #2424 (item 6 of 2a), merged on 2026-11-12, passed
 against the stage API, and in prod the same day with 1.52.0, the
 release that also carried #2420.
-Android has not started (`android-parity.md`, leg L2).
+Android is in review (2026-11-18): leg L2 of `android-parity.md`, whose
+first PR, flags on feed items, is #2498; its second is the per-flag
+filter on both lists.
 `flags-and-cross-media.md` has the gates, the answers that settled the
 open points below (its decisions 4 and 11), and what was built.
 
@@ -533,7 +537,9 @@ open points below (its decisions 4 and 11), and what was built.
    Room version 1 with a destructive fallback, so its first bump needs
    a real migration or an upgrade drops queued marks. `android-parity.md`
    PR 9 plans that bump (version 2, for folder and All Feeds order); if
-   it lands first, as planned, Phase 2 is version 3.
+   it lands first, as planned, Phase 2 is version 3. It did not land
+   first: leg L2's first PR (#2498) is version 2, with the first real
+   migration, and PR 9's column becomes version 3.
 1. **Sync.** `RssSyncEngine` on both platforms applies `flags` from item
    pages and state pages, and queues flag changes through the existing
    pending queue. Coalescing is per item and slot, so the latest intent
@@ -803,7 +809,9 @@ app; signing out removes the feed entries from Spotlight.
   imports that file's pending rows when it is installed again. Signing
   out in between deletes the set-aside file. 1.49.0 and earlier delete
   the file, and with it any unsent feed marks, so schema 7 ships after
-  1.50.0. Room must not move past version 1 without a real migration.
+  1.50.0. Room moves past version 1 only by a real migration, which
+  Android's leg L2 adds (#2498): an older build installed over the newer
+  file still rebuilds it, which only `adb install -d` can do.
 - Each phase's acceptance line above is written to be a tester sweep
   item.
 

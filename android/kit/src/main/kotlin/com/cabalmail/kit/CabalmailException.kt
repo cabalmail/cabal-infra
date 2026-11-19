@@ -34,12 +34,15 @@ sealed class CabalmailException(
     /**
      * Non-2xx from the Lambda API, carrying the server's message and, when
      * the response was the `{"Error", "code"}` envelope (the RSS endpoints,
-     * `docs/rss.md`), its stable [code] token.
+     * `docs/rss.md`), its stable [code] token. [flags] is the envelope's
+     * `flags` list, the palette slots a flag refusal names; empty when the
+     * response carried none.
      */
     class ApiError(
         val httpStatus: Int,
         message: String,
         val code: String? = null,
+        val flags: List<String> = emptyList(),
     ) : CabalmailException(message)
 
     /**

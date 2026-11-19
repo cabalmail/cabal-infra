@@ -119,7 +119,7 @@ class AppContainer(
     /** Reader-side mutations the message list mirrors without a refetch. */
     val mailEvents = MailEventBus()
 
-    /** Feed read/favorite changes and catalog changes, fanned out across the feed screens. */
+    /** Feed read and flag changes and catalog changes, fanned out across the feed screens. */
     val feedEvents = FeedEventBus()
 
     /** The on-device mirror of the feed catalog and cached items (rss plan, phase 6). */
@@ -281,7 +281,12 @@ class AppContainer(
     suspend fun requireRssSync(): RssSyncEngine {
         val api = requireApi()
         return authMutex.withLock {
-            rssSyncEngine ?: RssSyncEngine(api, rssStore).also { rssSyncEngine = it }
+            rssSyncEngine ?: RssSyncEngine(api, rssStore).also {
+                // Refused a flag on a feed item, the queue asks for the
+                // settings this device still owes before it gives the flag up.
+                it.unsentSettingsPush = { preferences.sendOwedFlagList() }
+                rssSyncEngine = it
+            }
         }
     }
 }

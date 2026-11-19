@@ -1,6 +1,7 @@
 package com.cabalmail.android.ui.theme
 
 import com.cabalmail.android.ui.feeds.feedRowDescription
+import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -99,17 +100,59 @@ class FlagDotMarkTest {
         )
     }
 
+    private fun feedItem(
+        isFavorite: Boolean = false,
+        flags: Set<String> = emptySet(),
+    ) = RssItem(feedId = "f1", sortKey = "k1", isFavorite = isFavorite, flags = flags)
+
     @Test
-    fun `a feed item's one flag takes the built-in entry's name and color`() {
-        assertEquals(emptyList<FlagDotMark>(), FlagDotMark.feedMarks(isFlagged = false, palette = listOf(urgent)))
+    fun `a feed item's built-in flag takes the built-in entry's name and color`() {
+        assertEquals(emptyList<FlagDotMark>(), FlagDotMark.feedMarks(feedItem(), palette = listOf(urgent)))
         assertEquals(
             listOf(FlagDotMark(FlagPalette.SYSTEM_SLOT, "Flagged", "yellow")),
-            FlagDotMark.feedMarks(isFlagged = true, palette = listOf(urgent)),
+            FlagDotMark.feedMarks(feedItem(isFavorite = true), palette = listOf(urgent)),
         )
         // Wherever the entry sits in the list, and whatever it is called.
         assertEquals(
             listOf(FlagDotMark(FlagPalette.SYSTEM_SLOT, "Later", "teal")),
-            FlagDotMark.feedMarks(isFlagged = true, palette = listOf(urgent, system(label = "Later", color = "teal"))),
+            FlagDotMark.feedMarks(
+                feedItem(isFavorite = true),
+                palette = listOf(urgent, system(label = "Later", color = "teal")),
+            ),
+        )
+    }
+
+    @Test
+    fun `a feed item draws a mark for each flag of the user's own, in the list's order`() {
+        val later = FlagPaletteEntry(slot = "cabal-flag-02", label = "Later", color = "blue")
+        val palette = listOf(later, system(), urgent)
+
+        assertEquals(
+            listOf(
+                FlagDotMark(later.slot, "Later", "blue"),
+                FlagDotMark(FlagPalette.SYSTEM_SLOT, "Flagged", "yellow"),
+                FlagDotMark(urgent.slot, "Urgent", "red"),
+            ),
+            FlagDotMark.feedMarks(feedItem(isFavorite = true, flags = setOf(urgent.slot, later.slot)), palette),
+        )
+        assertEquals(
+            listOf(FlagDotMark(urgent.slot, "Urgent", "red")),
+            FlagDotMark.feedMarks(feedItem(flags = setOf(urgent.slot)), palette),
+            "the built-in flag's mark only when the item carries it",
+        )
+        // A flag whose entry was deleted is still drawn, gray, under its slot id.
+        assertEquals(
+            listOf(FlagDotMark("cabal-flag-09", "cabal-flag-09", "")),
+            FlagDotMark.feedMarks(feedItem(flags = setOf("cabal-flag-09")), palette),
+        )
+        assertEquals(
+            FlagDotMark.ROW_LIMIT,
+            FlagDotMark
+                .feedMarks(
+                    feedItem(isFavorite = true, flags = FlagPalette.SLOTS.take(6).toSet()),
+                    FlagPalette.SLOTS.take(6).map { FlagPaletteEntry(it, it, "red") },
+                ).size,
+            "capped as a message's row is",
         )
     }
 

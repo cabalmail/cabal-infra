@@ -95,7 +95,12 @@ class FeedItemDetailViewModel(
                 if (event is FeedEvent.ItemChanged && event.item.id == "$feedId#$sortKey") {
                     mutableState.update { state ->
                         state.copy(
-                            item = state.item?.copy(isRead = event.item.isRead, isFavorite = event.item.isFavorite),
+                            item =
+                                state.item?.copy(
+                                    isRead = event.item.isRead,
+                                    isFavorite = event.item.isFavorite,
+                                    flags = event.item.flags,
+                                ),
                         )
                     }
                 }
@@ -175,13 +180,30 @@ class FeedItemDetailViewModel(
         }
     }
 
-    fun setFavorite(isFavorite: Boolean) {
+    /**
+     * Sets or clears one flag of Settings > Flags on the open item, by its
+     * palette slot: the built-in flag or one of the user's own. Shown at
+     * once, then written and sent; afterwards the item's marks are what
+     * the store holds, because the server can refuse a flag it no longer
+     * lists and the queue then takes it off the item again.
+     */
+    fun setFlag(
+        slot: String,
+        isSet: Boolean,
+    ) {
         val item = mutableState.value.item ?: return
-        val changed = item.copy(isFavorite = isFavorite)
+        val changed = item.withFlag(slot, isSet)
         mutableState.update { it.copy(item = changed) }
         viewModelScope.launch {
-            runCatching { engine().setFavorite(item, isFavorite) }
-            events.post(FeedEvent.ItemChanged(changed))
+            runCatching { engine().setPaletteFlag(item, slot, isSet) }
+            val stored = runCatching { store.item(feedId, sortKey) }.getOrNull() ?: changed
+            mutableState.update { state ->
+                state.copy(
+                    item =
+                        state.item?.copy(isRead = stored.isRead, isFavorite = stored.isFavorite, flags = stored.flags),
+                )
+            }
+            events.post(FeedEvent.ItemChanged(stored))
         }
     }
 
