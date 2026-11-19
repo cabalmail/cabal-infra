@@ -292,6 +292,7 @@
     <string name="feed_empty_unread_body">Every item here has been read.</string>
     <string name="feed_empty_favorite_title">No flagged items</string>
     <string name="feed_empty_favorite_body">Swipe an item or use its menu to flag it.</string>
+    <string name="feed_empty_favorite_body_menu">Touch and hold an item to flag it.</string>
     <string name="feed_open_on">Open on %1$s</string>
     <string name="feed_open_on_web">Open on the web</string>
     <string name="feed_open_article">Open article</string>
@@ -425,7 +426,6 @@
     <string name="settings_swipe_footer">Leading is a swipe that starts at the leading edge (the left in left-to-right languages); trailing starts at the other edge. The same action may be bound to both.</string>
     <string name="opt_swipe_toggle_read">Toggle read</string>
     <string name="opt_swipe_toggle_flag">Toggle default flag</string>
-    <string name="opt_swipe_toggle_favorite">Toggle flag</string>
     <string name="opt_swipe_dispose">Dispose (per Dispose action)</string>
     <string name="opt_swipe_none">None</string>
     <string name="opt_advance_next">Next message</string>

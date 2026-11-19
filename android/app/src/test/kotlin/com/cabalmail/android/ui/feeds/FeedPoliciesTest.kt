@@ -9,6 +9,9 @@ import com.cabalmail.kit.models.RssRemoteContentMode
 import com.cabalmail.kit.models.RssStyling
 import com.cabalmail.kit.models.RssSubscription
 import com.cabalmail.kit.models.RssSubscriptionUpdate
+import com.cabalmail.kit.settings.FeedSwipeAction
+import com.cabalmail.kit.settings.FlagPalette
+import com.cabalmail.kit.settings.FlagPaletteEntry
 import com.cabalmail.kit.settings.LoadRemoteContent
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -124,6 +127,27 @@ class FeedPoliciesTest {
         assertTrue(FeedDetailPolicy.showsReader(wantsReader = true, leftThroughLink = false))
         assertFalse(FeedDetailPolicy.showsReader(wantsReader = false, leftThroughLink = false))
         assertFalse(FeedDetailPolicy.showsReader(wantsReader = false, leftThroughLink = true))
+    }
+
+    @Test
+    fun `the empty Flagged list offers the swipe only while the swipe sets the flag that pill shows`() {
+        val urgent = FlagPaletteEntry(slot = "cabal-flag-01", label = "Urgent", color = "red")
+        val builtIn = FlagPalette.DEFAULT_SYSTEM_ENTRY
+        val flag = FeedSwipeAction.TOGGLE_FAVORITE
+        val read = FeedSwipeAction.TOGGLE_READ
+        val none = FeedSwipeAction.NONE
+
+        // The built-in flag is the default one: with no flag of the user's
+        // own, with one after it (a list that stores no built-in entry
+        // leads with it), and stored first.
+        assertTrue(FeedFlagWords.flaggedPillOffersSwipe(emptyList(), leading = read, trailing = flag))
+        assertTrue(FeedFlagWords.flaggedPillOffersSwipe(listOf(urgent), leading = read, trailing = flag))
+        assertTrue(FeedFlagWords.flaggedPillOffersSwipe(listOf(builtIn, urgent), leading = flag, trailing = none))
+        // Another flag was made the default: the swipe sets that one,
+        // which the Flagged pill does not show.
+        assertFalse(FeedFlagWords.flaggedPillOffersSwipe(listOf(urgent, builtIn), leading = read, trailing = flag))
+        // No edge is bound to the flag swipe.
+        assertFalse(FeedFlagWords.flaggedPillOffersSwipe(emptyList(), leading = read, trailing = none))
     }
 
     @Test

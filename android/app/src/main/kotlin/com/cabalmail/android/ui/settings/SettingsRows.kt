@@ -278,7 +278,9 @@ internal fun FeedSwipeAction.label(): String =
     stringResource(
         when (this) {
             FeedSwipeAction.TOGGLE_READ -> R.string.opt_swipe_toggle_read
-            FeedSwipeAction.TOGGLE_FAVORITE -> R.string.opt_swipe_toggle_favorite
+            // The stored value keeps its old name; the swipe toggles the
+            // default flag, as mail's does.
+            FeedSwipeAction.TOGGLE_FAVORITE -> R.string.opt_swipe_toggle_flag
             FeedSwipeAction.NONE -> R.string.opt_swipe_none
         },
     )

@@ -11,6 +11,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 
@@ -64,15 +65,16 @@ internal data class FlagDotMark(
         }
 
         /**
-         * A feed item's marks. A feed item has one flag, stored as its
-         * favorite bit, and it is the system flag: the mark takes the name
-         * and color of the palette's entry for it, as a flagged message's
-         * does.
+         * A feed item's marks: the built-in flag, which a feed item stores
+         * as its favorite bit, and every flag of the user's own it carries,
+         * in palette order and capped as a message's are
+         * ([RssItem.paletteFlags]).
          */
         fun feedMarks(
-            isFlagged: Boolean,
+            item: RssItem,
             palette: List<FlagPaletteEntry>,
-        ): List<FlagDotMark> = marks(if (isFlagged) listOf(FlagPalette.SYSTEM_SLOT) else emptyList(), palette)
+            limit: Int = ROW_LIMIT,
+        ): List<FlagDotMark> = marks(item.paletteFlags, palette, limit)
     }
 }
 

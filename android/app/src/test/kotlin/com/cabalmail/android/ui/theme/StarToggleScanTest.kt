@@ -58,10 +58,17 @@ class StarToggleScanTest {
     }
 
     @Test
-    fun `the feed reader's Favorite star draws its state by shape`() {
+    fun `the readers' flag star draws its state by shape`() {
+        // The mail reader and the feed reader share one star button, which
+        // sets the default flag; the feed reader used to draw its own, from
+        // the item's favorite mark.
         assertTrue(
-            source("ui/feeds/FeedItemDetailScreen.kt").contains("starTogglePainter(item.isFavorite)"),
-            "the feed reader's Favorite toggle must draw through starTogglePainter",
+            source("ui/mail/MessageDetailScreen.kt").contains("starTogglePainter(toggle.filledStar)"),
+            "the readers' flag toggle must draw through starTogglePainter",
+        )
+        assertTrue(
+            source("ui/feeds/FeedItemDetailScreen.kt").contains("ReaderFlagButton("),
+            "the feed reader's flag toggle must be the shared button",
         )
     }
 }

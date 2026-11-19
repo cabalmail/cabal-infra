@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Cross-screen feed changes, the Android sibling of the Apple `FeedStateBus`:
- * an item's read or favorite flag changed (lists patch the row in place, the
+ * an item's read mark or one of its flags changed (lists patch the row in place, the
  * feed list re-reads its counts), something broad changed (a sync, a
  * mark-all-read: first-page lists reload, the feed list reloads), or the
  * catalog itself changed (folders or subscriptions came or went).

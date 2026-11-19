@@ -47,11 +47,11 @@ internal fun UiLabel.text(): String =
  * items, a search result's long-press and the reader's star button. The
  * Kotlin sibling of the Apple app's `FlagToggle`.
  *
- * Mail's controls act on the palette's default flag, the first entry of
- * Settings > Flags ([defaultFlag]). A feed item has one mark, the server's
- * flag, so the feed's controls act on that flag's entry whatever its
- * position ([systemFlag]). There is always one of each: the list always
- * holds the built-in flag, and a flag cannot be switched off.
+ * Every one of them, on a message or a feed item, acts on the palette's
+ * default flag, the first entry of Settings > Flags ([defaultFlag]). There
+ * is always one: the list always holds the built-in flag, and a flag
+ * cannot be switched off. The Flagged filter pills are the exception:
+ * they filter on the built-in flag whatever its position ([systemFlag]).
  */
 internal data class FlagToggle(
     val slot: String,
@@ -84,11 +84,11 @@ internal data class FlagToggle(
         get() = slot == FlagPalette.SYSTEM_SLOT && label == FlagPalette.DEFAULT_SYSTEM_ENTRY.label
 
     companion object {
-        /** The flag the mail controls toggle: the first entry of the effective palette. */
+        /** The flag the one-press controls toggle: the first entry of the effective palette. */
         fun defaultFlag(palette: List<FlagPaletteEntry>): FlagToggle = FlagToggle(FlagPalette.defaultEntry(palette))
 
         /**
-         * The built-in flag's entry, for the feed controls. The effective
+         * The built-in flag's entry, for the Flagged filter. The effective
          * palette always holds it.
          */
         fun systemFlag(palette: List<FlagPaletteEntry>): FlagToggle =
