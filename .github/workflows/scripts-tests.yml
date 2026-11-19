@@ -24,6 +24,9 @@ name: Scripts Tests
 # runner-hung-before-tests.py, which decides whether a failed run started a
 # test at all, and xcodebuild-test.sh, which runs the command again.
 #
+# One reads android.yml itself: Play uploads from stage and main must run one
+# at a time (#2505), and the suite checks the upload job's concurrency group.
+#
 # The suites are stdlib-only (scripts/apple-release-dashboard.py imports its
 # third-party ASC deps lazily), so no pip install is needed — just a pinned
 # interpreter, git, bash and jq, all provided by the runner.
@@ -46,6 +49,9 @@ on:
       # names and kit-test matrix it depends on.
       - '.github/scripts/apple-promotion-verdict.py'
       - '.github/workflows/apple.yml'
+      # test_android_upload_concurrency.py: the upload job's concurrency
+      # group, which keeps a stage and a prod Play upload from overlapping.
+      - '.github/workflows/android.yml'
       - 'changelog.d/**'
       - 'design/**'
       # test_sms_consent_text.py: the native sign-up's SMS consent text
@@ -74,6 +80,9 @@ on:
       # names and kit-test matrix it depends on.
       - '.github/scripts/apple-promotion-verdict.py'
       - '.github/workflows/apple.yml'
+      # test_android_upload_concurrency.py: the upload job's concurrency
+      # group, which keeps a stage and a prod Play upload from overlapping.
+      - '.github/workflows/android.yml'
       - 'changelog.d/**'
       - 'design/**'
       # test_sms_consent_text.py: the native sign-up's SMS consent text

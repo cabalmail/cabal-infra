@@ -145,6 +145,24 @@ jobs:
     # The ref check (not an event check) is what keeps a workflow_dispatch
     # run on a feature branch from uploading.
     if: github.ref_name == 'main' || github.ref_name == 'stage'
+    # One upload at a time across stage and main, unlike the workflow's own
+    # group above, which is per ref. The publisher works inside a Play
+    # "edit", and Play keeps one open edit per account: when a second upload
+    # opens its edit, the first one's is invalidated and its upload fails
+    # with "This Edit has been deleted" (#2505, the 1.55.0 promotion). The
+    # edit is opened when the version code is resolved, minutes before the
+    # bundle is uploaded, so two uploads only had to overlap to collide.
+    #
+    # The group is on this job, not on the workflow, so a main run waiting
+    # at the approval gate holds nothing. An upload that finds the group
+    # taken waits for the other to finish; neither is cancelled for the
+    # other. By default GitHub keeps one waiting job per group and cancels
+    # an older waiting one for a newer, which cannot happen here: the per-ref
+    # group above leaves at most one live run on each of the two refs that
+    # upload.
+    concurrency:
+      group: android-play-upload
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
     steps:
