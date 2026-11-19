@@ -1,5 +1,6 @@
-'''Validates and stores the current user's mail rules
-(docs/1.x/user-mail-rules-plan.md, Phase 1).
+'''Validates and stores the current user's rules: the mail rules
+(docs/1.x/user-mail-rules-plan.md, Phase 1) and the feed rules beside them
+(docs/1.x/cross-media-ux-plan.md, Phase 4).
 
 The whole ordered rule set arrives as one array and is written as one
 whole-row replacement: array index is precedence, so there are no per-rule
@@ -19,6 +20,15 @@ against the user's IMAP folder list (the user may create the folder right
 after saving); the compiler re-verifies at compile time and skips rules whose
 folder is gone. The response's `warnings` field names every accepted-but-
 unverified folder target so clients can surface it.
+
+Feed rules are a second list, `feedRules`, in the same row and under the same
+version, so there is one conflict story for both. The key is optional: a
+request without it leaves the stored list as it is, which is what every
+client that predates feed rules sends, so a save from one can neither see
+nor lose a feed rule. A request that carries it replaces the list whole, as
+`rules` always is. The mail compiler reads only `rules`; feed rules are
+applied by the fetch worker when it inserts an item (rss_fetch, rss_rules).
+Only a save that changes the mail rules is published to the imap tier.
 '''
 import json
 import os
@@ -51,6 +61,13 @@ MAX_FOLDER_LENGTH = 255
 # attributes alongside; a limit the validation caps above make unreachable in
 # practice, kept as a backstop against pathological inputs.
 MAX_RULES_BYTES = 300_000
+MAX_FEED_RULES = 100
+# The two lists share one DynamoDB item (400 KB). Each has its own cap
+# rather than one for the pair, so a save that sends only `rules` can be
+# judged without reading what `feedRules` holds, and the two caps together
+# stay under the item limit. A feed rule has no reply body or folder list,
+# so this is room for a full list of long ones.
+MAX_FEED_RULES_BYTES = 60_000
 AUDIT_RETENTION_SECONDS = 90 * 24 * 3600
 
 FIELDS = {'from', 'to', 'cc', 'subject', 'body'}
@@ -81,6 +98,22 @@ DEFAULTS = {
     'reply': False,
     'replyBody': '',
     'continueToNext': False,
+}
+
+# A feed rule decorates a newly fetched feed item: it has conditions and the
+# three decoration actions a mail rule has, and no destination, forward,
+# reply or continue (nothing is filed, so every matching rule applies).
+# rss_rules.FIELDS is the reader's copy of FEED_FIELDS; a test holds the two
+# together.
+FEED_FIELDS = {'feed', 'title', 'author', 'summary'}
+FEED_BOOL_KEYS = ('enabled', 'flag', 'markRead')
+FEED_DEFAULTS = {
+    'name': '',
+    'enabled': True,
+    'conditions': [],
+    'flag': False,
+    'flags': [],
+    'markRead': False,
 }
 
 # Characters that are procmail- or shell-meaningful and must never appear in a
@@ -114,8 +147,11 @@ def _folder_error(value):
     return None
 
 
-def _condition_errors(conditions):
-    '''Validates the conditions list; returns a list of (field, message).'''
+def _condition_errors(conditions, fields=None):
+    '''Validates the conditions list; returns a list of (field, message).
+    `fields` is the set of condition fields the rule's kind allows (a mail
+    rule's by default).'''
+    fields = FIELDS if fields is None else fields
     errors = []
     if not isinstance(conditions, list):
         return [('conditions', 'Must be a list.')]
@@ -126,7 +162,7 @@ def _condition_errors(conditions):
         if not isinstance(cond, dict) or set(cond) != {'field', 'value'}:
             errors.append((where, 'Each condition needs exactly field and value.'))
             continue
-        if cond['field'] not in FIELDS:
+        if cond['field'] not in fields:
             errors.append((f'{where}.field', 'Unknown field.'))
         value = cond['value']
         if (not isinstance(value, str) or not 1 <= len(value) <= MAX_VALUE_LENGTH
@@ -136,16 +172,23 @@ def _condition_errors(conditions):
     return errors
 
 
-def _scalar_errors(rule):
-    '''Validates a rule's non-collection fields; returns a list of (field, message).'''
+def _name_and_bool_errors(rule, bool_keys):
+    '''Validates a rule's name and its boolean fields; returns a list of
+    (field, message). Shared by mail and feed rules.'''
     errors = []
     name = rule['name']
     if (not isinstance(name, str) or not 1 <= len(name.strip()) <= MAX_NAME_LENGTH
             or _bad_controls(name)):
         errors.append(('name', f'Must be 1-{MAX_NAME_LENGTH} characters, no control characters.'))
-    for key in BOOL_KEYS:
+    for key in bool_keys:
         if not isinstance(rule[key], bool):
             errors.append((key, 'Must be a boolean.'))
+    return errors
+
+
+def _scalar_errors(rule):
+    '''Validates a rule's non-collection fields; returns a list of (field, message).'''
+    errors = _name_and_bool_errors(rule, BOOL_KEYS)
     if rule['action'] not in ACTIONS:
         errors.append(('action', 'Unknown action.'))
     folder_error = _folder_error(rule['moveFolder'])
@@ -246,17 +289,72 @@ def _normalize_rules(rules_in):
             rule['forward'] = forwards
             if dropped:
                 stripped.append({'rule': index, 'forward': dropped})
-        # Ids are server-assigned: keep a well-formed, unseen client id (so
-        # edits are stable across saves), mint a fresh one otherwise.
-        rule_id = rule_in.get('id', '')
-        if not isinstance(rule_id, str) or not RULE_ID_RE.match(rule_id) or rule_id in seen_ids:
-            rule_id = 'r-' + secrets.token_hex(6)
-        seen_ids.add(rule_id)
-        rule['id'] = rule_id
+        rule['id'] = _assign_id(rule_in, seen_ids)
         errors += [{'rule': index, 'field': field, 'error': message}
                    for field, message in rule_errors]
         rules.append(rule)
     return rules, errors, stripped
+
+
+def _assign_id(rule_in, seen_ids):
+    '''The id a rule is stored under. Ids are server-assigned: keep a
+    well-formed, unseen client id (so edits are stable across saves), mint a
+    fresh one otherwise. Adds it to `seen_ids`.'''
+    rule_id = rule_in.get('id', '')
+    if not isinstance(rule_id, str) or not RULE_ID_RE.match(rule_id) or rule_id in seen_ids:
+        rule_id = 'r-' + secrets.token_hex(6)
+    seen_ids.add(rule_id)
+    return rule_id
+
+
+def _feed_condition_errors(conditions):
+    '''Validates a feed rule's conditions; returns a list of (field, message).
+
+    The shape rules are a mail rule's, over the feed fields. One more: at
+    most one `feed` condition. Conditions are ANDed and `feed` names one
+    subscription exactly, so two of them could never both hold.'''
+    errors = _condition_errors(conditions, FEED_FIELDS)
+    if errors or not isinstance(conditions, list):
+        return errors
+    if sum(1 for cond in conditions if cond['field'] == 'feed') > 1:
+        errors.append(('conditions', 'At most one feed condition per rule.'))
+    return errors
+
+
+def _normalize_feed_rules(rules_in, taken_ids):
+    '''Validates and canonicalizes the incoming feed rule array.
+
+    Returns (rules, errors): the canonical feed rule dicts (schema keys only,
+    server-assigned ids) and the structured validation errors, each marked
+    `'list': 'feedRules'` so a client can tell which list `rule` indexes.
+    `rules` is meaningful only when `errors` is empty. `taken_ids` are the
+    ids the mail rules of the same request hold: an id is unique across both
+    lists, so an audit path or a client's selection never names two rules.
+
+    Whether a `feed` condition names a subscription the caller still has,
+    and whether a slot is still in the palette, are not checked here, for
+    the reason folder targets are not: either can change after the save, and
+    a stale reference must not wedge every later whole-set save. The fetch
+    worker is the enforcement point: a rule for a subscription that is gone
+    matches nothing, and one that sets a slot not in the palette is skipped.
+    '''
+    rules, errors, seen_ids = [], [], set(taken_ids)
+    for index, rule_in in enumerate(rules_in):
+        if not isinstance(rule_in, dict):
+            errors.append({'list': 'feedRules', 'rule': index, 'field': '',
+                           'error': 'Rule must be an object.'})
+            continue
+        rule_errors = [(key, 'Unknown field.') for key in rule_in
+                       if key not in FEED_DEFAULTS and key != 'id']
+        rule = {key: rule_in.get(key, default) for key, default in FEED_DEFAULTS.items()}
+        rule_errors += _name_and_bool_errors(rule, FEED_BOOL_KEYS)
+        rule_errors += _feed_condition_errors(rule['conditions'])
+        rule_errors += _rule_flags_errors(rule['flags'])
+        rule['id'] = _assign_id(rule_in, seen_ids)
+        errors += [{'list': 'feedRules', 'rule': index, 'field': field, 'error': message}
+                   for field, message in rule_errors]
+        rules.append(rule)
+    return rules, errors
 
 
 def _folder_warnings(rules):
@@ -271,71 +369,115 @@ def _folder_warnings(rules):
     return warnings
 
 
-def _json_patch(old, new):
-    '''A JSON Patch (RFC 6902) turning the old rules array into the new one.'''
+def _json_patch(old, new, root='rules'):
+    '''A JSON Patch (RFC 6902) turning the old array at /<root> into the new one.'''
     ops = []
     for i in range(min(len(old), len(new))):
         if old[i] != new[i]:
-            ops.append({'op': 'replace', 'path': f'/rules/{i}', 'value': new[i]})
+            ops.append({'op': 'replace', 'path': f'/{root}/{i}', 'value': new[i]})
     for i in range(len(old), len(new)):
-        ops.append({'op': 'add', 'path': f'/rules/{i}', 'value': new[i]})
+        ops.append({'op': 'add', 'path': f'/{root}/{i}', 'value': new[i]})
     for i in range(len(old) - 1, len(new) - 1, -1):
-        ops.append({'op': 'remove', 'path': f'/rules/{i}'})
+        ops.append({'op': 'remove', 'path': f'/{root}/{i}'})
     return ops
 
 
 def _parse_request(event):
-    '''Returns (rules, expected_version) or raises ValueError with a 400 message.'''
+    '''Returns (rules, feed_rules, expected_version) or raises ValueError with
+    a 400 message. `feed_rules` is None when the request has no `feedRules`
+    key, which means "leave the stored list alone"; an explicit null is
+    refused rather than read as either that or "clear the list".'''
     try:
         body = json.loads(event.get('body') or '{}')
     except (TypeError, ValueError) as err:
         raise ValueError('Invalid JSON body.') from err
+    if not isinstance(body, dict):
+        raise ValueError('Request body must be a JSON object.')
     rules = body.get('rules')
     expected = body.get('expectedVersion')
     if not isinstance(rules, list):
         raise ValueError('rules must be a list.')
     if len(rules) > MAX_RULES:
         raise ValueError(f'At most {MAX_RULES} rules.')
+    feed_rules = None
+    if 'feedRules' in body:
+        feed_rules = body['feedRules']
+        if not isinstance(feed_rules, list):
+            raise ValueError('feedRules must be a list.')
+        if len(feed_rules) > MAX_FEED_RULES:
+            raise ValueError(f'At most {MAX_FEED_RULES} feed rules.')
     if isinstance(expected, bool) or not isinstance(expected, int) or expected < 0:
         raise ValueError('expectedVersion must be a non-negative integer.')
-    return rules, expected
+    return rules, feed_rules, expected
 
 
-def _write_row(user, serialized, expected, updated_at):
-    '''Commits the whole-row replacement guarded by the version condition.
+def _write_row(user, serialized, serialized_feed, expected, updated_at):  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    '''Commits the replacement guarded by the version condition and returns
+    the feed rules the row holds afterwards, as a JSON string.
+
+    `rules` is always replaced. `feedRules` is replaced only when
+    `serialized_feed` is not None: an UpdateItem that does not name an
+    attribute leaves it as it is, which is how a save from a client that
+    does not know feed rules keeps them.
 
     A first-ever write (expected 0) must find no versioned row; any later
     write must find exactly the version the client saw. Raises
     ClientError(ConditionalCheckFailedException) on a lost race.
     '''
+    expression = 'SET #r = :r, #v = :v, #t = :t'
+    names = {'#r': 'rules', '#v': 'version', '#t': 'updatedAt'}
     if expected == 0:
         condition = 'attribute_not_exists(#v)'
         values = {':r': serialized, ':v': 1, ':t': updated_at}
     else:
         condition = '#v = :ev'
         values = {':r': serialized, ':v': expected + 1, ':t': updated_at, ':ev': expected}
-    table.update_item(
+    if serialized_feed is not None:
+        expression += ', #f = :f'
+        names['#f'] = 'feedRules'
+        values[':f'] = serialized_feed
+    # The stored list is read back from the write itself, not from the read
+    # before it: that read can be a version behind the one the condition
+    # then matched.
+    written = table.update_item(
         Key={'user': user},
-        UpdateExpression='SET #r = :r, #v = :v, #t = :t',
+        UpdateExpression=expression,
         ConditionExpression=condition,
-        ExpressionAttributeNames={'#r': 'rules', '#v': 'version', '#t': 'updatedAt'},
+        ExpressionAttributeNames=names,
         ExpressionAttributeValues=values,
+        ReturnValues='ALL_NEW',
     )
+    return (written or {}).get('Attributes', {}).get('feedRules', '[]')
 
 
-def _record_side_effects(user, prior_rules, rules, version):
-    '''Audit row + SNS fan-out, best-effort after the committed write.'''
+def _record_side_effects(user, prior, new, version):
+    '''Audit row + SNS fan-out, best-effort after the committed write.
+
+    `prior` and `new` are (rules, feed_rules) pairs; `new`'s feed rules are
+    None when the request left them alone. The audit diff covers both lists,
+    under /rules and /feedRules.
+
+    The publish is what makes the imap tier recompile every user's procmail,
+    and that compiler reads only the mail rules. So only a save that changed
+    them publishes: a feed-rule edit, which the editors auto-save as the
+    user types, would otherwise cost the mail tier a reconfigure each time
+    for an identical result.'''
     now = time.time()
+    diff = _json_patch(prior[0], new[0])
+    if new[1] is not None:
+        diff += _json_patch(prior[1], new[1], 'feedRules')
     try:
         audit_table.put_item(Item={
             'user': user,
             'ts': int(now * 1000),
             'version': version,
-            'diff': json.dumps(_json_patch(prior_rules, rules)),
+            'diff': json.dumps(diff),
             'expiresAt': int(now) + AUDIT_RETENTION_SECONDS,
         })
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f'[set_rules] audit write failed for {user}: {err}')
+    if prior[0] == new[0]:
+        return
     try:
         sns.publish(TopicArn=TOPIC_ARN,
                     Message=json.dumps({'user': user, 'version': version}))
@@ -356,34 +498,56 @@ def _error_response(err, prior_version):
     return {'statusCode': 500, 'body': json.dumps({'Error': str(err)})}
 
 
+def _validate(rules_in, feed_in):
+    '''Normalizes both lists. Returns (rules, feed_rules, stripped, problem):
+    `problem` is the 400 body when either list is invalid or too large, else
+    None; `feed_rules` is None when the request carried no feed rules.'''
+    rules, errors, stripped = _normalize_rules(rules_in)
+    feed_rules = None
+    if feed_in is not None:
+        feed_rules, feed_errors = _normalize_feed_rules(feed_in, {rule['id'] for rule in rules})
+        errors += feed_errors
+    if errors:
+        return rules, feed_rules, stripped, {'errors': errors}
+    if len(json.dumps(rules)) > MAX_RULES_BYTES:
+        return rules, feed_rules, stripped, {'Error': 'Rule set too large.'}
+    if feed_rules is not None and len(json.dumps(feed_rules)) > MAX_FEED_RULES_BYTES:
+        return rules, feed_rules, stripped, {'Error': 'Feed rule set too large.'}
+    return rules, feed_rules, stripped, None
+
+
 def handler(event, _context):
     '''Validates and stores the caller's rule set with optimistic concurrency.'''
     user = event['requestContext']['authorizer']['claims']['cognito:username']
     prior = {}
     try:
-        rules_in, expected = _parse_request(event)
+        rules_in, feed_in, expected = _parse_request(event)
     except ValueError as err:
         return {'statusCode': 400, 'body': json.dumps({'Error': str(err)})}
-    rules, errors, stripped = _normalize_rules(rules_in)
-    if errors:
-        return {'statusCode': 400, 'body': json.dumps({'errors': errors})}
-    serialized = json.dumps(rules)
-    if len(serialized) > MAX_RULES_BYTES:
-        return {'statusCode': 400, 'body': json.dumps({'Error': 'Rule set too large.'})}
+    rules, feed_rules, stripped, problem = _validate(rules_in, feed_in)
+    if problem:
+        return {'statusCode': 400, 'body': json.dumps(problem)}
     updated_at = datetime.now(timezone.utc).isoformat()
     try:
         # Prior state read consistently for the audit diff; the conditional
         # write below is what actually guards the version race.
         prior = table.get_item(Key={'user': user}, ConsistentRead=True).get('Item', {})
-        prior_rules = json.loads(prior.get('rules', '[]'))
-        _write_row(user, serialized, expected, updated_at)
+        prior_lists = (json.loads(prior.get('rules', '[]')),
+                       json.loads(prior.get('feedRules', '[]')))
+        stored_feed = _write_row(
+            user, json.dumps(rules),
+            None if feed_rules is None else json.dumps(feed_rules),
+            expected, updated_at)
     except Exception as err:  # pylint: disable=broad-exception-caught
         return _error_response(err, int(prior.get('version', 0)))
-    _record_side_effects(user, prior_rules, rules, expected + 1)
+    _record_side_effects(user, prior_lists, (rules, feed_rules), expected + 1)
     return {
         'statusCode': 200,
         'body': json.dumps({
             'rules': rules,
+            # What the row holds now: the list this request sent, or the
+            # stored one it left alone.
+            'feedRules': json.loads(stored_feed),
             'version': expected + 1,
             'updatedAt': updated_at,
             'stripped': stripped,

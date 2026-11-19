@@ -119,7 +119,8 @@ class FakeTable:
                              'ExpressionAttributeValues': ExpressionAttributeValues or {}})
         key = self._key(Key)
         names = ExpressionAttributeNames or {}
-        if not _exists_holds(self.rows.get(key), ConditionExpression, names):
+        if not _condition_holds(self.rows.get(key), ConditionExpression, names,
+                                ExpressionAttributeValues or {}):
             raise _conditional_failed('UpdateItem')
         actions = [(clause, part.strip()) for clause, body in _clauses(UpdateExpression)
                    for part in _split_top(body)]
@@ -171,15 +172,28 @@ class FakeTable:
 
 
 _ATTRIBUTE_EXISTS = re.compile(r'attribute_exists\(\s*([^)\s]+)\s*\)')
+_ATTRIBUTE_NOT_EXISTS = re.compile(r'attribute_not_exists\(\s*([^)\s]+)\s*\)')
+_EQUALS = re.compile(r'^\s*([^\s=()]+)\s*=\s*(:[^\s=()]+)\s*$')
 
 
-def _exists_holds(row, condition, names):
-    '''Whether every attribute_exists(<name>) term of `condition` holds for
-    `row` (None when there is no row, which fails any such term). Only those
-    terms are evaluated, all as if joined by AND.'''
-    for name in _ATTRIBUTE_EXISTS.findall(condition or ''):
+def _condition_holds(row, condition, names, values):
+    '''Whether an update's condition holds for `row` (None when there is no
+    row). The forms the handlers use: attribute_exists(<name>) terms, which
+    a missing row fails; attribute_not_exists(<name>) terms, which a missing
+    row passes; and a lone `<name> = :value`, which a missing row fails (the
+    optimistic-concurrency check of set_rules). Terms of the first two
+    kinds are evaluated as if joined by AND.'''
+    condition = condition or ''
+    for name in _ATTRIBUTE_EXISTS.findall(condition):
         if row is None or names.get(name, name) not in row:
             return False
+    for name in _ATTRIBUTE_NOT_EXISTS.findall(condition):
+        if row is not None and names.get(name, name) in row:
+            return False
+    equals = _EQUALS.match(condition)
+    if equals:
+        name, placeholder = equals.groups()
+        return row is not None and row.get(names.get(name, name)) == values[placeholder]
     return True
 
 
@@ -266,12 +280,14 @@ SCHEMAS = {
                                      'by_due': ('due_shard', 'next_fetch_at')}),
     'cabal-rss-item': (['feed_id', 'sort_key'], {'by_guid': ('feed_id', 'guid'),
                                                  'by_fetched': ('feed_id', 'fetched_key')}),
-    'cabal-rss-subscription': (['user', 'subscription_id'], {}),
+    'cabal-rss-subscription': (['user', 'subscription_id'], {'by_feed': ('feed_id', 'user')}),
     'cabal-rss-folder': (['user', 'folder_id'], {}),
     'cabal-rss-user-item-state': (['user_feed', 'sort_key'],
                                   {'favorite_by_feed': ('user_feed', 'favorite_key'),
                                    'by_updated': ('user_feed', 'updated_key')}),
     'cabal-user-preferences': (['user'], {}),
+    'cabal-user-rules': (['user'], {}),
+    'cabal-user-rules-audit': (['user', 'ts'], {}),
 }
 TABLES = {}
 
@@ -291,6 +307,7 @@ def reset_tables():
     S3.objects.clear()
     S3.deleted.clear()
     SQS.sent.clear()
+    SNS.published.clear()
     return TABLES
 
 
@@ -330,6 +347,15 @@ class FakeSQS:
         return {}
 
 
+class FakeSNS:
+    def __init__(self):
+        self.published = []
+
+    def publish(self, **kw):
+        self.published.append(kw)
+        return {}
+
+
 class _SSMExceptions:
     class ParameterNotFound(Exception):
         pass
@@ -349,7 +375,8 @@ class _SSM:
 
 S3 = FakeS3()
 SQS = FakeSQS()
-_CLIENTS = {'s3': S3, 'sqs': SQS, 'ssm': _SSM()}
+SNS = FakeSNS()
+_CLIENTS = {'s3': S3, 'sqs': SQS, 'sns': SNS, 'ssm': _SSM()}
 
 _boto3 = types.ModuleType('boto3')
 _boto3.resource = lambda _n, **_k: _Resource()

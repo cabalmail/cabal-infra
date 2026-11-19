@@ -1,4 +1,7 @@
-'''Fetches the current user's mail rules (docs/1.x/user-mail-rules-plan.md).'''
+'''Fetches the current user's rules: the mail rules
+(docs/1.x/user-mail-rules-plan.md) and, beside them in the same row and
+under the same version, the feed rules (docs/1.x/cross-media-ux-plan.md,
+Phase 4).'''
 import json
 import os
 import boto3  # pylint: disable=import-error
@@ -18,6 +21,9 @@ def handler(event, _context):
         item = response.get('Item', {})
         body = {
             'rules': json.loads(item.get('rules', '[]')),
+            # Empty for a row written before feed rules existed. A client
+            # that does not know the key never reads it.
+            'feedRules': json.loads(item.get('feedRules', '[]')),
             'version': int(item.get('version', 0)),
             'updatedAt': item.get('updatedAt', ''),
         }

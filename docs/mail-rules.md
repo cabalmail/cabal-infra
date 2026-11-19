@@ -223,18 +223,115 @@ Work down this list:
 8. Still stuck? An operator can check the compile log (below) for a
    `compile_skip_rule` line naming your rule and the reason.
 
+## Feed rules
+
+A second list of rules, kept beside the mail rules, applies to feed
+items instead of messages: when the feed fetcher first sees a new item,
+it evaluates each subscriber's feed rules against it and flags the item
+or marks it read for that subscriber, before any device opens the feed.
+
+The server side is in place. No client has an editor for feed rules yet;
+it arrives in Settings → Rules with a later client release, and until
+then the list is empty for everyone. Clients that predate feed rules are
+unaffected: they never see the list, and saving mail rules from one
+leaves it exactly as it was.
+
+A feed rule is simpler than a mail rule. It has conditions and the three
+marks a mail rule can make, and nothing else: no folder, no forward, no
+reply, no "continue".
+
+| Condition | What is matched |
+| --------- | --------------- |
+| Feed      | One subscription, exactly. Without it the rule covers every feed you subscribe to. At most one per rule. |
+| Title     | The item's title; case-insensitive *contains*. |
+| Author    | The item's author; case-insensitive *contains*. |
+| Summary   | The text of the item's summary and of its body; case-insensitive *contains*. Markup is not text: a tag or attribute never matches. |
+
+Conditions are ANDed, and a rule with none matches every new item, as
+for mail. The actions are **Flag** (the built-in flag), **custom flags**
+and **Mark as read**.
+
+How feed rules differ from mail rules:
+
+- **Every matching rule applies.** Nothing is being filed, so there is
+  no "first match wins" and no order of evaluation; an item picks up the
+  marks of every enabled rule that matches it.
+- **A rule runs once per item, when the fetcher first sees it.** It does
+  not run again if the publisher later edits the item, and it does not
+  reach back to items that were already there when the rule was saved or
+  when you subscribed. The one case that looks retroactive is a feed
+  nobody on the system subscribed to before: its first fetch brings in
+  its whole backlog as new items, and a rule with no Feed condition
+  applies to all of them.
+- **A rule that sets a deleted custom flag is skipped whole,** as a mail
+  rule is, including its Flag and Mark-as-read, until you edit it.
+- **It is best effort.** If the rules cannot be read at the moment an
+  item arrives, the item is still stored and simply gets no marks; the
+  rule is not retried for it.
+
+Limits: 100 feed rules per account, 10 conditions per rule, 500
+characters per condition value.
+
+### On the wire
+
+`/get_rules` answers `feedRules` beside `rules`, and `/set_rules`
+accepts it beside `rules` under the same `expectedVersion`:
+
+```json
+{
+  "rules": [],
+  "feedRules": [
+    {
+      "id": "r-0123456789ab",
+      "name": "Releases",
+      "enabled": true,
+      "conditions": [
+        {"field": "feed", "value": "<subscription_id>"},
+        {"field": "title", "value": "release"}
+      ],
+      "flag": false,
+      "flags": ["cabal-flag-03"],
+      "markRead": false
+    }
+  ],
+  "expectedVersion": 4
+}
+```
+
+- `feedRules` is optional in a save. **Absent means "leave the stored
+  list alone"**; an empty list clears it; `null` is refused. `rules` is
+  still required, so a client that edits feed rules sends both lists.
+- The two lists share one `version`: a feed-rule save racing a mail-rule
+  save on another device gets the same 409 as two mail-rule saves.
+- Condition fields are `feed`, `title`, `author` and `summary`. Any key
+  or field outside this shape is refused, as for mail rules, and each
+  list is checked against its own fields: a mail rule cannot carry
+  `title`, nor a feed rule `subject`.
+- Ids are server-assigned and unique across both lists.
+- A validation error for a feed rule carries `"list": "feedRules"`
+  beside `rule` (the index in that list), `field` and `error`. Errors
+  for mail rules are unchanged and carry no `list`.
+- Whether a `feed` value still names one of the caller's subscriptions,
+  and whether a slot is still in the palette, are not checked at save
+  time, for the reason folder targets are not. The fetcher decides: a
+  rule for a subscription that is gone matches nothing.
+
 ## Operator notes: where rules live
 
 - **Source of truth**: the `cabal-user-rules` DynamoDB table, one row
   per user, the whole ordered rule list JSON-encoded with an
-  optimistic-concurrency version. Every write is audited to
-  `cabal-user-rules-audit` (JSON Patch diff per save, 90-day TTL) —
+  optimistic-concurrency version. The feed rules are a second
+  JSON-encoded attribute of the same row, `feedRules`, under the same
+  version. Every write is audited to
+  `cabal-user-rules-audit` (JSON Patch diff per save, 90-day TTL, with
+  mail rules under `/rules/` paths and feed rules under `/feedRules/`) —
   incident response for "who set the rule that caused this" starts
   there.
 - **Compiled form**: `/etc/procmail-user/<user>.rc` inside the imap
   container, regenerated atomically by
   `/usr/local/bin/compile-user-rules.py` on every reconfigure (an SNS
-  message from `set_rules`, from `set_preferences` when a custom flag
+  message from `set_rules` when a save changed the mail rules, from
+  `set_preferences` when a custom flag
   is added or deleted, or from any address change, plus the 15-minute
   fallback). Every local
   user gets a file; no rules means an empty file. Procmail includes it
@@ -270,6 +367,13 @@ Work down this list:
   submitted through the imap tier's sendmail, like system bounces —
   they are not DKIM-signed (only smtp-out signs). Deliverability of
   forwarded mail to strict receivers is accordingly best-effort.
+
+- **Feed rules have no compiled form.** The compiler never reads
+  `feedRules`, and a save that changes only feed rules is not published
+  to the imap tier. The `rss_fetch` worker reads the list when a fetch
+  inserts an item and writes the outcome to the subscriber's row in
+  `cabal-rss-user-item-state`; what it logs and counts is in
+  [rss.md](rss.md), "Feed rules at ingest".
 
 Users see none of the above; their contract is the editor plus this
 page's behavior descriptions.
