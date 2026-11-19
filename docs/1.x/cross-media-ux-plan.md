@@ -11,7 +11,7 @@ instead of reconstructing it from the git log.
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
 | 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
-| 4 -- Feed rules | Started (2026-11-18): the storage decision is answered (`feedRules` beside `rules`). Terraform in review; server, Apple and Android not started |
+| 4 -- Feed rules | Started (2026-11-18): the storage decision is answered (`feedRules` beside `rules`). Terraform in review (#2497); server, Apple and Android not started |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
 | 6 -- Ambient surfaces: Spotlight | Not started (2026-11-08) |
 
@@ -646,7 +646,7 @@ an article and the received mail carries the link and the summary.
 **Status:** Started (2026-11-18). The storage decision is answered:
 `feedRules` beside `rules`, with a plain subscriber index and a flag-list
 check at ingest (`flags-and-cross-media.md`, decision 6, which also
-records the rule format). The Terraform (4a, item 1) is in review; the
+records the rule format). The Terraform (4a, item 1) is in review as #2497; the
 server, Apple and Android work is not started. `flags-and-cross-media.md`
 gates the client work on fixes owned by other plans, and those have all
 merged:
