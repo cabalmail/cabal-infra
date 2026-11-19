@@ -50,12 +50,13 @@ android {
         applicationId = "com.cabalmail.android"
         minSdk = 31
         targetSdk = 37
-        // CI overrides both (android.yml upload job): versionCode from
-        // github.run_number — Play only needs a monotonically increasing
-        // integer, but that means a workflow *rename* resets it; if that ever
-        // happens, offset the expression in the workflow rather than renaming
-        // back. versionName tracks the newest CHANGELOG.md release, matching
-        // apple.yml's marketing version.
+        // CI overrides both (android.yml upload job): versionCode starts from
+        // github.run_number, and the publisher raises it when Play already
+        // holds that code or a higher one (see `resolutionStrategy` in the
+        // `play` block), so the code that ships can be above the run number.
+        // A workflow *rename* resets the run number, which the same rule
+        // absorbs. versionName tracks the newest CHANGELOG.md release,
+        // matching apple.yml's marketing version.
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
         versionName = System.getenv("VERSION_NAME") ?: "0.1.0"
         buildConfigField("String", "CONTROL_DOMAIN", "\"$controlDomain\"")
@@ -139,6 +140,20 @@ play {
     enabled.set(System.getenv("ANDROID_PUBLISHER_CREDENTIALS") != null)
     track.set("internal")
     defaultToAppBundles.set(true)
+    // Stage and main publish to this one track, and each run takes its
+    // version code (the run number) when it starts. A main run then waits
+    // for the gate-prod approval, so a stage run started meanwhile can
+    // publish a higher code first, and Play refuses the lower one: "does
+    // not allow any existing users to upgrade" (#2491, the 1.54.0
+    // promotion). AUTO asks Play, while the bundle is built, for the highest
+    // code on any track, and uses that plus one when ours is not above it;
+    // a code that is already above it is left alone. The same rule makes a
+    // re-run publishable: a re-run keeps its run number, which by then is
+    // taken. Two uploads built in the same few minutes can still pick the
+    // same code; the later commit fails, and a re-run picks the next one.
+    resolutionStrategy.set(
+        com.github.triplet.gradle.androidpublisher.ResolutionStrategy.AUTO,
+    )
 }
 
 dependencies {
