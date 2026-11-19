@@ -402,6 +402,13 @@ resource "aws_dynamodb_table" "rss_item" {
 * by_feed_notify a sparse index of exactly the subscribers to fan a new
 * item out to. by_user_folder projects ALL: subscription rows are small
 * and the folder view wants every display attribute without a second read.
+* by_feed is the plain feed-keyed index: every subscription row carries
+* feed_id, so it lists all of a feed's subscribers, which is how the fetch
+* worker finds whose feed rules to evaluate when it inserts an item
+* (docs/1.x/cross-media-ux-plan.md, Phase 4). Keys only: the worker needs
+* the user and the subscription id, and both are keys. Plain rather than
+* sparse so that nothing has to maintain a marker: a subscriber with no
+* feed rules costs the worker one rules read and no more.
 */
 
 #tfsec:ignore:aws-dynamodb-table-customer-key
@@ -428,6 +435,10 @@ resource "aws_dynamodb_table" "rss_subscription" {
     name = "notify_feed_id"
     type = "S"
   }
+  attribute {
+    name = "feed_id"
+    type = "S"
+  }
 
   global_secondary_index {
     name = "by_user_folder"
@@ -445,6 +456,18 @@ resource "aws_dynamodb_table" "rss_subscription" {
     name = "by_feed_notify"
     key_schema {
       attribute_name = "notify_feed_id"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "user"
+      key_type       = "RANGE"
+    }
+    projection_type = "KEYS_ONLY"
+  }
+  global_secondary_index {
+    name = "by_feed"
+    key_schema {
+      attribute_name = "feed_id"
       key_type       = "HASH"
     }
     key_schema {

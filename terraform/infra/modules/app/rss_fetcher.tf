@@ -229,6 +229,39 @@ resource "aws_iam_role_policy" "rss_fetch" {
         ]
       },
       {
+        # Feed rules (docs/1.x/cross-media-ux-plan.md, Phase 4): when a fetch
+        # inserts an item, list the feed's subscribers on the plain by_feed
+        # index. The index only, not the table: the worker never reads or
+        # writes a subscription row.
+        Effect   = "Allow"
+        Action   = "dynamodb:Query"
+        Resource = "arn:aws:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/cabal-rss-subscription/index/by_feed"
+      },
+      {
+        # ... read each subscriber's rules row (feedRules sits beside the
+        # mail rules in it) and, only for a subscriber whose matching rule
+        # sets a custom flag, their flag palette: a rule that names a slot
+        # no longer in the palette is skipped, as the mail compiler skips it.
+        # Read-only on both tables.
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:BatchGetItem",
+        ]
+        Resource = [
+          "arn:aws:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/cabal-user-rules",
+          "arn:aws:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/cabal-user-preferences",
+        ]
+      },
+      {
+        # ... and write the outcome (flags, read state) to the subscriber's
+        # state row for the new item. UpdateItem only: it creates the row
+        # when there is none and never replaces one a client wrote.
+        Effect   = "Allow"
+        Action   = "dynamodb:UpdateItem"
+        Resource = "arn:aws:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/cabal-rss-user-item-state"
+      },
+      {
         # Bodies too large for a DynamoDB row spill to the items/ prefix only.
         Effect   = "Allow"
         Action   = "s3:PutObject"
