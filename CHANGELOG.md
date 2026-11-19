@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.55.0] - 2026-11-19
+
+### Added
+- Android: **Filter in the compose From picker.** Tapping the From field
+  opens your addresses with the keyboard up, and typing narrows them to
+  the ones whose address or note contains what you typed; Done picks the
+  first. Create new address… stays in the list whatever you type.
+- Apple: **Filter for the compose From picker.** The From field opens a
+  list of your addresses with a filter field on top, in place of the
+  menu it opened before: a popover on iPad, Mac and Vision Pro, a sheet
+  on iPhone. Typing narrows the list to the addresses whose address or
+  note contains what you typed, Create new address… stays first, and
+  favorites stay on top. On the Mac the filter field has focus as the
+  list opens, so typing part of an address and pressing Return picks it.
+
+### Fixed
+- **A prod Android upload no longer loses to a stage upload that started
+  after it.** Stage and main publish to one Play track, and each run took its
+  version code, the workflow's run number, when it started. A main run then
+  waits for the `gate-prod` approval, so a stage run started meanwhile
+  published a higher code first and Play refused the lower one ("does not
+  allow any existing users to upgrade"), which is how the 1.54.0 prod build
+  failed to publish (#2491). The publisher now runs with
+  `ResolutionStrategy.AUTO`: while it builds the bundle it asks Play for the
+  highest code on any track and uses that plus one when the run number is not
+  above it. A re-run of a failed upload is publishable for the same reason.
+  The version code that ships can therefore be above the run number, so the
+  upload job's summary now names the code that was published, read from the
+  publisher's own output by `publish-play-bundle.py`.
+
+### Security
+- **dnspython 2.9.2.** Bumped the bundled `dnspython` in every API Lambda from 2.9.0 to 2.9.2, which fixes excessive memory and CPU use on crafted DNS responses (CVE-2026-128089).
+- **dnspython 2.9.2 in the API Lambdas.** Bumps the pinned `dnspython` from 2.9.0 to 2.9.2 in every `lambda/api/*/requirements.txt` to resolve CVE-2026-128089 (excessive memory and CPU use).
+
 ## [1.54.0] - 2026-11-16
 
 ### Added
