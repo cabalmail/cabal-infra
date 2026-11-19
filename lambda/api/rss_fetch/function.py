@@ -83,7 +83,7 @@ MAX_ERROR_LENGTH = 500
 # cuts off is logged and gets no rules; it is not retried, because on the
 # next fetch those items are no longer new.
 RULES_BUDGET_SECONDS = float(os.environ.get('RULES_BUDGET_SECONDS', '45'))
-RULES_RESERVE_SECONDS = 10.0
+RULES_RESERVE_SECONDS = 15.0
 RULES_BATCH = 100   # BatchGetItem's limit on keys per request
 RULES_BATCH_RETRIES = 3
 RULE_STATS = ('rule_subscribers', 'rule_read_calls', 'rules_evaluated', 'rule_matches',
@@ -92,9 +92,16 @@ RULE_STATS = ('rule_subscribers', 'rule_read_calls', 'rules_evaluated', 'rule_ma
 ddb = boto3.resource('dynamodb')
 feeds = ddb.Table(FEED_TABLE)
 items = ddb.Table(ITEM_TABLE)
-subscriptions = ddb.Table(SUBSCRIPTION_TABLE)
-state = ddb.Table(STATE_TABLE)
-preferences = ddb.Table(PREFERENCES_TABLE)
+# The feed rules' own DynamoDB handle. The deadline is only looked at
+# between calls, so each call must be short on its own: with the SDK's
+# defaults (a 60 s read timeout, ten attempts) one stalled request could
+# outlast the reserve and time the invocation out. Two attempts of at most
+# five seconds each stay inside RULES_RESERVE_SECONDS.
+rules_ddb = boto3.resource('dynamodb', config=boto3.session.Config(
+    connect_timeout=2, read_timeout=3, retries={'max_attempts': 2, 'mode': 'standard'}))
+subscriptions = rules_ddb.Table(SUBSCRIPTION_TABLE)
+state = rules_ddb.Table(STATE_TABLE)
+preferences = rules_ddb.Table(PREFERENCES_TABLE)
 s3 = boto3.client('s3')
 ssm = boto3.client('ssm')
 
@@ -466,11 +473,17 @@ def rules_deadline(started, context):
 
 def run_feed_rules(feed_id, inserted, deadline, stats):
     '''apply_feed_rules without the safety net.'''
-    subscribers = feed_subscribers(feed_id, stats)
+    if time.monotonic() >= deadline:
+        # The fetch itself used the time. Not even the lookups are made;
+        # how many evaluations that cost is not known without them.
+        stats['rule_unfinished'] = len(inserted)
+        print(f'[rss-fetch] {feed_id} feed rules not started: no time left')
+        return
+    subscribers = feed_subscribers(feed_id, deadline, stats)
     stats['rule_subscribers'] = len(subscribers)
     if not subscribers:
         return
-    rules_by_user = subscriber_rules(sorted(subscribers), stats)
+    rules_by_user = subscriber_rules(sorted(subscribers), deadline, stats)
     # Only the subscribers who have rules; a feed whose subscribers have
     # none stops here and never parses an item's markup.
     work = [(user, subscribers[user], rules) for user, rules in sorted(rules_by_user.items())]
@@ -495,9 +508,11 @@ def run_feed_rules(feed_id, inserted, deadline, stats):
             return
 
 
-def feed_subscribers(feed_id, stats):
+def feed_subscribers(feed_id, deadline, stats):
     '''{user: subscription_id} for every subscriber of the feed, from the
-    plain by_feed index (keys only: it projects exactly these).'''
+    plain by_feed index (keys only: it projects exactly these). Raises
+    TimeoutError if the deadline passes between pages: half a subscriber
+    list is not acted on.'''
     found = {}
     kwargs = {'IndexName': 'by_feed', 'KeyConditionExpression': Key('feed_id').eq(feed_id)}
     while True:
@@ -507,23 +522,31 @@ def feed_subscribers(feed_id, stats):
             found[row['user']] = row['subscription_id']
         if 'LastEvaluatedKey' not in response:
             return found
+        if time.monotonic() >= deadline:
+            raise TimeoutError('out of time listing subscribers')
         kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
 
 
-def subscriber_rules(users, stats):
+def subscriber_rules(users, deadline, stats):
     '''{user: enabled feed rules} for the users who have any. One
     BatchGetItem per RULES_BATCH users, projecting only the feed rules: a
     rules row also carries the mail rules, which this worker has no use
     for. Keys DynamoDB leaves unprocessed are asked for again a few times
-    and then given up on, which costs those users this fetch's rules.'''
+    and then given up on, which costs those users this fetch's rules; so
+    does the deadline passing between batches, for the batches not read.'''
     found = {}
     for start in range(0, len(users), RULES_BATCH):
+        if start and time.monotonic() >= deadline:
+            stats['rule_failures'] += 1
+            print('[rss-fetch] feed rules: out of time reading rules rows; '
+                  f'{len(users) - start} subscribers not read')
+            break
         request = {RULES_TABLE: {
             'Keys': [{'user': user} for user in users[start:start + RULES_BATCH]],
             'ProjectionExpression': '#u, feedRules',
             'ExpressionAttributeNames': {'#u': 'user'}}}
         for _ in range(RULES_BATCH_RETRIES):
-            response = ddb.batch_get_item(RequestItems=request)
+            response = rules_ddb.batch_get_item(RequestItems=request)
             stats['rule_read_calls'] += 1
             for row in response.get('Responses', {}).get(RULES_TABLE, []):
                 rules = parse_rules(row.get('feedRules'))
@@ -585,9 +608,12 @@ def write_rule_outcome(user_feed, sort_key, outcome):
     '''One UpdateItem on the subscriber's state row for the item, in the
     shape /rss_set_item_state writes: the same stamps (so the state sync's
     by_updated index carries it to every device), favorite_key beside
-    is_favorite (the sparse favorites index), and flags by ADD. The item was
-    inserted moments ago under a fresh id, so no client can have marked it
-    yet and there is no earlier mark to respect.
+    is_favorite (the sparse favorites index), and flags by ADD.
+
+    Everything here only adds, except the read mark, and that is written
+    only where the row has none: the item was inserted moments ago, but a
+    device that already fetched it may have marked it unread by hand, and
+    a rule must not overrule the person.
 
     The stamp is the time of this write, not of the fetch. A device's
     state-sync cursor trails the clock by only a few seconds
@@ -600,7 +626,7 @@ def write_rule_outcome(user_feed, sort_key, outcome):
             'updated_key = :ukey']
     values = {':item_id': item_id, ':now': now, ':ukey': f'{now}#{item_id}'}
     if outcome.mark_read:
-        sets.append('is_read = :read')
+        sets.append('is_read = if_not_exists(is_read, :read)')
         values[':read'] = True
     if outcome.flag:
         sets += ['is_favorite = :fav', 'favorite_key = :fkey']

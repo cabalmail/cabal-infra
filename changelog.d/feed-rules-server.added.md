@@ -9,7 +9,7 @@
   their state row, after the fetch is recorded and best effort, so a
   rules failure never fails ingestion; a rule that sets a custom flag no
   longer in the palette is skipped whole, as a mail rule is. A save that
-  leaves the mail rules unchanged no longer notifies the imap tier. No
-  client has an editor for feed rules yet
+  changes only the feed rules does not notify the imap tier. No client
+  has an editor for feed rules yet
   (docs/1.x/cross-media-ux-plan.md, Phase 4; docs/mail-rules.md, "Feed
   rules").

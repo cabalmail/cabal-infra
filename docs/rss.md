@@ -86,15 +86,28 @@ inserts nothing, which is most of them, does none of this.
    the item, in the shape `/rss_set_item_state` writes (`is_read`,
    `is_favorite` with `favorite_key`, `flags` by `ADD`, and the
    `updated_key` stamp), so the state sync carries it to every device.
+   The stamp is the time of the write, not of the fetch, so it cannot
+   land behind a device's sync cursor. `is_read` is written only where
+   the row has none, so a mark the user made by hand stands.
 
 This runs after the fetch has recorded its success on the feed row, and
 it is best effort throughout: a refused or failed lookup is logged and
 counted and the fetch still succeeds, one subscriber's failed write does
 not stop the next subscriber's, and nothing here can back a feed off or
 dead-letter it. It also has a time budget (`RULES_BUDGET_SECONDS`,
-default 45, and never past ten seconds before the function's timeout);
-evaluations the budget cuts off are logged and not retried, because on
-the next fetch those items are no longer new.
+default 45, and never past fifteen seconds before the function's
+timeout), and its DynamoDB calls use short timeouts and two attempts, so
+one stalled request cannot outlast that reserve. Evaluations the budget
+cuts off are logged and not retried, because on the next fetch those
+items are no longer new; for the same reason, items inserted by a fetch
+that then failed before recording its success get no rules.
+
+Two races are accepted. A feed's very first fetch is queued as its
+first subscriber subscribes, and can list subscribers before that row
+is visible, in which case the backlog gets no rules. And a subscriber
+who unsubscribes while the pass is running can be left with state rows
+for the feed, which they would see again only by re-subscribing while
+the feed still has another subscriber.
 
 A fetch that had subscribers to consider logs one extra line:
 
@@ -105,8 +118,9 @@ A fetch that had subscribers to consider logs one extra line:
 `rule_read_calls` counts DynamoDB read requests (the index query's
 pages, the rules batches and any palette reads), `rule_skips` rules that
 matched but named a custom flag no longer in the palette, and
-`rule_unfinished` rule evaluations the time budget cut off. No line
-names a subscriber.
+`rule_unfinished` rule evaluations the time budget cut off (or, when
+there was no time even to list subscribers, the number of new items). No
+line names a subscriber.
 
 Metrics are CloudWatch EMF under `Cabal/Rss` (`FeedsDue`, `FeedsClaimed`,
 `FeedsEnqueued`, `Fetched`, `NotModified`, `Failed`, `DeadLettered`,

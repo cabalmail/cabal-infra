@@ -14,6 +14,7 @@ or network access.'''
 import json
 import os
 import sys
+import time
 import types
 import unittest
 from datetime import datetime, timezone
@@ -70,7 +71,7 @@ class _Case(unittest.TestCase):
         function._bounds_cache.update(value=None, read_at=0.0)  # pylint: disable=protected-access
         function.fetch = lambda *_a, **_k: FetchResult(status=200, url='u', body=b'x')
         self.publish(item())
-        self.addCleanup(setattr, function, 'ddb', function.ddb)
+        self.addCleanup(setattr, function, 'rules_ddb', function.rules_ddb)
         self.addCleanup(setattr, function, 'RULES_BUDGET_SECONDS', function.RULES_BUDGET_SECONDS)
 
     def publish(self, *items):
@@ -155,6 +156,22 @@ class Outcome(_Case):
         self.assertGreater(row['updated_at'], looked_up[0])
         self.assertGreater(row['updated_at'], item_row['fetched_at'])
         self.assertTrue(row['updated_key'].startswith(row['updated_at'] + '#'))
+
+    def test_mark_read_does_not_overrule_a_mark_made_by_hand(self):
+        # A device fetched the item and marked it unread between the insert
+        # and the rules write.
+        function.uuid = types.SimpleNamespace(uuid4=lambda: 'item-1')
+        self.addCleanup(setattr, function, 'uuid', __import__('uuid'))
+        sort_key = f'{PUBLISHED.isoformat()}#item-1'
+        self.subscribe(ALICE)
+        self.rules(ALICE, feed_rule(markRead=True, flag=True))
+        self.state.rows[(rss_api.user_feed_key(ALICE, FEED), sort_key)] = {
+            'user_feed': rss_api.user_feed_key(ALICE, FEED), 'sort_key': sort_key,
+            'item_id': 'item-1', 'is_read': False}
+        self.fetch()
+        [sent] = self.state_of(ALICE)
+        self.assertEqual((sent['is_read'], sent['is_read_explicit'], sent['is_favorite']),
+                         (False, True, True))
 
     def test_only_what_the_rule_sets_is_written(self):
         self.subscribe(ALICE)
@@ -245,7 +262,7 @@ class OnceOnly(_Case):
         self.subscribe(ALICE)
         self.rules(ALICE, feed_rule(flag=True))
         self.fetch()
-        function.ddb = types.SimpleNamespace(batch_get_item=self.fail)
+        function.rules_ddb = types.SimpleNamespace(batch_get_item=self.fail)
         query, self.tables['cabal-rss-subscription'].query = (
             self.tables['cabal-rss-subscription'].query, self.fail)
         self.addCleanup(setattr, self.tables['cabal-rss-subscription'], 'query', query)
@@ -341,7 +358,7 @@ class BestEffort(_Case):
     def test_rules_read_refused(self):
         self.subscribe(ALICE)
         self.rules(ALICE, feed_rule(flag=True))
-        function.ddb = types.SimpleNamespace(batch_get_item=self.denied)
+        function.rules_ddb = types.SimpleNamespace(batch_get_item=self.denied)
         outcome = self.fetch()
         self.assertEqual((outcome['outcome'], outcome['rule_failures']), ('fetched', 1))
         self.assertTrue(self.recorded_success())
@@ -371,14 +388,14 @@ class BestEffort(_Case):
     def test_unprocessed_keys_are_asked_for_again(self):
         self.subscribe(ALICE)
         self.rules(ALICE, feed_rule(flag=True))
-        real, calls = function.ddb, []
+        real, calls = function.rules_ddb, []
 
         def stingy(RequestItems=None):  # pylint: disable=invalid-name
             calls.append(RequestItems)
             if len(calls) == 1:
                 return {'Responses': {}, 'UnprocessedKeys': RequestItems}
             return real.batch_get_item(RequestItems=RequestItems)
-        function.ddb = types.SimpleNamespace(batch_get_item=stingy)
+        function.rules_ddb = types.SimpleNamespace(batch_get_item=stingy)
         outcome = self.fetch()
         self.assertEqual(len(calls), 2)
         self.assertEqual(len(self.state_of(ALICE)), 1)
@@ -387,7 +404,7 @@ class BestEffort(_Case):
     def test_keys_that_stay_unprocessed_are_given_up_on(self):
         self.subscribe(ALICE)
         self.rules(ALICE, feed_rule(flag=True))
-        function.ddb = types.SimpleNamespace(
+        function.rules_ddb = types.SimpleNamespace(
             batch_get_item=lambda RequestItems=None: {'Responses': {},
                                                       'UnprocessedKeys': RequestItems})
         outcome = self.fetch()
@@ -397,7 +414,7 @@ class BestEffort(_Case):
     def test_rules_rows_are_read_in_batches_of_one_hundred(self):
         for n in range(205):
             self.subscribe(f'user-{n:03d}')
-        real, sizes = function.ddb, []
+        real, sizes = function.rules_ddb, []
 
         def counting(RequestItems=None):  # pylint: disable=invalid-name
             request = RequestItems['cabal-user-rules']
@@ -405,7 +422,7 @@ class BestEffort(_Case):
             # Only the feed rules are asked for, never the mail rules.
             self.assertEqual(request['ProjectionExpression'], '#u, feedRules')
             return real.batch_get_item(RequestItems=RequestItems)
-        function.ddb = types.SimpleNamespace(batch_get_item=counting)
+        function.rules_ddb = types.SimpleNamespace(batch_get_item=counting)
         outcome = self.fetch()
         self.assertEqual(sizes, [100, 100, 5])
         self.assertEqual(outcome['rule_subscribers'], 205)
@@ -426,27 +443,77 @@ class BestEffort(_Case):
 
 class Budget(_Case):
 
-    def test_out_of_time_stops_writing_and_still_succeeds(self):
+    def ticking(self):
+        '''Replaces the worker's clock with one that moves a second each
+        time it is read, so a budget counts reads of the clock.'''
+        ticks = iter(range(10_000))
+        function.time = types.SimpleNamespace(monotonic=lambda: float(next(ticks)),
+                                              time=time.time)
+        self.addCleanup(setattr, function, 'time', time)
+
+    def test_out_of_time_part_way_stops_writing_and_still_succeeds(self):
         self.subscribe(ALICE)
         self.subscribe(BOB)
         self.rules(ALICE, feed_rule(flag=True), feed_rule(markRead=True))
         self.rules(BOB, feed_rule(flag=True))
         self.publish(item('g1'), item('g2'))
+        self.ticking()
+        # The clock is read once to start, once before the lookups, and once
+        # per item: this budget lets Alice's two items through and stops at
+        # Bob's first.
+        function.RULES_BUDGET_SECONDS = 3.5
+        outcome = self.fetch()
+        self.assertEqual(len(self.state_of(ALICE)), 2)
+        self.assertEqual(self.state_of(BOB), [])
+        self.assertEqual((outcome['outcome'], outcome['new']), ('fetched', 2))
+        # Bob's one rule against two items.
+        self.assertEqual(outcome['rule_unfinished'], 2)
+        self.assertEqual(outcome['rule_failures'], 0)
+
+    def test_no_time_at_all_makes_no_call(self):
+        self.subscribe(ALICE)
+        self.rules(ALICE, feed_rule(flag=True))
+        self.publish(item('g1'), item('g2'))
+        table = self.tables['cabal-rss-subscription']
+        real, table.query = table.query, self.fail
+        self.addCleanup(setattr, table, 'query', real)
         function.RULES_BUDGET_SECONDS = 0.0
         outcome = self.fetch()
         self.assertEqual(self.state.rows, {})
-        self.assertEqual((outcome['outcome'], outcome['new']), ('fetched', 2))
-        # Two items for Alice's two rules, two for Bob's one.
-        self.assertEqual(outcome['rule_unfinished'], 6)
-        self.assertEqual(outcome['rule_failures'], 0)
+        self.assertEqual((outcome['outcome'], outcome['rule_read_calls'],
+                          outcome['rule_unfinished']), ('fetched', 0, 2))
+        self.assertTrue(self.recorded_success())
+
+    def test_out_of_time_between_rules_batches_reads_no_more(self):
+        for n in range(150):
+            self.subscribe(f'user-{n:03d}')
+        self.rules('user-000', feed_rule(flag=True))
+        real, sizes = function.rules_ddb, []
+
+        def counting(RequestItems=None):  # pylint: disable=invalid-name
+            sizes.append(len(RequestItems['cabal-user-rules']['Keys']))
+            return real.batch_get_item(RequestItems=RequestItems)
+        function.rules_ddb = types.SimpleNamespace(batch_get_item=counting)
+        self.ticking()
+        # Started, checked before the lookups, then checked before the
+        # second batch: that third reading is past the budget.
+        function.RULES_BUDGET_SECONDS = 1.5
+        outcome = self.fetch()
+        self.assertEqual(sizes, [100])
+        self.assertEqual((outcome['outcome'], outcome['rule_failures']), ('fetched', 1))
+
+    def test_the_rules_calls_are_short_ones(self):
+        # A stalled request must not be able to outlast the reserve: the
+        # deadline is only looked at between calls.
+        self.assertLess(2 * (2 + 3), function.RULES_RESERVE_SECONDS)
 
     def test_the_lambdas_own_deadline_wins_when_it_is_nearer(self):
         self.subscribe(ALICE)
         self.rules(ALICE, feed_rule(flag=True))
-        # Less left than the reserve: the rules must not start writing.
+        # Less left than the reserve: the rules must not start.
         outcome = self.fetch(_Context(int(function.RULES_RESERVE_SECONDS * 1000) - 1))
         self.assertEqual(self.state.rows, {})
-        self.assertEqual(outcome['rule_unfinished'], 1)
+        self.assertEqual((outcome['rule_unfinished'], outcome['rule_read_calls']), (1, 0))
 
     def test_plenty_of_time_left_changes_nothing(self):
         self.subscribe(ALICE)

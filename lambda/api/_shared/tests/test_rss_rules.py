@@ -97,6 +97,23 @@ class Matching(unittest.TestCase):
         self.assertTrue(rss_rules.matches(rule(('title', 'vector')), SUB, angled))
         self.assertTrue(rss_rules.matches(rule(('title', 'big news')), SUB, marked))
 
+    def test_an_entity_is_its_character_not_its_spelling(self):
+        item = text(title='Tom &amp; Jerry')
+        self.assertTrue(rss_rules.matches(rule(('title', 'tom & jerry')), SUB, item))
+        self.assertFalse(rss_rules.matches(rule(('title', 'amp')), SUB, item))
+
+    def test_one_letter_two_unicode_spellings(self):
+        composed, combining = 'caf\u00e9', 'cafe\u0301'
+        self.assertTrue(rss_rules.matches(rule(('title', composed)), SUB, text(title=combining)))
+        self.assertTrue(rss_rules.matches(rule(('title', combining)), SUB, text(title=composed)))
+
+    def test_only_the_start_of_a_very_long_body_is_read(self):
+        long = '<p>' + 'x ' * rss_rules.MAX_MARKUP_CHARS + 'needle</p>'
+        self.assertFalse(rss_rules.matches(rule(('summary', 'needle')), SUB,
+                                           text(summary='', content=long)))
+        self.assertTrue(rss_rules.matches(rule(('summary', 'needle')), SUB,
+                                          text(summary='', content='<p>needle</p>' + long)))
+
     def test_whitespace_runs_do_not_defeat_a_match(self):
         item = text(title='Release   notes\n for  2.0')
         self.assertTrue(rss_rules.matches(rule(('title', 'release notes for')), SUB, item))

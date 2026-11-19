@@ -262,12 +262,18 @@ How feed rules differ from mail rules:
   when you subscribed. The one case that looks retroactive is a feed
   nobody on the system subscribed to before: its first fetch brings in
   its whole backlog as new items, and a rule with no Feed condition
-  applies to all of them.
+  usually applies to all of them. Usually, because that first fetch is
+  started as you subscribe and can run before your subscription is
+  visible to it; then the backlog gets no marks.
 - **A rule that sets a deleted custom flag is skipped whole,** as a mail
   rule is, including its Flag and Mark-as-read, until you edit it.
+- **Mark as read never overrules you.** If you have already marked the
+  item read or unread yourself by the time the rule is applied, your
+  mark stands. Flags are only ever added.
 - **It is best effort.** If the rules cannot be read at the moment an
-  item arrives, the item is still stored and simply gets no marks; the
-  rule is not retried for it.
+  item arrives, or the fetch that brought it in fails part-way, the
+  item is still stored and simply gets no marks; the rule is not
+  retried for it.
 
 Limits: 100 feed rules per account, 10 conditions per rule, 500
 characters per condition value.
@@ -330,8 +336,8 @@ accepts it beside `rules` under the same `expectedVersion`:
 - **Compiled form**: `/etc/procmail-user/<user>.rc` inside the imap
   container, regenerated atomically by
   `/usr/local/bin/compile-user-rules.py` on every reconfigure (an SNS
-  message from `set_rules` when a save changed the mail rules, from
-  `set_preferences` when a custom flag
+  message from `set_rules` on every save but one that changed only the
+  feed rules, from `set_preferences` when a custom flag
   is added or deleted, or from any address change, plus the 15-minute
   fallback). Every local
   user gets a file; no rules means an empty file. Procmail includes it

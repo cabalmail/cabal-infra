@@ -136,6 +136,11 @@ class Saving(_Case):
         self.assertNotIn(mail_id, ids)
         self.assertEqual(len(set(ids)), 2)
 
+    def test_an_id_is_matched_whole(self):
+        _, body = save(rules=[], feedRules=[feed_rule(id='r-0123456789ab\n')], expectedVersion=0)
+        self.assertRegex(body['feedRules'][0]['id'], r'\Ar-[0-9a-f]{12}\Z')
+        self.assertNotEqual(body['feedRules'][0]['id'], 'r-0123456789ab\n')
+
     def test_both_lists_share_one_version(self):
         _, first = save(rules=[], feedRules=[feed_rule()], expectedVersion=0)
         self.assertEqual(first['version'], 1)
@@ -214,6 +219,9 @@ class Validation(_Case):
             (feed_rule(flags=['\\Flagged']), 'flags[0]'),
             (feed_rule(flags=[LATER, LATER]), 'flags[1]'),
             (feed_rule(flags=LATER), 'flags'),
+            (feed_rule(flags=[LATER + '\n']), 'flags[0]'),
+            (feed_rule(conditions=[{'field': [], 'value': 'x'}]), 'conditions[0].field'),
+            (feed_rule(conditions=[{'field': {}, 'value': 'x'}]), 'conditions[0].field'),
             (feed_rule(markRead='yes'), 'markRead'),
             (feed_rule(flag=1), 'flag'),
             (feed_rule(enabled=None), 'enabled'),
@@ -254,6 +262,14 @@ class SideEffects(_Case):
         self.assertEqual(self.published(), [{'user': USER, 'version': 1}])
         save(rules=first['rules'], feedRules=[feed_rule()], expectedVersion=1)
         self.assertEqual(len(self.published()), 1)
+
+    def test_a_save_that_changes_nothing_still_notifies(self):
+        # Saving again is how a rule gets recompiled after its folder is
+        # created; that holds for a client that sends feedRules too.
+        _, first = save(rules=[mail_rule()], feedRules=[feed_rule()], expectedVersion=0)
+        save(rules=first['rules'], expectedVersion=1)
+        save(rules=first['rules'], feedRules=first['feedRules'], expectedVersion=2)
+        self.assertEqual([p['version'] for p in self.published()], [1, 2, 3])
 
     def test_a_mail_rule_change_still_notifies(self):
         _, first = save(rules=[mail_rule()], feedRules=[feed_rule()], expectedVersion=0)

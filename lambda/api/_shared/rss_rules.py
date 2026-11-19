@@ -35,6 +35,7 @@ half-applied rule would be worse than one that waits to be edited.
 '''
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from html import unescape
 from html.parser import HTMLParser
@@ -51,6 +52,10 @@ _BREAKING = frozenset((
 _UNSEEN = frozenset(('script', 'style'))
 _SPACE = re.compile(r'\s+')
 _TAG = re.compile(r'<[^>]*>')
+# How much of a field's markup is read for matching. A body can be megabytes;
+# a rule that needs text past this point of one is not worth a parse of all
+# of it on every fetch.
+MAX_MARKUP_CHARS = 262_144
 
 
 class _Text(HTMLParser):
@@ -84,7 +89,7 @@ def plain_text(markup):
     whitespace.'''
     if not markup:
         return ''
-    markup = str(markup)
+    markup = str(markup)[:MAX_MARKUP_CHARS]
     try:
         parser = _Text()
         parser.feed(markup)
@@ -98,17 +103,23 @@ def plain_text(markup):
 
 
 def fold(text):
-    '''The form both sides of a "contains" are compared in.'''
-    return _SPACE.sub(' ', str(text or '')).strip().casefold()
+    '''The form both sides of a "contains" are compared in: one Unicode
+    spelling of each character (so an accented letter typed as one code
+    point matches the same letter published as two), whitespace runs as
+    one space, case folded.'''
+    normal = unicodedata.normalize('NFKC', str(text or ''))
+    return _SPACE.sub(' ', normal).strip().casefold()
 
 
 def _forms(value):
-    '''A short field as a reader may see it: as written, and with any
-    markup taken out. Publishers put both plain text and HTML in titles,
-    and clients differ in which they show, so a rule may match either: a
-    title "Using <vector> well" must match "vector", and a title
-    "<em>Big</em> news" must match "big news".'''
-    return tuple(dict.fromkeys(form for form in (fold(value), fold(plain_text(value))) if form))
+    '''A short field as a reader may see it: as written (entities decoded,
+    so "&amp;" is never text), and with any markup taken out. Publishers
+    put both plain text and HTML in titles, and clients differ in which
+    they show, so a rule may match either: a title "Using <vector> well"
+    must match "vector", and a title "<em>Big</em> news" must match
+    "big news".'''
+    written = unescape(str(value or '')[:MAX_MARKUP_CHARS])
+    return tuple(dict.fromkeys(form for form in (fold(written), fold(plain_text(value))) if form))
 
 
 class ItemText:  # pylint: disable=too-few-public-methods

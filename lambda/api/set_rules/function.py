@@ -28,7 +28,7 @@ client that predates feed rules sends, so a save from one can neither see
 nor lose a feed rule. A request that carries it replaces the list whole, as
 `rules` always is. The mail compiler reads only `rules`; feed rules are
 applied by the fetch worker when it inserts an item (rss_fetch, rss_rules).
-Only a save that changes the mail rules is published to the imap tier.
+A save that changes only the feed rules is not published to the imap tier.
 '''
 import json
 import os
@@ -162,7 +162,9 @@ def _condition_errors(conditions, fields=None):
         if not isinstance(cond, dict) or set(cond) != {'field', 'value'}:
             errors.append((where, 'Each condition needs exactly field and value.'))
             continue
-        if cond['field'] not in fields:
+        # A string first: an unhashable value (a list, an object) would
+        # raise on the set lookup instead of being refused.
+        if not isinstance(cond['field'], str) or cond['field'] not in fields:
             errors.append((f'{where}.field', 'Unknown field.'))
         value = cond['value']
         if (not isinstance(value, str) or not 1 <= len(value) <= MAX_VALUE_LENGTH
@@ -216,7 +218,8 @@ def _rule_flags_errors(flags):
     errors = []
     seen = set()
     for i, slot in enumerate(flags):
-        if not isinstance(slot, str) or not SLOT_RE.match(slot):
+        # fullmatch: `$` alone also accepts a trailing newline.
+        if not isinstance(slot, str) or not SLOT_RE.fullmatch(slot):
             errors.append((f'flags[{i}]', 'Unknown flag slot.'))
         elif slot in seen:
             errors.append((f'flags[{i}]', 'Duplicate flag slot.'))
@@ -301,7 +304,7 @@ def _assign_id(rule_in, seen_ids):
     well-formed, unseen client id (so edits are stable across saves), mint a
     fresh one otherwise. Adds it to `seen_ids`.'''
     rule_id = rule_in.get('id', '')
-    if not isinstance(rule_id, str) or not RULE_ID_RE.match(rule_id) or rule_id in seen_ids:
+    if not isinstance(rule_id, str) or not RULE_ID_RE.fullmatch(rule_id) or rule_id in seen_ids:
         rule_id = 'r-' + secrets.token_hex(6)
     seen_ids.add(rule_id)
     return rule_id
@@ -458,10 +461,13 @@ def _record_side_effects(user, prior, new, version):
     under /rules and /feedRules.
 
     The publish is what makes the imap tier recompile every user's procmail,
-    and that compiler reads only the mail rules. So only a save that changed
-    them publishes: a feed-rule edit, which the editors auto-save as the
-    user types, would otherwise cost the mail tier a reconfigure each time
-    for an identical result.'''
+    and that compiler reads only the mail rules. So a save that changed the
+    feed rules and left the mail rules as they were does not publish: a
+    feed-rule edit, which the editors auto-save as the user types, would
+    otherwise cost the mail tier a reconfigure each time for an identical
+    result. Every other save publishes as it always has, including one that
+    changes nothing: saving again is how a user gets a rule recompiled
+    after creating the folder it files into.'''
     now = time.time()
     diff = _json_patch(prior[0], new[0])
     if new[1] is not None:
@@ -476,7 +482,7 @@ def _record_side_effects(user, prior, new, version):
         })
     except Exception as err:  # pylint: disable=broad-exception-caught
         print(f'[set_rules] audit write failed for {user}: {err}')
-    if prior[0] == new[0]:
+    if new[1] is not None and prior[0] == new[0] and prior[1] != new[1]:
         return
     try:
         sns.publish(TopicArn=TOPIC_ARN,
