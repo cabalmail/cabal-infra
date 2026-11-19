@@ -9,11 +9,14 @@ import com.cabalmail.kit.models.RssItemScope
 import com.cabalmail.kit.models.RssItemStateChange
 import com.cabalmail.kit.models.RssSubscription
 import com.cabalmail.kit.models.RssSubscriptionUpdate
+import com.cabalmail.kit.settings.FlagPalette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 
 /**
@@ -30,16 +33,20 @@ import kotlinx.coroutines.sync.withPermit
  *     largest `fetchedKey` seen; after that it follows the server's
  *     since-sync (ingest-time cursor) in pages until `hasMore` is false,
  *     bounded per run so one huge feed cannot monopolise a refresh. Then
- *     the feed's state sync: the read/favorite marks changed on the server
- *     (by another device, or by a mark-all-read's flip) since the feed's
- *     state cursor, applied to the cached items. Without it a mark made
+ *     the feed's state sync: the read and favorite marks and the flags
+ *     changed on the server (by another device, or by a mark-all-read's
+ *     flip) since the feed's state cursor, applied to the cached items. Without it a mark made
  *     elsewhere never arrives, because ingest time does not move when
  *     state does.
  *   * [drainPending] — the offline mutation queue, replayed in the order
  *     the user made the changes: item marks coalesced into
  *     `/rss_set_item_state` batches, each `/rss_mark_all_read` a fence
  *     between batches. A failure leaves the queue intact for the next
- *     attempt.
+ *     attempt, with one exception: a flag add the server refuses because
+ *     the account's flag list does not hold that flag would be refused
+ *     every time, and the whole batch with it, so once this device owes
+ *     the server no change to the flag list those adds are dropped and the
+ *     rest of the batch is sent again ([pushItemStates]).
  *
  * The engine never decides *when* to run; the app calls it from its
  * triggers (selection, foreground, periodic refresh, reconnect).
@@ -59,6 +66,19 @@ class RssSyncEngine(
 
     /** Feeds synced at once by [syncAll]. */
     var concurrency = 4
+
+    /**
+     * Sends the change to the flag list this device owes the server, if
+     * any, and says how that went. Asked before a refused flag add is
+     * dropped ([pushItemStates]); the app installs it when it builds the
+     * engine, and the kit's feed code knows nothing else of settings. With
+     * none installed the answer is [RssUnsentSettings.NOTHING_UNSENT].
+     */
+    @Volatile
+    var unsentSettingsPush: (suspend () -> RssUnsentSettings)? = null
+
+    /** One drain at a time, so the server sees an item's changes in the order they were made. */
+    private val draining = Mutex()
 
     // ------------------------------------------------------------- catalog
 
@@ -194,9 +214,9 @@ class RssSyncEngine(
 
     /** One server call of a drain, in queue order. */
     private sealed class DrainStep {
+        /** The queue rows of at most [STATE_BATCH] items, sent as one change an item. */
         data class ItemStates(
-            val changes: List<RssItemStateChange>,
-            val pendingIds: List<Long>,
+            val rows: List<PendingMutation>,
         ) : DrainStep()
 
         data class MarkAllRead(
@@ -204,27 +224,88 @@ class RssSyncEngine(
         ) : DrainStep()
     }
 
-    /** Pushes queued state changes. Returns how many queue rows were cleared. */
-    suspend fun drainPending(): Int {
-        val pending = store.pendingMutations()
-        if (pending.isEmpty()) return 0
-        var cleared = 0
-        for (step in drainSteps(pending)) {
-            when (step) {
-                is DrainStep.ItemStates -> {
-                    client.setItemState(step.changes)
-                    store.deletePending(step.pendingIds)
-                    cleared += step.pendingIds.size
+    /**
+     * Pushes queued state changes. Returns how many queue rows were cleared.
+     * A drain asked for while another is pushing waits and then reads the
+     * queue afresh: two at once could reach the server out of order, and
+     * the later intent for an item (a flag set, then cleared) would lose.
+     */
+    suspend fun drainPending(): Int =
+        draining.withLock {
+            val pending = store.pendingMutations()
+            var cleared = 0
+            for (step in drainSteps(pending)) {
+                when (step) {
+                    is DrainStep.ItemStates -> cleared += pushItemStates(step.rows)
+                    is DrainStep.MarkAllRead -> {
+                        val result = client.markAllRead(RssItemScope.Subscription(step.mutation.subscriptionId))
+                        store.applyServerWatermark(step.mutation.subscriptionId, result.readWatermark)
+                        store.deletePending(listOf(step.mutation.id))
+                        cleared += 1
+                    }
                 }
-                is DrainStep.MarkAllRead -> {
-                    val result = client.markAllRead(RssItemScope.Subscription(step.mutation.subscriptionId))
-                    store.applyServerWatermark(step.mutation.subscriptionId, result.readWatermark)
-                    store.deletePending(listOf(step.mutation.id))
-                    cleared += 1
+            }
+            cleared
+        }
+
+    /**
+     * Sends one batch and clears its rows from the queue; returns how many
+     * rows left it.
+     *
+     * The server checks every flag a call adds against the account's flag
+     * list before it writes anything, and refuses the whole call for one
+     * the list does not hold ([RssFlagRefusal]). Two things leave such an
+     * add in the queue. The flag was deleted, here or on another device,
+     * after the change was queued, and asking again cannot succeed. Or the
+     * flag was created on this device and the settings that carry it have
+     * not reached the server yet. So the first refusal of a batch asks for
+     * the owed settings to be sent ([unsentSettingsPush]), and the answer
+     * decides:
+     *   * sent: the batch goes again as it was, and a refusal after that
+     *     is final, since the server's flag list is now this device's;
+     *   * still unsent: the refused adds stay queued for a later drain and
+     *     the rest of the batch goes now, because the refusal would
+     *     otherwise hold every other change with it;
+     *   * nothing unsent: the refused adds are taken back
+     *     ([RssStore.dropRefusedFlagAdds]) and the rest of the batch goes.
+     * Every round after the first takes at least one row out, so this ends.
+     */
+    private suspend fun pushItemStates(batch: List<PendingMutation>): Int {
+        var rows = batch
+        var cleared = 0
+        var asked: RssUnsentSettings? = null
+        while (rows.isNotEmpty()) {
+            val refusal =
+                try {
+                    client.setItemState(stateChanges(rows))
+                    break
+                } catch (refusal: RssFlagRefusal) {
+                    refusal
+                }
+            val refused = rows.filter { it.kind == PendingKind.FLAG && it.value && it.slot in refusal.slots }
+            // Slots this batch does not add: not something dropping a row
+            // here can answer, so the queue stays as any failure leaves it.
+            if (refused.isEmpty()) throw refusal.asApiError()
+            val settings =
+                when (asked) {
+                    null -> (unsentSettingsPush?.invoke() ?: RssUnsentSettings.NOTHING_UNSENT).also { asked = it }
+                    RssUnsentSettings.SENT -> RssUnsentSettings.NOTHING_UNSENT
+                    else -> asked
+                }
+            when (settings) {
+                RssUnsentSettings.SENT -> Unit
+                RssUnsentSettings.STILL_UNSENT -> rows = rows - refused.toSet()
+                RssUnsentSettings.NOTHING_UNSENT -> {
+                    // Fewer than `refused` when the user has changed one of
+                    // them again since this drain read the queue: that row
+                    // is gone and the newer change waits for the next drain.
+                    cleared += store.dropRefusedFlagAdds(refused.map { it.id })
+                    rows = rows - refused.toSet()
                 }
             }
         }
-        return cleared
+        store.deletePending(rows.map { it.id })
+        return cleared + rows.size
     }
 
     // ----------------------------- local mutations (store first, then push)
@@ -244,6 +325,36 @@ class RssSyncEngine(
         store.setFavorite(item.feedId, item.sortKey, isFavorite)
         pushSoon()
     }
+
+    /**
+     * Sets or clears one flag of the user's own, by its palette slot
+     * ([FlagPalette.SLOTS]). The built-in flag is [setFavorite]; that slot,
+     * or anything else that is not a keyword slot, is refused here, because
+     * the server refuses it too and nothing could then clear the row from
+     * the queue.
+     */
+    suspend fun setFlag(
+        item: RssItem,
+        slot: String,
+        isSet: Boolean,
+    ) {
+        require(slot in FlagPalette.SLOTS) { "Not a flag slot: $slot" }
+        store.setFlag(item.feedId, item.sortKey, slot, isSet)
+        pushSoon()
+    }
+
+    /**
+     * Sets or clears the flag in palette slot [slot] on an item, whichever
+     * kind it is: the built-in flag's slot is the favorite mark
+     * ([setFavorite]), any other a flag of the user's own ([setFlag]). The
+     * one place that difference is told apart for a write, as
+     * [RssItem.carries] is for a read.
+     */
+    suspend fun setPaletteFlag(
+        item: RssItem,
+        slot: String,
+        isSet: Boolean,
+    ) = if (slot == FlagPalette.SYSTEM_SLOT) setFavorite(item, isSet) else setFlag(item, slot, isSet)
 
     suspend fun markAllRead(subscriptionId: String) {
         store.markAllRead(subscriptionId)
@@ -304,28 +415,22 @@ class RssSyncEngine(
 
         /**
          * The queue as server calls. Item marks between two mark-all-reads
-         * coalesce (the queue holds one row per item and kind, so read +
-         * favorite for one item become one change) into batches of at most
-         * [STATE_BATCH]; a mark-all-read is a fence. The user's order is what
-         * the server must see: replaying "mark all read, then mark X unread"
-         * the other way round lets the server's mark-all-read flip X back.
+         * coalesce (the queue holds one row per item and kind, and per slot
+         * for a flag change, so every change to one item becomes one entry)
+         * into batches of at most [STATE_BATCH] items; a mark-all-read is a
+         * fence. The user's order is what the server must see: replaying
+         * "mark all read, then mark X unread" the other way round lets the
+         * server's mark-all-read flip X back.
          */
         private fun drainSteps(pending: List<PendingMutation>): List<DrainStep> {
             val steps = ArrayList<DrainStep>()
-            var changes = LinkedHashMap<String, RssItemStateChange>()
-            var changeIds = LinkedHashMap<String, MutableList<Long>>()
+            var rows = LinkedHashMap<String, MutableList<PendingMutation>>()
 
             fun closeBatch() {
-                val keys = changes.keys.sorted()
-                keys.chunked(STATE_BATCH).forEach { batch ->
-                    steps +=
-                        DrainStep.ItemStates(
-                            changes = batch.map { changes.getValue(it) },
-                            pendingIds = batch.flatMap { changeIds[it].orEmpty() },
-                        )
+                rows.keys.sorted().chunked(STATE_BATCH).forEach { batch ->
+                    steps += DrainStep.ItemStates(batch.flatMap { rows.getValue(it) })
                 }
-                changes = LinkedHashMap()
-                changeIds = LinkedHashMap()
+                rows = LinkedHashMap()
             }
             for (mutation in pending) {
                 if (mutation.kind == PendingKind.MARK_ALL_READ) {
@@ -333,18 +438,46 @@ class RssSyncEngine(
                     steps += DrainStep.MarkAllRead(mutation)
                     continue
                 }
-                val key = "${mutation.feedId}#${mutation.sortKey}"
-                val change = changes[key] ?: RssItemStateChange(mutation.feedId, mutation.sortKey)
-                changes[key] =
-                    if (mutation.kind == PendingKind.READ) {
-                        change.copy(isRead = mutation.value)
-                    } else {
-                        change.copy(isFavorite = mutation.value)
-                    }
-                changeIds.getOrPut(key) { mutableListOf() }.add(mutation.id)
+                rows.getOrPut("${mutation.feedId}#${mutation.sortKey}") { mutableListOf() }.add(mutation)
             }
             closeBatch()
             return steps
+        }
+
+        /**
+         * One entry an item for a batch's rows, in item order: its read and
+         * favorite marks and the flags it adds and removes.
+         */
+        internal fun stateChanges(rows: List<PendingMutation>): List<RssItemStateChange> {
+            val changes = LinkedHashMap<String, RssItemStateChange>()
+            for (row in rows) {
+                val key = "${row.feedId}#${row.sortKey}"
+                val change = changes[key] ?: RssItemStateChange(row.feedId, row.sortKey)
+                changes[key] =
+                    when (row.kind) {
+                        PendingKind.READ -> change.copy(isRead = row.value)
+                        PendingKind.FAVORITE -> change.copy(isFavorite = row.value)
+                        // The queue holds one row per item and slot; were
+                        // there two, the later one is the intent, and a slot
+                        // never goes in both lists, which the server refuses.
+                        PendingKind.FLAG ->
+                            if (row.value) {
+                                change.copy(
+                                    addFlags = change.addFlags + row.slot,
+                                    removeFlags =
+                                        change.removeFlags - row.slot,
+                                )
+                            } else {
+                                change.copy(
+                                    addFlags = change.addFlags - row.slot,
+                                    removeFlags =
+                                        change.removeFlags + row.slot,
+                                )
+                            }
+                        PendingKind.MARK_ALL_READ -> change
+                    }
+            }
+            return changes.keys.sorted().map { changes.getValue(it) }
         }
     }
 }

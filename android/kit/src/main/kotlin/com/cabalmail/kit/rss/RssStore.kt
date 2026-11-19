@@ -60,9 +60,11 @@ interface RssStore {
 
     /**
      * Writes a page of items from the server. An item with a queued local
-     * read or favorite change keeps its local flags (the local intent is
-     * newer than whatever the server had); everything else takes the
-     * server's copy.
+     * read or favorite change keeps its local read and favorite marks (the
+     * local intent is newer than whatever the server had); everything else
+     * takes the server's copy. Its flags of the user's own are the server's
+     * with the queued changes laid over them, slot by slot
+     * ([RssStoredFlags.overlaying]).
      */
     suspend fun upsertItems(items: List<RssItem>)
 
@@ -108,6 +110,19 @@ interface RssStore {
     )
 
     /**
+     * Sets or clears one flag of the user's own on an item, by its palette
+     * slot, and queues the change. The queue keeps one change per item and
+     * slot, the latest: an add then a remove leaves a remove, not nothing,
+     * since the server may hold the flag from another device.
+     */
+    suspend fun setFlag(
+        feedId: String,
+        sortKey: String,
+        slot: String,
+        isSet: Boolean,
+    )
+
+    /**
      * Mark-all-read for one subscription, the way the server does it:
      * advance the watermark and flip items explicitly marked unread. A
      * null watermark means now.
@@ -119,8 +134,9 @@ interface RssStore {
 
     /**
      * Applies state rows the server reported (the state sync) to the items
-     * this device has, without queueing anything. A flag with a queued
-     * local change is left alone; an item not cached here is skipped.
+     * this device has, without queueing anything. A mark with a queued
+     * local change is left alone, and so is each flag slot with one; an
+     * item not cached here is skipped.
      */
     suspend fun applyServerStates(states: List<RssItemState>)
 
@@ -142,6 +158,15 @@ interface RssStore {
     ): Boolean
 
     suspend fun deletePending(ids: List<Long>)
+
+    /**
+     * Takes back the queued flag adds among [ids] that the server refused
+     * for good: each row leaves the queue and its flag leaves its item, in
+     * one transaction. Returns how many rows went. A row the user has
+     * changed again since the caller read the queue is gone already, and
+     * the newer change is left alone.
+     */
+    suspend fun dropRefusedFlagAdds(ids: List<Long>): Int
 
     /** All defaults when the feed has never synced. */
     suspend fun syncState(feedId: String): FeedSyncState
@@ -196,6 +221,9 @@ enum class PendingKind(
 ) {
     READ("read"),
     FAVORITE("favorite"),
+
+    /** One flag of the user's own on one item; the row names its slot. */
+    FLAG("flag"),
     MARK_ALL_READ("mark_all_read"),
     ;
 
@@ -212,6 +240,8 @@ data class PendingMutation(
     val sortKey: String,
     val subscriptionId: String,
     val value: Boolean,
+    /** The palette slot of a [PendingKind.FLAG] row, whose [value] is add or remove; empty otherwise. */
+    val slot: String = "",
 )
 
 /** Sync bookkeeping for one feed. */

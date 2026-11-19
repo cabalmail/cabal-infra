@@ -9,7 +9,30 @@ import com.cabalmail.kit.models.RssRemoteContentMode
 import com.cabalmail.kit.models.RssStyling
 import com.cabalmail.kit.models.RssSubscription
 import com.cabalmail.kit.models.RssSubscriptionUpdate
+import com.cabalmail.kit.settings.FeedSwipeAction
+import com.cabalmail.kit.settings.FlagPalette
+import com.cabalmail.kit.settings.FlagPaletteEntry
 import com.cabalmail.kit.settings.LoadRemoteContent
+
+/**
+ * Words on the feed list that depend on which flag a control sets.
+ */
+object FeedFlagWords {
+    /**
+     * Whether the empty Flagged list may offer the swipe as a way to flag
+     * an item. The Flagged pill shows the built-in flag, and the swipe
+     * sets the default flag: the hint holds only while those are one flag
+     * and an edge is bound to the flag swipe. Otherwise the row's menu is
+     * the way, and the words say so.
+     */
+    fun flaggedPillOffersSwipe(
+        palette: List<FlagPaletteEntry>,
+        leading: FeedSwipeAction,
+        trailing: FeedSwipeAction,
+    ): Boolean =
+        FlagPalette.defaultEntry(palette).slot == FlagPalette.SYSTEM_SLOT &&
+            FeedSwipeAction.TOGGLE_FAVORITE in listOf(leading, trailing)
+}
 
 /**
  * Which pill a feed list opens on and what a tap writes back — the Apple

@@ -67,7 +67,7 @@ data class FeedItemListUiState(
 /**
  * One feed list (a feed, a folder, or All Feeds), the Apple
  * `FeedItemListViewModel`. Reads pages from the store; syncs the scope's
- * feeds on demand; applies read and favorite changes optimistically and
+ * feeds on demand; applies read and flag changes optimistically and
  * posts them on the bus; keeps the filter pill sticky on the scope's row
  * or the All Feeds preference. Takes narrow collaborators rather than the
  * container so it unit-tests against the kit's in-memory store.
@@ -312,15 +312,25 @@ class FeedItemListViewModel(
         }
     }
 
-    fun setFavorite(
+    /**
+     * Sets or clears one flag of Settings > Flags on an item, by its
+     * palette slot: the built-in flag or one of the user's own. Shown at
+     * once, then written and sent; afterwards the row is what the store
+     * holds, because the server can refuse a flag it no longer lists and
+     * the queue then takes it off the item again.
+     */
+    fun setFlag(
         item: RssItem,
-        isFavorite: Boolean,
+        slot: String,
+        isSet: Boolean,
     ) {
-        val changed = item.copy(isFavorite = isFavorite)
+        val changed = item.withFlag(slot, isSet)
         patch(changed)
         viewModelScope.launch {
-            runCatching { engine().setFavorite(item, isFavorite) }
-            events.post(FeedEvent.ItemChanged(changed))
+            runCatching { engine().setPaletteFlag(item, slot, isSet) }
+            val stored = runCatching { store.item(item.feedId, item.sortKey) }.getOrNull() ?: changed
+            patch(stored)
+            events.post(FeedEvent.ItemChanged(stored))
             refreshPendingMarks()
         }
     }
@@ -363,10 +373,8 @@ class FeedItemListViewModel(
             state.copy(
                 items =
                     state.items.map {
-                        if (it.id ==
-                            changed.id
-                        ) {
-                            it.copy(isRead = changed.isRead, isFavorite = changed.isFavorite)
+                        if (it.id == changed.id) {
+                            it.copy(isRead = changed.isRead, isFavorite = changed.isFavorite, flags = changed.flags)
                         } else {
                             it
                         }

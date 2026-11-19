@@ -9,9 +9,9 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android not started (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android in review (2026-11-18): the first of its two PRs, flags on feed items, is #2498 (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
-| 4 -- Feed rules | Not started (2026-11-08) |
+| 4 -- Feed rules | Started (2026-11-18): the storage decision is answered (`feedRules` beside `rules`). Terraform in review (#2497); server, Apple and Android not started |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
 | 6 -- Ambient surfaces: Spotlight | Not started (2026-11-08) |
 
@@ -129,7 +129,9 @@ moved most of the code this plan names. The facts a phase depends on:
 - `RssStore` is at schema 7 with #2411 (schema 6 before it). From 1.50.0
   (#2404) `openRecovering` sets aside a file written by a newer schema;
   1.49.0 and earlier delete it.
-  Android's `RoomRssStore` is at version 1 with a destructive fallback.
+  Android's `RoomRssStore` is at version 1 with a destructive fallback
+  until leg L2's first PR (#2498, in review 2026-11-18), which takes it
+  to version 2 by its first real migration.
 
 ### Where the two media already align
 
@@ -322,7 +324,11 @@ The fetcher cannot do this today. It has no way to find a feed's
 subscribers (the subscription table's only feed-keyed index is the
 sparse `by_feed_notify`), and its IAM role reaches neither the rules
 table, nor the subscription table, nor the item-state table. Phase 4
-adds a feed-keyed subscription index and those grants. A feed is shared
+adds a plain feed-keyed subscription index (`by_feed`) and those grants,
+and a read on the preferences table: a rule that sets a custom flag no
+longer in the subscriber's flag list is skipped whole, as the mail
+compiler skips a mail rule, so the fetcher reads that list for a
+subscriber whose matching rule sets one. A feed is shared
 across subscribers, so the fetcher loads each subscriber's rules once
 per invocation; at hobby scale the subscriber count per feed is small
 and the item count per fetch smaller. Evaluation is best effort: a
@@ -463,8 +469,8 @@ and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
 **Status:** Server in prod (2026-11-11); Apple merged (2026-11-12),
-the per-flag filter in prod with 1.53.0 (2026-11-13); Android not
-started. The unified flags plan
+the per-flag filter in prod with 1.53.0 (2026-11-13); Android in
+review (2026-11-18, #2498). The unified flags plan
 shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
 are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
@@ -489,7 +495,9 @@ these PRs and already in prod. The filter's shape was answered again on
 before it merged: #2424 (item 6 of 2a), merged on 2026-11-12, passed
 against the stage API, and in prod the same day with 1.52.0, the
 release that also carried #2420.
-Android has not started (`android-parity.md`, leg L2).
+Android is in review (2026-11-18): leg L2 of `android-parity.md`, whose
+first PR, flags on feed items, is #2498; its second is the per-flag
+filter on both lists.
 `flags-and-cross-media.md` has the gates, the answers that settled the
 open points below (its decisions 4 and 11), and what was built.
 
@@ -529,7 +537,9 @@ open points below (its decisions 4 and 11), and what was built.
    Room version 1 with a destructive fallback, so its first bump needs
    a real migration or an upgrade drops queued marks. `android-parity.md`
    PR 9 plans that bump (version 2, for folder and All Feeds order); if
-   it lands first, as planned, Phase 2 is version 3.
+   it lands first, as planned, Phase 2 is version 3. It did not land
+   first: leg L2's first PR (#2498) is version 2, with the first real
+   migration, and PR 9's column becomes version 3.
 1. **Sync.** `RssSyncEngine` on both platforms applies `flags` from item
    pages and state pages, and queues flag changes through the existing
    pending queue. Coalescing is per item and slot, so the latest intent
@@ -639,8 +649,12 @@ an article and the received mail carries the link and the summary.
 
 ## Phase 4 -- Feed rules
 
-**Status:** Not started (2026-11-08). `flags-and-cross-media.md` gates
-the client work on fixes owned by other plans, and those have all
+**Status:** Started (2026-11-18). The storage decision is answered:
+`feedRules` beside `rules`, with a plain subscriber index and a flag-list
+check at ingest (`flags-and-cross-media.md`, decision 6, which also
+records the rule format). The Terraform (4a, item 1) is in review as #2497; the
+server, Apple and Android work is not started. `flags-and-cross-media.md`
+gates the client work on fixes owned by other plans, and those have all
 merged:
 
 - #1903: an unreadable 200 from `/set_rules` is no longer read as a
@@ -650,14 +664,15 @@ merged:
 - #2040: VoiceOver reads each rule's switch as a switch.
 
 What is left is this plan's own order. Phase 2 has shipped on Apple
-(the last of it in 1.53.0, 2026-11-13), so that is the Terraform and
-server work in prod, plus the storage decision.
+(the last of it in 1.53.0, 2026-11-13), and the storage decision is
+answered, so that is the Terraform and server work in prod.
 
 ### 4a. Server and infrastructure
 
-1. **Terraform.** A feed-keyed index on the subscription table, and
-   grants for `rss_fetch`: read on the rules table, query on the new
-   index, update on the item-state table. Applied through `infra.yml`
+1. **Terraform.** A plain feed-keyed index on the subscription table
+   (`by_feed`), and grants for `rss_fetch`: query on the new index, read
+   on the rules table and on the preferences table (the flag list),
+   update on the item-state table. Applied through `infra.yml`
    with Checkov, tflint, and tfsec. `app.yml` deploys Lambda code
    independently of `infra.yml`, so this rides a promotion before the
    code that needs it.
@@ -794,7 +809,9 @@ app; signing out removes the feed entries from Spotlight.
   imports that file's pending rows when it is installed again. Signing
   out in between deletes the set-aside file. 1.49.0 and earlier delete
   the file, and with it any unsent feed marks, so schema 7 ships after
-  1.50.0. Room must not move past version 1 without a real migration.
+  1.50.0. Room moves past version 1 only by a real migration, which
+  Android's leg L2 adds (#2498): an older build installed over the newer
+  file still rebuilds it, which only `adb install -d` can do.
 - Each phase's acceptance line above is written to be a tester sweep
   item.
 
@@ -817,7 +834,7 @@ and Phase 2 above was rewritten to it.
 | How does Mark All as Read on a feed folder reach the server? | 3 | One queue row per feed, sent as one request | feed-bulk-actions 3 |
 | Where does Forward as Email go? | 3 | The reader's menus and the row menu | feed-bulk-actions 4 |
 | What does the forwarded mail contain? | 3 | The summary as plain text | feed-bulk-actions 5 |
-| Where are feed rules stored? | 4 | `feedRules` beside `rules` | flags-and-cross-media 6 |
+| Where are feed rules stored? | 4 | `feedRules` beside `rules` | flags-and-cross-media 6 (answered 2026-11-18) |
 | Is the Flagged view built now or on the SQLite store's query? | 5 | On the SQLite store's query | flags-and-cross-media 7 |
 | Where does the Flagged view live where Mail and Feeds are separate tabs or destinations (iOS after the one-tree merge, visionOS, Android)? | 5 | None set; on Apple the Search tab is the natural candidate (Decision 8) | Not yet numbered; flags-and-cross-media's Duo note asks it as a Phase 5 decision |
 | Keep or drop the All / Mail / Feeds search scope? | 5 | Keep | flags-and-cross-media 8 |

@@ -131,9 +131,9 @@ internal fun mailSwipeReveal(
 internal fun feedSwipeReveal(
     action: FeedSwipeAction,
     isRead: Boolean,
-    /** The built-in flag's entry ([FlagToggle.systemFlag]), the one flag a feed item has. */
+    /** The default flag ([FlagToggle.defaultFlag]), which the feed's flag swipe toggles as mail's does. */
     flag: FlagToggle,
-    isFavorite: Boolean,
+    isFlagSet: Boolean,
 ): SwipeReveal? =
     when (action) {
         FeedSwipeAction.TOGGLE_READ ->
@@ -142,7 +142,7 @@ internal fun feedSwipeReveal(
                 glyph = SwipeGlyph.EMAIL,
                 tone = SwipeTone.READ,
             )
-        FeedSwipeAction.TOGGLE_FAVORITE -> flagSwipeReveal(flag, isFavorite)
+        FeedSwipeAction.TOGGLE_FAVORITE -> flagSwipeReveal(flag, isFlagSet)
         FeedSwipeAction.NONE -> null
     }
 

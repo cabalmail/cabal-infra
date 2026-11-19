@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
     alias(libs.plugins.ktlint)
 }
 
@@ -36,6 +37,13 @@ android {
     }
 }
 
+// The feed database's schema at each version, exported by Room's compiler
+// and committed: a migration is tested against these files, and a schema
+// change that forgets to raise the version fails the build.
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -57,5 +65,6 @@ dependencies {
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.client.mock)
+    testImplementation(libs.sqlite.jdbc)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

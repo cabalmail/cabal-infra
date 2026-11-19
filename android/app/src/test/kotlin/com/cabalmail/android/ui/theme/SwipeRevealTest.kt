@@ -100,8 +100,8 @@ class SwipeRevealTest {
             feedSwipeReveal(
                 FeedSwipeAction.TOGGLE_FAVORITE,
                 isRead = true,
-                flag = FlagToggle.systemFlag(allOff),
-                isFavorite = false,
+                flag = FlagToggle.defaultFlag(allOff),
+                isFlagSet = false,
             ),
         )
     }
@@ -169,18 +169,18 @@ class SwipeRevealTest {
     @Test
     fun `none reveals nothing on either list`() {
         assertNull(mailSwipeReveal(MailSwipeAction.NONE, false, builtIn, false, archive))
-        assertNull(feedSwipeReveal(FeedSwipeAction.NONE, isRead = false, flag = builtIn, isFavorite = false))
+        assertNull(feedSwipeReveal(FeedSwipeAction.NONE, isRead = false, flag = builtIn, isFlagSet = false))
     }
 
     @Test
     fun `feed reveals mirror the mail ones, on the built-in flag's entry`() {
         assertEquals(
             SwipeReveal(R.string.mark_unread, SwipeGlyph.EMAIL, SwipeTone.READ),
-            feedSwipeReveal(FeedSwipeAction.TOGGLE_READ, isRead = true, flag = builtIn, isFavorite = false),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_READ, isRead = true, flag = builtIn, isFlagSet = false),
         )
         assertEquals(
             SwipeReveal(UiLabel.Fixed(R.string.add_flag), SwipeGlyph.STAR_HOLLOW, SwipeTone.FLAG, flagColor = "yellow"),
-            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = builtIn, isFavorite = false),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = builtIn, isFlagSet = false),
         )
         assertEquals(
             SwipeReveal(
@@ -189,7 +189,7 @@ class SwipeRevealTest {
                 SwipeTone.FLAG,
                 flagColor = "yellow",
             ),
-            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = builtIn, isFavorite = true),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = builtIn, isFlagSet = true),
         )
         // Renamed and recolored in Settings > Flags: the feed's swipe follows.
         val urgent = FlagToggle(slot = FlagPalette.SYSTEM_SLOT, label = "Urgent", color = "red")
@@ -200,7 +200,7 @@ class SwipeRevealTest {
                 SwipeTone.FLAG,
                 "red",
             ),
-            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = urgent, isFavorite = true),
+            feedSwipeReveal(FeedSwipeAction.TOGGLE_FAVORITE, isRead = true, flag = urgent, isFlagSet = true),
         )
     }
 }

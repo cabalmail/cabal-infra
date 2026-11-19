@@ -15,8 +15,8 @@ import com.cabalmail.kit.models.RssStyling
 import com.cabalmail.kit.settings.FolderCountDisplay
 
 /**
- * The filter pill's label. The Flagged pill filters on the one flag a feed
- * item has, the built-in flag, so it carries that flag's name from
+ * The filter pill's label. The Flagged pill filters on the built-in flag,
+ * whichever flags an item carries, so it carries that flag's name from
  * Settings > Flags.
  */
 @Composable
