@@ -249,6 +249,111 @@ class PublishLoopTests(unittest.TestCase):
         )
 
 
+#: The plugin's line from run 43990475833 (the 1.54.0 prod upload), and the
+#: same line as it would read had the publisher raised the code: run 196 of
+#: that promotion was refused because stage's run 197 had published first
+#: (#2491), and with `ResolutionStrategy.AUTO` it publishes 198 instead.
+PUBLISHED_LINE = (
+    "Updating [completed] release (com.cabalmail.android:[198]) in track "
+    "'internal'\n"
+)
+SUCCEEDED_NAMING_ITS_RELEASE = SUCCEEDED.replace(
+    "> Task :commitEditFor", PUBLISHED_LINE + "\n> Task :commitEditFor"
+)
+
+
+class PublishedVersionCodeTests(unittest.TestCase):
+    """Saying which version code shipped, now that it is not the run number."""
+
+    def test_the_plugins_line_gives_the_app_the_code_and_the_track(self):
+        self.assertEqual(
+            module.published_releases(SUCCEEDED_NAMING_ITS_RELEASE),
+            [("com.cabalmail.android", [198], "internal")],
+        )
+
+    def test_several_codes_in_one_release_are_all_read(self):
+        line = PUBLISHED_LINE.replace("[198]", "[198, 199]")
+        self.assertEqual(
+            module.published_releases(line),
+            [("com.cabalmail.android", [198, 199], "internal")],
+        )
+
+    def test_output_that_names_no_release_reads_as_none(self):
+        # SUCCEEDED is the #1442 log with its two task lines changed; it has
+        # the upload's own lines and no `Updating ... release` line.
+        self.assertEqual(module.published_releases(SUCCEEDED), [])
+        # The failed run's log carries an edit id, a run of digits, in the
+        # commit URL; it must not be taken for a version code.
+        self.assertEqual(module.published_releases(REPORTED_FAILURE), [])
+
+    def test_the_report_goes_to_the_job_summary(self):
+        with tempfile.TemporaryDirectory() as workdir:
+            summary = os.path.join(workdir, "summary.md")
+            with open(summary, "w", encoding="utf-8") as handle:
+                handle.write("Version: 1.54.0 (version code 196, ...)\n")
+            lines = module.report_published(
+                SUCCEEDED_NAMING_ITS_RELEASE, summary_path=summary
+            )
+            with open(summary, encoding="utf-8") as handle:
+                written = handle.read()
+        self.assertEqual(
+            lines,
+            [
+                "Published version code 198 of com.cabalmail.android to the "
+                "'internal' track."
+            ],
+        )
+        # Appended, not written over: the Derive versions step's line stays.
+        self.assertTrue(written.startswith("Version: 1.54.0"), written)
+        self.assertTrue(written.endswith(lines[0] + "\n"), written)
+
+    def test_a_publish_that_names_no_release_says_so(self):
+        with tempfile.TemporaryDirectory() as workdir:
+            summary = os.path.join(workdir, "summary.md")
+            lines = module.report_published(SUCCEEDED, summary_path=summary)
+            with open(summary, encoding="utf-8") as handle:
+                written = handle.read()
+        self.assertEqual(len(lines), 1)
+        self.assertIn("did not name the version code", lines[0])
+        self.assertEqual(written, lines[0] + "\n")
+
+    def test_only_the_run_that_succeeded_is_reported(self):
+        reported = []
+        runner = Runner((1, REPORTED_FAILURE), (0, SUCCEEDED_NAMING_ITS_RELEASE))
+        rc = module.publish(
+            ["-Pa=1"], runner=runner, sleep=lambda _s: None, report=reported.append
+        )
+        self.assertEqual(rc, 0)
+        self.assertEqual(reported, [SUCCEEDED_NAMING_ITS_RELEASE])
+
+    def test_a_failed_publish_reports_nothing(self):
+        reported = []
+        runner = Runner((1, PERMANENT_REFUSAL))
+        rc = module.publish(
+            ["-Pa=1"], runner=runner, sleep=lambda _s: None, report=reported.append
+        )
+        self.assertEqual(rc, 1)
+        self.assertEqual(reported, [])
+
+    def test_the_entry_point_reports(self):
+        # `main` is the one caller that must pass the report; the loop tests
+        # above all drive `publish` directly and would not notice it missing.
+        seen = {}
+
+        def fake_publish(args, **kwargs):
+            seen.update(kwargs, args=args)
+            return 0
+
+        real_publish, real_argv = module.publish, sys.argv
+        module.publish, sys.argv = fake_publish, ["publish-play-bundle.py", "-Pa=1"]
+        try:
+            self.assertEqual(module.main(), 0)
+        finally:
+            module.publish, sys.argv = real_publish, real_argv
+        self.assertEqual(seen["args"], ["-Pa=1"])
+        self.assertIs(seen["report"], module.report_published)
+
+
 class RunGradleTests(unittest.TestCase):
     """The one part the loop tests stub out: actually invoking Gradle.
 

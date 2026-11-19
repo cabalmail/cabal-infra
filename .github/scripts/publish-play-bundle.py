@@ -26,6 +26,7 @@ Usage (from the `android/` directory):
 Every argument is passed through to `./gradlew publishBundle`.
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -53,6 +54,17 @@ _COMMIT_TASK = re.compile(
 # task name — including nothing at all — means it ran, or means we cannot
 # tell, and both are handled the same way: do not retry.
 _DID_NOT_RUN = ("SKIPPED", "NO-SOURCE")
+
+# `Updating [completed] release (com.cabalmail.android:[198]) in track
+# 'internal'` — the plugin's own line naming what it put on the track. It is
+# the one place the published version code can be read: the code starts from
+# the workflow's run number, and the plugin raises it when Play already holds
+# that code or a higher one (`resolutionStrategy` in app/build.gradle.kts,
+# #2491), so the run number alone no longer says what shipped.
+_PUBLISHED = re.compile(
+    r"release \((?P<app>[^:()\s]+):\[(?P<codes>[\d,\s]+)\]\) in track "
+    r"'(?P<track>[^']+)'"
+)
 
 RETRY_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 15.0
@@ -131,13 +143,67 @@ def run_gradle(args):
     return rc, "".join(captured)
 
 
-def publish(args, runner=run_gradle, sleep=time.sleep):
-    """Publish, retrying a transient refusal that left the edit uncommitted."""
+def published_releases(output):
+    """What the plugin says it put on a track: [(app, [codes], track), ...].
+
+    Empty when the output has no such line, which is also what a run with the
+    plugin disabled (no credentials) looks like.
+    """
+    return [
+        (
+            match.group("app"),
+            [int(code) for code in re.findall(r"\d+", match.group("codes"))],
+            match.group("track"),
+        )
+        for match in _PUBLISHED.finditer(output)
+    ]
+
+
+def report_published(output, summary_path=None):
+    """Say which version code was published, in the log and the job summary.
+
+    `summary_path` defaults to `$GITHUB_STEP_SUMMARY`; with neither, the line
+    goes to the log only. A publish whose output names no release is said so
+    rather than passed over, because that is a plugin wording change and the
+    summary would otherwise go quiet without anyone noticing.
+    """
+    releases = published_releases(output)
+    if releases:
+        lines = [
+            "Published version code "
+            f"{', '.join(str(code) for code in codes)} of {app} to the "
+            f"'{track}' track."
+            for app, codes, track in releases
+        ]
+    else:
+        lines = [
+            "The publish succeeded, but its output did not name the version "
+            "code it published."
+        ]
+        warn(lines[0])
+    for line in lines:
+        print(line, flush=True)
+    if summary_path is None:
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        with open(summary_path, "a", encoding="utf-8") as handle:
+            handle.write("".join(f"{line}\n" for line in lines))
+    return lines
+
+
+def publish(args, runner=run_gradle, sleep=time.sleep, report=None):
+    """Publish, retrying a transient refusal that left the edit uncommitted.
+
+    `report`, when given, is called with the output of the run that
+    succeeded, and of no other.
+    """
     attempt = 0
     while True:
         attempt += 1
         rc, output = runner(args)
         if rc == 0:
+            if report is not None:
+                report(output)
             return 0
         if attempt >= RETRY_ATTEMPTS:
             warn(
@@ -158,7 +224,7 @@ def publish(args, runner=run_gradle, sleep=time.sleep):
 
 
 def main():
-    return publish(sys.argv[1:])
+    return publish(sys.argv[1:], report=report_published)
 
 
 if __name__ == "__main__":
