@@ -125,6 +125,8 @@
     <string name="compose_send">Send</string>
     <string name="compose_from">From</string>
     <string name="compose_from_placeholder">Choose a From address</string>
+    <string name="compose_from_filter">Filter addresses</string>
+    <string name="compose_from_no_match">No address matches “%1$s”</string>
     <string name="compose_create_address">Create new address…</string>
     <string name="compose_to">To</string>
     <string name="compose_cc">Cc</string>

@@ -210,11 +210,16 @@ jobs:
             echo "::error::Could not parse a version from CHANGELOG.md"
             exit 1
           fi
-          # run_number is monotonic per workflow name; a rename resets it. If
-          # this workflow is ever renamed, add the last pre-rename run number
-          # as an offset here instead of renaming back.
+          # The run number is where the version code starts, not always where
+          # it ends. It is one sequence across stage and main, and a main run
+          # takes its number before it waits for approval, so by the time it
+          # uploads Play may hold a higher code from a later stage run
+          # (#2491). The publisher then uses Play's highest code plus one
+          # (`resolutionStrategy` in app/build.gradle.kts), which also covers
+          # a re-run and a workflow rename. The publish step's summary line
+          # gives the code that was published.
           VERSION_CODE=${{ github.run_number }}
-          echo "Version: $VERSION_NAME ($VERSION_CODE)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Version: $VERSION_NAME (version code $VERSION_CODE, or Play's next free code if that one is not above every code it holds)" >> "$GITHUB_STEP_SUMMARY"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
 

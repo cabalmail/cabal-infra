@@ -15,9 +15,14 @@ import CabalmailKit
 //
 // The rule is about the platform: iOS/iPadOS/visionOS menu rows really do wrap
 // (measured in #1597's retest) and have no type-to-select, macOS rows never
-// wrap and do. So these pin both halves, plus the two call sites — a call site
+// wrap and do. So these pin both halves, plus the call site — a call site
 // that goes back to `wrappable` directly puts the defect back on screen, and
 // nothing else would catch it.
+//
+// The compose From picker was the second call site until it stopped being a
+// menu: it opens `FromAddressList` now, whose filter field matches what is
+// typed against the raw address. `FromAddressFilterTests` pins that, as
+// behaviour, in place of the two scans of its menu rows that were here.
 final class AddressMenuTitlePolicyTests: XCTestCase {
 
     private let sample = "daily@qa0722.cabal-mail.com"
@@ -62,28 +67,17 @@ final class AddressMenuTitlePolicyTests: XCTestCase {
 
     // MARK: - Call sites
 
-    /// Both menus ask the policy. Neither view's body is reachable from a unit
-    /// test, so the call is read out of the source: a row that goes back to
-    /// `AddressDisplay.wrappable` compiles, ships, and highlights the wrong
+    /// The Default From menu asks the policy. Its body isn't reachable from a
+    /// unit test, so the call is read out of the source: a row that goes back
+    /// to `AddressDisplay.wrappable` compiles, ships, and highlights the wrong
     /// address on macOS.
-    func testBothMenuRowSitesRouteThroughThePolicy() throws {
-        let sources = try Self.viewSources()
-        for path in ["CabalmailUI/Compose/FromPicker.swift", "CabalmailUI/Settings/SettingsDetailViews.swift"] {
-            let code = Self.code(in: try XCTUnwrap(sources[path], "\(path) is missing from the corpus"))
-            XCTAssertTrue(
-                code.contains("AddressMenuTitlePolicy.rowTitle("),
-                "\(path): draw menu rows through AddressMenuTitlePolicy (#1702)"
-            )
-        }
-    }
-
-    /// The compose From menu's two branches — the checked row and the plain
-    /// one — both take the policy's title. #1597's verification caught a fix
-    /// that covered only one of them.
-    func testBothComposeMenuBranchesTakeThePolicysTitle() throws {
-        let code = Self.code(in: try XCTUnwrap(Self.viewSources()["CabalmailUI/Compose/FromPicker.swift"]))
-        XCTAssertTrue(code.contains("Label(menuTitle(address), systemImage: \"checkmark\")"))
-        XCTAssertTrue(code.contains("Text(menuTitle(address))"))
+    func testTheDefaultFromMenuRowsRouteThroughThePolicy() throws {
+        let path = "CabalmailUI/Settings/SettingsDetailViews.swift"
+        let code = Self.code(in: try XCTUnwrap(Self.viewSources()[path], "\(path) is missing from the corpus"))
+        XCTAssertTrue(
+            code.contains("AddressMenuTitlePolicy.rowTitle("),
+            "\(path): draw menu rows through AddressMenuTitlePolicy (#1702)"
+        )
         XCTAssertEqual(
             try Self.wrappableMenuRowHits(in: code), 0,
             "a menu row drawing AddressDisplay.wrappable directly is the defect (#1702)"
