@@ -14,8 +14,10 @@ import androidx.room.RawQuery
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
+import androidx.room.migration.Migration
 import androidx.room.withTransaction
 import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteQuery
 import com.cabalmail.kit.models.RssCatalog
 import com.cabalmail.kit.models.RssFeedSummary
@@ -36,9 +38,10 @@ import com.cabalmail.kit.settings.wireEnum
  * Room-backed [RssStore]. Unlike the envelope cache, items are exploded
  * into columns: search needs real text columns, and the list, the filters
  * and the unread counts are SQL over them. The schema and the SQL mirror
- * the Apple store's (`RssStore.swift`, schema version 4), which the kit's
- * contract tests verified on real SQLite; here the DAO is exercised
- * on-device and the contract by [InMemoryRssStore]'s tests.
+ * the Apple store's (`RssStore.swift`), which the Apple kit's contract
+ * tests verified on real SQLite; here the DAO is exercised on-device and
+ * the contract by [InMemoryRssStore]'s tests. The schema's upgrade steps
+ * ([RssMigrations]) do run on real SQLite in the kit's tests.
  *
  * Full-text search is Room's `@Fts4` content table over `title` and
  * `body_text` with the `unicode61` tokenizer and no stemmer (a stemmer
@@ -103,6 +106,8 @@ data class RssItemRow(
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean,
     @ColumnInfo(name = "state_is_explicit") val stateIsExplicit: Boolean,
     @ColumnInfo(name = "cached_at") val cachedAt: String,
+    /** The item's flags of the user's own: a sorted JSON list of palette slots ([RssStoredFlags]). */
+    @ColumnInfo(defaultValue = RssStoredFlags.NONE) val flags: String = RssStoredFlags.NONE,
 )
 
 /** The search index over [RssItemRow]; Room keeps it current with triggers. */
@@ -132,6 +137,8 @@ data class RssPendingRow(
     @ColumnInfo(name = "subscription_id") val subscriptionId: String,
     val value: Boolean,
     @ColumnInfo(name = "created_at") val createdAt: String,
+    /** The palette slot of a `flag` row, whose [value] is add or remove; empty for every other kind. */
+    @ColumnInfo(defaultValue = "") val slot: String = "",
 )
 
 /** One listed item: the row's columns plus the computed read state and its subscription. */
@@ -152,6 +159,7 @@ data class RssItemView(
     @ColumnInfo(name = "effective_read") val effectiveRead: Boolean,
     @ColumnInfo(name = "is_favorite") val isFavorite: Boolean,
     @ColumnInfo(name = "state_is_explicit") val stateIsExplicit: Boolean,
+    val flags: String,
     @ColumnInfo(name = "subscription_id") val subscriptionId: String,
 )
 
@@ -263,6 +271,19 @@ interface RssDao {
         watermark: String,
     )
 
+    @Query("SELECT flags FROM rss_items WHERE feed_id = :feedId AND sort_key = :sortKey")
+    suspend fun itemFlags(
+        feedId: String,
+        sortKey: String,
+    ): String?
+
+    @Query("UPDATE rss_items SET flags = :flags WHERE feed_id = :feedId AND sort_key = :sortKey")
+    suspend fun setFlags(
+        feedId: String,
+        sortKey: String,
+        flags: String,
+    )
+
     @Query("DELETE FROM rss_items WHERE feed_id = :feedId")
     suspend fun deleteItems(feedId: String)
 
@@ -295,11 +316,20 @@ interface RssDao {
     @Query("SELECT feed_id || '#' || sort_key FROM rss_pending WHERE kind IN ('read', 'favorite')")
     suspend fun shieldedItemKeys(): List<String>
 
-    @Query("DELETE FROM rss_pending WHERE kind = :kind AND feed_id = :feedId AND sort_key = :sortKey")
+    @Query("SELECT * FROM rss_pending WHERE kind = 'flag' ORDER BY id")
+    suspend fun pendingFlags(): List<RssPendingRow>
+
+    @Query("SELECT * FROM rss_pending WHERE id IN (:ids) ORDER BY id")
+    suspend fun pendingByIds(ids: List<Long>): List<RssPendingRow>
+
+    @Query(
+        "DELETE FROM rss_pending WHERE kind = :kind AND feed_id = :feedId AND sort_key = :sortKey AND slot = :slot",
+    )
     suspend fun deletePendingOfKind(
         kind: String,
         feedId: String,
         sortKey: String,
+        slot: String,
     )
 
     @Query("DELETE FROM rss_pending WHERE id IN (:ids)")
@@ -359,7 +389,7 @@ interface RssDao {
         const val ITEM_COLUMNS =
             "i.feed_id, i.sort_key, i.item_id, i.guid, i.title, i.author, i.url, i.published_at, " +
                 "i.updated_at, i.fetched_at, i.fetched_key, i.summary_html, i.content_html, " +
-                "($READ_EXPRESSION) AS effective_read, i.is_favorite, i.state_is_explicit, " +
+                "($READ_EXPRESSION) AS effective_read, i.is_favorite, i.state_is_explicit, i.flags, " +
                 "COALESCE((SELECT s.subscription_id FROM rss_subscriptions s " +
                 "WHERE s.feed_id = i.feed_id LIMIT 1), '') AS subscription_id"
     }
@@ -374,20 +404,67 @@ interface RssDao {
         RssFeedSyncRow::class,
         RssPendingRow::class,
     ],
-    version = 1,
+    version = RssDatabase.VERSION,
     exportSchema = true,
 )
 abstract class RssDatabase : RoomDatabase() {
     abstract fun dao(): RssDao
 
     companion object {
+        /**
+         * The schema's version. Raising it needs a step in
+         * [RssMigrations.STEPS] and the schema Room exports for it under
+         * `android/kit/schemas`; `RssMigrationTest` holds both.
+         */
+        const val VERSION = 2
+
         fun open(context: Context): RssDatabase =
             Room
                 .databaseBuilder(context, RssDatabase::class.java, "rss_cache.db")
-                // A cache rebuilds itself from the server; never block an upgrade on it.
+                // The queue of unsent marks lives here, so an upgrade
+                // migrates rather than rebuilds.
+                .addMigrations(*RssMigrations.all().toTypedArray())
+                // What no migration covers: a file from a newer build than
+                // this one (an older build installed over it). The cache
+                // rebuilds itself from the server, and the unsent marks in
+                // that file are lost.
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
     }
+}
+
+/**
+ * The feed database's upgrade steps, as the SQL each runs. Kept as plain
+ * strings, apart from Room's [Migration], so the kit's JVM tests can run
+ * them against a real SQLite file built from the exported schemas.
+ */
+object RssMigrations {
+    /**
+     * Version 2: flags of the user's own on feed items. `rss_items.flags`
+     * is the item's slots and `rss_pending.slot` names the slot of a queued
+     * flag change. Every feed's state cursor is emptied too, so the first
+     * sync after the upgrade pulls every state row again: the older build
+     * read those rows without their flags and stepped its cursor past
+     * them, and the state sync only delivers rows changed since the
+     * cursor, so a flag another device set before this one was upgraded
+     * would otherwise never arrive.
+     */
+    val V1_TO_V2 =
+        listOf(
+            "ALTER TABLE rss_items ADD COLUMN flags TEXT NOT NULL DEFAULT '[]'",
+            "ALTER TABLE rss_pending ADD COLUMN slot TEXT NOT NULL DEFAULT ''",
+            "UPDATE rss_feed_sync SET state_cursor = ''",
+        )
+
+    /** Each step's SQL by the version it starts from; step `n` ends at `n + 1`. */
+    val STEPS: Map<Int, List<String>> = mapOf(1 to V1_TO_V2)
+
+    fun all(): List<Migration> =
+        STEPS.map { (from, statements) ->
+            object : Migration(from, from + 1) {
+                override fun migrate(db: SupportSQLiteDatabase) = statements.forEach(db::execSQL)
+            }
+        }
 }
 
 class RoomRssStore(
@@ -511,6 +588,7 @@ class RoomRssStore(
         database.withTransaction {
             val now = clock()
             val shielded = dao.shieldedItemKeys().toSet()
+            val queuedFlags = queuedFlags()
             for (item in items) {
                 val existing = dao.itemRow(item.feedId, item.sortKey)
                 val keepLocalState = existing != null && item.id in shielded
@@ -535,6 +613,10 @@ class RoomRssStore(
                         isFavorite = if (keepLocalState) existing.isFavorite else item.isFavorite,
                         stateIsExplicit = if (keepLocalState) existing.stateIsExplicit else item.isReadExplicit,
                         cachedAt = now,
+                        flags =
+                            RssStoredFlags.encode(
+                                RssStoredFlags.overlaying(queuedFlags[item.id].orEmpty(), item.flags),
+                            ),
                     ),
                 )
             }
@@ -616,6 +698,31 @@ class RoomRssStore(
         enqueue(PendingKind.FAVORITE, feedId, sortKey, isFavorite)
     }
 
+    override suspend fun setFlag(
+        feedId: String,
+        sortKey: String,
+        slot: String,
+        isSet: Boolean,
+    ) = database.withTransaction {
+        writeFlag(feedId, sortKey, slot, isSet)
+        enqueue(PendingKind.FLAG, feedId, sortKey, isSet, slot)
+    }
+
+    /** Sets or clears one slot on an item this device has; opens no transaction of its own. */
+    private suspend fun writeFlag(
+        feedId: String,
+        sortKey: String,
+        slot: String,
+        isSet: Boolean,
+    ) {
+        val flags = RssStoredFlags.decode(dao.itemFlags(feedId, sortKey) ?: return)
+        dao.setFlags(feedId, sortKey, RssStoredFlags.encode(if (isSet) flags + slot else flags - slot))
+    }
+
+    /** Every queued flag change, by item and then slot ([RssStoredFlags.queued]). */
+    private suspend fun queuedFlags(): Map<String, Map<String, Boolean>> =
+        RssStoredFlags.queued(dao.pendingFlags().mapNotNull { it.toMutation() })
+
     override suspend fun markAllRead(
         subscriptionId: String,
         watermark: String?,
@@ -640,14 +747,23 @@ class RoomRssStore(
     override suspend fun applyServerStates(states: List<RssItemState>) {
         if (states.isEmpty()) return
         database.withTransaction {
+            val queuedFlags = queuedFlags()
             for (state in states) {
-                if (dao.itemRow(state.feedId, state.sortKey) == null) continue
+                val stored = dao.itemFlags(state.feedId, state.sortKey) ?: continue
                 if (dao.pendingCount(PendingKind.READ.wire, state.feedId, state.sortKey) == 0) {
                     dao.applyReadState(state.feedId, state.sortKey, state.isRead, state.isReadExplicit)
                 }
                 if (dao.pendingCount(PendingKind.FAVORITE.wire, state.feedId, state.sortKey) == 0) {
                     dao.setFavorite(state.feedId, state.sortKey, state.isFavorite)
                 }
+                val flags =
+                    RssStoredFlags.encode(
+                        RssStoredFlags.overlaying(
+                            queuedFlags["${state.feedId}#${state.sortKey}"].orEmpty(),
+                            state.flags,
+                        ),
+                    )
+                if (flags != stored) dao.setFlags(state.feedId, state.sortKey, flags)
             }
         }
     }
@@ -657,11 +773,11 @@ class RoomRssStore(
         watermark: String,
     ) = dao.advanceWatermark(subscriptionId, watermark)
 
-    override suspend fun pendingMutations(): List<PendingMutation> =
-        dao.pending().mapNotNull { row ->
-            PendingKind.fromWire(row.kind)?.let {
-                PendingMutation(row.id, it, row.feedId, row.sortKey, row.subscriptionId, row.value)
-            }
+    override suspend fun pendingMutations(): List<PendingMutation> = dao.pending().mapNotNull { it.toMutation() }
+
+    private fun RssPendingRow.toMutation(): PendingMutation? =
+        PendingKind.fromWire(kind)?.let {
+            PendingMutation(id, it, feedId, sortKey, subscriptionId, value, slot)
         }
 
     override suspend fun pendingCount(): Int = dao.pendingCount()
@@ -675,15 +791,27 @@ class RoomRssStore(
         if (ids.isNotEmpty()) dao.deletePending(ids)
     }
 
+    override suspend fun dropRefusedFlagAdds(ids: List<Long>): Int {
+        if (ids.isEmpty()) return 0
+        return database.withTransaction {
+            val refused = dao.pendingByIds(ids).filter { it.kind == PendingKind.FLAG.wire && it.value }
+            refused.forEach { writeFlag(it.feedId, it.sortKey, it.slot, isSet = false) }
+            dao.deletePending(refused.map { it.id })
+            refused.size
+        }
+    }
+
     private suspend fun enqueue(
         kind: PendingKind,
         feedId: String,
         sortKey: String,
         value: Boolean,
+        slot: String = "",
     ) {
-        // The latest intent for an item wins; drop earlier queued flips of
-        // the same kind so a drain never replays a superseded state.
-        dao.deletePendingOfKind(kind.wire, feedId, sortKey)
+        // The latest intent for an item wins (for an item and slot, when
+        // the change is to one flag); drop earlier queued flips of the same
+        // kind so a drain never replays a superseded state.
+        dao.deletePendingOfKind(kind.wire, feedId, sortKey, slot)
         dao.insertPending(
             RssPendingRow(
                 kind = kind.wire,
@@ -692,6 +820,7 @@ class RoomRssStore(
                 subscriptionId = "",
                 value = value,
                 createdAt = clock(),
+                slot = slot,
             ),
         )
     }
@@ -820,5 +949,6 @@ class RoomRssStore(
             isRead = effectiveRead,
             isReadExplicit = stateIsExplicit,
             isFavorite = isFavorite,
+            flags = RssStoredFlags.decode(flags),
         )
 }

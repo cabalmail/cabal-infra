@@ -29,8 +29,8 @@ import com.cabalmail.kit.models.RssUnsubscribeResult
  * `/rss_list_items` has three forms, kept as three methods: [listItems]
  * (a merged listing with an opaque page cursor), [syncItems] (items
  * ingested since a `fetched_key`, oldest-ingested first) and
- * [syncItemStates] (the caller's read/favorite rows changed since an
- * opaque state cursor). A client cache needs the last two together: ingest
+ * [syncItemStates] (the caller's state rows, with an item's read and
+ * favorite marks and its flags, changed since an opaque state cursor). A client cache needs the last two together: ingest
  * time does not move when state does, so the item sync alone never
  * re-delivers a mark made on another device.
  */
@@ -87,7 +87,11 @@ interface RssClient {
         sortKey: String,
     ): RssItem
 
-    /** At most 100 changes per call; returns the server's `updated` count. */
+    /**
+     * At most 100 changes per call; returns the server's `updated` count.
+     * Throws [RssFlagRefusal] when the server refuses the call for a flag
+     * it adds; the call has then changed nothing.
+     */
     suspend fun setItemState(changes: List<RssItemStateChange>): Int
 
     suspend fun markAllRead(scope: RssItemScope): RssMarkAllReadResult
