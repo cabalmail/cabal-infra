@@ -468,6 +468,10 @@ class ApiClient(
         if (filters.hasAttachment) {
             query["has_attachment"] = "1"
         }
+        filters.keyword?.let { query["keyword"] = it }
+        if (filters.anyFlag) {
+            query["any_flag"] = "1"
+        }
         limit?.let { query["limit"] = it.toString() }
         cursor?.let { query["cursor"] = it }
         return decode(call(HttpMethod.Get, "search_envelopes", query = query))

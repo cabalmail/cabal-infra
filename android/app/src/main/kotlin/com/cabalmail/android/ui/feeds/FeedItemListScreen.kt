@@ -72,6 +72,8 @@ import com.cabalmail.android.ui.mail.ForegroundPolling
 import com.cabalmail.android.ui.theme.ColorTokens
 import com.cabalmail.android.ui.theme.FlagDot
 import com.cabalmail.android.ui.theme.FlagDotMark
+import com.cabalmail.android.ui.theme.FlagFilterChoice
+import com.cabalmail.android.ui.theme.FlagFilterPill
 import com.cabalmail.android.ui.theme.FlagMenu
 import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.ui.theme.LocalFlagPalette
@@ -191,16 +193,32 @@ fun FeedItemListScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                // The Flagged pill filters on the built-in flag, under the
-                // name it has in Settings > Flags (RssItemFilter.label).
-                RssItemFilter.PILLS.forEach { filter ->
-                    FilterChip(
-                        selected = state.filter == filter,
-                        onClick = { viewModel.setFilter(state.filter.toggling(filter)) },
-                        label = { Text(filter.label()) },
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                }
+                FilterChip(
+                    selected = state.unreadLit,
+                    onClick = { viewModel.setFilter(FeedFlagWords.unreadTap(state.filter, state.flagPick)) },
+                    label = { Text(RssItemFilter.UNREAD.label()) },
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
+                // The Flagged pill is the built-in flag's remembered
+                // filter, under the name that flag has in Settings > Flags.
+                // Once the list holds a flag of the user's own it opens a
+                // menu instead: every flag, Any flag and Clear filter
+                // (FlagFilterMenu). A feed pill draws no count.
+                FlagFilterPill(
+                    palette = LocalFlagPalette.current,
+                    builtInLit = state.builtInFlagLit,
+                    pick = state.flagPick,
+                    count = null,
+                    onToggleBuiltIn = { viewModel.setFilter(state.filter.toggling(RssItemFilter.FAVORITE)) },
+                    onChoose = { choice ->
+                        when (choice) {
+                            FlagFilterChoice.BuiltIn -> viewModel.setFilter(RssItemFilter.FAVORITE)
+                            is FlagFilterChoice.Pick -> viewModel.pickFlag(choice.criterion)
+                        }
+                    },
+                    onClear = { viewModel.setFilter(RssItemFilter.ALL) },
+                    modifier = Modifier.padding(horizontal = 4.dp),
+                )
             }
             if (state.canSearch) {
                 OutlinedTextField(
@@ -445,17 +463,21 @@ private fun EmptyState(state: FeedItemListUiState) {
         when {
             state.searchQuery.isNotBlank() ->
                 stringResource(R.string.feed_empty_search_title) to stringResource(R.string.feed_empty_search_body)
-            state.filter == RssItemFilter.UNREAD ->
+            state.unreadLit ->
                 stringResource(R.string.feed_empty_unread_title) to stringResource(R.string.feed_empty_unread_body)
-            state.filter == RssItemFilter.FAVORITE -> {
+            state.builtInFlagLit || state.flagPick != null -> {
+                // The words name the flag the pill is lit for, and offer
+                // the swipe only while the swipe sets that flag.
+                val palette = LocalFlagPalette.current
                 val bindings = LocalSwipeBindings.current
                 val offersSwipe =
                     FeedFlagWords.flaggedPillOffersSwipe(
-                        palette = LocalFlagPalette.current,
+                        palette = palette,
                         leading = bindings.feedLeading,
                         trailing = bindings.feedTrailing,
+                        pick = state.flagPick,
                     )
-                stringResource(R.string.feed_empty_favorite_title) to
+                FeedFlagWords.emptyTitle(palette, state.flagPick).text() to
                     stringResource(
                         if (offersSwipe) R.string.feed_empty_favorite_body else R.string.feed_empty_favorite_body_menu,
                     )

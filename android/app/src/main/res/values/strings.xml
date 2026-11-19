@@ -43,6 +43,10 @@
     <string name="filter_all">All</string>
     <string name="filter_unread">Unread</string>
     <string name="filter_no_matches">No matching messages</string>
+    <string name="filter_no_matches_flag">No messages marked %1$s</string>
+    <string name="filter_no_matches_any_flag">No flagged messages</string>
+    <string name="flag_filter_any">Any flag</string>
+    <string name="flag_filter_clear">Clear filter</string>
     <string name="unread">Unread</string>
     <string name="mark_read">Mark read</string>
     <string name="mark_unread">Mark unread</string>
@@ -293,6 +297,7 @@
     <string name="feed_empty_favorite_title">No flagged items</string>
     <string name="feed_empty_favorite_body">Swipe an item or use its menu to flag it.</string>
     <string name="feed_empty_favorite_body_menu">Touch and hold an item to flag it.</string>
+    <string name="feed_empty_flag_title">No items marked %1$s</string>
     <string name="feed_open_on">Open on %1$s</string>
     <string name="feed_open_on_web">Open on the web</string>
     <string name="feed_open_article">Open article</string>

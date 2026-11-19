@@ -12,6 +12,8 @@ import com.cabalmail.kit.models.Envelope
 import com.cabalmail.kit.models.SearchFilters
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.DefaultSort
+import com.cabalmail.kit.settings.FlagCriterion
+import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.MailFolderFilter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -93,7 +95,14 @@ data class MessageListUiState(
     val sortField: MessageSortField = MessageSortField.DATE_RECEIVED,
     val sortDescending: Boolean = true,
     val filter: MessageFilter = MessageFilter.ALL,
-    /** Server matches for the active filter pill, newest-first. */
+    /**
+     * A flag picked from the Flagged pill's menu, for this visit: a flag
+     * of the user's own, or any flag. It takes the list over while it is
+     * in force and stores nothing, so [filter] stays the pill the folder
+     * remembers and the list goes back to it when the pick ends.
+     */
+    val flagPick: FlagCriterion? = null,
+    /** Server matches for the active filter pill or pick, newest-first. */
     val filterMatches: List<Envelope> = emptyList(),
     /** Opaque next-page cursor for the pill's search; null = no further pages. */
     val filterCursor: String? = null,
@@ -116,13 +125,45 @@ data class MessageListUiState(
      */
     val filteredRows: List<Envelope>
         get() =
-            when (filter) {
-                MessageFilter.ALL ->
+            when {
+                flagPick != null -> filterMatches.filter { flagPick.matches(it.flags) }
+                filter == MessageFilter.ALL ->
                     envelopes.entries
                         .sortedBy { it.key }
                         .map { it.value }
-                MessageFilter.UNREAD -> filterMatches.filter { !it.isSeen }
-                MessageFilter.FLAGGED -> filterMatches.filter { it.isFlagged }
+                filter == MessageFilter.UNREAD -> filterMatches.filter { !it.isSeen }
+                else -> filterMatches.filter { it.isFlagged }
+            }
+
+    /** Whether the list is the folder as it is: no pill lit and no pick, so no search behind it. */
+    val showsAll: Boolean
+        get() = filter == MessageFilter.ALL && flagPick == null
+
+    /** Whether the Unread pill is lit. A pick takes the list over, so it is not while one is in force. */
+    val unreadLit: Boolean
+        get() = filter == MessageFilter.UNREAD && flagPick == null
+
+    /** Whether the remembered Flagged filter is what the list shows: the built-in flag, and no pick. */
+    val builtInFlagLit: Boolean
+        get() = filter == MessageFilter.FLAGGED && flagPick == null
+
+    /**
+     * The criteria of the search behind a lit pill or a pick. A flag of
+     * the user's own goes as `keyword` alone and Any flag as `any_flag`
+     * alone, never beside the remembered pill's own criterion.
+     */
+    val pillSearch: SearchFilters
+        get() =
+            when (flagPick) {
+                null ->
+                    SearchFilters(unread = filter == MessageFilter.UNREAD, flagged = filter == MessageFilter.FLAGGED)
+                FlagCriterion.AnyFlag -> SearchFilters(anyFlag = true)
+                is FlagCriterion.Slot ->
+                    if (flagPick.slot == FlagPalette.SYSTEM_SLOT) {
+                        SearchFilters(flagged = true)
+                    } else {
+                        SearchFilters(keyword = flagPick.slot)
+                    }
             }
 }
 
@@ -315,7 +356,7 @@ class MessageListViewModel(
                     )
                 }
                 ensureBand(0)
-                if (mutableState.value.filter != MessageFilter.ALL) {
+                if (!mutableState.value.showsAll) {
                     fetchFilterPage(reset = true)
                 }
             } catch (exception: Exception) {
@@ -380,14 +421,24 @@ class MessageListViewModel(
         ensureBand(0)
     }
 
-    /** A pill tap: applies, and makes it the pill this folder's list opens on. */
+    /**
+     * A pill tap, or the menu's built-in flag or Clear filter: applies,
+     * ends any pick, and makes it the pill this folder's list opens on.
+     */
     fun setFilter(filter: MessageFilter) {
-        if (mutableState.value.filter == filter) {
+        val current = mutableState.value
+        if (current.filter == filter && current.flagPick == null) {
             return
         }
         filterJob?.cancel()
         mutableState.update {
-            it.copy(filter = filter, filterMatches = emptyList(), filterCursor = null, filterLoading = false)
+            it.copy(
+                filter = filter,
+                flagPick = null,
+                filterMatches = emptyList(),
+                filterCursor = null,
+                filterLoading = false,
+            )
         }
         if (filter != MessageFilter.ALL) {
             fetchFilterPage(reset = true)
@@ -401,6 +452,20 @@ class MessageListViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * A flag of the user's own, or Any flag, picked from the Flagged
+     * pill's menu: a search of this folder for it, for the visit. Nothing
+     * is stored, so the folder opens next time on the pill it remembers.
+     * Picked again, it runs again, which is how a failed search is retried.
+     */
+    fun pickFlag(pick: FlagCriterion) {
+        filterJob?.cancel()
+        mutableState.update {
+            it.copy(flagPick = pick, filterMatches = emptyList(), filterCursor = null, filterLoading = false)
+        }
+        fetchFilterPage(reset = true)
     }
 
     // ------------------------------------------------------------ windowing
@@ -423,7 +488,7 @@ class MessageListViewModel(
      */
     fun loadMoreForFilter() {
         val current = mutableState.value
-        if (current.filter == MessageFilter.ALL || current.filterLoading || current.filterCursor == null) {
+        if (current.showsAll || current.filterLoading || current.filterCursor == null) {
             return
         }
         fetchFilterPage(reset = false)
@@ -444,11 +509,7 @@ class MessageListViewModel(
                     val current = mutableState.value
                     val result =
                         container.requireApi().searchEnvelopes(
-                            filters =
-                                SearchFilters(
-                                    unread = current.filter == MessageFilter.UNREAD,
-                                    flagged = current.filter == MessageFilter.FLAGGED,
-                                ),
+                            filters = current.pillSearch,
                             folder = folder,
                             limit = BAND_SIZE,
                             cursor = if (reset) null else current.filterCursor,

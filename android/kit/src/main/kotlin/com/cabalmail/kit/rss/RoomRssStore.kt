@@ -634,6 +634,11 @@ class RoomRssStore(
             RssItemFilter.UNREAD -> clauses += "NOT (${RssDao.READ_EXPRESSION})"
             RssItemFilter.FAVORITE -> clauses += "i.is_favorite = 1"
         }
+        query.flag?.let { flag ->
+            val clause = RssFlagQuery.clause(flag) ?: return emptyList()
+            clauses += clause.sql
+            binds.addAll(clause.binds)
+        }
         binds.add(query.limit)
         binds.add(query.offset)
         val sql =

@@ -169,6 +169,14 @@ data class SearchFilters(
     val unread: Boolean = false,
     val flagged: Boolean = false,
     val hasAttachment: Boolean = false,
+    /**
+     * One flag of the user's own, by its palette slot (`cabal-flag-01` ...
+     * `cabal-flag-20`); the server refuses anything else. The built-in
+     * flag is [flagged].
+     */
+    val keyword: String? = null,
+    /** The built-in flag or any of the twenty slots. */
+    val anyFlag: Boolean = false,
 )
 
 /**
