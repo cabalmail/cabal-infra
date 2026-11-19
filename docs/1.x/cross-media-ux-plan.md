@@ -9,7 +9,7 @@ instead of reconstructing it from the git log.
 | Phase | Status |
 | --- | --- |
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
-| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android (2026-11-18): the first of its two PRs, flags on feed items, merged as #2498; the second, the per-flag filter, is in review as #2502 (`android-parity.md`, leg L2) |
+| 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android (2026-11-18): the first of its two PRs, flags on feed items, merged as #2498; the second, the per-flag filter, merged as #2502; neither is in a release yet (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Started (2026-11-18): the storage decision is answered (`feedRules` beside `rules`). Terraform merged as #2497 (2026-11-19); server in review as #2501; Apple and Android not started |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
@@ -470,9 +470,9 @@ and retargets the toggle gestures to the default flag. Server first,
 then the Kit, then the clients.
 
 **Status:** Server in prod (2026-11-11); Apple merged (2026-11-12),
-the per-flag filter in prod with 1.53.0 (2026-11-13); Android's
-first PR merged (2026-11-18, #2498) and its second is in review
-(#2502). The unified flags plan
+the per-flag filter in prod with 1.53.0 (2026-11-13); Android
+merged (2026-11-18, #2498 and #2502), not yet in a release. The
+unified flags plan
 shipped on Apple in 1.47.0 and on Android in 1.48.0. The two server PRs
 are merged: #2399 (items 1, 2 and 4 of 2a, with their tests) and #2400
 (item 3, with its tests). Both passed their checks against the stage
@@ -499,7 +499,7 @@ against the stage API, and in prod the same day with 1.52.0, the
 release that also carried #2420.
 Android is leg L2 of `android-parity.md` (2026-11-18): its first PR,
 flags on feed items, merged as #2498, and its second, the per-flag
-filter on both lists, is in review as #2502.
+filter on both lists, as #2502. Neither is in a release yet.
 `flags-and-cross-media.md` has the gates, the answers that settled the
 open points below (its decisions 4 and 11), and what was built.
 
