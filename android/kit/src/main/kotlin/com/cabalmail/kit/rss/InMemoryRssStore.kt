@@ -173,7 +173,8 @@ class InMemoryRssStore(
                         RssItemFilter.UNREAD -> !projected.isRead
                         RssItemFilter.FAVORITE -> projected.isFavorite
                     }
-                }.sortedWith(RssRules.comparator(query.ordering))
+                }.filter { projected -> RssFlagQuery.matches(query.flag, projected) }
+                .sortedWith(RssRules.comparator(query.ordering))
                 .drop(query.offset)
                 .take(query.limit)
                 .toList()

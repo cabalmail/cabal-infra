@@ -71,11 +71,16 @@ import com.cabalmail.android.R
 import com.cabalmail.android.Shortcut
 import com.cabalmail.android.ui.settings.SortDirection
 import com.cabalmail.android.ui.settings.labelRes
+import com.cabalmail.android.ui.theme.FlagFilterChoice
+import com.cabalmail.android.ui.theme.FlagFilterMenu
+import com.cabalmail.android.ui.theme.FlagFilterPill
 import com.cabalmail.android.ui.theme.FlagMenu
 import com.cabalmail.android.ui.theme.FlagToggle
 import com.cabalmail.android.ui.theme.LocalFlagPalette
+import com.cabalmail.android.ui.theme.UiLabel
 import com.cabalmail.android.ui.theme.text
 import com.cabalmail.kit.models.Envelope
+import com.cabalmail.kit.settings.FlagCriterion
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -120,15 +125,15 @@ fun MessageListScreen(
     // Keyboard row cursor (plan §7.2): j/k (or the arrows) move it, Enter
     // opens it, and Ctrl+Shift+U / Ctrl+Shift+L act on it. Plain letters
     // only reach here while the list holds focus, so text fields keep theirs.
-    var cursor by remember(state.filter) { mutableStateOf<Int?>(null) }
-    val rowCount = if (state.filter == MessageFilter.ALL) state.total ?: 0 else state.filteredRows.size
+    var cursor by remember(state.filter, state.flagPick) { mutableStateOf<Int?>(null) }
+    val rowCount = if (state.showsAll) state.total ?: 0 else state.filteredRows.size
 
     // Reads the view model's live state so the shortcut collector (a
     // long-lived coroutine) never acts on the parameter it captured.
     fun envelopeAt(index: Int?): Envelope? =
         index?.let {
             val live = viewModel.state.value
-            if (live.filter == MessageFilter.ALL) live.envelopes[it] else live.filteredRows.getOrNull(it)
+            if (live.showsAll) live.envelopes[it] else live.filteredRows.getOrNull(it)
         }
     val scope = rememberCoroutineScope()
 
@@ -162,7 +167,7 @@ fun MessageListScreen(
             }
         }
     }
-    LaunchedEffect(listState, state.filter) {
+    LaunchedEffect(listState, state.filter, state.flagPick) {
         snapshotFlow {
             val info = listState.layoutInfo
             info.visibleItemsInfo.firstOrNull()?.index to
@@ -173,7 +178,7 @@ fun MessageListScreen(
                 // the composition it launched in, and the load-more compare
                 // must see the rows earlier pages already appended.
                 val live = viewModel.state.value
-                if (live.filter == MessageFilter.ALL) {
+                if (live.showsAll) {
                     if (first != null) {
                         viewModel.onVisibleRange(first, last)
                     }
@@ -265,7 +270,7 @@ fun MessageListScreen(
         },
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
-            FilterPills(state = state, onFilter = viewModel::setFilter)
+            FilterPills(state = state, onFilter = viewModel::setFilter, onPickFlag = viewModel::pickFlag)
             PullToRefreshBox(
                 isRefreshing = state.refreshing,
                 onRefresh = viewModel::refresh,
@@ -282,7 +287,7 @@ fun MessageListScreen(
                             )
                         }
                     }
-                    if (state.filter == MessageFilter.ALL) {
+                    if (state.showsAll) {
                         // Loaded rows are keyed by UID so per-row state (the
                         // swipe offset especially) travels with the message:
                         // an optimistic removal shifts the window down while
@@ -356,8 +361,10 @@ fun MessageListScreen(
                             }
                         } else if (state.filteredRows.isEmpty() && state.filterCursor == null) {
                             item(key = "filter-empty") {
+                                // A pick that finds nothing says which
+                                // flag it looked for.
                                 Text(
-                                    text = stringResource(R.string.filter_no_matches),
+                                    text = pillEmptyWords(state.flagPick, palette).text(),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.padding(16.dp),
@@ -651,36 +658,66 @@ private fun MessageSortField.labelRes(): Int =
 
 // --------------------------------------------------------------- filter row
 
+/**
+ * What an emptied pill list says: the flag a pick looked for, by name, or
+ * that nothing is flagged at all; under a remembered pill, the words it
+ * always had.
+ */
+internal fun pillEmptyWords(
+    pick: FlagCriterion?,
+    palette: List<FlagPaletteEntry>,
+): UiLabel =
+    when (pick) {
+        null -> UiLabel.Fixed(R.string.filter_no_matches)
+        FlagCriterion.AnyFlag -> UiLabel.Fixed(R.string.filter_no_matches_any_flag)
+        is FlagCriterion.Slot -> UiLabel.Formatted(R.string.filter_no_matches_flag, FlagFilterMenu.name(palette, pick))
+    }
+
+/**
+ * The pill a tap on Unread leaves. With no pick it is the toggle it always
+ * was. Over a pick it ends the pick and shows Unread, whatever the folder
+ * remembered: the pick had the list, so the tap is a choice of Unread.
+ */
+internal fun unreadTap(
+    filter: MessageFilter,
+    pick: FlagCriterion?,
+): MessageFilter = if (pick != null) MessageFilter.UNREAD else filter.toggling(MessageFilter.UNREAD)
+
 @Composable
 private fun FilterPills(
     state: MessageListUiState,
     onFilter: (MessageFilter) -> Unit,
+    onPickFlag: (FlagCriterion) -> Unit,
 ) {
-    // The Flagged pill filters on the built-in flag, the one flag the
-    // server can filter on, so it carries that flag's name from Settings >
-    // Flags.
     val palette = LocalFlagPalette.current
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-        MessageFilter.PILLS.forEach { filter ->
-            val count =
-                when (filter) {
-                    MessageFilter.ALL -> state.counts?.all
-                    MessageFilter.UNREAD -> state.counts?.unseen
-                    MessageFilter.FLAGGED -> state.counts?.flagged
+        val unread = stringResource(R.string.filter_unread)
+        FilterChip(
+            selected = state.unreadLit,
+            onClick = { onFilter(unreadTap(state.filter, state.flagPick)) },
+            label = { Text(state.counts?.unseen?.let { "$unread $it" } ?: unread) },
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        // The Flagged pill is the built-in flag's remembered filter, under
+        // the name that flag has in Settings > Flags. Once the list holds a
+        // flag of the user's own it opens a menu instead: every flag, Any
+        // flag and Clear filter (FlagFilterMenu). The count is the folder's
+        // count of the built-in flag, so a pick draws none.
+        FlagFilterPill(
+            palette = palette,
+            builtInLit = state.builtInFlagLit,
+            pick = state.flagPick,
+            count = state.counts?.flagged,
+            onToggleBuiltIn = { onFilter(state.filter.toggling(MessageFilter.FLAGGED)) },
+            onChoose = { choice ->
+                when (choice) {
+                    FlagFilterChoice.BuiltIn -> onFilter(MessageFilter.FLAGGED)
+                    is FlagFilterChoice.Pick -> onPickFlag(choice.criterion)
                 }
-            val label =
-                when (filter) {
-                    MessageFilter.ALL -> stringResource(R.string.filter_all)
-                    MessageFilter.UNREAD -> stringResource(R.string.filter_unread)
-                    MessageFilter.FLAGGED -> FlagToggle.systemFlagName(palette)
-                }
-            FilterChip(
-                selected = state.filter == filter,
-                onClick = { onFilter(state.filter.toggling(filter)) },
-                label = { Text(if (count != null) "$label $count" else label) },
-                modifier = Modifier.padding(horizontal = 4.dp),
-            )
-        }
+            },
+            onClear = { onFilter(MessageFilter.ALL) },
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
     }
 }
 

@@ -1,17 +1,11 @@
 package com.cabalmail.kit.rss
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.io.File
 import java.sql.Connection
-import java.sql.DriverManager
 
 /**
  * The feed database's upgrade steps ([RssMigrations]) on real SQLite,
@@ -30,55 +24,11 @@ import java.sql.DriverManager
  * emulator covers the first.
  */
 class RssMigrationTest {
-    private val directory = File("schemas/com.cabalmail.kit.rss.RssDatabase")
+    private fun exportedVersions(): List<Int> = ExportedSchema.versions()
 
-    private fun exportedVersions(): List<Int> =
-        directory
-            .listFiles { file -> file.extension == "json" }
-            .orEmpty()
-            .map { it.nameWithoutExtension.toInt() }
-            .sorted()
+    private fun exported(version: Int) = ExportedSchema.database(version)
 
-    private fun exported(version: Int): JsonObject =
-        Json
-            .parseToJsonElement(File(directory, "$version.json").readText())
-            .jsonObject
-            .getValue("database")
-            .jsonObject
-
-    private fun memory(): Connection = DriverManager.getConnection("jdbc:sqlite::memory:")
-
-    private fun Connection.run(sql: String) = createStatement().use { it.execute(sql) }
-
-    private fun Connection.rows(sql: String): List<List<String?>> =
-        createStatement().use { statement ->
-            statement.executeQuery(sql).use { result ->
-                val columns = result.metaData.columnCount
-                buildList {
-                    while (result.next()) add((1..columns).map { result.getString(it) })
-                }
-            }
-        }
-
-    /** A database as Room creates it at [version]: every table, index and trigger of the exported schema. */
-    private fun created(version: Int): Connection =
-        memory().also { connection ->
-            val database = exported(version)
-            for (entity in database.getValue("entities").jsonArray.map { it.jsonObject }) {
-                val table = entity.getValue("tableName").jsonPrimitive.content
-
-                fun statement(sql: String) = connection.run(sql.replace("\${TABLE_NAME}", table))
-                statement(entity.getValue("createSql").jsonPrimitive.content)
-                entity["indices"]?.jsonArray?.forEach {
-                    statement(
-                        it.jsonObject
-                            .getValue("createSql")
-                            .jsonPrimitive.content,
-                    )
-                }
-                entity["contentSyncTriggers"]?.jsonArray?.forEach { statement(it.jsonPrimitive.content) }
-            }
-        }
+    private fun created(version: Int): Connection = ExportedSchema.created(version)
 
     /**
      * What Room compares when it checks a file: every table's columns

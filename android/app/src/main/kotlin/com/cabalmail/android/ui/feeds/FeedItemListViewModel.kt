@@ -18,6 +18,7 @@ import com.cabalmail.kit.rss.ItemQuery
 import com.cabalmail.kit.rss.RssStore
 import com.cabalmail.kit.rss.RssSyncEngine
 import com.cabalmail.kit.settings.AppPreferences
+import com.cabalmail.kit.settings.FlagCriterion
 import com.cabalmail.kit.settings.MarkAsRead
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +33,13 @@ data class FeedItemListUiState(
     val folder: RssFolder? = null,
     val items: List<RssItem> = emptyList(),
     val filter: RssItemFilter = RssItemFilter.DEFAULT_FOR_FEEDS,
+    /**
+     * A flag picked from the Flagged pill's menu, for this visit: a flag
+     * of the user's own, or any flag. It takes the list over while it is
+     * in force and stores nothing, so [filter] stays the pill the feed
+     * remembers and the list goes back to it when the pick ends.
+     */
+    val flagPick: FlagCriterion? = null,
     val ordering: RssOrderingMode = RssOrderingMode.NEWEST_FIRST,
     val searchQuery: String = "",
     val syncing: Boolean = false,
@@ -55,6 +63,27 @@ data class FeedItemListUiState(
     val listEpoch: Int = 0,
 ) {
     val canSearch: Boolean get() = subscription != null
+
+    /** Whether the Unread pill is lit. A pick takes the list over, so it is not while one is in force. */
+    val unreadLit: Boolean get() = filter == RssItemFilter.UNREAD && flagPick == null
+
+    /** Whether the remembered Flagged filter is what the list shows: the built-in flag, and no pick. */
+    val builtInFlagLit: Boolean get() = filter == RssItemFilter.FAVORITE && flagPick == null
+
+    /** One page of what the list shows: the pick alone while one is in force, else the remembered pill. */
+    fun query(
+        limit: Int,
+        offset: Int,
+    ): ItemQuery =
+        ItemQuery(
+            scope = scope,
+            filter = if (flagPick != null) RssItemFilter.ALL else filter,
+            ordering = ordering,
+            limit = limit,
+            offset = offset,
+            flag = flagPick,
+        )
+
     val canLoadOlder: Boolean get() = subscription != null && !olderExhausted
     val allRead: Boolean get() = items.all { it.isRead }
 
@@ -147,7 +176,7 @@ class FeedItemListViewModel(
                 if (current.searchQuery.isNotBlank() && feedId != null) {
                     store.search(feedId, current.searchQuery)
                 } else {
-                    store.items(ItemQuery(current.scope, current.filter, current.ordering, PAGE_SIZE, 0))
+                    store.items(current.query(PAGE_SIZE, 0))
                 }
             val searching = current.searchQuery.isNotBlank() && feedId != null
             val olderExhausted = feedId?.let { store.syncState(it).olderExhausted } ?: false
@@ -187,7 +216,7 @@ class FeedItemListViewModel(
         viewModelScope.launch {
             val page =
                 runCatching {
-                    store.items(ItemQuery(current.scope, current.filter, current.ordering, PAGE_SIZE, loaded))
+                    store.items(current.query(PAGE_SIZE, loaded))
                 }.getOrNull() ?: return@launch
             loaded += page.size
             mutableState.update { it.copy(items = it.items + page, hasMoreLocal = page.size == PAGE_SIZE) }
@@ -252,13 +281,14 @@ class FeedItemListViewModel(
     }
 
     /**
-     * The pill: applied at once, then written back to the scope's row (or
-     * the All Feeds preference) when it differs from what is stored.
+     * The pill, or the menu's built-in flag or Clear filter: applied at
+     * once, ending any pick, then written back to the scope's row (or the
+     * All Feeds preference) when it differs from what is stored.
      */
     fun setFilter(filter: RssItemFilter) {
         val current = mutableState.value
-        if (current.filter == filter) return
-        mutableState.update { it.copy(filter = filter) }
+        if (current.filter == filter && current.flagPick == null) return
+        mutableState.update { it.copy(filter = filter, flagPick = null) }
         viewModelScope.launch {
             reload(restart = true)
             when (val scope = current.scope) {
@@ -279,6 +309,18 @@ class FeedItemListViewModel(
                 }
             }
         }
+    }
+
+    /**
+     * A flag of the user's own, or Any flag, picked from the Flagged
+     * pill's menu: the list shows only what carries it, for the visit.
+     * Nothing is written anywhere, so the list reopens on the pill it
+     * remembers.
+     */
+    fun pickFlag(pick: FlagCriterion) {
+        if (mutableState.value.flagPick == pick) return
+        mutableState.update { it.copy(flagPick = pick) }
+        viewModelScope.launch { reload(restart = true) }
     }
 
     /** The ordering, applied at once and stored on the feed's row (single-feed scopes). */

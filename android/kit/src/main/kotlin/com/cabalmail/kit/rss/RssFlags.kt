@@ -1,6 +1,9 @@
 package com.cabalmail.kit.rss
 
 import com.cabalmail.kit.CabalmailException
+import com.cabalmail.kit.models.RssItem
+import com.cabalmail.kit.settings.FlagCriterion
+import com.cabalmail.kit.settings.FlagPalette
 import kotlinx.serialization.json.Json
 
 /**
@@ -56,6 +59,46 @@ object RssStoredFlags {
         }
         return changes
     }
+}
+
+/**
+ * A [FlagCriterion] over cached feed items, for [ItemQuery.flag]: once as
+ * a predicate, which [InMemoryRssStore] runs, and once as the SQL
+ * [RoomRssStore] runs over `rss_items i`. Side by side so the two stores
+ * cannot drift; the kit's tests run both over the same rows.
+ *
+ * On a feed item the built-in flag is the favorite mark and a flag of the
+ * user's own is a slot in the stored list ([RssStoredFlags]). A slot that
+ * is neither is never looked for.
+ */
+object RssFlagQuery {
+    /** One `WHERE` term and the values it binds, in order. */
+    data class Clause(
+        val sql: String,
+        val binds: List<String> = emptyList(),
+    )
+
+    private fun isSearchable(criterion: FlagCriterion): Boolean =
+        criterion !is FlagCriterion.Slot ||
+            criterion.slot == FlagPalette.SYSTEM_SLOT ||
+            criterion.slot in FlagPalette.SLOTS
+
+    /** Whether [item] is one [criterion] finds; every item when there is none. */
+    fun matches(
+        criterion: FlagCriterion?,
+        item: RssItem,
+    ): Boolean = criterion == null || (isSearchable(criterion) && criterion.matches(item.paletteFlags))
+
+    /** The term for [criterion], or null when it can find nothing. */
+    fun clause(criterion: FlagCriterion): Clause? =
+        when {
+            !isSearchable(criterion) -> null
+            criterion is FlagCriterion.AnyFlag -> Clause("(i.is_favorite = 1 OR i.flags != '${RssStoredFlags.NONE}')")
+            (criterion as FlagCriterion.Slot).slot == FlagPalette.SYSTEM_SLOT -> Clause("i.is_favorite = 1")
+            // The stored list is JSON, each slot a quoted string, and no
+            // slot's atom is part of another's.
+            else -> Clause("i.flags LIKE ?", listOf("%\"${criterion.slot}\"%"))
+        }
 }
 
 /**

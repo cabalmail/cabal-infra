@@ -9,6 +9,7 @@ import com.cabalmail.kit.models.RssItemScope
 import com.cabalmail.kit.models.RssItemState
 import com.cabalmail.kit.models.RssOrderingMode
 import com.cabalmail.kit.models.RssSubscription
+import com.cabalmail.kit.settings.FlagCriterion
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -213,6 +214,13 @@ data class ItemQuery(
     val ordering: RssOrderingMode = RssOrderingMode.NEWEST_FIRST,
     val limit: Int = 50,
     val offset: Int = 0,
+    /**
+     * Narrows the page to the items a flag criterion finds, beside
+     * [filter]: one flag by its palette slot (the built-in flag's is the
+     * favorite mark) or any flag. A slot that is not a palette slot finds
+     * nothing.
+     */
+    val flag: FlagCriterion? = null,
 )
 
 /** What a queued mutation does. */

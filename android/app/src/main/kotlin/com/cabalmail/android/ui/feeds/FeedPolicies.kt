@@ -1,5 +1,8 @@
 package com.cabalmail.android.ui.feeds
 
+import com.cabalmail.android.R
+import com.cabalmail.android.ui.theme.FlagFilterMenu
+import com.cabalmail.android.ui.theme.UiLabel
 import com.cabalmail.kit.models.RssFolder
 import com.cabalmail.kit.models.RssFolderUpdate
 import com.cabalmail.kit.models.RssItemFilter
@@ -10,6 +13,7 @@ import com.cabalmail.kit.models.RssStyling
 import com.cabalmail.kit.models.RssSubscription
 import com.cabalmail.kit.models.RssSubscriptionUpdate
 import com.cabalmail.kit.settings.FeedSwipeAction
+import com.cabalmail.kit.settings.FlagCriterion
 import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.FlagPaletteEntry
 import com.cabalmail.kit.settings.LoadRemoteContent
@@ -20,18 +24,51 @@ import com.cabalmail.kit.settings.LoadRemoteContent
 object FeedFlagWords {
     /**
      * Whether the empty Flagged list may offer the swipe as a way to flag
-     * an item. The Flagged pill shows the built-in flag, and the swipe
-     * sets the default flag: the hint holds only while those are one flag
-     * and an edge is bound to the flag swipe. Otherwise the row's menu is
-     * the way, and the words say so.
+     * an item. The swipe sets the default flag, and the lit pill shows the
+     * built-in flag, or the flag [pick] names, or any flag at all: the
+     * hint holds only while the swipe would put an item in the list, and
+     * an edge is bound to the flag swipe. Otherwise the row's menu is the
+     * way, and the words say so.
      */
     fun flaggedPillOffersSwipe(
         palette: List<FlagPaletteEntry>,
         leading: FeedSwipeAction,
         trailing: FeedSwipeAction,
-    ): Boolean =
-        FlagPalette.defaultEntry(palette).slot == FlagPalette.SYSTEM_SLOT &&
+        pick: FlagCriterion? = null,
+    ): Boolean {
+        val shown = pick ?: FlagCriterion.Slot(FlagPalette.SYSTEM_SLOT)
+        return shown.matches(listOf(FlagPalette.defaultEntry(palette).slot)) &&
             FeedSwipeAction.TOGGLE_FAVORITE in listOf(leading, trailing)
+    }
+
+    /**
+     * The empty list's title under the lit Flagged pill: the picked flag
+     * by name, or that nothing is flagged, which is also what the
+     * built-in flag's own filter has always said.
+     */
+    internal fun emptyTitle(
+        palette: List<FlagPaletteEntry>,
+        pick: FlagCriterion?,
+    ): UiLabel =
+        when (pick) {
+            null, FlagCriterion.AnyFlag -> UiLabel.Fixed(R.string.feed_empty_favorite_title)
+            is FlagCriterion.Slot ->
+                UiLabel.Formatted(
+                    R.string.feed_empty_flag_title,
+                    FlagFilterMenu.name(palette, pick),
+                )
+        }
+
+    /**
+     * The pill a tap on Unread leaves. With no pick it is the toggle it
+     * always was. Over a pick it ends the pick and shows Unread, whatever
+     * the feed remembered: the pick had the list, so the tap is a choice
+     * of Unread.
+     */
+    fun unreadTap(
+        filter: RssItemFilter,
+        pick: FlagCriterion?,
+    ): RssItemFilter = if (pick != null) RssItemFilter.UNREAD else filter.toggling(RssItemFilter.UNREAD)
 }
 
 /**
