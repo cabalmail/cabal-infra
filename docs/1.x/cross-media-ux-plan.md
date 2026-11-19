@@ -11,7 +11,7 @@ instead of reconstructing it from the git log.
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
 | 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android in review (2026-11-18): the first of its two PRs, flags on feed items, is #2498 (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
-| 4 -- Feed rules | Started (2026-11-18): the storage decision is answered (`feedRules` beside `rules`). Terraform in review (#2497); server, Apple and Android not started |
+| 4 -- Feed rules | Started (2026-11-18): the storage decision is answered (`feedRules` beside `rules`). Terraform merged as #2497 (2026-11-19); server in review as #2501; Apple and Android not started |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
 | 6 -- Ambient surfaces: Spotlight | Not started (2026-11-08) |
 
@@ -312,17 +312,18 @@ condition and action sets, so a saved rule always means something,
 which is the lesson of the rules-composition plan's
 "decorate-then-file" finding.
 
-Feed rules are evaluated server-side when the fetcher inserts a new
-item (`rss_fetch`, `insert_item`), once per subscriber of the feed, and
-the outcome is written straight to that subscriber's state row. This is
+Feed rules are evaluated server-side for each item a fetch inserts
+(`rss_fetch`, after the fetch has recorded its success), once per
+subscriber of the feed, and the outcome is written straight to that
+subscriber's state row. This is
 the delivery-time analogue of procmail. Client-side evaluation on sync
 was rejected: with several devices, whichever synced first would apply
 the rule, the others would see the outcome only after state sync, and a
 device that never syncs a feed would never apply it.
 
-The fetcher cannot do this today. It has no way to find a feed's
-subscribers (the subscription table's only feed-keyed index is the
-sparse `by_feed_notify`), and its IAM role reaches neither the rules
+Before Phase 4 the fetcher could not do this. It had no way to find a
+feed's subscribers (the subscription table's only feed-keyed index was
+the sparse `by_feed_notify`), and its IAM role reached neither the rules
 table, nor the subscription table, nor the item-state table. Phase 4
 adds a plain feed-keyed subscription index (`by_feed`) and those grants,
 and a read on the preferences table: a rule that sets a custom flag no
@@ -652,8 +653,9 @@ an article and the received mail carries the link and the summary.
 **Status:** Started (2026-11-18). The storage decision is answered:
 `feedRules` beside `rules`, with a plain subscriber index and a flag-list
 check at ingest (`flags-and-cross-media.md`, decision 6, which also
-records the rule format). The Terraform (4a, item 1) is in review as #2497; the
-server, Apple and Android work is not started. `flags-and-cross-media.md`
+records the rule format). The Terraform (4a, item 1) merged as #2497 (2026-11-19) and the
+server (4a, items 2 to 4) is in review as #2501; the Apple and Android
+work is not started. `flags-and-cross-media.md`
 gates the client work on fixes owned by other plans, and those have all
 merged:
 
@@ -681,9 +683,10 @@ answered, so that is the Terraform and server work in prod.
    the same version check, validates it as Decision 4 says, and keeps
    the stored list when a save omits the key. The procmail compiler is
    unchanged.
-1. **`rss_fetch`.** On `insert_item`, evaluate each subscriber's feed
-   rules against the parsed item and write the resulting `flags`,
-   `is_favorite`, and explicit `is_read` to the subscriber's state row.
+1. **`rss_fetch`.** For each item a fetch inserts, once the fetch has
+   recorded its success, evaluate each subscriber's feed rules against
+   the parsed item and write the resulting `flags`, `is_favorite`, and
+   explicit `is_read` to the subscriber's state row.
    Conditions match case-insensitively on the plain text of the field,
    as mail rules do on headers. Best effort, per Decision 4. Metrics:
    rules evaluated and items matched, per feed.
