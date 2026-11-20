@@ -4,9 +4,10 @@
 #
 # `altool --upload-app` (in apple.yml's upload-ios / upload-mac jobs) ships
 # only the binary; it has no way to set beta release notes. This script runs
-# right after that upload and writes the App Store Connect
-# `betaBuildLocalizations.whatsNew` field - the text testers see as "What to
-# Test" in the TestFlight app - using the App Store Connect API.
+# after that upload, in apple.yml's testflight-assign job, and writes the
+# App Store Connect `betaBuildLocalizations.whatsNew` field - the text
+# testers see as "What to Test" in the TestFlight app - using the App Store
+# Connect API.
 #
 # Scope: prod releases only. apple.yml gates the calling step on
 # `github.ref_name == 'main'`. The stage track is the developer's own and

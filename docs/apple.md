@@ -447,7 +447,7 @@ are expanded in the sections further down.
 9. **Create the TestFlight internal groups CI distributes to.** On
    **each** app record (iOS and macOS), create two internal testing
    groups named exactly **`stage`** and **`prod`** (lowercase — the
-   upload jobs look the group up by name):
+   `testflight-assign` job looks the group up by name):
    - App Store Connect → your app → **TestFlight** tab → **Internal
      Testing** → **+**.
    - Add your Apple ID (with an App Store Connect role) as a tester to
@@ -456,11 +456,11 @@ are expanded in the sections further down.
      creation dialog. CI attaches each uploaded build to the group
      matching its branch (`stage` pushes → `stage`, `main` → `prod`)
      via the App Store Connect API (`assign-testflight-group.py`), and
-     fails the upload job if the attach doesn't succeed. Automatic
-     distribution would give every group every build, erasing the
-     branch routing — and the API refuses explicit attaches to such
-     groups, so the assign step would fail. The explicit attach exists
-     to replace it, not to supplement it.
+     fails that platform's `testflight-assign` leg if the attach doesn't
+     succeed. Automatic distribution would give every group every build,
+     erasing the branch routing — and the API refuses explicit attaches
+     to such groups, so the assign step would fail. The explicit attach
+     exists to replace it, not to supplement it.
    - The distribution mode is **immutable after creation** — the
      checkbox exists only in the create dialog, and the group Settings
      tab merely displays the resulting "Build Distribution" state. To
@@ -774,8 +774,9 @@ own CI files, on pushes to `main` and `stage` that do, and on
 | `app-build` | PRs, and `workflow_dispatch` from a branch other than `main` or `stage` | Unsigned `xcodebuild build`: `CabalmailVision` (visionOS) and `CabalmailWatch` (watchOS) on a PR, where the two test suites already build the iOS and Mac apps; all four schemes, adding `Cabalmail` (iOS) and `CabalmailMac` (macOS), from another branch. Skipped on `main` and `stage` runs, whose upload archives are the device builds |
 | `apple-gate` | Every run | The one check that sums up the test and build jobs above |
 | `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass and `ios-duo-test` passes or is skipped, or straight after `promotion-verdict` on a `main` push it reports tested |
-| `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → attach to the branch's internal test group |
-| `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
+| `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → hand the build number to `testflight-assign` |
+| `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload → hand the build number to `testflight-assign`, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact |
+| `testflight-assign` | `main` and `stage` runs, after the upload jobs | One Ubuntu leg per platform: waits for App Store Connect to ingest the build the upload leg handed it, attaches it to the branch's internal test group, and on `main` sets the iOS and macOS builds' "What to Test" notes. The waiting runs here rather than on the macOS runner that uploaded |
 
 Both upload jobs no-op, with a workflow warning, when their required
 secrets are missing. Because `app-build` skips `main` and `stage` runs,
@@ -813,8 +814,8 @@ and `CabalmailKit/Package.swift`.
 ## Installing a build from TestFlight
 
 After a successful CI upload and App Store Connect processing (5–30 min),
-the build appears in your app's **Builds** list, and the upload job
-attaches it to the internal group matching the branch it was built from
+the build appears in your app's **Builds** list, and the
+`testflight-assign` job attaches it to the internal group matching the branch it was built from
 (`stage` pushes → the `stage` group, `main` → `prod`) — see the group
 setup in [Apple Developer account setup](#apple-developer-account-setup).
 To install one:
@@ -826,9 +827,9 @@ To install one:
 
 macOS follows the same flow using the macOS TestFlight app (install
 from the Mac App Store). If a build you expected never shows up, check
-the upload job's **Assign build to TestFlight group** step — it fails
-(with the build number in the error) when the build could not be
-attached, and the fallback is attaching that build by hand from the
+that platform's **Assign <platform> build to TestFlight group** job —
+it fails (with the build number in the error) when the build could not
+be attached, and the fallback is attaching that build by hand from the
 group's **Builds** tab.
 
 ## Setting Cabalmail as the default mail handler
