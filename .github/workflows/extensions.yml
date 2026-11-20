@@ -499,6 +499,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           BUNDLE_ID: com.cabalmail.extension-host
+          ASC_PLATFORM: MAC_OS
           TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
         run: |
           set -euo pipefail

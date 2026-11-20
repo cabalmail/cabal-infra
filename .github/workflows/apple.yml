@@ -1771,20 +1771,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # asc_platform: App Store Connect's name for the platform. The iOS
+        # and visionOS builds share one app record and can share a build
+        # number, so the scripts look a build up by number and platform
+        # (#2518).
         # notes: whether a main push sets this build's "What to Test". iOS
-        # and macOS only, as when this ran in the upload jobs: one notes pass
-        # per release on the iOS app record is enough until
-        # set-testflight-notes.py grows platform awareness.
+        # and macOS only; the visionOS build has never carried notes.
         include:
           - platform: iOS
+            asc_platform: IOS
             bundle_id: com.cabalmail.Cabalmail
             notes: true
             handoff: ${{ needs.upload-ios.outputs.handoff_iOS }}
           - platform: visionOS
+            asc_platform: VISION_OS
             bundle_id: com.cabalmail.Cabalmail
             notes: false
             handoff: ${{ needs.upload-ios.outputs.handoff_visionOS }}
           - platform: macOS
+            asc_platform: MAC_OS
             bundle_id: com.cabalmail.CabalmailMac
             notes: true
             handoff: ${{ needs.upload-mac.outputs.handoff_macOS }}
@@ -1867,6 +1872,7 @@ jobs:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           BUNDLE_ID: ${{ matrix.bundle_id }}
+          ASC_PLATFORM: ${{ matrix.asc_platform }}
           TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
         run: python .github/scripts/assign-testflight-group.py
 
@@ -1879,5 +1885,6 @@ jobs:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
           BUNDLE_ID: ${{ matrix.bundle_id }}
+          ASC_PLATFORM: ${{ matrix.asc_platform }}
           CHANGELOG_PATH: ${{ github.workspace }}/CHANGELOG.md
         run: python .github/scripts/set-testflight-notes.py
