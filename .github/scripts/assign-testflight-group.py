@@ -31,6 +31,9 @@
 #   ASC_KEY_PATH      Path to the decoded .p8 private key
 #   BUNDLE_ID         App bundle id (e.g. com.cabalmail.Cabalmail)
 #   BUILD_NUMBER      CFBundleVersion of the uploaded build
+#   ASC_PLATFORM      The build's App Store Connect platform: IOS, MAC_OS,
+#                     TV_OS or VISION_OS (one app record holds a build per
+#                     platform, possibly under the same build number)
 #   TF_GROUP          Name of the internal test group to attach to
 # Optional env:
 #   ASC_POLL_TIMEOUT  Seconds to wait overall (default 2400 - Apple-side
@@ -52,6 +55,7 @@ from asc_api import (
     make_token,
     notice,
     require_env,
+    require_platform,
     warn,
 )
 
@@ -126,6 +130,7 @@ def main():
     key_path = require_env("ASC_KEY_PATH")
     bundle_id = require_env("BUNDLE_ID")
     build_number = require_env("BUILD_NUMBER")
+    platform = require_platform()
     group_name = require_env("TF_GROUP")
     timeout = int(os.environ.get("ASC_POLL_TIMEOUT", "2400"))
     interval = int(os.environ.get("ASC_POLL_INTERVAL", "30"))
@@ -149,13 +154,13 @@ def main():
         )
         return 1
     print(f"Resolved app {bundle_id} -> {app_id}, group {group_name!r} -> {group_id}")
-    print(f"Attaching build {build_number} of {bundle_id} to group {group_name!r}...")
+    print(f"Attaching {platform} build {build_number} of {bundle_id} to group {group_name!r}...")
 
     deadline = time.time() + timeout
     last_refusal = ""
     defect_hits = 0
     while time.time() < deadline:
-        build = find_build(app_id, build_number, token_factory)
+        build = find_build(app_id, build_number, platform, token_factory)
         if build is None:
             # Upload accepted but the build resource hasn't surfaced yet.
             time.sleep(interval)

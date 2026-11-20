@@ -38,9 +38,9 @@
 #      A fresh token is minted per request so polling can outlast the 20-minute
 #      token lifetime ASC enforces.
 #   2. Resolve the app record by bundle id.
-#   3. Poll for the build (by app + CFBundleVersion) until it leaves the
-#      PROCESSING state. A freshly-uploaded build may not appear for a minute,
-#      so "not found yet" is treated as "keep polling".
+#   3. Poll for the build (by app, CFBundleVersion and platform) until it
+#      leaves the PROCESSING state. A freshly-uploaded build may not appear
+#      for a minute, so "not found yet" is treated as "keep polling".
 #   4. Create or update the en-US betaBuildLocalizations record with the notes.
 #
 # Required env:
@@ -50,6 +50,8 @@
 #   BUNDLE_ID         App bundle id (e.g. com.cabalmail.Cabalmail)
 #   MARKETING_VERSION CFBundleShortVersionString of the uploaded build
 #   BUILD_NUMBER      CFBundleVersion of the uploaded build
+#   ASC_PLATFORM      The build's App Store Connect platform (IOS, MAC_OS,
+#                     TV_OS or VISION_OS)
 #   CHANGELOG_PATH    Path to CHANGELOG.md
 # Optional env:
 #   ASC_LOCALE        Beta localization locale (default en-US)
@@ -70,6 +72,7 @@ from asc_api import (
     make_token,
     notice,
     require_env,
+    require_platform,
     warn,
 )
 
@@ -185,7 +188,7 @@ def flatten_changelog(changelog_path):
     return text
 
 
-def wait_for_build(app_id, build_number, token_factory, timeout, interval):
+def wait_for_build(app_id, build_number, platform, token_factory, timeout, interval):
     """Poll until the build leaves PROCESSING. Return its id, or None.
 
     Returns None (with a warning already emitted) on timeout or a terminal
@@ -193,7 +196,7 @@ def wait_for_build(app_id, build_number, token_factory, timeout, interval):
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
-        build = find_build(app_id, build_number, token_factory)
+        build = find_build(app_id, build_number, platform, token_factory)
         if build is None:
             # Upload accepted but the build resource hasn't surfaced yet.
             time.sleep(interval)
@@ -272,8 +275,9 @@ def main():
     key_path = require_env("ASC_KEY_PATH")
     bundle_id = require_env("BUNDLE_ID")
     build_number = require_env("BUILD_NUMBER")
+    platform = require_platform()
     changelog_path = require_env("CHANGELOG_PATH")
-    require_env("MARKETING_VERSION")  # Logged for context; build lookup is by build number.
+    require_env("MARKETING_VERSION")  # Logged for context; the lookup is by build number and platform.
 
     locale = os.environ.get("ASC_LOCALE", "en-US").strip() or "en-US"
     timeout = int(os.environ.get("ASC_POLL_TIMEOUT", "1200"))
@@ -294,8 +298,8 @@ def main():
         return
     print(f"Resolved app {bundle_id} -> {app_id}")
 
-    print(f"Waiting for build {build_number} to finish processing...")
-    build_id = wait_for_build(app_id, build_number, token_factory, timeout, interval)
+    print(f"Waiting for {platform} build {build_number} to finish processing...")
+    build_id = wait_for_build(app_id, build_number, platform, token_factory, timeout, interval)
     if build_id is None:
         return
 
