@@ -60,6 +60,34 @@ private val HEAD_OPEN = Regex("""<head\b[^>]*>""", RegexOption.IGNORE_CASE)
 private val HTML_OPEN = Regex("""<html\b[^>]*>""", RegexOption.IGNORE_CASE)
 private val DOCTYPE = Regex("""<!doctype\b[^>]*>""", RegexOption.IGNORE_CASE)
 
+/**
+ * The policy the feed article's reader rendering leads with: no script, no
+ * plugins and no frames, whatever the article carries (Readability keeps
+ * inline event handlers), with the `http://` upgrade every rendered body
+ * gets. The second of two locks; the first is the web view loading that
+ * document with JavaScript off. Either one alone keeps an article's
+ * handlers from running, and this one also holds where the first cannot:
+ * the web view's JavaScript switch is the view's, not the document's, and
+ * Back brings a reader document back into a view whose scripts were turned
+ * on again for the page that followed it.
+ */
+const val ARTICLE_READER_POLICY_META =
+    "<meta http-equiv=\"Content-Security-Policy\" " +
+        "content=\"upgrade-insecure-requests; script-src 'none'; object-src 'none'; frame-src 'none'\">"
+
+/**
+ * The feed article's reader document: [article] (the extracted article's
+ * markup) in the reader stylesheet, behind [ARTICLE_READER_POLICY_META].
+ * The policy is the document's first bytes, because only a policy in the
+ * head applies and the head ends at the first piece of content: placed
+ * anywhere an article's own markup could come before it (a stray `<head>`
+ * tag in the body is one way), the engine would ignore it.
+ */
+fun articleReaderDocument(
+    article: String,
+    darkMode: Boolean,
+): String = ARTICLE_READER_POLICY_META + readerModeHtml(article, darkMode)
+
 private val AUTHOR_STYLE_BLOCK =
     Regex("""<style\b[^>]*>[\s\S]*?</style\s*>""", RegexOption.IGNORE_CASE)
 private val AUTHOR_STYLESHEET_LINK =

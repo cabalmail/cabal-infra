@@ -86,4 +86,48 @@ class BodyFormattingTest {
         assertEquals(1, once.windowed(meta.length).count { it == meta })
         assertTrue(upgradeInsecureRequests(readerModeHtml("<p>x</p>", darkMode = false)).contains(meta))
     }
+
+    @Test
+    fun `the article reader document leads with a policy that refuses script, plugins and frames`() {
+        val policy = Regex("""^<meta http-equiv="Content-Security-Policy" content="([^"]*)">$""")
+        val directives =
+            policy
+                .find(ARTICLE_READER_POLICY_META)
+                ?.groupValues
+                ?.get(1)
+                ?.split(";")
+                ?.map { it.trim() }
+        assertEquals(
+            listOf("upgrade-insecure-requests", "script-src 'none'", "object-src 'none'", "frame-src 'none'"),
+            directives,
+        )
+        for (darkMode in listOf(false, true)) {
+            val out = articleReaderDocument("<article><p>Hello</p></article>", darkMode)
+            assertTrue(out.startsWith(ARTICLE_READER_POLICY_META))
+            assertTrue(out.contains("<article><p>Hello</p></article>"))
+            assertEquals(ARTICLE_READER_POLICY_META + readerModeHtml("<article><p>Hello</p></article>", darkMode), out)
+        }
+    }
+
+    @Test
+    fun `nothing an article carries comes before the reader document's policy`() {
+        // Only a policy in the head applies, and the head ends at the first
+        // content. Each of these moves the http upgrade's meta when it is
+        // placed by upgradeInsecureRequests; none may move this one.
+        val openers =
+            listOf(
+                "<head>",
+                "<html>",
+                "<!doctype html>",
+                "<header>",
+                "</head><body>",
+                "<meta http-equiv=\"Content-Security-Policy\" content=\"script-src * 'unsafe-inline'\">",
+            )
+        for (opener in openers) {
+            val article = "$opener<img src=x onerror=\"document.title='js-ran'\">"
+            val out = articleReaderDocument(article, darkMode = false)
+            assertEquals(0, out.indexOf(ARTICLE_READER_POLICY_META), opener)
+            assertTrue(out.indexOf(opener) > ARTICLE_READER_POLICY_META.length, opener)
+        }
+    }
 }
