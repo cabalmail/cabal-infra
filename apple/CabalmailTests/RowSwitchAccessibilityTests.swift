@@ -3,6 +3,7 @@ import XCTest
 import SwiftUI
 import AppKit
 import ApplicationServices
+import os
 @testable import CabalmailUI
 
 /// What `RowSwitch` tells VoiceOver it is, read through the accessibility
@@ -145,8 +146,9 @@ final class RowSwitchAccessibilityTests: XCTestCase {
     /// accessibility tree, with the harness's layout reported into `layout`
     /// meanwhile. The read runs off the main queue — an AX query aimed at
     /// one's own process is answered on the main runloop, so asking from it
-    /// deadlocks — and the window is torn down afterwards. On the main actor,
-    /// where the window and the harness's layout live.
+    /// deadlocks — its result comes back through a lock, and the window is
+    /// torn down afterwards. On the main actor, where the window and the
+    /// harness's layout live.
     @MainActor
     private func hostAndRead(_ layout: Layout = Layout()) throws -> [String: Reading] {
         let window = NSWindow(
@@ -157,16 +159,17 @@ final class RowSwitchAccessibilityTests: XCTestCase {
         window.contentView = NSHostingView(rootView: Harness(layout: layout))
         window.orderFront(nil)
 
-        var readings: [String: Reading] = [:]
+        let readings = OSAllocatedUnfairLock<[String: Reading]>(initialState: [:])
         let done = expectation(description: "accessibility read")
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
             var found: [String: Reading] = [:]
             Self.walk(AXUIElementCreateApplication(getpid()), depth: 0, into: &found)
-            readings = found
+            let read = found
+            readings.withLock { $0 = read }
             done.fulfill()
         }
         wait(for: [done], timeout: 20)
-        return readings
+        return readings.withLock { $0 }
     }
 
     private static func walk(_ element: AXUIElement, depth: Int, into found: inout [String: Reading]) {
