@@ -300,25 +300,33 @@ public struct Rule: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// The whole ordered rule set as returned by `/get_rules` and `/set_rules`:
-/// one row per user, `version` carrying optimistic concurrency.
+/// The user's rules as returned by `/get_rules` and `/set_rules`: one row
+/// per user holding the ordered mail rules and, beside them, the feed rules,
+/// with one `version` carrying optimistic concurrency for both lists.
 public struct RuleSet: Codable, Equatable, Sendable {
     public var rules: [Rule]
+    /// The feed rules. Empty when the reply has no `feedRules` key, which
+    /// is what a server that predates them answers.
+    public var feedRules: [FeedRule]
     public var version: Int
     /// ISO 8601 server stamp; informational.
     public var updatedAt: String
 
-    public init(rules: [Rule] = [], version: Int = 0, updatedAt: String = "") {
+    public init(
+        rules: [Rule] = [], feedRules: [FeedRule] = [], version: Int = 0, updatedAt: String = ""
+    ) {
         self.rules = rules
+        self.feedRules = feedRules
         self.version = version
         self.updatedAt = updatedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case rules, version, updatedAt }
+    private enum CodingKeys: String, CodingKey { case rules, feedRules, version, updatedAt }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         rules = try container.decodeIfPresent([Rule].self, forKey: .rules) ?? []
+        feedRules = try container.decodeIfPresent([FeedRule].self, forKey: .feedRules) ?? []
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 0
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? ""
     }

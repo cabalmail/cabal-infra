@@ -9,14 +9,23 @@ extension URLSessionApiClient {
         return try decodeReply(RuleSet.self, from: data, for: request)
     }
 
-    public func setRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet {
+    public func setRules(
+        _ rules: [Rule], feedRules: [FeedRule]?, expectedVersion: Int
+    ) async throws -> RuleSet {
         // Encode through JSONEncoder (the model owns its wire keys), then
         // bridge to the `[String: Any]` shape the shared `put` helper takes.
-        let encodedRules = try JSONSerialization.jsonObject(with: JSONEncoder().encode(rules))
-        let request = try await put("/set_rules", json: [
-            "rules": encodedRules,
+        var body: [String: Any] = [
+            "rules": try JSONSerialization.jsonObject(with: JSONEncoder().encode(rules)),
             "expectedVersion": expectedVersion,
-        ])
+        ]
+        // The key is left off, not sent empty or null, when the caller has
+        // no feed rules to write: the server reads a missing key as "leave
+        // the stored list alone", an empty list as "clear it", and refuses
+        // null.
+        if let feedRules {
+            body["feedRules"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(feedRules))
+        }
+        let request = try await put("/set_rules", json: body)
         do {
             let data = try await send(request, expectedStatuses: 200..<300)
             // The 200 body also carries `stripped` (invalid forward chips the

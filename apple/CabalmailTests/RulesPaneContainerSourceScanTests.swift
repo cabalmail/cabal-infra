@@ -12,6 +12,8 @@ final class RulesPaneContainerSourceScanTests: XCTestCase {
     /// A `model.add(...)` call whose returned id goes nowhere: nothing but
     /// whitespace sits to its left on the line.
     private static let discardedAdd = #"(?m)^\s*model\.add\("#
+    /// The same for a feed rule's Add, which goes through `model.feed`.
+    private static let discardedFeedAdd = #"(?m)^\s*model\.feed\.add\("#
 
     func testRulesPaneIsAGroupedFormNotABareList() throws {
         let source = try Self.source(of: "CabalmailUI/Rules/RulesView.swift")
@@ -144,6 +146,40 @@ final class RulesPaneContainerSourceScanTests: XCTestCase {
         XCTAssertNil(
             source.range(of: Self.discardedAdd, options: .regularExpression),
             "an Add site drops the id `add` returned, so the editor can't be pushed for it"
+        )
+    }
+
+    /// The same for the feed rules, which are added through `model.feed`
+    /// and pushed into an editor of their own: every feed Add site takes
+    /// the id it is returned, and the pane pushes the feed editor for it.
+    /// `discardedAdd` cannot see these sites (they don't begin
+    /// `model.add(`), so they have a pattern of their own.
+    func testEveryFeedAddSiteTakesTheIDItIsReturned() throws {
+        let source = try Self.source(of: "CabalmailUI/Rules/RulesView.swift")
+        XCTAssertTrue(
+            source.contains(".navigationDestination(item: $addedFeedRuleID)"),
+            "the Rules pane no longer pushes the editor for a feed rule Add just made"
+        )
+        XCTAssertGreaterThanOrEqual(
+            source.components(separatedBy: "addedFeedRuleID = model.feed.add(").count - 1, 3,
+            "a feed Add site is gone: the section's Add rule, the blank feed rule and the template"
+        )
+        XCTAssertNil(
+            source.range(of: Self.discardedFeedAdd, options: .regularExpression),
+            "a feed Add site drops the id `add` returned, so the editor can't be pushed for it"
+        )
+    }
+
+    /// Proves the feed pattern catches a dropped result and nothing else.
+    func testDiscardedFeedAddPatternMatchesDroppedResultsOnly() {
+        XCTAssertNotNil("model.feed.add()".range(of: Self.discardedFeedAdd, options: .regularExpression))
+        XCTAssertNotNil("    model.feed.add(template)".range(of: Self.discardedFeedAdd, options: .regularExpression))
+        XCTAssertNil(
+            "addedFeedRuleID = model.feed.add()".range(of: Self.discardedFeedAdd, options: .regularExpression)
+        )
+        XCTAssertNil(
+            "addedFeedRuleID = model.feed.add(template)"
+                .range(of: Self.discardedFeedAdd, options: .regularExpression)
         )
     }
 
