@@ -2,7 +2,9 @@
 #
 # Attach a freshly-uploaded build to a TestFlight internal test group.
 #
-# apple.yml's upload jobs run this right after `altool --upload-app`.
+# apple.yml's testflight-assign job runs this once an upload job's
+# `altool --upload-app` has finished; extensions.yml's Safari upload job
+# runs it right after its own.
 # Distribution used to rely on App Store Connect's "automatic distribution"
 # group setting, which fires exactly once per build (when processing
 # finishes) and never retries: a misfire leaves the build fully processed

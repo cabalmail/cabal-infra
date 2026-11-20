@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Shared App Store Connect API helpers for CI scripts.
 
-Used by set-testflight-notes.py and assign-testflight-group.py, which run
-from an ephemeral venv in apple.yml's upload jobs (PyJWT + cryptography are
-installed at step time). Python resolves this module without any packaging
+Used by set-testflight-notes.py and assign-testflight-group.py, which run in
+apple.yml's testflight-assign job and extensions.yml's Safari upload job
+(PyJWT + cryptography are installed at step time). Python resolves this module without any packaging
 because it sits next to the entry-point scripts: sys.path[0] is the
 directory of the script being run.
 
