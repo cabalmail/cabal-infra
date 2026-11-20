@@ -1,6 +1,7 @@
 package com.cabalmail.android.ui.feeds
 
 import android.content.Context
+import com.cabalmail.kit.models.articleReaderDocument
 
 /**
  * The vendored Readability.js the article view injects for its reader
@@ -38,12 +39,15 @@ object ReaderAssets {
 
     /**
      * The program run after the script: Readability over a clone of the
-     * live document, returning the extraction as JSON text (or null).
+     * live document, returning the extraction as JSON text (or null). The
+     * video pattern matches nothing, so Readability drops every iframe,
+     * embed and object, video players included: reader mode runs no
+     * third-party code, and the players stay on the publisher's page.
      */
     const val EXTRACTION_PROGRAM = """
         (function () {
           try {
-            var article = new Readability(document.cloneNode(true)).parse();
+            var article = new Readability(document.cloneNode(true), { allowedVideoRegex: /(?!)/ }).parse();
             if (!article) { return null; }
             return JSON.stringify({ title: article.title || "", byline: article.byline || "",
                                     content: article.content || "" });
@@ -61,6 +65,18 @@ data class ExtractedArticle(
 
 /** The reader document built from an extraction, the Apple `ArticleReaderDocument`. */
 object ArticleReaderDocument {
+    /**
+     * The whole document the article view loads for reader mode: the
+     * article in the reader stylesheet, behind the policy that refuses
+     * script, plugins and frames (`articleReaderDocument`).
+     */
+    fun document(
+        article: ExtractedArticle,
+        sourceHost: String,
+        darkMode: Boolean,
+    ): String = articleReaderDocument(html(article, sourceHost), darkMode)
+
+    /** The article's markup under its title and byline; [document] wraps it. */
     fun html(
         article: ExtractedArticle,
         sourceHost: String,

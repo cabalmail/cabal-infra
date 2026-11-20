@@ -37,15 +37,14 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.mail.RendererRecovery
-import com.cabalmail.kit.models.readerModeHtml
-import com.cabalmail.kit.models.upgradeInsecureRequests
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * The publisher's page (D6 = C: no server-side extraction). JavaScript on,
- * since live pages need it; cookies and storage in a profile of the
+ * The publisher's page (D6 = C: no server-side extraction). JavaScript on
+ * for the publisher's page, since live pages need it, and off for the
+ * reader rendering; cookies and storage in a profile of the
  * subscription's own (D11), so a login on one feed's site never reaches
  * another feed's — the `androidx.webkit` multi-profile API where the
  * installed WebView has it, the default profile where it does not.
@@ -56,12 +55,14 @@ import kotlinx.serialization.json.jsonPrimitive
  * vendored Readability.js is in this build, the live page is cloned and
  * extracted once it has loaded, and the result shown as a reader document
  * restyled with the mail reader's stylesheet; following a link leaves
- * reader mode for the live destination, as Safari's Reader does.
+ * reader mode for the live destination, as Safari's Reader does. The
+ * reader document runs no script from the article: it loads with the web
+ * view's JavaScript off, and it carries a policy that refuses script,
+ * plugins and frames ([ArticleReader], `articleReaderDocument`).
  *
  * A lost renderer is handled by [RendererRecovery]: a fresh WebView
  * reloads the article, or the notice offers Retry when it keeps crashing.
  */
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun ArticleWebView(
     url: String,
@@ -79,58 +80,31 @@ fun ArticleWebView(
     onLeftReader: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val darkMode = isSystemInDarkTheme()
+    val darkMode by rememberUpdatedState(isSystemInDarkTheme())
+    val currentOnLeftReader by rememberUpdatedState(onLeftReader)
     val script = remember { ReaderAssets.readabilityScript(context) }
     var failure by remember(url) { mutableStateOf<String?>(null) }
     var attempt by remember(url) { mutableIntStateOf(0) }
     var canGoBack by remember { mutableStateOf(false) }
     var webView by remember { mutableStateOf<WebView?>(null) }
-    val reader = remember(url) { ReaderState(url) }
+    val reader =
+        remember(url) {
+            ArticleReader(
+                pageUrl = url,
+                script = script,
+                readerDocument = { article, pageUrl ->
+                    ArticleReaderDocument.document(article, pageUrl.toUri().host.orEmpty(), darkMode)
+                },
+                onLeftReader = { currentOnLeftReader() },
+            )
+        }
+    // The web view outlives a change of article, so its client reads these
+    // through state rather than holding the ones it was built beside.
+    val currentReader by rememberUpdatedState(reader)
     val recovery = remember(url) { RendererRecovery() }
     val currentRecovery by rememberUpdatedState(recovery)
 
-    BackHandler(enabled = canGoBack) { webView?.goBack() }
-
-    fun reconcile(view: WebView) {
-        val asked = wantsReader && script != null
-        // The toggle moving is the user asking again, which is what ends a
-        // link-out's hold on this page (#2060).
-        if (reader.askedForReader != asked) {
-            if (reader.askedForReader != null) reader.leftThroughLink = false
-            reader.askedForReader = asked
-        }
-        val wants = FeedDetailPolicy.showsReader(asked, reader.leftThroughLink)
-        if (wants == reader.showingReader || !reader.pageLoaded || reader.extracting) return
-        if (wants) {
-            val cached = reader.readerDocument
-            if (cached != null) {
-                reader.show(view, cached)
-            } else {
-                reader.extracting = true
-                view.evaluateJavascript(script + "\n" + ReaderAssets.EXTRACTION_PROGRAM) { result ->
-                    reader.extracting = false
-                    val article = decodeExtraction(result)
-                    if (article == null) return@evaluateJavascript
-                    val body =
-                        ArticleReaderDocument.html(
-                            article,
-                            reader.pageUrl
-                                .toUri()
-                                .host
-                                .orEmpty(),
-                        )
-                    val document = upgradeInsecureRequests(readerModeHtml(body, darkMode))
-                    reader.readerDocument = document
-                    reader.show(view, document)
-                }
-            }
-        } else {
-            reader.showingReader = false
-            reader.pageLoaded = false
-            reader.leftThroughLink = false
-            view.loadUrl(reader.pageUrl)
-        }
-    }
+    BackHandler(enabled = canGoBack) { webView?.let { reader.back(WebViewArticlePage(it)) } }
 
     Box(modifier = modifier) {
         if (!recovery.gaveUp) {
@@ -145,10 +119,12 @@ fun ArticleWebView(
                             ) {
                                 runCatching { WebViewCompat.setProfile(this, profileName) }
                             }
-                            settings.javaScriptEnabled = true
+                            // JavaScript is not set here: a web view starts with it off, and
+                            // every load sets it for what that load shows (ArticleReader).
                             settings.domStorageEnabled = true
                             settings.allowFileAccess = false
                             settings.allowContentAccess = false
+                            val page = WebViewArticlePage(this)
                             webViewClient =
                                 object : WebViewClient() {
                                     override fun shouldOverrideUrlLoading(
@@ -156,22 +132,13 @@ fun ArticleWebView(
                                         request: WebResourceRequest?,
                                     ): Boolean {
                                         val target = request?.url ?: return false
-                                        val scheme = target.scheme?.lowercase()
-                                        if (scheme != "http" && scheme != "https") return true
-                                        // A link followed from the reader leaves reader mode for the live
-                                        // page, and that page stays as served rather than being extracted
-                                        // again when it finishes loading (#2060).
-                                        if (reader.showingReader && request.hasGesture()) {
-                                            reader.showingReader = false
-                                            reader.readerDocument = null
-                                            reader.pageUrl = target.toString()
-                                            reader.pageLoaded = false
-                                            reader.leftThroughLink = true
-                                            onLeftReader()
-                                            view?.loadUrl(reader.pageUrl)
-                                            return true
-                                        }
-                                        return false
+                                        return currentReader.navigation(
+                                            page = page,
+                                            url = target.toString(),
+                                            scheme = target.scheme,
+                                            hasGesture = request.hasGesture(),
+                                            isForMainFrame = request.isForMainFrame,
+                                        )
                                     }
 
                                     override fun onPageFinished(
@@ -180,17 +147,7 @@ fun ArticleWebView(
                                     ) {
                                         canGoBack = view?.canGoBack() == true
                                         failure = null
-                                        reader.pageLoaded = true
-                                        // A new live page invalidates the extraction of the previous one.
-                                        val current = view?.url.orEmpty()
-                                        if (!reader.showingReader &&
-                                            current.startsWith("http") &&
-                                            current != reader.pageUrl
-                                        ) {
-                                            reader.pageUrl = current
-                                            reader.readerDocument = null
-                                        }
-                                        view?.let { reconcile(it) }
+                                        currentReader.pageFinished(page, view?.url.orEmpty())
                                     }
 
                                     override fun onReceivedError(
@@ -210,7 +167,7 @@ fun ArticleWebView(
                                         // The fresh view starts over: no history to walk back
                                         // through, and no extraction left to answer.
                                         canGoBack = false
-                                        reader.extracting = false
+                                        currentReader.rendererGone()
                                         return currentRecovery.onRenderProcessGone(detail?.didCrash() == true)
                                     }
                                 }
@@ -218,15 +175,13 @@ fun ArticleWebView(
                         }
                     },
                     update = { view ->
+                        val page = WebViewArticlePage(view)
                         val loadKey = url to attempt
                         if (view.tag != loadKey) {
                             view.tag = loadKey
-                            reader.showingReader = false
-                            reader.pageLoaded = false
-                            reader.leftThroughLink = false
-                            view.loadUrl(url)
+                            reader.open(page, url, wantsReader)
                         } else {
-                            reconcile(view)
+                            reader.ask(page, wantsReader)
                         }
                     },
                     onRelease = { view ->
@@ -278,35 +233,35 @@ fun readerScriptAvailable(): Boolean {
     return remember { ReaderAssets.readabilityScript(context) != null }
 }
 
-/** The reader mode's bookkeeping for one article view. */
-private class ReaderState(
-    var pageUrl: String,
-) {
-    var showingReader = false
-    var pageLoaded = false
-    var extracting = false
-    var readerDocument: String? = null
-
-    /**
-     * The page on screen was reached by a link out of the reader, so it stays
-     * as the publisher served it however the toggle reads (#2060). Holds on
-     * its own: the view model's own per-page state arrives a recomposition
-     * later, after this page may already have finished loading.
-     */
-    var leftThroughLink = false
-
-    /** What the toggle last asked for, so a move of it can be told from a recomposition. */
-    var askedForReader: Boolean? = null
-
-    fun show(
-        view: WebView,
-        document: String,
-    ) {
-        showingReader = true
-        leftThroughLink = false
-        pageLoaded = false
-        view.loadDataWithBaseURL(pageUrl, document, "text/html", "utf-8", pageUrl)
+/**
+ * The web view as [ArticleReader] drives it: each call is `WebView`'s own.
+ * The one place in the app that loads a page into the article view or sets
+ * its JavaScript, so that the reader's rule for them (`ArticleScriptPolicy`)
+ * is the only one; `ArticleWebViewScriptScanTest` holds the source to that.
+ */
+private class WebViewArticlePage(
+    private val view: WebView,
+) : ArticlePage {
+    // The value is ArticleReader's: on for the publisher's page, which needs
+    // its scripts, and off for the reader rendering.
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun setJavaScriptEnabled(enabled: Boolean) {
+        view.settings.javaScriptEnabled = enabled
     }
+
+    override fun loadUrl(url: String) = view.loadUrl(url)
+
+    override fun loadDocument(
+        pageUrl: String,
+        html: String,
+    ) = view.loadDataWithBaseURL(pageUrl, html, "text/html", "utf-8", pageUrl)
+
+    override fun goBack() = view.goBack()
+
+    override fun evaluate(
+        program: String,
+        onResult: (String?) -> Unit,
+    ) = view.evaluateJavascript(program) { onResult(it) }
 }
 
 /** `evaluateJavascript` hands back a JSON-encoded value: a quoted string of the extraction's JSON, or `null`. */
