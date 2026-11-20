@@ -215,7 +215,9 @@ final class ApiClientDecodeFailureTests: XCTestCase {
         Endpoint("fetchSyncedSettings", .strict("get_preferences")) { _ = try await $0.fetchSyncedSettings() },
         Endpoint("loadNavState", .lenient) { _ = try await $0.loadNavState() },
         Endpoint("listRules", .strict("get_rules")) { _ = try await $0.listRules() },
-        Endpoint("setRules", .strict("set_rules")) { _ = try await $0.setRules([], expectedVersion: 1) },
+        Endpoint("setRules", .strict("set_rules")) {
+            _ = try await $0.setRules([], feedRules: nil, expectedVersion: 1)
+        },
         Endpoint("fetchPushEnvelope", .strict("push_envelope")) {
             _ = try await $0.fetchPushEnvelope(folder: "INBOX", uid: 1, messageID: nil)
         },

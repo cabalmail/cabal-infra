@@ -544,6 +544,19 @@ final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
     var holdSaves = false
     private var heldSaves: [CheckedContinuation<Void, Never>] = []
     private(set) var savedSets: [(rules: [Rule], expectedVersion: Int)] = []
+    /// The `feedRules` argument of each save, in step with `savedSets`: nil
+    /// where the request carried no feed rules.
+    private(set) var savedFeedRules: [[FeedRule]?] = []
+    var subscriptions: [RssSubscription] = []
+    var subscriptionsError: Error?
+    /// When true, a save's answer is the lists as the real client returns
+    /// them: decoded from JSON, so equal in content but with new local
+    /// condition ids. Off, the answer is the very values that were sent.
+    var answersAsDecoded = false
+    /// What the server does to a save before answering it, for a test that
+    /// needs its canonical set to differ from the one sent (an id it
+    /// re-minted, say). Nil answers the set as sent.
+    var canonicalize: ((RuleSet) -> RuleSet)?
 
     func releaseHeldSaves() {
         heldSaves.forEach { $0.resume() }
@@ -565,14 +578,29 @@ final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
         return ruleSet
     }
 
-    func saveRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet {
+    /// As `/set_rules` treats the feed list: a request that carries one
+    /// replaces the stored list (`ruleSet.feedRules`), a request without
+    /// one leaves it, and the answer says what the row holds either way.
+    func saveRules(
+        _ rules: [Rule], feedRules: [FeedRule]?, expectedVersion: Int
+    ) async throws -> RuleSet {
         savedSets.append((rules, expectedVersion))
+        savedFeedRules.append(feedRules)
         if holdSaves {
             await withCheckedContinuation { heldSaves.append($0) }
             try Task.checkCancellation()
         }
         if let saveError { throw saveError }
-        return RuleSet(rules: rules, version: expectedVersion + 1)
+        if let feedRules { ruleSet.feedRules = feedRules }
+        var answer = RuleSet(rules: rules, feedRules: ruleSet.feedRules, version: expectedVersion + 1)
+        if let canonicalize { answer = canonicalize(answer) }
+        guard answersAsDecoded else { return answer }
+        return try JSONDecoder().decode(RuleSet.self, from: JSONEncoder().encode(answer))
+    }
+
+    func listSubscriptions() async throws -> [RssSubscription] {
+        if let subscriptionsError { throw subscriptionsError }
+        return subscriptions
     }
 
     func listFolders() async throws -> [Folder] { folders }

@@ -27,6 +27,11 @@ once, the second save is rejected and that device offers a single
 **Reload** — last writer wins, unsaved edits on the loser are discarded.
 There is no merge.
 
+On the Apple clients the same screen holds a second list, **Feed
+items**, under the mail rules (headed **Email messages**): the rules for
+feed items, described under [Feed rules](#feed-rules) below. Everything
+on this page up to that section is about mail rules.
+
 The list shows one row per rule with an enable switch and a one-line
 summary. Rules can be added (blank or from a starter template),
 duplicated, deleted, and reordered; a disabled rule is kept but never
@@ -230,11 +235,26 @@ items instead of messages: when the feed fetcher first sees a new item,
 it evaluates each subscriber's feed rules against it and flags the item
 or marks it read for that subscriber, before any device opens the feed.
 
-The server side is in place. No client has an editor for feed rules yet;
-it arrives in Settings → Rules with a later client release, and until
-then the list is empty for everyone. Clients that predate feed rules are
-unaffected: they never see the list, and saving mail rules from one
-leaves it exactly as it was.
+The Apple clients edit feed rules in Settings → Rules, in the **Feed
+items** list under the mail rules. Android has no editor for them yet.
+Clients that predate feed rules are unaffected: they never see the list,
+and saving mail rules from one leaves it exactly as it was.
+
+The list works as the mail rules' does: one row per rule with an enable
+switch and a one-line summary; add (blank, or the "Flag matching items"
+template on the first-run screen), duplicate, delete and reorder; and
+the same auto-save, indicator and **Reload**. The two lists are saved
+together and share one version, so an edit to either on one device is a
+conflict for a device still holding the older set. A new blank rule
+arrives switched off: with no conditions it would match every new item
+in every feed.
+
+In the editor a rule has a name, the **Feed** it applies to (**All
+feeds**, or one of your subscriptions), its conditions, and its actions.
+A rule with no action switched on is saved, and the editor and its row
+say that it does nothing yet. If you unsubscribe from a rule's feed the
+rule stays and matches nothing; the editor says so until you pick
+another feed or All feeds.
 
 A feed rule is simpler than a mail rule. It has conditions and the three
 marks a mail rule can make, and nothing else: no folder, no forward, no
@@ -242,7 +262,7 @@ reply, no "continue".
 
 | Condition | What is matched |
 | --------- | --------------- |
-| Feed      | One subscription, exactly. Without it the rule covers every feed you subscribe to. At most one per rule. |
+| Feed      | One subscription, exactly. Without it the rule covers every feed you subscribe to. At most one per rule. The editor shows it as the rule's Feed, not as a condition row. |
 | Title     | The item's title; case-insensitive *contains*. |
 | Author    | The item's author; case-insensitive *contains*. |
 | Summary   | The text of the item's summary and of its body; case-insensitive *contains*. Markup is not text: a tag or attribute never matches. |
@@ -307,6 +327,9 @@ accepts it beside `rules` under the same `expectedVersion`:
 - `feedRules` is optional in a save. **Absent means "leave the stored
   list alone"**; an empty list clears it; `null` is refused. `rules` is
   still required, so a client that edits feed rules sends both lists.
+  The Apple clients send `feedRules` only when the feed list differs
+  from the server's last answer, so an edit to the mail rules alone is
+  the request an older build sends.
 - The two lists share one `version`: a feed-rule save racing a mail-rule
   save on another device gets the same 409 as two mail-rule saves.
 - Condition fields are `feed`, `title`, `author` and `summary`. Any key

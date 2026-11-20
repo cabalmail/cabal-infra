@@ -14,6 +14,7 @@ final class SectionFooterWrapTests: XCTestCase {
         "CabalmailUI/Rules/RulesView.swift",
         "CabalmailUI/Rules/RuleEditorView.swift",
         "CabalmailUI/Rules/RuleEditorExtras.swift",
+        "CabalmailUI/Rules/FeedRuleEditorView.swift",
         "CabalmailUI/Settings/SettingsDetailViews.swift",
         "CabalmailUI/Settings/NotificationSettingsSection.swift",
         "CabalmailUI/Mail/Search/SearchFiltersSheet.swift",
