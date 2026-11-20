@@ -77,38 +77,55 @@ extension View {
 ///   "switch", and `.accessibilityLabel` then names it, which the
 ///   Notifications switches it now matches do not even do.
 ///
-/// So macOS keeps the label and takes its width away. iOS and visionOS
-/// keep `.labelsHidden()`: their default switch reads correctly already,
-/// and a zero-width label there leaves the toggle's own `Spacer` free to
-/// push the switch across the row it shares.
+/// The last spelling, as #2040 first shipped it (a `Text` squeezed with
+/// `.frame(width: 0)`), took its room back in a grouped `Form`, where every
+/// `RowSwitch` lives. A switch toggle lays its label and switch out
+/// through `LabeledContent`, which a grouped form stretches across the row:
+/// the toggle took half the rule row from the summary, so the summary's
+/// chevron landed mid-row, and the zero-width "Enabled" wrapped a letter
+/// to a line, which made the row seven lines tall with the switch at its
+/// top. `.fixedSize()` does not rescue it, because the form gives the toggle
+/// a wide ideal width too. An `.accessibilityRepresentation` over a
+/// `.labelsHidden()` switch draws right and speaks as a switch, but
+/// VoiceOver's element comes out at the regular switch's 54×24 whatever
+/// control size it is given, so its cursor overhangs the 36×16 mini switch
+/// drawn.
+///
+/// So the macOS switch keeps its label and lays itself out through
+/// `SwitchOnlyLabeledContentStyle`, which gives the label a box of no size
+/// and puts the switch at once after it. It draws exactly what
+/// `.labelsHidden()` drew, in a form or out of one, and still reads as a
+/// named `AXSwitch`; `RowSwitchAccessibilityTests` holds both halves in a
+/// grouped form. iOS and visionOS keep `.labelsHidden()`: their default
+/// switch reads correctly already.
 struct RowSwitch: View {
-    /// The gap a toggle leaves between its label and its control, which a
-    /// zero-width label does not remove.
-    static let labelGap: CGFloat = 8
-
     let label: String
     @Binding var isOn: Bool
 
     var body: some View {
         #if os(macOS)
-        Toggle(isOn: $isOn) {
-            // Not `.labelsHidden()`: see the type's doc. `.clipped()` so
-            // the text cannot draw outside the width it was given.
-            Text(label)
-                .frame(width: 0)
-                .clipped()
-        }
-        .accessibilityLabel(label)
-        .miniSwitchStyleOnMac()
-        // A zero-width label still gets the toggle's label-to-control gap,
-        // which would move the switch 8 pt along the row it shares — 20 pt
-        // from the leading edge before, 28 after (measured, macOS 27).
-        // Taking the gap back keeps the row's footprint exactly where
-        // `.labelsHidden()` drew it; `RowSwitchAccessibilityTests` pins it.
-        .padding(.leading, -Self.labelGap)
+        Toggle(label, isOn: $isOn)
+            .labeledContentStyle(SwitchOnlyLabeledContentStyle())
+            .accessibilityLabel(label)
+            .miniSwitchStyleOnMac()
         #else
         Toggle(label, isOn: $isOn)
             .labelsHidden()
         #endif
+    }
+}
+
+/// `RowSwitch`'s layout on macOS: the switch alone, with the label kept in
+/// the view at no size so the toggle still counts as labelled. Not
+/// `.hidden()` on the label: that reads as a hidden label again, a toggle
+/// button (#2040).
+private struct SwitchOnlyLabeledContentStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 0) {
+            configuration.label
+                .frame(width: 0, height: 0)
+                .clipped()
+            configuration.content
+        }
     }
 }
