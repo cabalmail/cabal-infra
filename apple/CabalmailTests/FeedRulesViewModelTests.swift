@@ -366,3 +366,85 @@ final class FeedRulesSaveReplyTests: FeedRulesSaveTestCase {
         XCTAssertEqual(try recordedSave(backend, 1).expectedVersion, 6)
     }
 }
+
+/// A save's answer and the rows being edited. The editors draw a rule's
+/// conditions by each one's local `id`, and a condition decoded from a
+/// reply has a new one. So taking in an answer that changes nothing must
+/// leave the local rules alone: replacing them with an equal copy rebuilt
+/// the condition rows, and the field being typed in lost the keyboard
+/// whenever the user paused long enough for a save to land. The backend
+/// answers as the real client does here, with decoded values.
+@MainActor
+final class RulesSaveAnswerIdentityTests: FeedRulesSaveTestCase {
+    func testAnUnchangedAnswerLeavesTheMailConditionBeingTypedIn() async throws {
+        let backend = FakeRulesBackend()
+        backend.answersAsDecoded = true
+        let model = await loadedModel(backend)
+        var edited = try XCTUnwrap(model.rules.first)
+        edited.conditions[0].value = "invoices"
+        model.update(edited)
+        let typedIn = try XCTUnwrap(model.rules.first?.conditions.first?.id)
+        await waitForSaves(backend, 1)
+        await waitForSaved(model)
+
+        XCTAssertEqual(model.version, 6, "the answer was taken in")
+        XCTAssertEqual(model.rules.first?.conditions.first?.id, typedIn)
+    }
+
+    func testAnUnchangedAnswerLeavesTheFeedConditionBeingTypedIn() async throws {
+        let backend = FakeRulesBackend()
+        backend.answersAsDecoded = true
+        let model = await loadedModel(backend)
+        var edited = try XCTUnwrap(model.feed.rules.first)
+        edited.conditions[1].value = "releases"
+        model.feed.update(edited)
+        let typedIn = try XCTUnwrap(model.feed.rules.first?.conditions.last?.id)
+        await waitForSaves(backend, 1)
+        await waitForSaved(model)
+
+        XCTAssertEqual(model.version, 6, "the answer was taken in")
+        XCTAssertEqual(model.feed.rules.first?.conditions.last?.id, typedIn)
+        XCTAssertFalse(model.feed.hasUnsavedChanges)
+    }
+
+    /// A mail-only save answers the stored feed rules too, decoded. They
+    /// are equal to the local ones, so they are left alone as well.
+    func testAMailSaveLeavesTheFeedRulesRowsAlone() async throws {
+        let backend = FakeRulesBackend()
+        backend.answersAsDecoded = true
+        let model = await loadedModel(backend)
+        let feedCondition = try XCTUnwrap(model.feed.rules.first?.conditions.first?.id)
+        var edited = try XCTUnwrap(model.rules.first)
+        edited.name = "Invoices"
+        model.update(edited)
+        await waitForSaves(backend, 1)
+        await waitForSaved(model)
+
+        XCTAssertEqual(model.feed.rules.first?.conditions.first?.id, feedCondition)
+    }
+
+    /// The guard is on equality, not on adoption: when the server's set
+    /// does differ (here it re-minted both rules' ids), it still replaces
+    /// the local one.
+    func testAnAnswerTheServerChangedStillReplacesBothLists() async throws {
+        let backend = FakeRulesBackend()
+        backend.answersAsDecoded = true
+        backend.canonicalize = { sent in
+            var answer = sent
+            for index in answer.rules.indices { answer.rules[index].id = "r-00000000000\(index)" }
+            for index in answer.feedRules.indices { answer.feedRules[index].id = "r-11111111111\(index)" }
+            return answer
+        }
+        let model = await loadedModel(backend)
+        var edited = try XCTUnwrap(model.rules.first)
+        edited.name = "Invoices"
+        model.update(edited)
+        model.feed.add(feedRule(name: "Security"))
+        await waitForSaves(backend, 1)
+        await waitForSaved(model)
+
+        XCTAssertEqual(model.rules.map(\.id), ["r-000000000000"])
+        XCTAssertEqual(model.feed.rules.map(\.id), ["r-111111111110", "r-111111111111"])
+        XCTAssertFalse(model.feed.hasUnsavedChanges)
+    }
+}

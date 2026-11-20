@@ -51,9 +51,13 @@ final class FeedRulesEditor {
     /// the local one only if nothing was edited mid-flight, the guard the
     /// mail rules use. An edit made during the PUT has scheduled a save of
     /// its own, and stays unsaved against the new baseline.
+    ///
+    /// An answer equal to the local list replaces nothing, as for the mail
+    /// rules: an equal copy would still carry new condition ids and take
+    /// the keyboard from the condition being typed in.
     func adopt(saved rules: [FeedRule], sentAs snapshot: [FeedRule]) {
         serverRules = rules
-        if list.rules == snapshot {
+        if list.rules == snapshot, rules != snapshot {
             list.replace(with: rules)
         }
     }

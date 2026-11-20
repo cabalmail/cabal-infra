@@ -324,10 +324,17 @@ final class RulesViewModel {
     /// stripped, the feed rules the row now holds) replace the local ones,
     /// each only if nothing changed in it mid-flight; edits during the PUT
     /// have already scheduled their own save.
+    ///
+    /// And only if the server's list differs from the local one. Nearly
+    /// every answer is the list as it was sent, and replacing the rules
+    /// with an equal copy is not free: a decoded condition has a new local
+    /// `id`, so the editor's condition rows would be rebuilt and the field
+    /// being typed in would lose the keyboard each time a save landed.
     private func adopt(_ saved: RuleSet, sentAs snapshot: [Rule], feedSentAs feedSnapshot: [FeedRule]) {
         version = saved.version
-        if rules == snapshot {
-            mail.replace(with: saved.rules.map { $0.normalizingLegacyContinue() })
+        let canonical = saved.rules.map { $0.normalizingLegacyContinue() }
+        if rules == snapshot, canonical != snapshot {
+            mail.replace(with: canonical)
         }
         feed.adopt(saved: saved.feedRules, sentAs: feedSnapshot)
     }

@@ -549,6 +549,14 @@ final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
     private(set) var savedFeedRules: [[FeedRule]?] = []
     var subscriptions: [RssSubscription] = []
     var subscriptionsError: Error?
+    /// When true, a save's answer is the lists as the real client returns
+    /// them: decoded from JSON, so equal in content but with new local
+    /// condition ids. Off, the answer is the very values that were sent.
+    var answersAsDecoded = false
+    /// What the server does to a save before answering it, for a test that
+    /// needs its canonical set to differ from the one sent (an id it
+    /// re-minted, say). Nil answers the set as sent.
+    var canonicalize: ((RuleSet) -> RuleSet)?
 
     func releaseHeldSaves() {
         heldSaves.forEach { $0.resume() }
@@ -584,7 +592,10 @@ final class FakeRulesBackend: RulesBackend, @unchecked Sendable {
         }
         if let saveError { throw saveError }
         if let feedRules { ruleSet.feedRules = feedRules }
-        return RuleSet(rules: rules, feedRules: ruleSet.feedRules, version: expectedVersion + 1)
+        var answer = RuleSet(rules: rules, feedRules: ruleSet.feedRules, version: expectedVersion + 1)
+        if let canonicalize { answer = canonicalize(answer) }
+        guard answersAsDecoded else { return answer }
+        return try JSONDecoder().decode(RuleSet.self, from: JSONEncoder().encode(answer))
     }
 
     func listSubscriptions() async throws -> [RssSubscription] {
