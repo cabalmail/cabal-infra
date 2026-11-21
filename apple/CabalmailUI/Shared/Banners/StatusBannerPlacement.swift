@@ -53,8 +53,14 @@ enum StatusBannerPlacement {
     /// the bottom band — including an iPhone Plus / Max in landscape, whose
     /// width is regular but whose shell is still the tabs. visionOS's tab bar
     /// is a leading ornament, clear of the band.
-    static func bottomInset(in layout: ShellLayout) -> CGFloat {
-        bottomInset(isRegularWidth: layout != .tabs)
+    ///
+    /// Nor do the tabs while the system draws the window's bars in a side
+    /// strip (`\.barsAreVertical`: iPhone Duo's outer display on the iOS 27.1
+    /// SDK). The tab bar is in the strip there, so nothing holds the band and
+    /// the banner takes the plain gap. The bars' place is the system's own
+    /// reading, never the device or the window's width.
+    static func bottomInset(in layout: ShellLayout, barsAreVertical: Bool = false) -> CGFloat {
+        layout == .tabs && !barsAreVertical ? compactWidthBottomInset : defaultBottomInset
     }
 
     /// The part of a window a status banner hangs from the bottom of.

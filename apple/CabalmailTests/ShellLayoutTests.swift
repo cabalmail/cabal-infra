@@ -149,4 +149,24 @@ final class ShellLayoutTests: XCTestCase {
             XCTAssertEqual(StatusBannerPlacement.bottomInset(in: layout), StatusBannerPlacement.defaultBottomInset)
         }
     }
+
+    /// Nor do the tabs while the system draws their bar in a side strip, as
+    /// on iPhone Duo's outer display: nothing holds the bottom band there,
+    /// so a banner lifted to clear a bar would hang over empty space.
+    func testTabsInASideStripDoNotLiftTheBanners() {
+        XCTAssertEqual(
+            StatusBannerPlacement.bottomInset(in: .tabs, barsAreVertical: true),
+            StatusBannerPlacement.defaultBottomInset
+        )
+        XCTAssertEqual(
+            StatusBannerPlacement.bottomInset(in: .tabs, barsAreVertical: false),
+            StatusBannerPlacement.compactWidthBottomInset
+        )
+        for layout in [ShellLayout.desktop, .split, .ornament] {
+            XCTAssertEqual(
+                StatusBannerPlacement.bottomInset(in: layout, barsAreVertical: true),
+                StatusBannerPlacement.defaultBottomInset
+            )
+        }
+    }
 }
