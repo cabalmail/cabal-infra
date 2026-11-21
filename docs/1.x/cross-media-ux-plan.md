@@ -662,8 +662,9 @@ Verified note under B4.2), and both shipped in 1.56.0 the same day. The
 Apple work (4b on Apple) merged as #2509 on 2026-11-20 UTC and is not in
 a release yet: `flags-and-cross-media.md`
 decision 12 has what its scope settled, and the Built note under its
-B4.3 line what was built and run. The Android work is not started
-(`android-parity.md`, leg L3, after the Apple leg is promoted).
+B4.3 line what was built and run. The Android work (4b on Android) is
+in review as #2536 (2026-11-21): `android-parity.md`, leg L3, has its
+scope answers, what was built and its check in a running app.
 `flags-and-cross-media.md`
 gated the client work on fixes owned by other plans, and those have all
 merged:
@@ -728,6 +729,11 @@ validator is a type of its own, `FeedRulesValidator`, sharing
 one of the condition rows: the editor shows it as the rule's Feed, a
 picker of its own above the Title, Author and Summary conditions,
 because the server allows one to a rule and matches it exactly.
+
+As built on Android (#2536), the same two differences hold. A third:
+Android's mail rules still fail the whole load on a value the build does
+not know (it never took #1901's change), so only the feed rule is kept
+opaque there, and it must be, since both lists arrive in one reply.
 
 Acceptance: a rule "title contains 'release' in feed X, flag
 Releases" flags the next matching item on ingest, on every device,
