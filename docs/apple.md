@@ -1387,8 +1387,11 @@ and From, To, Cc, Bcc, Subject and the attachments below it
 in one `ForEach`, so a fold rebuilds no row and the editor keeps its web
 view, caret and undo). The arrangement reads the window's fold and the
 form's own pieces with the keyboard ignored, the software keyboard's
-frame (`onSoftwareKeyboardChange`, a `Platform/` adapter) and the form's
-scroll. The body's height comes from where it and the From header sat at
+frame (`onSoftwareKeyboardChange`, a `Platform/` adapter, which brings
+the frame from the screen's coordinates into the window's, the ones the
+fold is in, so the two agree where the window does not fill the screen)
+and the form's scroll. The body's height comes from where it and the
+From header sat at
 rest (sampled only at the form's top, idle, with the keyboard down): it
 reaches the fold, and any space the rows leave is padding under it that
 carries the header below the band (`ComposeLaptopPolicy.bodyFrame`);
@@ -1500,6 +1503,9 @@ phone's Search tab takes no search role
 (`CompactTab.role(in:barsAreVertical:)`), because the strip can hand that
 role's button to the selected tab's own search field (#1963); it is an
 ordinary tab there, and opens the Search screen with its field at the top.
+The status banners drop the lift that clears the phone's tab bar there too
+(`StatusBannerPlacement.bottomInset(in:barsAreVertical:)`): the bar is in
+the strip, so nothing holds the window's bottom band.
 
 **The reader's actions in the strip.** While the bars are vertical the mail
 reader's actions are five separate system bottom-bar items
