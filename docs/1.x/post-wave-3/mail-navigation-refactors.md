@@ -3,7 +3,7 @@
 > **Repo copy (2026-10-15):** Written in the 2026-10 Cabalmail Client Architecture project, which has closed. This copy is self-contained: what it took from that project's audits, scope docs, soak notes and threads is stated where it is used. Names, machines and test accounts are generalized for publication. Repo line numbers are as of the commit named under "Written"; re-check them before starting.
 
 **Recommendation:** Session, run in two passes by one plan. Every PR preserves behaviour over code that already has tests, there are two decisions in one batch, and nothing needs a server change, a migration, parallel threads or an outside event; the passes exist only because each PR waits for a different plan to free its file.
-**Size:** M (six PRs, each S or M; PR 7, L, only if decision 1 is Yes).
+**Size:** M (six PRs, each S or M). PR 7, L, was only for a Yes to decision 1, which was answered No.
 **Priority:** Next overall. PR 6 and PR 3a: Now, because each is small and frees room in a file that a bug-fix PR edits next (shared-load-error-state.md's A3 and A4). PR 1: Next, after ipad-layout-and-keyboard.md's PR B. PRs 2, 3b and 4: Later.
 **Depends on:** nothing hard. Order only, one open PR per shared file: ipad-layout-and-keyboard.md (PR B before PR 1; PR H in `SplitShell.swift`), duo-support.md (PR 3 in `SplitShell.swift`), hardening-web-and-writes.md (PR 1 and PR 5 in the compose model), shared-load-error-state.md (A3 in the test double; A1 and A4 in compose; B3 in the reader), platform-conditionals.md (FU-5 before PR 3b; FU-16), multi-window-and-restore.md (never open beside PR 1), detached-reader-window.md (PR 3 in the reader). Soft: refresh-scheduling.md (its loop type, if merged first).
 **Unblocks:** flags-and-cross-media.md (PR 1 before B5.1), sqlite-mail-store.md (PR 1 before Phase 3; PR 6 frees the test double), shared-load-error-state.md (PR 6 before A3 and PR 3a before A4, inferred). Soft: hardening-web-and-writes.md (PR 3a goes first if its PR 1 needs the room), multi-window-and-restore.md (R5 prefers PR 1 first), duo-support.md (a Session 2 fix that needs `SceneNavigator.swift` waits for PR 1), feed-bulk-actions.md (order only), test-debt.md (PR 6 frees `FakeImapClient` room before its A2).
@@ -20,15 +20,15 @@ Pass 1 started on 2026-11-21 against `stage` at `344859cda` (release 1.56.0 plus
 
 | Work item | Status |
 |---|---|
-| Decisions 1 and 2 | Decision 2: **Yes** (the maintainer, 2026-11-21), so PR 2 ran. Decision 1: asked again in pass 1's scope doc (2026-11-21) and still unanswered, so its default (No) stands until the maintainer answers. |
+| Decisions 1 and 2 | Both answered by the maintainer on 2026-11-21. Decision 1: **No**, so global search keeps its message-list model and PR 7 is dropped. Decision 2: **Yes**, so PR 2 ran. |
 | PR 6. `FakeImapClient`'s call gate | Done (2026-11-21): PR #2522. |
 | PR 3a. `ComposeAutosave` | Done (2026-11-21): PR #2523 finished what #2256 (duo-support.md's PR 7b) began under the name `ComposeAutosaveLoops`: the loop exit, the injected interval and sleep, `flush()` and the tests. |
-| PR 1. `MailNavigationState` (the navigator split) | Done (2026-11-21): PR #2529, held as a draft until release 1.57.0 had shipped the feed rules, so it is the one structural change in the release after 1.57.0 (the maintainer's choice). Its merge clears gate G4 of flags-and-cross-media.md. |
-| PR 2. The split's width write (only if decision 2 is Yes) | Done (2026-11-21): PR #2535, after the maintainer's Yes to decision 2 the same day. |
+| PR 1. `MailNavigationState` (the navigator split) | Done (2026-11-21): PR #2529, held as a draft until release 1.57.0 had shipped the feed rules, so it rides the release after 1.57.0 (the maintainer's choice), which PR 2 rides too. Its merge cleared gate G4 of flags-and-cross-media.md. |
+| PR 2. The split's width write (only if decision 2 is Yes) | Done (2026-11-21): PR #2535, after the maintainer's Yes to decision 2 the same day. It rides the same release as PR 1, also the maintainer's choice. |
 | PR 3b. `SendCoordinator` | Partly done (2026-10-28), under another name: #2256 moved the after-Send, Save Draft and Discard effects into `ComposeOutcomeReport`. The tests, `FolderTree.draftsPath` and the toast value are not started. |
 | PR 4. `MessageRenderer` (measure first) | Not started (2026-10-15). |
 | PR 5 | Moved to sqlite-mail-store.md's Phase 3; not this plan's work. |
-| PR 7. `GlobalSearchModel` (only if decision 1 is Yes) | Not started (2026-10-15). |
+| PR 7. `GlobalSearchModel` (only if decision 1 is Yes) | Dropped (2026-11-21): decision 1 is No. |
 
 > **Duo spec (2026-10-13):** This plan was written before the maintainer's Oct 7 Duo spec (the Claude Doc linked in duo-support.md) had been read. duo-support.md now follows it; where this plan's text disagrees with the points below, the points win. In the spec, "fold" means book or laptop pose, which changes no size class and swaps no shell; what this plan calls folding or unfolding the Duo is closing or opening it.
 >
@@ -36,8 +36,8 @@ Pass 1 started on 2026-11-21 against `stage` at `344859cda` (release 1.56.0 plus
 
 ## Decisions for the maintainer
 
-1. **Give global search its own model class now?** **No (recommended).** Consequence: global search stays a message-list model in "search" mode, and the question moves to sqlite-mail-store.md's Phase 3 question list, which already holds it (its line 203); that phase reshapes both lists anyway. Yes adds PR 7 (size L, pass 2) and approves moving one source-scan test's anchor (`MessageListRefreshRoutingTests.swift:60`). Default if unanswered: No.
-2. **Remove the iPad split's unused width measurement?** **Yes (recommended).** Consequence: the split stops measuring a width nothing reads. One source-scan test ends its slice on a comment that goes away, so its end marker moves to the next heading in the same file; none of its checks change. Default if unanswered: No, and PR 2 is dropped, because a scan change needs your yes. **Answered 2026-11-21: Yes** ("Yes, remove the unused width measurement."), after pass 1's three PRs had merged on the default; PR 2 followed the same day.
+1. **Give global search its own model class now?** **No (recommended).** Consequence: global search stays a message-list model in "search" mode, and the question moves to sqlite-mail-store.md's Phase 3 question list, which already holds it (its line 203); that phase reshapes both lists anyway. Yes adds PR 7 (size L, pass 2) and approves moving one source-scan test's anchor (`MessageListRefreshRoutingTests.swift:60`). Default if unanswered: No. **Answered 2026-11-21: No** ("Decision 1: No."), after pass 1 had finished on the default.
+2. **Remove the iPad split's unused width measurement?** **Yes (recommended).** Consequence: the split stops measuring a width nothing reads. One source-scan test ends its slice on a comment that goes away, so its end marker moves to the next heading in the same file; none of its checks change. Default if unanswered: No, and PR 2 is dropped, because a scan change needs your yes. **Answered 2026-11-21: Yes** ("Yes, remove the unused width measurement."), after pass 1's three PRs had merged on the default; PR 2 followed the same day. Asked whether it should ride the same release as PR 1, the maintainer answered "Same release" (2026-11-21).
 
 ## What you'll see change
 
@@ -110,7 +110,7 @@ Counts strip blank and comment-only lines, as SwiftLint does. The script reprodu
 - Tests: new `MailNavigationStateTests` for each transition's records and the gate; every `SceneNavigator*`, `ShellHandOff`, `WindowCommand*` and `ListPlace*` suite unchanged.
 - Verify: CI, the mutation pass, then the fold check. Risk: medium. This code keeps an open message across a fold, and its rules came from bugs (#1535, #1555 and #1664, closed; #1912, open but fixed).
 
-**Status:** Done (2026-11-21), PR #2529. It was held as a draft while the feed rules (#2509, #2517) were on `stage` unreleased, because this should be the one structural change in its release; the maintainer shipped those in 1.57.0 the same day and chose the release after it for this PR. The Mac window check on that release's stage TestFlight build holds its Promote.
+**Status:** Done (2026-11-21), PR #2529. It was held as a draft while the feed rules (#2509, #2517) were on `stage` unreleased, because this should be the one structural change in its release; the maintainer shipped those in 1.57.0 the same day and chose the release after it for this PR. The Mac window check on that release's stage TestFlight build holds its Promote. PR 2 (#2535) rides that release as well, by the maintainer's later choice, so it carries two changes to fold code and not one.
 
 - **What moved.** `Navigation/MailNavigationState.swift` holds the folder, the open message (one stored `envelope`, one reader, the ref worked out in `messageRecord(for:in:)`), the collapsed column and the `TreeGate` (one member, `gate`). Its transitions are `setFolder`, `openMessage`, `selectMessage`, `setColumn` and `handOff`; each returns records (`folder`, `sessionFolder`, `message`, `noMessage`, `searchResult`, `backedOut`) that the navigator applies in one place, `move(_:)`, in a mail extension beside the feed one. `selectedFolder`, `folder(in:)`, `envelope(in:)` and `compactColumn(in:)` forward, so no call site and no existing test changed. The type's doc names where a one-tree navigator deletes the gate and where the Duo spec's narrowing order would go (`handOff`).
 - **Counts.** `SceneNavigator`'s body is 187 counted lines, from 250, against the target of 205, so the landing bookkeeping (`didLand`, `awaitingLaunchReconcile`, `loadedFolders`, `resolvedFolder`) stayed in the navigator and the #1535 and #1912 rules did not move. The file is 383 counted lines, from 398.
@@ -124,13 +124,15 @@ Counts strip blank and comment-only lines, as SwiftLint does. The script reprodu
 - Scope: delete `contentColumnWidth`, its `.onGeometryChange` and `recordContentColumnWidth`, and move `ColumnToolbarOccupantsSourceScanTests`' end marker (`:114`) to `// MARK: - Floating folder panel` (`SplitShell.swift:191`) with every assertion unchanged. `ReaderColumnFloorSourceScanTests` and `SidebarToggleRemovalSourceScanTests` also read the file and stay unedited and green.
 - Verify: CI, then the fold check on the iPad and the unfolded Duo. Risk: low.
 
-**Status:** Done (2026-11-21), PR #2535, on `stage` at `7fe9241ca` (which holds PR 1, unreleased).
+**Status:** Done (2026-11-21), PR #2535, on `stage` at `7fe9241ca` (which holds PR 1, unreleased). It rides the same release as PR 1: the maintainer's answer the same day was "Same release".
 
 - **What went.** `contentColumnWidth`, the one `.onGeometryChange(for: CGFloat.self)` on the list column that wrote it, and `recordContentColumnWidth`. The split's other two geometry readers (`splitFrame` and `windowIsTall`) and the Mac window's own `contentColumnWidth` in `DesktopShell.swift`, which its search field reads, are untouched.
 - **The scan.** `ColumnToolbarOccupantsSourceScanTests` ends its column-bar slice at `// MARK: - Floating folder panel`; no assertion changed. Five mutations in the headless harness each fail a named test of it: a gear in the last function before the new marker, a Settings request beside the folder toggle, the toggle's action removed, the marker's heading renamed in the source, and the old marker put back in the test. The other four scans that read the file (`ReaderColumnFloorSourceScanTests`, `SidebarToggleRemovalSourceScanTests`, `SplitRetileWiringSourceScanTests`, `LaptopAddressesWiringSourceScanTests`) pass unedited.
 - **Fold check** (headless simulators on the MacBook, one simulator per device with the `stage` build and then this PR's): on the iPad Pro 11-inch the full 25-step tour (713.5 pt, 375 pt and back) gave 20 identical trees, 18 of them identical to the pixel; three differ only in how far a flick scrolled, and two narrow steps differ in how a row's sender line truncates. That last difference is not this PR: six repeats of that step, alternating the builds, gave each truncation on both builds. On the iPhone Duo, 10 steps closed, open, half open and half open turned (a message, a feed item, a search) gave 10 identical trees, frames included. visionOS was not run: `SplitShell` is the iPad and unfolded-Duo shell.
 
 **End of pass 1.** PR 1 is the one structural change in its release, so a fold regression traces to one PR; the maintainer picks which release, avoiding duo-support.md's R1 and ipad-layout-and-keyboard.md's Session 1 release where possible. Hand off to the soak. The session can stop here; pass 2 resumes from this plan when its files are free.
+
+As it went (2026-11-21): pass 1 is complete, with PR 6, PR 3a, PR 1 and PR 2 merged. PR 1 and PR 2 ride the release after 1.57.0 together, the maintainer's choice, so a fold regression in that release has two candidate PRs: the navigator split, and the deletion in `SplitShell.swift`, which is one commit to revert.
 
 ### Pass 2 (Later)
 
@@ -155,7 +157,7 @@ Counts strip blank and comment-only lines, as SwiftLint does. The script reprodu
 
 **PR 7. `GlobalSearchModel` (only if decision 1 is Yes).** After mail-correctness.md's PRs 2 and 3 and shared-load-error-state.md's B4, which edit `+Search.swift` and the list's state. Scope doc first: the list view takes a protocol both models satisfy, the `.search` scope and its 9 branches go, and the scan anchor moves as approved. The scope doc lists every scan that reads a `MessageListView*` file (8 test files name one by path at 50e6022). Size L; fold check; risk medium to high.
 
-**Status:** Not started (2026-10-15).
+**Status:** Dropped (2026-11-21): decision 1 is No. The question of global search's own model stays with sqlite-mail-store.md's Phase 3 list.
 
 ## Background from the rearchitecture
 
@@ -186,7 +188,7 @@ Opening brief, ready to paste:
 
 > Run pass 1 of the "Mail and navigation hotspot refactors" plan (`docs/1.x/post-wave-3/mail-navigation-refactors.md`) for the Cabalmail Apple clients on current `stage`. Read 00-working-agreements.md (same folder) first. The maintainer's answers: decision 1 `<answer>`, decision 2 `<answer>`. Recount every type in the plan's table with `swiftlint --strict` on a rig, then post a one-page scope doc: the two decisions quoted at the top with the answers, then one line per PR saying what the maintainer will see. Order: PR 6, PR 3a, PR 1, then PR 2 if `SplitShell.swift` is free. Before each PR, check that no other plan has a PR open on its files (the plan names them). Every PR preserves behaviour: tests unchanged except receiver-only commits, no source-scan edits beyond the approved ones, `no-changelog`, one open Apple PR at a time. Run the fold check on PRs 1 and 2, and post before taking the Studio's screen. Hand off to the soak after PR 1 (or PR 2), and stop; pass 2 is a later session.
 
-For pass 2, the same brief with "pass 2" and the order PR 3b, PR 4 (measure first), then PR 7 if decision 1 was Yes.
+For pass 2, the same brief with "pass 2" and the order PR 3b, then PR 4 (measure first). Decision 1 was answered No on 2026-11-21, so there is no PR 7.
 
 ## Risks and checks
 
