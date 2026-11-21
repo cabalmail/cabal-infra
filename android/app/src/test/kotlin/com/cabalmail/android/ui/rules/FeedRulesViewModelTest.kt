@@ -501,6 +501,68 @@ class FeedRulesViewModelTest {
         }
 
     @Test
+    fun `a later visit to the pane asks for the subscriptions again`() =
+        runTest(dispatcher) {
+            // The view model outlives a visit: a feed subscribed to in the
+            // Feeds tab since the load must reach the picker, and one
+            // unsubscribed from must leave it.
+            val backend = stocked()
+            backend.subscriptions = listOf(subscription("s1", "Apple"))
+            val model = RulesViewModel(backend)
+            advanceUntilIdle()
+            assertEquals(1, backend.subscriptionRequests)
+
+            backend.subscriptions = listOf(subscription("s3", "New feed"))
+            model.refreshSubscriptions()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("New feed"),
+                model.state.value.subscriptions
+                    ?.map { it.displayTitle },
+            )
+            // The rules were not fetched again, and nothing was saved.
+            assertEquals(
+                listOf("Releases"),
+                model.state.value.feedRules
+                    ?.map { it.name },
+            )
+            assertTrue(backend.savedSets.isEmpty())
+        }
+
+    @Test
+    fun `the pane's first visit does not ask twice`() =
+        runTest(dispatcher) {
+            // The load asks as its last step; the visit that started it
+            // need not ask beside it.
+            val backend = stocked()
+            val model = RulesViewModel(backend)
+            model.refreshSubscriptions()
+            advanceUntilIdle()
+
+            assertEquals(1, backend.subscriptionRequests)
+        }
+
+    @Test
+    fun `a refresh that fails keeps the list it had`() =
+        runTest(dispatcher) {
+            val backend = stocked()
+            backend.subscriptions = listOf(subscription("s1", "Apple"))
+            val model = RulesViewModel(backend)
+            advanceUntilIdle()
+
+            backend.subscriptionsError = IllegalStateException("offline")
+            model.refreshSubscriptions()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("Apple"),
+                model.state.value.subscriptions
+                    ?.map { it.displayTitle },
+            )
+        }
+
+    @Test
     fun `subscriptions that fail to load stay unknown, and the rules still load`() =
         runTest(dispatcher) {
             val backend = stocked()

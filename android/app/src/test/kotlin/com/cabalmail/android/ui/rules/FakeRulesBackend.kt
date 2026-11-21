@@ -32,6 +32,7 @@ class FakeRulesBackend : RulesBackend {
     /** The feed list each save carried, in order; null for a save with none. */
     val savedFeedLists = mutableListOf<List<FeedRule>?>()
     val createdFolders = mutableListOf<String>()
+    var subscriptionRequests = 0
 
     override suspend fun fetchRules(): RuleSet = ruleSet
 
@@ -58,6 +59,7 @@ class FakeRulesBackend : RulesBackend {
     }
 
     override suspend fun listSubscriptions(): List<RssSubscription> {
+        subscriptionRequests += 1
         subscriptionsError?.let { throw it }
         return subscriptions
     }

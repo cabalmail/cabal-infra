@@ -696,6 +696,9 @@ private fun MailNavGraph(
                     val rulesViewModel: RulesViewModel =
                         viewModel(factory = RulesViewModel.factory(container))
                     val rulesState by rulesViewModel.state.collectAsState()
+                    // Each visit to the pane, not only the view model's
+                    // first load: the rows name each feed rule's feed.
+                    LaunchedEffect(rulesViewModel) { rulesViewModel.refreshSubscriptions() }
                     RulesScreen(
                         state = rulesState,
                         onAdd = { template ->
@@ -808,6 +811,9 @@ private fun MailNavGraph(
                 viewModel(parentEntry, factory = RulesViewModel.factory(container))
             val state by viewModel.state.collectAsState()
             val preferences by container.preferences.preferences.collectAsState()
+            // The Feed picker offers the feeds as they are now, not as they
+            // were when Settings was first opened in this run of the app.
+            LaunchedEffect(viewModel) { viewModel.refreshSubscriptions() }
             FeedRuleEditorScreen(
                 state = state,
                 ruleId = entry.arguments?.getString("ruleId").orEmpty(),

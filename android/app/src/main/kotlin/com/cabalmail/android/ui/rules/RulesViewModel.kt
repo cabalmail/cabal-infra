@@ -196,7 +196,7 @@ class RulesViewModel(
                 }
             }
             refreshFolders()
-            refreshSubscriptions()
+            loadSubscriptions()
         }
     }
 
@@ -205,9 +205,26 @@ class RulesViewModel(
             .onSuccess { folders -> mutableState.update { it.copy(folders = folders) } }
     }
 
+    /**
+     * Asks again for the feeds the Feed picker offers. Called when the
+     * Rules pane or a feed rule's editor comes on screen: this view model
+     * outlives a visit to the pane (it belongs to Settings, which keeps its
+     * state while another tab is in front), so a feed subscribed to since
+     * the load would otherwise be missing from the picker, and one
+     * unsubscribed from would still be offered, until the app restarted.
+     *
+     * Nothing to do while a load is running: it asks as its last step.
+     */
+    fun refreshSubscriptions() {
+        if (mutableState.value.loading) {
+            return
+        }
+        viewModelScope.launch { loadSubscriptions() }
+    }
+
     /** A failure leaves what was there: the pickers keep the last list, or
      * none, and a rule's feed is then shown without its name. */
-    private suspend fun refreshSubscriptions() {
+    private suspend fun loadSubscriptions() {
         runCatching { backend.listSubscriptions() }
             .onSuccess { subscriptions ->
                 val byTitle = subscriptions.sortedBy { it.displayTitle.lowercase() }
