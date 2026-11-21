@@ -62,19 +62,11 @@ final class SceneNavigator {
 
     private(set) var route: AppRoute
 
-    /// The sidebar's folder: the resolved value of `route.mail.folderPath`,
-    /// the fetched `Folder` once the folder list has loaded (#1535). Trees
-    /// read it through `folder(in:)`.
-    private(set) var selectedFolder: Folder?
-
-    /// The open message; read through `envelope(in:)`. Usually the route's
-    /// message, but a search result while searching.
-    private var selectedEnvelope: Envelope?
-
-    /// Which column the collapsed navigation shows; read through
-    /// `compactColumn(in:)`. Stored rather than derived from the route
-    /// because backing out to the folder list leaves the folder selected.
-    private var compactColumn: NavigationSplitViewColumn = .sidebar
+    /// The window's place in mail: the sidebar's folder, the open message,
+    /// the collapsed navigation's column and the tree that owns them
+    /// (`MailNavigationState`). Trees read it through `folder(in:)`,
+    /// `envelope(in:)` and `compactColumn(in:)`.
+    private(set) var mail = MailNavigationState()
 
     /// The window's place in the feed reader, read and written by the feed
     /// trees (`FeedNavigationState`).
@@ -129,10 +121,6 @@ final class SceneNavigator {
     /// recorded whatever tab was up, so this never goes back to false.
     private(set) var hasShownMail: Bool
 
-    /// The tree that owns the window's folder, message and column
-    /// (`TreeGate`).
-    private var mailTrees = TreeGate()
-
     private let coordinator: @MainActor () -> NavStateCoordinator?
     private let hasClient: @MainActor () -> Bool
     /// The router deep links reach this window through (`open(_:)`).
@@ -184,24 +172,6 @@ final class SceneNavigator {
 
     // MARK: Trees
 
-    /// The sidebar folder as `tree` should draw it: none until the tree has
-    /// taken over (see the type's doc).
-    func folder(in tree: UUID) -> Folder? {
-        mailTrees.shows(tree) ? selectedFolder : nil
-    }
-
-    /// The open message as `tree` should draw it: none until the tree has
-    /// taken over.
-    func envelope(in tree: UUID) -> Envelope? {
-        mailTrees.shows(tree) ? selectedEnvelope : nil
-    }
-
-    /// The compact column as `tree` should draw it: the folder list until the
-    /// tree has taken over.
-    func compactColumn(in tree: UUID) -> NavigationSplitViewColumn {
-        mailTrees.shows(tree) ? compactColumn : .sidebar
-    }
-
     /// A mail tree appeared: a `MailRootView`, or visionOS's tab view, which
     /// lands whichever tab it opens on. The first tree in the window lands;
     /// a tree built after it by a layout swap takes over the window's route;
@@ -214,14 +184,14 @@ final class SceneNavigator {
     ///   INBOX. visionOS's tab view has no folder list in its Mail tab, so it
     ///   lands on INBOX as the wide split does.
     func mailTreeAppeared(_ tree: UUID, isWide: Bool, startsOnFolderList: Bool = false) async {
-        let isRebuild = mailTrees.appear(tree, startsOnFolderList: startsOnFolderList && !isWide)
+        let isRebuild = mail.appear(tree, startsOnFolderList: startsOnFolderList && !isWide)
         layoutIsWide = isWide
         if isWide {
             hasShownMail = true
             feedTreeArrived(tree, showsReader: route.section == .feeds)
         }
         guard isRebuild, didLand else {
-            mailTrees.mount(tree)
+            mail.mount(tree)
             await landIfNeeded(tree, isWide: isWide)
             return
         }
@@ -229,7 +199,7 @@ final class SceneNavigator {
         // A tree that a second swap replaced while this one waited on the
         // feed store takes nothing over.
         guard isCurrent(tree, isWide: isWide) else { return }
-        mailTrees.mount(tree)
+        mail.mount(tree)
     }
 
     /// A rebuilt tree renders the route: the folder stays, an open message is
@@ -245,8 +215,10 @@ final class SceneNavigator {
     /// mail.
     private func rehand(_ tree: UUID, isWide: Bool) async {
         listHold.handOff(isWide: isWide, folderPath: selectedFolder?.path, parkingIn: restores)
-        selectedEnvelope = nil
-        compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: selectedFolder != nil)
+        move {
+            $0.handOff()
+            return []
+        }
         // A result the window was reading in search when its layout changed:
         // the split draws search in place of its list, so its reader takes it
         // (#2184). The tab layouts' Search tab takes its own on appear
@@ -254,7 +226,7 @@ final class SceneNavigator {
         // folder open loses it to the folder the landing picks, as any open
         // message is lost to a folder pick.
         if isWide, let result = shellHandOff.takeSearchResult() {
-            applyMessage(result, isSearching: true)
+            move { $0.openMessage(result, isSearching: true) }
         }
         guard let coordinator = coordinator() else { return }
         if isWide, route.section == .feeds {
@@ -303,14 +275,14 @@ final class SceneNavigator {
     /// list hosted outside a main window — and takes a restore as before.
     func listMayTakeRestore(in tree: UUID?) -> Bool {
         guard let tree else { return true }
-        return !mailTrees.isSuperseded(tree)
+        return !mail.isSuperseded(tree)
     }
 
     /// Whether `tree` is still the one taking the window over, in the layout
     /// it appeared in: a second swap during a feed-store wait may have built
     /// another tree, or gone back to a compact tab that has no mail tree.
     private func isCurrent(_ tree: UUID, isWide: Bool) -> Bool {
-        mailTrees.isAppearing(tree) && layoutIsWide == isWide
+        mail.isAppearing(tree) && layoutIsWide == isWide
     }
 
     // MARK: Landing
@@ -354,7 +326,7 @@ final class SceneNavigator {
     /// resume, a tree that starts on its folder list stays there: no folder,
     /// so nothing to reconcile and nothing recorded until the user picks one.
     private func landOnSessionFolder(_ coordinator: NavStateCoordinator, stored: AppRoute.Mail = AppRoute.Mail()) {
-        guard let target = coordinator.mailLaunchTarget(stored: stored, for: mailTrees) else { return }
+        guard let target = coordinator.mailLaunchTarget(stored: stored, for: mail.gate) else { return }
         awaitingLaunchReconcile = true
         recorder.recording?.armProvisionalLanding()
         restores.park(target, priming: recorder.recording)
@@ -404,7 +376,7 @@ final class SceneNavigator {
                 restores.clearPendingRestore()
                 setFolder(inbox, records: hasShownMail)
             }
-        } else if let target = coordinator?.mailLaunchTarget(stored: route.mail, for: mailTrees) {
+        } else if let target = coordinator?.mailLaunchTarget(stored: route.mail, for: mail.gate) {
             // The client wasn't wired when the tree appeared, so there was no
             // provisional landing: land now. A folder that is gone falls back
             // to INBOX without its message. With nothing to resume, a tree
@@ -458,27 +430,6 @@ final class SceneNavigator {
         if folder != nil { followSplit() }
     }
 
-    /// The list's selection from `tree` — a tap, a restore, an advance after
-    /// a dispose.
-    func selectMessage(_ envelope: Envelope?, isSearching: Bool, from tree: UUID) {
-        guard canWrite(from: tree) else { return }
-        let before = route
-        applyMessage(envelope, isSearching: isSearching)
-        if route != before { followSplit() }
-    }
-
-    /// The collapsed split view moved column from `tree` (the back gesture).
-    /// Leaving the reader drops the open message, so the same row can be
-    /// opened again.
-    func setCompactColumn(_ column: NavigationSplitViewColumn, isSearching: Bool, from tree: UUID) {
-        guard canWrite(from: tree), column != compactColumn else { return }
-        compactColumn = column
-        if column == .sidebar { listHold.backOut(from: restores) }
-        if CompactColumnPolicy.dropsMessage(movingTo: column) {
-            applyMessage(nil, isSearching: isSearching)
-        }
-    }
-
     /// The compact tab bar switched, or a navigation moved it. The Mail and
     /// Feeds tabs each keep their own position, so only the section moves;
     /// the utility tabs move nothing, and re-selecting the tab on screen
@@ -493,66 +444,6 @@ final class SceneNavigator {
     }
 
     // MARK: Transitions
-
-    private func canWrite(from tree: UUID) -> Bool {
-        mailTrees.canWrite(tree)
-    }
-
-    /// The wide split switching to feeds: the mail folder and message clear.
-    /// Neither is recorded; the feed scope's own record moves the session.
-    private func enterFeeds() {
-        setFolder(nil)
-        applyMessage(nil, isSearching: false)
-        moveSection(to: .feeds)
-    }
-
-    /// - Parameter records: whether a new folder moves the session there.
-    ///   Only a landing before the window has shown mail passes false.
-    private func setFolder(_ folder: Folder?, records: Bool = true) {
-        // A same-path write is a metadata reconcile — the provisional
-        // `Folder(path:)` swapped for the fetched one: same mailbox, so the
-        // message stays and nothing is re-recorded.
-        guard folder?.path != selectedFolder?.path else {
-            if folder != selectedFolder { selectedFolder = folder }
-            return
-        }
-        selectedFolder = folder
-        selectedEnvelope = nil
-        listHold.drop(from: restores, landingOn: folder?.path)
-        route.mail = AppRoute.Mail(folderPath: folder?.path)
-        compactColumn = CompactColumnPolicy.afterFolderChange(hasFolder: folder != nil)
-        guard let path = folder?.path, records else { return }
-        moveSection(to: .mail)
-        // Folder is the cursor's highest-priority field; the coordinator
-        // debounces and de-dupes the write.
-        recorder.folder(path)
-        // visionOS's Folders tab picks the folder for its Mail tab, so a new
-        // folder chosen there shows its messages.
-        if compactTab == .folders { showTab(.mail) }
-    }
-
-    private func applyMessage(_ envelope: Envelope?, isSearching: Bool) {
-        guard envelope != selectedEnvelope else { return }
-        selectedEnvelope = envelope
-        compactColumn = CompactColumnPolicy.column(hasSelectedMessage: envelope != nil, current: compactColumn)
-        // What a later layout swap hands to the layout's search surface
-        // (#2184); a message opened outside search is not a result.
-        shellHandOff.searchResultChanged(isSearching ? envelope : nil)
-        // While searching, the open message is a result with no single folder
-        // to anchor the cursor to.
-        guard !isSearching, let folderPath = selectedFolder?.path else { return }
-        guard let envelope else {
-            route.mail.message = nil
-            recorder.noMessage(folderPath: folderPath)
-            return
-        }
-        // Anchored to the sidebar's folder: a row from another folder is not
-        // this folder's position.
-        let ref = envelope.ref(defaultFolder: folderPath)
-        guard ref.folder == folderPath else { return }
-        route.mail.message = ref
-        recorder.message(ref)
-    }
 
     /// A landing moved the window to `section`. The wide layout has no tab
     /// bar; its tab is the one a swap to the compact layout opens on, so a
@@ -570,6 +461,97 @@ final class SceneNavigator {
     /// utility tab survives a round trip with nothing picked.
     private func followSplit() {
         if layoutIsWide { compactTab = CompactTab.initial(for: route.section) }
+    }
+}
+
+// The mail half (`MailNavigationState`), in the same file so it reaches the
+// window's private state: what the trees read, the writes they make, and the
+// one place a mail transition's records are applied.
+extension SceneNavigator {
+    /// The sidebar's folder: the resolved value of `route.mail.folderPath`.
+    /// Trees read it through `folder(in:)`.
+    var selectedFolder: Folder? { mail.folder }
+
+    /// The sidebar folder as `tree` should draw it: none until the tree has
+    /// taken over (see the type's doc).
+    func folder(in tree: UUID) -> Folder? { mail.folder(in: tree) }
+
+    /// The open message as `tree` should draw it: none until the tree has
+    /// taken over.
+    func envelope(in tree: UUID) -> Envelope? { mail.envelope(in: tree) }
+
+    /// The compact column as `tree` should draw it: the folder list until the
+    /// tree has taken over.
+    func compactColumn(in tree: UUID) -> NavigationSplitViewColumn { mail.column(in: tree) }
+
+    /// The list's selection from `tree` — a tap, a restore, an advance after
+    /// a dispose. A different message in the wide split moves the compact
+    /// tab (`followSplit`).
+    func selectMessage(_ envelope: Envelope?, isSearching: Bool, from tree: UUID) {
+        let before = route
+        move { $0.selectMessage(envelope, isSearching: isSearching, from: tree) }
+        if route != before { followSplit() }
+    }
+
+    /// The collapsed split view moved column from `tree` (the back gesture).
+    /// Leaving the reader drops the open message, so the same row can be
+    /// opened again.
+    func setCompactColumn(_ column: NavigationSplitViewColumn, isSearching: Bool, from tree: UUID) {
+        move { $0.setColumn(column, isSearching: isSearching, from: tree) }
+    }
+
+    /// The wide split switching to feeds: the mail folder and message clear.
+    /// Neither is recorded; the feed scope's own record moves the session.
+    private func enterFeeds() {
+        setFolder(nil)
+        move { $0.openMessage(nil, isSearching: false) }
+        moveSection(to: .feeds)
+    }
+
+    /// - Parameter records: whether a new folder moves the session there.
+    ///   Only a landing before the window has shown mail passes false.
+    private func setFolder(_ folder: Folder?, records: Bool = true) {
+        move { $0.setFolder(folder, movesSession: records) }
+    }
+
+    /// Makes a mail transition and applies what follows from it to the
+    /// route, the resume session, the folder list's hold and the tab, in the
+    /// order the transition gave.
+    ///
+    /// The transition runs on a copy, and the window's place is written only
+    /// if it changed. Mutating `mail` in place would tell every view that
+    /// reads it to redraw on each call, including the ones that change
+    /// nothing: the same message selected again, the column already on
+    /// screen, a write from a tree a swap has replaced.
+    private func move(_ transition: (inout MailNavigationState) -> [MailNavigationState.Record]) {
+        var next = mail
+        let records = transition(&next)
+        if next != mail { mail = next }
+        for record in records {
+            switch record {
+            case .folder(let path):
+                listHold.drop(from: restores, landingOn: path)
+                route.mail = AppRoute.Mail(folderPath: path)
+            case .sessionFolder(let path):
+                moveSection(to: .mail)
+                // Folder is the cursor's highest-priority field; the
+                // coordinator debounces and de-dupes the write.
+                recorder.folder(path)
+                // visionOS's Folders tab picks the folder for its Mail tab,
+                // so a new folder chosen there shows its messages.
+                if compactTab == .folders { showTab(.mail) }
+            case .message(let ref):
+                route.mail.message = ref
+                recorder.message(ref)
+            case .noMessage(let folderPath):
+                route.mail.message = nil
+                recorder.noMessage(folderPath: folderPath)
+            case .searchResult(let envelope):
+                shellHandOff.searchResultChanged(envelope)
+            case .backedOut:
+                listHold.backOut(from: restores)
+            }
+        }
     }
 }
 
@@ -787,7 +769,7 @@ extension SceneNavigator {
 
     /// The Search tab reports the result it has open, so the next layout
     /// swap can hand it to the split's reader (#2184). The split's own open
-    /// result is reported by `applyMessage`.
+    /// result is recorded by its transition (`MailNavigationState.Record.searchResult`).
     func searchTabResultChanged(_ envelope: Envelope?) {
         shellHandOff.searchResultChanged(envelope)
     }
