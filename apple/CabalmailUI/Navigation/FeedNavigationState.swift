@@ -3,9 +3,9 @@ import CabalmailKit
 
 /// One window's place in the feed reader, with its transitions.
 ///
-/// Both feed trees read and write it: the wide split, where `MailRootView`
-/// hosts feeds beside mail, and `FeedRootView`, the Feeds tab on the compact
-/// layout and on visionOS. Before, each kept its own copy as view state and
+/// Both feed trees read and write it: the wide split, where `WideMail` hosts
+/// feeds beside mail, and `FeedRootView`, the Feeds tab on the compact layout
+/// and on visionOS. Before, each kept its own copy as view state and
 /// they disagreed on when a restored item opens; a layout swap threw both
 /// away. The transitions are pure: each returns what the resume session
 /// should record, and `SceneNavigator` records it.
