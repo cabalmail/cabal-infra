@@ -13,13 +13,21 @@ import CabalmailKit
 /// them: the wide section's header and filter pills, the Feeds tab's
 /// toolbar, filter field and pills.
 struct FeedSidebarContent<Leading: View>: View {
-    enum Style {
-        /// Rows are `Button`s, inside the mail sidebar's
-        /// `List(selection: $folder)`: one list carries one selection type,
-        /// and the mail folders own it.
+    enum Style: Equatable {
+        /// Rows are `Button`s inside the mail sidebar's list, beside its
+        /// selection rather than part of it: the iPad's split.
         case rowButtons
-        /// Rows are tagged for the host's own `List(selection:)`.
+        /// Rows are tagged for the host's own `List(selection:)`, whose
+        /// selection is a feed list: the Feeds tab's sidebar.
         case listSelection
+        /// Rows are tagged for the mail sidebar's list, whose selection is a
+        /// `SidebarSelection`, so a feed is selected as a folder is: the Mac.
+        case sidebarSelection
+
+        /// The style of the Feeds section inside the mail sidebar's list.
+        static func inMailSidebar(on platform: HostPlatform) -> Style {
+            platform.sidebarSelectsFeeds ? .sidebarSelection : .rowButtons
+        }
     }
 
     let style: Style
@@ -54,7 +62,7 @@ struct FeedSidebarContent<Leading: View>: View {
     @ViewBuilder
     private var emptyState: some View {
         switch style {
-        case .rowButtons:
+        case .rowButtons, .sidebarSelection:
             Button("Subscribe to a feed…") { actions.subscribe() }
                 .buttonStyle(.plain)
                 .appFont(.footnote)
@@ -103,6 +111,10 @@ struct FeedSidebarContent<Leading: View>: View {
             label
                 .tag(RssItemScope.all)
                 .contextMenu { menu(for: nil, scope: .all) }
+        case .sidebarSelection:
+            label
+                .sidebarFeedRow(.all, identifier: "feed.row.all")
+                .contextMenu { menu(for: nil, scope: .all) }
         }
     }
 
@@ -119,6 +131,13 @@ struct FeedSidebarContent<Leading: View>: View {
                 FeedSidebarRowLabel(row: row, isSelected: selection == row.scope,
                                     isCollapsed: isCollapsed, toggleCollapse: toggleCollapse)
                     .tag(row.scope)
+                    .contextMenu { menu(for: row, scope: row.scope) }
+            }
+        case .sidebarSelection:
+            ForEach(rows) { row in
+                FeedSidebarRowLabel(row: row, isSelected: selection == row.scope,
+                                    isCollapsed: isCollapsed, toggleCollapse: toggleCollapse)
+                    .sidebarFeedRow(row.scope, identifier: "feed.row.\(row.id)")
                     .contextMenu { menu(for: row, scope: row.scope) }
             }
         }
@@ -139,6 +158,18 @@ extension FeedSidebarContent where Leading == EmptyView {
             style: style, model: model, selection: selection, rows: rows, isCollapsed: isCollapsed,
             toggleCollapse: toggleCollapse, actions: actions, management: management, leading: { EmptyView() }
         )
+    }
+}
+
+private extension View {
+    /// A feed row of the mail sidebar's list: the row the list selects for
+    /// its feed list, and named for a driver as the button row it replaces
+    /// was. `.contain` keeps the folder chevron inside it reachable, as on
+    /// the folder rows.
+    func sidebarFeedRow(_ scope: RssItemScope, identifier: String) -> some View {
+        sidebarFeedRow(scope)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(identifier)
     }
 }
 

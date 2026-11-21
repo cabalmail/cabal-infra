@@ -171,6 +171,9 @@ final class SceneNavigator {
         route = storedRoute ?? AppRoute(section: section)
         compactTab = CompactTab.initial(for: section)
         hasShownMail = section == .mail
+        // No sidebar offers a smart view yet, so a stored one (another
+        // build's) opens on the route's mail or feeds place.
+        route.smartView = nil
     }
 
     // MARK: Trees

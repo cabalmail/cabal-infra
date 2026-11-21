@@ -30,8 +30,9 @@ struct FolderListView: View {
     /// The Feeds section's selection (RSS plan, phase 5). Non-nil only on the
     /// layouts where feeds share this sidebar (macOS, iPad-regular); the
     /// compact and visionOS Feeds tabs have their own `FeedSidebarList`.
-    /// Rows are buttons rather than list selection because the folder rows
-    /// already own this list's selection type.
+    /// On the Mac the feed rows are rows of this list's selection, beside
+    /// the folders (`SidebarSelectionList`); in the iPad's split they are
+    /// buttons (`HostPlatform.sidebarSelectsFeeds`).
     var feedSelection: Binding<RssItemScope?>?
     @State var feedModel: FeedSidebarViewModel?
     // Feed management (RSS plan, phase 5c): the sheets and confirmations
@@ -179,7 +180,7 @@ struct FolderListView: View {
 
     private var folderList: some View {
         let collapsedSet = collapsedPaths
-        return List(selection: $selection) {
+        return SidebarSelectionList(folder: $selection, feedScope: feedSelection, folders: model?.folders ?? []) {
             if let model {
                 if model.isLoading && model.folders.isEmpty {
                     ProgressView("Loading folders…")
@@ -365,7 +366,7 @@ struct FolderListView: View {
             hasChildren: sectionRow.hasChildren,
             isCollapsed: collapsed.contains(folder.path)
         )
-            .tag(folder)
+            .sidebarFolderRow(folder)
             .overlay {
                 if dropTargetPath == folder.path {
                     RoundedRectangle(cornerRadius: 6)
