@@ -5,6 +5,110 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.57.0] - 2026-11-21
+
+### Added
+- Apple: **Rules for feed items.** Settings > Rules has a second list,
+  "Feed items", under the mail rules, which now sit under "Email
+  messages". A feed rule flags a new item or marks it read as soon as its
+  feed is fetched, before any device opens the feed: pick the feed it
+  applies to (or all feeds), add conditions on the item's title, author
+  or summary, and switch on any of your flags and Mark as read. Every
+  enabled rule that matches applies, so their order is only how the list
+  is shown. A rule runs once, when an item first arrives; it does not
+  reach back to items already there. A "Flag matching items" template
+  joins the starter templates. Feed rules sync with the mail rules and
+  save with them: one device's edit to either list is a conflict for a
+  device still holding the older set, and an edit to the mail rules
+  alone leaves the stored feed rules untouched (`feedRules` on
+  `/get_rules` and `/set_rules`; docs/mail-rules.md, "Feed rules").
+- **"What to Test" notes on visionOS TestFlight builds.** A prod release
+  set the TestFlight notes on its iOS and macOS builds only: the visionOS
+  build shares the iOS app record and could share its build number, and
+  the notes script had no way to tell the two builds apart. Since the
+  build lookup now matches the platform (#2518), `testflight-assign` sets
+  the notes on every platform's build, visionOS included.
+
+### Changed
+- **A composer's autosave loops end with their composer.** The two loops
+  that save a draft while it is being written (the local copy every 5 s,
+  the server copy every 60 s) kept waking for the rest of the process if
+  a composer went away without stopping them. Each now looks for its
+  composer when it wakes and ends once it is gone. The intervals and the
+  sleep are injected (`ComposeAutosaveTiming`) and the loops save through
+  a small protocol, so the new `ComposeAutosaveTests` step the loops
+  instead of waiting them out. A composer whose scene goes to the
+  background also writes its local copy at once rather than at the next
+  5 s tick (`ComposeAutosaveLoops.flush()`), and only while the loops are
+  running, so a draft that was sent, discarded or handed to a window is
+  not written back.
+- **`FakeImapClient`'s hold on a wire call is a type of its own.** The
+  shared IMAP test double's hold-and-release machinery (the search hold
+  and the per-call hold some sixty suites order their races with) moves
+  into `CallGate`, a value the fake stores and mutates, so holding a call
+  adds no suspension point and no test changes. The fake's body drops
+  from 248 to 225 of SwiftLint's 250 counted lines, which leaves room for
+  the next script added to it. `FakeImapClientHoldTests` pins each rule
+  of the hold on its own. Test support only: no app or Kit source
+  changes.
+- **TestFlight group assignment off the macOS runners.** After `altool`
+  finished, each of `apple.yml`'s iOS, visionOS and macOS upload legs
+  went on polling App Store Connect from its macOS runner until Apple had
+  ingested the build and it could join the branch's TestFlight group: 1.5
+  to 5 minutes a leg on recent pushes, with a 40-minute ceiling. The legs
+  now hand their build numbers to a new `testflight-assign` job, which
+  attaches each build and, on `main`, sets its "What to Test" notes from
+  an Ubuntu runner, so a macOS runner is released as soon as its upload
+  is done. A Mac build is now attached even when the optional Developer
+  ID notarization after its upload fails.
+
+### Fixed
+- Android: **Feed reader mode runs no script.** An article in reader view
+  no longer runs scripts or event handlers from the publisher's markup,
+  and video players now show only on the publisher's page (#2508). The
+  reader toggle in an open article also holds now: Show reader view and
+  Show original formatting used to be undone as soon as the page they
+  loaded had finished loading (#2510).
+- Apple: **Compose in laptop pose beside another app.** On an iPhone Duo
+  folded like a laptop, compose places Cancel, Attach and Send by where
+  the software keyboard ends up against the fold. The keyboard's frame
+  arrives in the screen's coordinates and the fold is in the window's,
+  and the two agree only while the window fills the screen. The frame is
+  now brought into the window first, so they also agree beside another
+  app in Split View. Nothing changes where the window fills the screen.
+- Apple: **Toasts lifted for a tab bar that is not there.** In the phone
+  layout a toast, the offline notice and a failed send's banner sit 57 pt
+  above the window's bottom edge, to clear the tab bar across it. On
+  iPhone Duo's outer display the system draws the tab bar in the strip at
+  the side, and the banners kept the lift with no bar under them. They
+  now take the plain gap above the bottom edge wherever the bars are in a
+  side strip, and keep the lift wherever the tab bar runs across the
+  bottom.
+- Apple: **Compact rule rows in Mac Settings.** Each rule in Settings >
+  Rules stood several lines tall, with its Enabled switch at the top and
+  the summary's chevron halfway across the row. The hidden label that
+  lets VoiceOver call the control a switch (#2040) was being laid out by
+  the settings form, which stretched it across half the row and wrapped
+  it a letter to a line. The switch takes only its own room again and
+  still reads as a switch.
+- Apple: **A rule's condition losing the keyboard while you type.** In
+  the rule editor, pausing mid-word long enough for the auto-save to
+  finish cost the condition's text field its keyboard on the next
+  character. The save's answer replaced the rules with an identical copy,
+  whose conditions the editor took for new rows, so the row being typed
+  in was rebuilt. An answer that changes nothing now leaves the rules as
+  they are; one the server did change (an id it re-minted, a forward it
+  stripped) still replaces them.
+- **TestFlight build lookup matches the platform.** The iOS and visionOS
+  builds share an App Store Connect app record, and each upload leg
+  stamps its build number from the clock, so the two legs can stamp the
+  same number. `assign-testflight-group.py` and `set-testflight-notes.py`
+  looked a build up by number alone and took whichever platform's build
+  App Store Connect listed first, which could attach one build to its
+  TestFlight group twice and leave the other outside every group with
+  every job green. Both now also match the build's platform, which
+  `apple.yml` and `extensions.yml` pass as `ASC_PLATFORM` (#2518).
+
 ## [1.56.0] - 2026-11-19
 
 ### Added
