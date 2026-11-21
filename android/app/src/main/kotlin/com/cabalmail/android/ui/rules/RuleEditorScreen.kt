@@ -54,6 +54,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
 import com.cabalmail.android.ui.settings.flagColor
+import com.cabalmail.kit.models.FeedRule
 import com.cabalmail.kit.models.Rule
 import com.cabalmail.kit.models.RuleAction
 import com.cabalmail.kit.models.RuleCondition
@@ -163,7 +164,7 @@ fun RuleEditorScreen(
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.titleSmall,
@@ -173,7 +174,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun Hint(
+internal fun Hint(
     text: String,
     error: Boolean = false,
 ) {
@@ -592,7 +593,7 @@ private fun ContinueSection(
 }
 
 @Composable
-private fun ToggleRow(
+internal fun ToggleRow(
     title: String,
     checked: Boolean,
     enabled: Boolean = true,
@@ -629,14 +630,37 @@ internal data class RuleFlagRow(
 internal fun ruleFlagRows(
     palette: List<FlagPaletteEntry>,
     rule: Rule,
+): List<RuleFlagRow> = ruleFlagRows(palette, rule.flag, rule.flags)
+
+/**
+ * The same list for any rule that sets flags, from its two flag fields: a
+ * feed rule has the pair a mail rule has, and its editor lists them the
+ * same way.
+ */
+internal fun ruleFlagRows(
+    palette: List<FlagPaletteEntry>,
+    flag: Boolean,
+    flags: List<String>,
 ): List<RuleFlagRow> {
     val offered = FlagPalette.effective(palette)
-    val stray = FlagPalette.SLOTS.filter { slot -> slot in rule.flags && offered.none { it.slot == slot } }
     return offered.map { entry ->
-        val isOn = if (entry.slot == FlagPalette.SYSTEM_SLOT) rule.flag else entry.slot in rule.flags
+        val isOn = if (entry.slot == FlagPalette.SYSTEM_SLOT) flag else entry.slot in flags
         RuleFlagRow(entry.slot, entry.label, entry.color, isOn)
     } +
-        stray.map { slot -> RuleFlagRow(slot, label = slot, color = "", isOn = true) }
+        strayFlagSlots(palette, flags).map { slot -> RuleFlagRow(slot, label = slot, color = "", isOn = true) }
+}
+
+/**
+ * The slots a rule sets whose entry is gone from Settings > Flags. While
+ * one remains the rule is skipped whole, by the mail compiler and by the
+ * feed fetcher alike.
+ */
+internal fun strayFlagSlots(
+    palette: List<FlagPaletteEntry>,
+    flags: List<String>,
+): List<String> {
+    val offered = FlagPalette.effective(palette)
+    return FlagPalette.SLOTS.filter { slot -> slot in flags && offered.none { it.slot == slot } }
 }
 
 /**
@@ -654,8 +678,19 @@ internal fun Rule.settingFlag(
         else -> copy(flags = flags - slot)
     }
 
+/** The same toggle on a feed rule, whose `flags` the server holds to the same shape. */
+internal fun FeedRule.settingFlag(
+    slot: String,
+    on: Boolean,
+): FeedRule =
+    when {
+        slot == FlagPalette.SYSTEM_SLOT -> copy(flag = on)
+        on -> copy(flags = (flags + slot).distinct())
+        else -> copy(flags = flags - slot)
+    }
+
 @Composable
-private fun FlagToggleRow(
+internal fun FlagToggleRow(
     label: String,
     color: Color,
     checked: Boolean,

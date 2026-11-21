@@ -7,6 +7,9 @@ import com.cabalmail.kit.auth.CodeDelivery
 import com.cabalmail.kit.auth.RecoveryContacts
 import com.cabalmail.kit.auth.SignInResult
 import com.cabalmail.kit.auth.SignUpResult
+import com.cabalmail.kit.models.FeedRule
+import com.cabalmail.kit.models.FeedRuleCondition
+import com.cabalmail.kit.models.FeedRuleField
 import com.cabalmail.kit.models.Rule
 import com.cabalmail.kit.models.RuleAction
 import com.cabalmail.kit.models.RuleCondition
@@ -26,7 +29,9 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -203,6 +208,108 @@ class RulesApiTest {
                     ?.jsonPrimitive
                     ?.content,
             )
+        }
+
+    private val feedRule =
+        FeedRule(
+            id = "r-ba9876543210",
+            name = "Releases",
+            conditions =
+                listOf(
+                    FeedRuleCondition(FeedRuleField.FEED, "sub-1"),
+                    FeedRuleCondition(FeedRuleField.TITLE, "release"),
+                ),
+            flags = listOf("cabal-flag-03"),
+        )
+
+    @Test
+    fun `getRules decodes both lists from one reply`() =
+        runTest {
+            val body =
+                """
+                {"rules":[{"id":"r-0123456789ab","name":"Receipts"}],
+                 "feedRules":[{"id":"r-ba9876543210","name":"Releases","enabled":true,
+                   "conditions":[{"field":"feed","value":"sub-1"},{"field":"title","value":"release"}],
+                   "flag":false,"flags":["cabal-flag-03"],"markRead":false}],
+                 "version":5,"updatedAt":"2026-11-19T12:00:00+00:00"}
+                """.trimIndent()
+            val server = Server(HttpStatusCode.OK to body)
+
+            val ruleSet = server.api.getRules()
+
+            assertEquals(listOf("Receipts"), ruleSet.rules.map { it.name })
+            assertEquals(listOf(feedRule), ruleSet.feedRules)
+            assertEquals(5, ruleSet.version)
+        }
+
+    @Test
+    fun `a whole-set save carries rules and feedRules together under one version`() =
+        runTest {
+            val response =
+                """
+                {"rules":[{"id":"r-0123456789ab","name":"A"}],
+                 "feedRules":[{"id":"r-ba9876543210","name":"Releases",
+                   "conditions":[{"field":"feed","value":"sub-1"},{"field":"title","value":"release"}],
+                   "flags":["cabal-flag-03"]}],
+                 "version":6,"updatedAt":"2026-11-19T12:00:01+00:00","stripped":[],"warnings":[]}
+                """.trimIndent()
+            val server = Server(HttpStatusCode.OK to response)
+            val rule = Rule(id = "r-0123456789ab", name = "A")
+
+            val saved = server.api.setRules(listOf(rule), expectedVersion = 5, feedRules = listOf(feedRule))
+
+            assertEquals(6, saved.version)
+            assertEquals(listOf(feedRule), saved.feedRules)
+            val payload = Json.parseToJsonElement(server.body(0)).jsonObject
+            // The three keys `_parse_request` reads, and no other.
+            assertEquals(setOf("rules", "feedRules", "expectedVersion"), payload.keys)
+            assertEquals(5, payload["expectedVersion"]?.jsonPrimitive?.content?.toInt())
+            assertEquals(
+                "r-0123456789ab",
+                payload["rules"]!!
+                    .jsonArray
+                    .single()
+                    .jsonObject["id"]
+                    ?.jsonPrimitive
+                    ?.content,
+            )
+            // The feed rule on the wire is the documented one, key for key.
+            assertEquals(
+                Json.parseToJsonElement(
+                    """
+                    {"id":"r-ba9876543210","name":"Releases","enabled":true,
+                     "conditions":[{"field":"feed","value":"sub-1"},{"field":"title","value":"release"}],
+                     "flag":false,"flags":["cabal-flag-03"],"markRead":false}
+                    """.trimIndent(),
+                ),
+                payload["feedRules"]!!.jsonArray.single(),
+            )
+        }
+
+    @Test
+    fun `a save with no feed list leaves the key off the request`() =
+        runTest {
+            // Absent is "leave the stored list alone", and is the request a
+            // build from before feed rules sends. A null or an empty list in
+            // its place would be refused or would clear the stored rules.
+            val server = Server(HttpStatusCode.OK to """{"rules":[],"version":1}""")
+
+            server.api.setRules(listOf(Rule(id = "r-0123456789ab", name = "A")), expectedVersion = 0)
+
+            val payload = Json.parseToJsonElement(server.body(0)).jsonObject
+            assertEquals(setOf("rules", "expectedVersion"), payload.keys)
+            assertFalse("feedRules" in server.body(0))
+        }
+
+    @Test
+    fun `an empty feed list is sent as one, to clear the stored list`() =
+        runTest {
+            val server = Server(HttpStatusCode.OK to """{"rules":[],"feedRules":[],"version":1}""")
+
+            server.api.setRules(emptyList(), expectedVersion = 0, feedRules = emptyList())
+
+            val payload = Json.parseToJsonElement(server.body(0)).jsonObject
+            assertTrue(payload["feedRules"]!!.jsonArray.isEmpty())
         }
 
     @Test

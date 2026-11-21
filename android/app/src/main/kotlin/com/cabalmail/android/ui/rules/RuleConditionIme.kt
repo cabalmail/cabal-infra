@@ -18,9 +18,15 @@ import com.cabalmail.kit.models.RuleField
  * The address headers take the email keyboard, the free-text fields the
  * plain one (#2022, [holdsAddresses]).
  */
-fun ruleConditionKeyboardOptions(field: RuleField): KeyboardOptions =
+fun ruleConditionKeyboardOptions(field: RuleField): KeyboardOptions = ruleConditionKeyboardOptions(field.holdsAddresses)
+
+/**
+ * The same for any condition value, by whether it holds addresses. A feed
+ * rule's Title, Author and Summary are all free text.
+ */
+fun ruleConditionKeyboardOptions(holdsAddresses: Boolean): KeyboardOptions =
     KeyboardOptions(
-        keyboardType = if (field.holdsAddresses) KeyboardType.Email else KeyboardType.Text,
+        keyboardType = if (holdsAddresses) KeyboardType.Email else KeyboardType.Text,
         capitalization = KeyboardCapitalization.None,
         autoCorrectEnabled = false,
     )
@@ -46,9 +52,15 @@ fun ruleConditionKeyboardOptions(field: RuleField): KeyboardOptions =
 fun ruleConditionInputType(
     field: RuleField,
     inputType: Int,
+): Int = ruleConditionInputType(field.holdsAddresses, inputType)
+
+/** The same for any condition value, by whether it holds addresses. */
+fun ruleConditionInputType(
+    holdsAddresses: Boolean,
+    inputType: Int,
 ): Int {
     val variation =
-        if (field.holdsAddresses) {
+        if (holdsAddresses) {
             inputType and InputType.TYPE_MASK_VARIATION
         } else {
             InputType.TYPE_TEXT_VARIATION_FILTER
@@ -66,10 +78,17 @@ fun ruleConditionInputType(
  * never a whole screen: the interception reaches every text field in the
  * subtree.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun WithoutImeRewrites(
     field: RuleField,
+    content: @Composable () -> Unit,
+) = WithoutImeRewrites(field.holdsAddresses, content)
+
+/** The same for any condition value, by whether it holds addresses. */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun WithoutImeRewrites(
+    holdsAddresses: Boolean,
     content: @Composable () -> Unit,
 ) {
     InterceptPlatformTextInput(
@@ -77,7 +96,7 @@ fun WithoutImeRewrites(
             val amended =
                 PlatformTextInputMethodRequest { outAttributes ->
                     val connection = request.createInputConnection(outAttributes)
-                    outAttributes.inputType = ruleConditionInputType(field, outAttributes.inputType)
+                    outAttributes.inputType = ruleConditionInputType(holdsAddresses, outAttributes.inputType)
                     connection
                 }
             nextHandler.startInputMethod(amended)

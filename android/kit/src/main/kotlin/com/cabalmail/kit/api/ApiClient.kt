@@ -11,6 +11,7 @@ import com.cabalmail.kit.models.BulkResult
 import com.cabalmail.kit.models.ComposeFields
 import com.cabalmail.kit.models.DomainAllowance
 import com.cabalmail.kit.models.Envelope
+import com.cabalmail.kit.models.FeedRule
 import com.cabalmail.kit.models.FolderList
 import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.models.MessageContent
@@ -887,14 +888,24 @@ class ApiClient(
      * `warnings` keys are ignored: `RulesValidator` flags bad forwards
      * before the PUT, and the folder warning fires for every folder target
      * on every save, so it isn't actionable.
+     *
+     * [feedRules] is the feed list to store, or null to leave the stored
+     * one alone: the server reads a request with no `feedRules` key that
+     * way, and null leaves the key off, so the request is the one a build
+     * from before feed rules sends. An empty list clears the stored one.
+     * `rules` is required either way, so a feed edit sends both lists.
      */
     suspend fun setRules(
         rules: List<Rule>,
         expectedVersion: Int,
+        feedRules: List<FeedRule>? = null,
     ): RuleSet {
         val body =
             buildJsonObject {
                 put("rules", bodyJson.encodeToJsonElement(rules))
+                if (feedRules != null) {
+                    put("feedRules", bodyJson.encodeToJsonElement(feedRules))
+                }
                 put("expectedVersion", expectedVersion)
             }
         val text =
