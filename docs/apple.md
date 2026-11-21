@@ -776,7 +776,7 @@ own CI files, on pushes to `main` and `stage` that do, and on
 | `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass and `ios-duo-test` passes or is skipped, or straight after `promotion-verdict` on a `main` push it reports tested |
 | `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → hand the build number to `testflight-assign` |
 | `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload → hand the build number to `testflight-assign`, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact |
-| `testflight-assign` | `main` and `stage` runs, after the upload jobs | One Ubuntu leg per platform: waits for App Store Connect to ingest the build the upload leg handed it, attaches it to the branch's internal test group, and on `main` sets the iOS and macOS builds' "What to Test" notes. The waiting runs here rather than on the macOS runner that uploaded |
+| `testflight-assign` | `main` and `stage` runs, after the upload jobs | One Ubuntu leg per platform: waits for App Store Connect to ingest the build the upload leg handed it, attaches it to the branch's internal test group, and on `main` sets the build's "What to Test" notes. The waiting runs here rather than on the macOS runner that uploaded |
 
 Both upload jobs no-op, with a workflow warning, when their required
 secrets are missing. Because `app-build` skips `main` and `stage` runs,

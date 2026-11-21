@@ -1775,23 +1775,18 @@ jobs:
         # and visionOS builds share one app record and can share a build
         # number, so the scripts look a build up by number and platform
         # (#2518).
-        # notes: whether a main push sets this build's "What to Test". iOS
-        # and macOS only; the visionOS build has never carried notes.
         include:
           - platform: iOS
             asc_platform: IOS
             bundle_id: com.cabalmail.Cabalmail
-            notes: true
             handoff: ${{ needs.upload-ios.outputs.handoff_iOS }}
           - platform: visionOS
             asc_platform: VISION_OS
             bundle_id: com.cabalmail.Cabalmail
-            notes: false
             handoff: ${{ needs.upload-ios.outputs.handoff_visionOS }}
           - platform: macOS
             asc_platform: MAC_OS
             bundle_id: com.cabalmail.CabalmailMac
-            notes: true
             handoff: ${{ needs.upload-mac.outputs.handoff_macOS }}
     steps:
       - name: Read the upload leg's handoff
@@ -1880,7 +1875,7 @@ jobs:
         # Prod releases only - the stage track is the developer's own and
         # ships no notes. Best-effort: the binary is already uploaded, so the
         # script warns and exits 0 on any failure rather than failing release.
-        if: steps.handoff.outputs.uploaded == 'true' && github.ref_name == 'main' && matrix.notes
+        if: steps.handoff.outputs.uploaded == 'true' && github.ref_name == 'main'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
