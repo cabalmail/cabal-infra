@@ -16,10 +16,12 @@ This table and the **Status:** line under each work item are updated in the same
 
 Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11-09. A row or Status line that still carries an earlier date was checked and did not change.
 
+Pass 1 started on 2026-11-21 against `stage` at `344859cda` (release 1.56.0 plus the unreleased feed rules). Recounted there with `swiftlint` 0.63.2, body of 250 and counted file lines of 500: `SceneNavigator` 250 and 398 (807 raw), `FakeImapClient` 248 and 252, `ComposeViewModel` 237 and 244, `ComposeView` 231 and 437, `NavStateCoordinator` 183 and 213, `MessageDetailViewModel` 149 and 209, `MessageListViewModel` 118 and 258. The navigator's class body is at the cap, so the next member added to it fails CI until PR 1 merges. The scope doc went to the maintainer the same day; pass 1's PRs are PR 6, PR 3a and PR 1, one open at a time, and PR 2 only on a Yes to decision 2.
+
 | Work item | Status |
 |---|---|
-| Decisions 1 and 2 | Unanswered (2026-10-15). |
-| PR 6. `FakeImapClient`'s call gate | Not started (2026-10-15). |
+| Decisions 1 and 2 | Asked again in pass 1's scope doc (2026-11-21); unanswered, so pass 1 runs on the defaults (No and No) until the maintainer answers. |
+| PR 6. `FakeImapClient`'s call gate | Done (2026-11-21): PR #2522. |
 | PR 3a. `ComposeAutosave` | Partly done (2026-10-28), under another name: #2256 (duo-support.md's PR 7b) moved both loops into `ComposeAutosaveLoops`. The loop exit, the injected interval and the tests are not started. Hardening PR 1, which it waited for, merged as #2053 and shipped in 1.31.2. |
 | PR 1. `MailNavigationState` (the navigator split) | Not started (2026-10-15). |
 | PR 2. The split's width write (only if decision 2 is Yes) | Not started (2026-10-15). |
@@ -87,7 +89,7 @@ Counts strip blank and comment-only lines, as SwiftLint does. The script reprodu
 - Scope: move the hold-and-release machinery (`FakeImapClient.swift:174-228`: the search hold and the per-call hold keyed by the existing `HeldCall`) into a value type in `CabalmailKitTestSupport` that the actor stores and mutates. Keep it a stored value, not a second actor, so no new suspension point changes the order tests rely on. The fake's public methods stay. Test support is compiled by folder (`apple/project.yml:681-689`), so a new file needs no project edit.
 - Target: a body of about 210 (inferred). Verify: `swift test` and the app suites in CI. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-11-21), PR #2522. The search hold and the per-call hold are one `CallGate` (`CabalmailKitTestSupport/CallGate.swift`), a generic value the fake stores, keyed by a private enum of the search and the seven held calls. The fake keeps every public method and `FakeImapClient.HeldCall`; the two suspension points stay in the actor, in the continuation bodies they were in. Its body is 225 counted lines (from 248), short of the inferred 210: the six public methods and the two private waits stay in the actor because a mutating call on stored actor state cannot be awaited across. New `FakeImapClientHoldTests` (8 tests, in the Kit suite, every wait bounded) pin each rule, pass on the fake as it was before the move, and each of 12 mutations of the gate fails at least one of them. No existing test changed.
 
 **PR 3a. `ComposeAutosave`.** After hardening-web-and-writes.md's PR 1 merges (it edits the seed call in the same class body); if that PR needs more than two class-body lines, this goes first. Never open beside shared-load-error-state.md's A1 or A4.
 - Scope: a small type that owns both autosave tasks, with `start` and `stop`, and ends a loop when its model is gone. Inside each loop, after the sleep, rebind with `guard let self else { return }`; binding before the loop would hold the model strongly, so it would never go away. Intervals stay at 5 and 60 seconds but are injected, with the sleep, the way `FolderPollTiming` does it (`Mail/Store/FolderPollers.swift:41`), so tests step instead of sleeping. If refresh-scheduling.md's PR 2 loop type has merged, build on it instead (its lines 66-67 and 115 expect that).

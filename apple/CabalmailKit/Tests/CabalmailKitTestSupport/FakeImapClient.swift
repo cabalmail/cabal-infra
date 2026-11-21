@@ -171,71 +171,46 @@ public actor FakeImapClient: ImapClient {
         searchPages = pages
     }
 
-    // A search the test can hold open at the transport, so a result can be
-    // made to land after the user has ended the search (#1536):
-    // `holdNextSearch()` parks the next request, `awaitHeldSearch()` waits
-    // for it to arrive, `releaseHeldSearch()` lets it answer.
-    private var holdNext = false
-    private var heldSearch: CheckedContinuation<Void, Never>?
-    private var searchArrived: CheckedContinuation<Void, Never>?
-
-    public func holdNextSearch() {
-        holdNext = true
-    }
-
-    public func awaitHeldSearch() async {
-        guard heldSearch == nil else { return }
-        await withCheckedContinuation { searchArrived = $0 }
-    }
-
-    public func releaseHeldSearch() {
-        holdNext = false
-        heldSearch?.resume()
-        heldSearch = nil
-    }
-
-    // The same hold for the list's own wire calls, so a test can make a
-    // move, STATUS or top-page fetch answer after something else has
-    // happened -- e.g. a refresh fetched before a dispose's move landed that
-    // only arrives once the dispose has finished. `holdNext(_:)` parks the
-    // next such call, `awaitHeld(_:)` waits for it to arrive, and
-    // `releaseHeld(_:)` lets it answer with whatever is scripted by then.
+    // Calls the test can hold open at the transport (`CallGate`). A search,
+    // so a result can be made to land after the user has ended the search
+    // (#1536): `holdNextSearch()` parks the next request, `awaitHeldSearch()`
+    // waits for it to arrive, `releaseHeldSearch()` lets it answer. And the
+    // list's own wire calls, so a move, STATUS or top-page fetch can answer
+    // after something else has happened: `holdNext(_:)`, `awaitHeld(_:)` and
+    // `releaseHeld(_:)`, which answers with whatever is scripted by then.
     public enum HeldCall: Hashable, Sendable { case move, status, topEnvelopes, envelopes, fetchBody, setFlags, purge }
-    private var callsToHold: Set<HeldCall> = []
-    private var heldCalls: [HeldCall: CheckedContinuation<Void, Never>] = [:]
-    private var heldCallArrivals: [HeldCall: CheckedContinuation<Void, Never>] = [:]
+    private enum Gated: Hashable, Sendable { case search, call(HeldCall) }
+    private var gate = CallGate<Gated>()
 
-    public func holdNext(_ call: HeldCall) {
-        callsToHold.insert(call)
+    public func holdNextSearch() { gate.arm(.search) }
+
+    public func awaitHeldSearch() async { await arrival(of: .search) }
+
+    /// Also drops a hold no search has taken yet.
+    public func releaseHeldSearch() {
+        _ = gate.disarm(.search)
+        gate.release(.search)
     }
 
-    public func awaitHeld(_ call: HeldCall) async {
-        guard heldCalls[call] == nil else { return }
-        await withCheckedContinuation { heldCallArrivals[call] = $0 }
+    public func holdNext(_ call: HeldCall) { gate.arm(.call(call)) }
+
+    public func awaitHeld(_ call: HeldCall) async { await arrival(of: .call(call)) }
+
+    public func releaseHeld(_ call: HeldCall) { gate.release(.call(call)) }
+
+    private func arrival(of call: Gated) async {
+        guard !gate.isParked(call) else { return }
+        await withCheckedContinuation { gate.waitForArrival(of: call, on: $0) }
     }
 
-    public func releaseHeld(_ call: HeldCall) {
-        heldCalls.removeValue(forKey: call)?.resume()
-    }
-
-    private func parkIfHeld(_ call: HeldCall) async {
-        guard callsToHold.remove(call) != nil else { return }
-        await withCheckedContinuation { continuation in
-            heldCalls[call] = continuation
-            heldCallArrivals.removeValue(forKey: call)?.resume()
-        }
+    private func parkIfHeld(_ call: Gated) async {
+        guard gate.disarm(call) else { return }
+        await withCheckedContinuation { gate.park(call, on: $0) }
     }
 
     public func searchEnvelopes(_ query: SearchQuery) async throws -> SearchResult {
         searchCalls.append(query)
-        if holdNext {
-            holdNext = false
-            await withCheckedContinuation { continuation in
-                heldSearch = continuation
-                searchArrived?.resume()
-                searchArrived = nil
-            }
-        }
+        await parkIfHeld(.search)
         if !searchPages.isEmpty { return searchPages.removeFirst() }
         guard let searchResult else { return try trap() }
         return searchResult
@@ -250,7 +225,7 @@ public actor FakeImapClient: ImapClient {
         flagCalls.append(FlagCall(
             folder: folder, uids: Set(uids), flags: flags, operation: operation
         ))
-        await parkIfHeld(.setFlags)
+        await parkIfHeld(.call(.setFlags))
         if !flagResults.isEmpty {
             try flagResults.removeFirst().get()
         }
@@ -260,7 +235,7 @@ public actor FakeImapClient: ImapClient {
         moveCalls.append(MoveCall(
             folder: folder, uids: Set(uids), destination: destination, markSeen: markSeen
         ))
-        await parkIfHeld(.move)
+        await parkIfHeld(.call(.move))
         if !moveResults.isEmpty {
             try moveResults.removeFirst().get()
         }
@@ -268,7 +243,7 @@ public actor FakeImapClient: ImapClient {
 
     public func purge(folder: String, uids: [UInt32]) async throws {
         purgeCalls.append(PurgeCall(folder: folder, uids: Set(uids)))
-        await parkIfHeld(.purge)
+        await parkIfHeld(.call(.purge))
         if !purgeResults.isEmpty {
             try purgeResults.removeFirst().get()
         }
@@ -290,7 +265,7 @@ public actor FakeImapClient: ImapClient {
     public func unsubscribe(path: String) async throws { try trapVoid() }
     public func status(path: String, flagged: Bool) async throws -> FolderStatus {
         statusCalls.append(StatusCall(path: path, flagged: flagged))
-        await parkIfHeld(.status)
+        await parkIfHeld(.call(.status))
         // Mirror the production transport: a URLSession data task whose
         // surrounding Task is cancelled fails with `URLError.cancelled`,
         // which `URLSessionHTTPTransport` reports as `.cancelled` (#1815).
@@ -303,7 +278,7 @@ public actor FakeImapClient: ImapClient {
         folder: String, offset: UInt32, limit: UInt32, sort: SortCriterion
     ) async throws -> [Envelope] {
         envelopesCalls.append(EnvelopesCall(folder: folder, offset: offset, limit: limit, sort: sort))
-        await parkIfHeld(.envelopes)
+        await parkIfHeld(.call(.envelopes))
         if Task.isCancelled, !answersAfterCancellation.contains(.envelopes) { throw CabalmailError.cancelled }
         if let scripted = envelopesResults.next() { return try scripted.get() }
         guard let folderContents else { return try trap() }
@@ -315,7 +290,7 @@ public actor FakeImapClient: ImapClient {
         topEnvelopesCalls.append(TopEnvelopesCall(
             folder: folder, limit: limit, totalMessages: totalMessages, sort: sort
         ))
-        await parkIfHeld(.topEnvelopes)
+        await parkIfHeld(.call(.topEnvelopes))
         // Cancellation-sensitive for the same reason as `status(path:flagged:)`.
         if Task.isCancelled { throw CabalmailError.cancelled }
         guard let topEnvelopesResult else { return try trap() }
@@ -323,7 +298,7 @@ public actor FakeImapClient: ImapClient {
     }
     public func fetchBody(folder: String, uid: UInt32) async throws -> RawMessage {
         fetchBodyCalls.append(FetchBodyCall(folder: folder, uid: uid))
-        await parkIfHeld(.fetchBody)
+        await parkIfHeld(.call(.fetchBody))
         if Task.isCancelled { throw CabalmailError.cancelled }
         guard let scripted = bodies[BodyKey(folder: folder, uid: uid)]?.next() else { return try trap() }
         // Like `ApiBackedImapClient`, the raw fetch carries no flags.
