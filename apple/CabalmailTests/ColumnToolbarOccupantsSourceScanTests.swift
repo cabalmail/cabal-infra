@@ -111,7 +111,7 @@ final class ColumnToolbarOccupantsSourceScanTests: XCTestCase {
     private static func columnToolbarBlock() throws -> String {
         try slice(
             from: "ToolbarItem(placement: .topBarLeading) {",
-            to: "    /// Records the measured content-column width"
+            to: "// MARK: - Floating folder panel"
         )
     }
 
