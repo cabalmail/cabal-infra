@@ -15,11 +15,14 @@ import CabalmailKit
 /// window re-landed the new tree from the per-install resume session, which
 /// another window may have written since.
 ///
-/// **Trees.** Each `MailRootView` instance is a tree with an identity of its
-/// own (`mailTreeAppeared`), and so is visionOS's tab view, which has no
-/// layout swap and so only ever one. The first tree in a window lands — on a
-/// parked deep link (`DeepLinkRouter`), else the window's stored route (`StoredRoute`),
-/// else the launch snapshot of the resume session. A tree built later by a
+/// **Trees.** Each view that draws the window's mail is a tree with an
+/// identity of its own (`mailTreeAppeared`): `WideMail`, which the Mac's
+/// `DesktopShell` and the iPad's `SplitShell` hold; `CompactMailStack`, the
+/// Mail tab of the tab layout; and `OrnamentShell`'s tab view on visionOS,
+/// which has no layout swap and so only ever one. The first tree in a
+/// window lands — on a parked deep link (`DeepLinkRouter`), else the window's
+/// stored route (`StoredRoute`), else the launch snapshot of the resume
+/// session. A tree built later by a
 /// layout swap renders the window's route instead: the folder stays, and an
 /// open message is re-parked in the window's own `WindowRestores`, so the new
 /// list selects it once it has appeared and loaded. (A route with no folder
@@ -31,8 +34,8 @@ import CabalmailKit
 /// dropped.
 ///
 /// **Feeds** follow the same pattern with trees of their own: `FeedRootView`
-/// (the Feeds tab on the compact layout and visionOS) and the wide
-/// `MailRootView`, which hosts feeds beside mail (`feedTreeAppeared`,
+/// (the Feeds tab on the compact layout and visionOS) and `WideMail`, which
+/// hosts feeds beside mail in the wide split (`feedTreeAppeared`,
 /// `FeedNavigationState`). The wide split shows feeds while the window is in
 /// the feeds section with a list open (`splitShowsFeeds`); mail in that split
 /// leaves the compact Feeds tab's place where it was.
@@ -172,8 +175,8 @@ final class SceneNavigator {
 
     // MARK: Trees
 
-    /// A mail tree appeared: a `MailRootView`, or visionOS's tab view, which
-    /// lands whichever tab it opens on. The first tree in the window lands;
+    /// A mail tree appeared: `WideMail`, `CompactMailStack`, or visionOS's
+    /// tab view, which lands whichever tab it opens on. The first tree in the window lands;
     /// a tree built after it by a layout swap takes over the window's route;
     /// the same tree appearing again (a tab switch) changes nothing once the
     /// window has landed. A wide tree hosts the feed reader too.
@@ -641,8 +644,8 @@ extension SceneNavigator {
         return true
     }
 
-    /// A tree that hosts feeds appeared: `FeedRootView`, or a wide
-    /// `MailRootView`. One a layout swap built takes the reader over. When it
+    /// A tree that hosts feeds appeared: `FeedRootView`, or `WideMail`, the
+    /// wide split. One a layout swap built takes the reader over. When it
     /// shows the reader, the open item is parked for its list to select once
     /// it has appeared and loaded (#1664), unless the list already waits on
     /// one (a banner's); a wide split showing mail keeps it for the Feeds tab.
