@@ -11,8 +11,8 @@ instead of reconstructing it from the git log.
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
 | 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android (2026-11-18): the first of its two PRs, flags on feed items, merged as #2498; the second, the per-flag filter, merged as #2502; neither is in a release yet (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
-| 4 -- Feed rules | Server in prod with 1.56.0 (2026-11-19): Terraform (#2497) and server (#2501), checked on stage first; the rule format was accepted as written that day. Apple (Kit and the Feed items editor) merged as #2509 (2026-11-20 UTC), not in a release yet. Android not started |
-| 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
+| 4 -- Feed rules | Server in prod with 1.56.0 (2026-11-19): Terraform (#2497) and server (#2501), checked on stage first; the rule format was accepted as written that day. Apple (Kit and the Feed items editor) merged as #2509 (2026-11-20 UTC), in prod with 1.57.0 (2026-11-21). Android not started |
+| 5 -- Cross-media views: flagged and search | Structure (item 1) built on Apple (2026-11-21), its PR held as a draft until the release that carries the navigator split (#2529) is promoted; the views are not started (`flags-and-cross-media.md`, Sessions 4 and 5) |
 | 6 -- Ambient surfaces: Spotlight | Not started (2026-11-08) |
 
 This document is the design: what each phase builds and why. The
@@ -651,7 +651,7 @@ an article and the received mail carries the link and the summary.
 
 ## Phase 4 -- Feed rules
 
-**Status:** Server in prod, Apple merged and not yet promoted (2026-11-20). The storage
+**Status:** Server in prod with 1.56.0 (2026-11-19), Apple in prod with 1.57.0 (2026-11-21). The storage
 decision is answered: `feedRules` beside `rules`, with a plain subscriber
 index and a flag-list check at ingest (`flags-and-cross-media.md`,
 decision 6, which also records the rule format, accepted as written on
@@ -659,11 +659,12 @@ decision 6, which also records the rule format, accepted as written on
 (4a, items 2 to 4) as #2501, both on 2026-11-19; the API check and the
 synthetic check passed on stage (`flags-and-cross-media.md`, the
 Verified note under B4.2), and both shipped in 1.56.0 the same day. The
-Apple work (4b on Apple) merged as #2509 on 2026-11-20 UTC and is not in
-a release yet: `flags-and-cross-media.md`
+Apple work (4b on Apple) merged as #2509 on 2026-11-20 UTC and shipped
+in 1.57.0 (2026-11-21): `flags-and-cross-media.md`
 decision 12 has what its scope settled, and the Built note under its
 B4.3 line what was built and run. The Android work is not started
-(`android-parity.md`, leg L3, after the Apple leg is promoted).
+(`android-parity.md`, leg L3, which waited for the Apple leg to be
+promoted).
 `flags-and-cross-media.md`
 gated the client work on fixes owned by other plans, and those have all
 merged:
@@ -736,7 +737,14 @@ that predates Phase 4 leaves the feed rule in place.
 
 ## Phase 5 -- Cross-media views: flagged and search
 
-**Status:** Not started (2026-11-08).
+**Status:** Structure built on Apple (2026-11-21), not merged; the views
+are not started. Item 1 is `flags-and-cross-media.md`'s B5.1: the Kit's
+`ItemRef`, one `SidebarSelection` for the folder list on every platform
+with the Mac's feed rows as rows of it, and an optional smart view on a
+window's route, which nothing can select until item 2. Its PR is a draft
+until the release that carries the navigator split (#2529) is promoted.
+That plan's decision 13 has its scope answers and the Built note under
+its B5.1 line what was built and run.
 
 1. **Structure first** (Decision 8). `ItemRef` in the Kit and, on the
    Mac, one sidebar selection, shipped alone in its release because it
