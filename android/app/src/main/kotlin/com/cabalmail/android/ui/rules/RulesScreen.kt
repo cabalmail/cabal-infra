@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -42,25 +44,41 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.kit.models.FeedRule
 import com.cabalmail.kit.models.Rule
-import com.cabalmail.kit.rules.RulesValidator
 
 /**
- * Mail-rules master list (`docs/1.x/user-mail-rules-plan.md`, Phase 4b):
- * enable, reorder (row-menu Move up / Move down — the Compose idiom here,
- * not a transplant of the iOS drag grip), add, duplicate, delete, and the
- * empty state's quick-start templates. Rows open [RuleEditorScreen].
+ * What a rule's row does, each taking the rule's id. The mail list and the
+ * feed list each hand the screen one of these, so both draw the one row.
+ */
+class RuleRowActions(
+    val onOpen: (String) -> Unit,
+    val onSetEnabled: (String, Boolean) -> Unit,
+    val onMove: (String, Int) -> Unit,
+    val onDuplicate: (String) -> Unit,
+    val onDelete: (String) -> Unit,
+)
+
+/**
+ * The rules master list (`docs/1.x/user-mail-rules-plan.md`, Phase 4b, and
+ * `docs/1.x/cross-media-ux-plan.md`, Phase 4): the mail rules under "Email
+ * messages" and, after them, the feed rules under "Feed items". Each list
+ * has enable, reorder (row-menu Move up / Move down — the Compose idiom
+ * here, not a transplant of the iOS drag grip), duplicate and delete; the
+ * top bar's Add makes a rule of either kind; and the empty state offers the
+ * quick-start templates. Rows open [RuleEditorScreen] or
+ * [FeedRuleEditorScreen].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RulesScreen(
     state: RulesUiState,
+    /** Adds a mail rule: the template given, or a blank one for null. */
     onAdd: (Rule?) -> Unit,
-    onOpenRule: (String) -> Unit,
-    onSetEnabled: (String, Boolean) -> Unit,
-    onMove: (String, Int) -> Unit,
-    onDuplicate: (String) -> Unit,
-    onDelete: (String) -> Unit,
+    mailRows: RuleRowActions,
+    /** Adds a feed rule: the template given, or a blank one for null. */
+    onAddFeed: (FeedRule?) -> Unit,
+    feedRows: RuleRowActions,
     onReload: () -> Unit,
     onRetrySave: () -> Unit,
     /** Null when the settings category list is visible alongside. */
@@ -83,11 +101,14 @@ fun RulesScreen(
                     }
                 },
                 actions = {
-                    if (state.rules.orEmpty().size < RulesValidator.MAX_RULES) {
-                        IconButton(onClick = { onAdd(null) }) {
-                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.rules_add))
-                        }
-                    }
+                    AddRuleMenu(
+                        canAddMail = !RuleListEdits.mail.isFull(state.rules.orEmpty()),
+                        // No feed rule can be added before the lists load:
+                        // the view model has no list to add it to.
+                        canAddFeed = state.feedRules != null && !RuleListEdits.feed.isFull(state.feedRules),
+                        onAddMail = { onAdd(null) },
+                        onAddFeed = { onAddFeed(null) },
+                    )
                 },
             )
         },
@@ -95,11 +116,12 @@ fun RulesScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             val rules = state.rules
+            val feedRules = state.feedRules.orEmpty()
             when {
                 state.loading || (rules == null && state.loadError == null) -> Loading()
                 state.loadError != null -> LoadError(state.loadError, onReload)
-                rules.isNullOrEmpty() -> RulesEmptyState(onAdd)
-                else -> RulesList(rules, onOpenRule, onSetEnabled, onMove, onDuplicate, onDelete)
+                rules.isNullOrEmpty() && feedRules.isEmpty() -> RulesEmptyState(onAdd, onAddFeed)
+                else -> RulesList(state, rules.orEmpty(), feedRules, mailRows, feedRows)
             }
         }
     }
@@ -148,61 +170,158 @@ private fun LoadError(
     }
 }
 
+/**
+ * The top bar's Add. With two lists it opens a menu of the two kinds of
+ * rule; a kind whose list is at the server's cap is left out, and with
+ * neither to offer the button goes, as it did at the mail cap.
+ */
 @Composable
-private fun RulesList(
-    rules: List<Rule>,
-    onOpenRule: (String) -> Unit,
-    onSetEnabled: (String, Boolean) -> Unit,
-    onMove: (String, Int) -> Unit,
-    onDuplicate: (String) -> Unit,
-    onDelete: (String) -> Unit,
+private fun AddRuleMenu(
+    canAddMail: Boolean,
+    canAddFeed: Boolean,
+    onAddMail: () -> Unit,
+    onAddFeed: () -> Unit,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(rules, key = { it.id }) { rule ->
-            RuleRow(
-                rule = rule,
-                first = rule.id == rules.first().id,
-                last = rule.id == rules.last().id,
-                onOpen = { onOpenRule(rule.id) },
-                onSetEnabled = { onSetEnabled(rule.id, it) },
-                onMove = { delta -> onMove(rule.id, delta) },
-                onDuplicate = { onDuplicate(rule.id) },
-                onDelete = { onDelete(rule.id) },
+    if (!canAddMail && !canAddFeed) {
+        return
+    }
+    var open by remember { mutableStateOf(false) }
+    IconButton(onClick = { open = true }) {
+        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.rules_add))
+    }
+    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        if (canAddMail) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.rules_add_mail)) },
+                onClick = {
+                    open = false
+                    onAddMail()
+                },
             )
-            HorizontalDivider()
         }
-        item {
-            Text(
-                stringResource(R.string.rules_list_footer),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp),
+        if (canAddFeed) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.rules_add_feed)) },
+                onClick = {
+                    open = false
+                    onAddFeed()
+                },
             )
         }
     }
 }
 
 @Composable
+private fun RulesList(
+    state: RulesUiState,
+    rules: List<Rule>,
+    feedRules: List<FeedRule>,
+    mailRows: RuleRowActions,
+    feedRows: RuleRowActions,
+) {
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item(key = "header:mail") { SectionHeader(stringResource(R.string.rules_section_mail)) }
+        if (rules.isEmpty()) {
+            item(key = "empty:mail") { SectionNote(stringResource(R.string.rules_section_mail_empty)) }
+        }
+        // A rule's id is unique across both lists on the server; the prefix
+        // keeps the keys apart for a rule minted here and not yet saved.
+        items(rules, key = { "mail:" + it.id }) { rule ->
+            RuleRow(
+                row =
+                    RuleRowContent(
+                        id = rule.id,
+                        name = rule.name,
+                        summary = describeRule(rule),
+                        enabled = rule.enabled,
+                        first = rule.id == rules.first().id,
+                        last = rule.id == rules.last().id,
+                    ),
+                actions = mailRows,
+            )
+            HorizontalDivider()
+        }
+        item(key = "footer:mail") { SectionNote(stringResource(R.string.rules_list_footer)) }
+        item(key = "header:feed") { SectionHeader(stringResource(R.string.rules_section_feed)) }
+        if (feedRules.isEmpty()) {
+            item(key = "empty:feed") { SectionNote(stringResource(R.string.rules_section_feed_empty)) }
+        }
+        items(feedRules, key = { "feed:" + it.id }) { rule ->
+            RuleRow(
+                row =
+                    RuleRowContent(
+                        id = rule.id,
+                        name = rule.name,
+                        summary = describeFeedRule(rule, state.subscriptionTitle(rule.feedSubscriptionId)),
+                        enabled = rule.enabled,
+                        first = rule.id == feedRules.first().id,
+                        last = rule.id == feedRules.last().id,
+                        editable = rule.isEditable,
+                    ),
+                actions = feedRows,
+            )
+            HorizontalDivider()
+        }
+        item(key = "footer:feed") { SectionNote(stringResource(R.string.rules_feed_list_footer)) }
+    }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun SectionNote(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+    )
+}
+
+/** What a rule's row draws, of either kind of rule. */
+private class RuleRowContent(
+    val id: String,
+    val name: String,
+    val summary: String,
+    val enabled: Boolean,
+    val first: Boolean,
+    val last: Boolean,
+    /**
+     * False for a feed rule this build cannot render: its switch is locked
+     * and it cannot be duplicated, since either would save a rewritten copy
+     * of a rule this build cannot express. It can still be moved, deleted
+     * and opened (its editor says why it is read-only).
+     */
+    val editable: Boolean = true,
+)
+
+@Composable
 private fun RuleRow(
-    rule: Rule,
-    first: Boolean,
-    last: Boolean,
-    onOpen: () -> Unit,
-    onSetEnabled: (Boolean) -> Unit,
-    onMove: (Int) -> Unit,
-    onDuplicate: () -> Unit,
-    onDelete: () -> Unit,
+    row: RuleRowContent,
+    actions: RuleRowActions,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     ListItem(
         headlineContent = {
-            Text(rule.name.ifEmpty { stringResource(R.string.rules_untitled) })
+            Text(row.name.ifEmpty { stringResource(R.string.rules_untitled) })
         },
         supportingContent = {
-            Text(describeRule(rule), maxLines = 2)
+            Text(row.summary, maxLines = 2)
         },
         leadingContent = {
-            Switch(checked = rule.enabled, onCheckedChange = onSetEnabled)
+            Switch(
+                checked = row.enabled,
+                onCheckedChange = { actions.onSetEnabled(row.id, it) },
+                enabled = row.editable,
+            )
         },
         trailingContent = {
             Row {
@@ -210,42 +329,44 @@ private fun RuleRow(
                     Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.rules_row_menu))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    if (!first) {
+                    if (!row.first) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.rules_move_up)) },
                             onClick = {
                                 menuOpen = false
-                                onMove(-1)
+                                actions.onMove(row.id, -1)
                             },
                         )
                     }
-                    if (!last) {
+                    if (!row.last) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.rules_move_down)) },
                             onClick = {
                                 menuOpen = false
-                                onMove(1)
+                                actions.onMove(row.id, 1)
+                            },
+                        )
+                    }
+                    if (row.editable) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.rules_duplicate)) },
+                            onClick = {
+                                menuOpen = false
+                                actions.onDuplicate(row.id)
                             },
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.rules_duplicate)) },
-                        onClick = {
-                            menuOpen = false
-                            onDuplicate()
-                        },
-                    )
-                    DropdownMenuItem(
                         text = { Text(stringResource(R.string.rules_delete)) },
                         onClick = {
                             menuOpen = false
-                            onDelete()
+                            actions.onDelete(row.id)
                         },
                     )
                 }
             }
         },
-        modifier = Modifier.clickable(onClick = onOpen),
+        modifier = Modifier.clickable(onClick = { actions.onOpen(row.id) }),
     )
 }
 
@@ -286,11 +407,15 @@ private fun RulesSaveBar(
     }
 }
 
-/** First-run screen: the plan's three starter templates plus a blank rule. */
+/** First-run screen, shown while both lists are empty: the plan's three mail
+ * templates and the feed one, plus a blank rule of either kind. */
 @Composable
-private fun RulesEmptyState(onAdd: (Rule?) -> Unit) {
+private fun RulesEmptyState(
+    onAdd: (Rule?) -> Unit,
+    onAddFeed: (FeedRule?) -> Unit,
+) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
     ) {
@@ -310,8 +435,14 @@ private fun RulesEmptyState(onAdd: (Rule?) -> Unit) {
         TemplateButton(R.string.rules_template_vacation, R.string.rules_template_vacation_hint) {
             onAdd(RuleTemplates.vacationReply())
         }
+        TemplateButton(R.string.rules_template_feed_flag, R.string.rules_template_feed_flag_hint) {
+            onAddFeed(RuleTemplates.flagMatchingItems())
+        }
         TextButton(onClick = { onAdd(null) }) {
             Text(stringResource(R.string.rules_blank_rule))
+        }
+        TextButton(onClick = { onAddFeed(null) }) {
+            Text(stringResource(R.string.rules_blank_feed_rule))
         }
     }
 }

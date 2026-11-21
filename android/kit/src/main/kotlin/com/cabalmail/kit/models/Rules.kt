@@ -110,11 +110,17 @@ data class Rule(
 
 /**
  * The whole ordered rule set as returned by `/get_rules` and `/set_rules`:
- * one row per user, [version] carrying optimistic concurrency.
+ * one row per user, [version] carrying optimistic concurrency for both of
+ * its lists.
  */
 @Serializable
 data class RuleSet(
     val rules: List<Rule> = emptyList(),
+    /**
+     * The feed rules, stored beside the mail rules. Empty when the reply
+     * has no such key, which is what a server from before feed rules sends.
+     */
+    val feedRules: List<FeedRule> = emptyList(),
     val version: Int = 0,
     /** ISO 8601 server stamp; informational. */
     val updatedAt: String = "",

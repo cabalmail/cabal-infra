@@ -45,38 +45,6 @@ class RulesViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private class FakeBackend : RulesBackend {
-        var ruleSet = RuleSet()
-        var folders = listOf("INBOX", "Receipts")
-        var saveError: Exception? = null
-
-        /** When set, `saveRules` records the save then suspends on this gate
-         * — cancellably, like a real HTTP call — mimicking the "server
-         * committed, client hung up" case. */
-        var saveGate: CompletableDeferred<Unit>? = null
-        val savedSets = mutableListOf<Pair<List<Rule>, Int>>()
-        val createdFolders = mutableListOf<String>()
-
-        override suspend fun fetchRules(): RuleSet = ruleSet
-
-        override suspend fun saveRules(
-            rules: List<Rule>,
-            expectedVersion: Int,
-        ): RuleSet {
-            savedSets += rules to expectedVersion
-            saveGate?.await()
-            saveError?.let { throw it }
-            return RuleSet(rules = rules, version = expectedVersion + 1)
-        }
-
-        override suspend fun listFolders(): List<String> = folders
-
-        override suspend fun createFolder(name: String) {
-            createdFolders += name
-            folders = folders + name
-        }
-    }
-
     private fun sampleRule(name: String = "Receipts"): Rule =
         Rule(
             name = name,
@@ -88,7 +56,7 @@ class RulesViewModelTest {
     @Test
     fun `load populates rules version and folders`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             backend.ruleSet = RuleSet(rules = listOf(sampleRule()), version = 5)
 
             val model = RulesViewModel(backend)
@@ -109,7 +77,7 @@ class RulesViewModelTest {
             // as Copy (truthful Continue, decision 2) without scheduling a
             // save of its own — the normalized form persists on the next
             // edit.
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             backend.ruleSet =
                 RuleSet(
                     rules =
@@ -136,7 +104,7 @@ class RulesViewModelTest {
     @Test
     fun `update schedules a debounced whole-set save`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             backend.ruleSet = RuleSet(rules = listOf(sampleRule()), version = 5)
             val model = RulesViewModel(backend)
             advanceUntilIdle()
@@ -159,7 +127,7 @@ class RulesViewModelTest {
     @Test
     fun `rapid mutations coalesce into one save carrying the final order`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             backend.ruleSet = RuleSet(rules = listOf(sampleRule()), version = 1)
             val model = RulesViewModel(backend)
             advanceUntilIdle()
@@ -178,7 +146,7 @@ class RulesViewModelTest {
     @Test
     fun `an invalid set holds the put and surfaces the issue`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             val model = RulesViewModel(backend)
             advanceUntilIdle()
 
@@ -192,7 +160,7 @@ class RulesViewModelTest {
     @Test
     fun `a conflict flips the flag and reload adopts the winner`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             backend.ruleSet = RuleSet(rules = listOf(sampleRule()), version = 2)
             val model = RulesViewModel(backend)
             advanceUntilIdle()
@@ -225,7 +193,7 @@ class RulesViewModelTest {
             // or not the client hangs up, so an aborted request left
             // `version` stale and the next save's 409 masqueraded as another
             // device's edit ("only the A in Amazon was saved").
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             backend.ruleSet = RuleSet(rules = listOf(sampleRule()), version = 1)
             val model = RulesViewModel(backend)
             advanceUntilIdle()
@@ -264,7 +232,7 @@ class RulesViewModelTest {
     @Test
     fun `list mutations`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             backend.ruleSet = RuleSet(rules = listOf(sampleRule()), version = 1)
             val model = RulesViewModel(backend)
             advanceUntilIdle()
@@ -310,7 +278,7 @@ class RulesViewModelTest {
     @Test
     fun `add refuses beyond the server cap`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             backend.ruleSet =
                 RuleSet(rules = List(RulesValidator.MAX_RULES) { Rule(name = "r$it") }, version = 1)
             val model = RulesViewModel(backend)
@@ -333,7 +301,7 @@ class RulesViewModelTest {
     @Test
     fun `a blank rule is added disabled and saved that way`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             val model = RulesViewModel(backend)
             advanceUntilIdle()
 
@@ -364,7 +332,7 @@ class RulesViewModelTest {
     @Test
     fun `add keeps the enabled flag of a rule it is given`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             val model = RulesViewModel(backend)
             advanceUntilIdle()
 
@@ -387,7 +355,7 @@ class RulesViewModelTest {
     @Test
     fun `create archive folder refreshes the folder list`() =
         runTest(dispatcher) {
-            val backend = FakeBackend()
+            val backend = FakeRulesBackend()
             val model = RulesViewModel(backend)
             advanceUntilIdle()
             assertFalse(model.state.value.hasArchiveFolder)

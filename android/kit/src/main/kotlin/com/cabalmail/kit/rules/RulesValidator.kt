@@ -2,7 +2,6 @@ package com.cabalmail.kit.rules
 
 import com.cabalmail.kit.models.Rule
 import com.cabalmail.kit.models.RuleAction
-import com.cabalmail.kit.models.RuleCondition
 import com.cabalmail.kit.settings.FlagPalette
 
 /**
@@ -42,12 +41,15 @@ object RulesValidator {
     /**
      * One structured finding, mirroring the Lambda's `{rule, field, error}`
      * entries. [ruleIndex] is null for set-level findings (the rule-count
-     * cap).
+     * cap). [list] is null for a mail rule and `feedRules` for a feed rule
+     * ([FeedRulesValidator]), as the Lambda's entries carry it, and says
+     * which list [ruleIndex] counts in.
      */
     data class Issue(
         val ruleIndex: Int?,
         val field: String,
         val message: String,
+        val list: String? = null,
     )
 
     /**
@@ -68,7 +70,7 @@ object RulesValidator {
         index: Int = 0,
     ): List<Issue> =
         scalarIssues(rule, index) +
-            conditionIssues(rule.conditions, index) +
+            conditionIssues(rule.conditions.map { it.value }, index) +
             copyFolderIssues(rule.copyFolders, index) +
             forwardIssues(rule.forward, index) +
             ruleFlagsIssues(rule.flags, index) +
@@ -99,18 +101,19 @@ object RulesValidator {
      * deleted destination folder, a slot that leaves the palette makes the
      * compiler skip the rule rather than wedging the save.
      */
-    private fun ruleFlagsIssues(
+    internal fun ruleFlagsIssues(
         flags: List<String>,
         index: Int,
+        list: String? = null,
     ): List<Issue> {
         if (flags.size > MAX_RULE_FLAGS) {
-            return listOf(Issue(index, "flags", "At most $MAX_RULE_FLAGS flags per rule."))
+            return listOf(Issue(index, "flags", "At most $MAX_RULE_FLAGS flags per rule.", list))
         }
         val seen = mutableSetOf<String>()
         return flags.mapIndexedNotNull { position, slot ->
             when {
-                slot !in FlagPalette.SLOTS -> Issue(index, "flags[$position]", "Unknown flag slot.")
-                !seen.add(slot) -> Issue(index, "flags[$position]", "Duplicate flag slot.")
+                slot !in FlagPalette.SLOTS -> Issue(index, "flags[$position]", "Unknown flag slot.", list)
+                !seen.add(slot) -> Issue(index, "flags[$position]", "Duplicate flag slot.", list)
                 else -> null
             }
         }
@@ -161,12 +164,7 @@ object RulesValidator {
         index: Int,
     ): List<Issue> =
         buildList {
-            val trimmedName = rule.name.trim()
-            if (trimmedName.isEmpty() || codePoints(trimmedName) > MAX_NAME_LENGTH || hasForbiddenControls(rule.name)) {
-                add(
-                    Issue(index, "name", "Must be 1-$MAX_NAME_LENGTH characters, no control characters."),
-                )
-            }
+            nameIssue(rule.name, index)?.let { add(it) }
             folderIssue(rule.moveFolder)?.let { add(Issue(index, "moveFolder", it)) }
             if (codePoints(rule.replyBody) > MAX_REPLY_BODY_LENGTH ||
                 hasForbiddenControls(rule.replyBody, allowNewlines = true)
@@ -179,20 +177,47 @@ object RulesValidator {
             }
         }
 
-    private fun conditionIssues(
-        conditions: List<RuleCondition>,
+    /**
+     * The Lambda's `_name_and_bool_errors`, the name half: 1 to
+     * [MAX_NAME_LENGTH] characters once trimmed, no control characters.
+     * Shared with [FeedRulesValidator], as the Lambda shares it.
+     */
+    internal fun nameIssue(
+        name: String,
         index: Int,
-    ): List<Issue> {
-        if (conditions.size > MAX_CONDITIONS) {
-            return listOf(Issue(index, "conditions", "At most $MAX_CONDITIONS conditions per rule."))
+        list: String? = null,
+    ): Issue? {
+        val trimmed = name.trim()
+        return if (trimmed.isEmpty() || codePoints(trimmed) > MAX_NAME_LENGTH || hasForbiddenControls(name)) {
+            Issue(index, "name", "Must be 1-$MAX_NAME_LENGTH characters, no control characters.", list)
+        } else {
+            null
         }
-        return conditions.mapIndexedNotNull { position, condition ->
-            val count = codePoints(condition.value)
-            if (count < 1 || count > MAX_VALUE_LENGTH || hasForbiddenControls(condition.value)) {
+    }
+
+    /**
+     * The Lambda's `_condition_errors` over the conditions' [values]: at
+     * most [MAX_CONDITIONS], each 1 to [MAX_VALUE_LENGTH] characters with
+     * no control characters. Which fields a rule's kind allows is the
+     * caller's to check; the models here cannot hold a field their kind
+     * lacks. Shared with [FeedRulesValidator].
+     */
+    internal fun conditionIssues(
+        values: List<String>,
+        index: Int,
+        list: String? = null,
+    ): List<Issue> {
+        if (values.size > MAX_CONDITIONS) {
+            return listOf(Issue(index, "conditions", "At most $MAX_CONDITIONS conditions per rule.", list))
+        }
+        return values.mapIndexedNotNull { position, value ->
+            val count = codePoints(value)
+            if (count < 1 || count > MAX_VALUE_LENGTH || hasForbiddenControls(value)) {
                 Issue(
                     index,
                     "conditions[$position].value",
                     "Must be 1-$MAX_VALUE_LENGTH characters, no control characters.",
+                    list,
                 )
             } else {
                 null
