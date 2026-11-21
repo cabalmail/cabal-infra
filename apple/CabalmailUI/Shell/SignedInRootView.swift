@@ -96,12 +96,15 @@ struct SignedInRootView: View {
             }
             // Bottom-anchored since #1426: at the top the banners covered the
             // filter pills and clipped the first message row. Kept off the
-            // fold on an iPhone Duo (`StatusBannerOverlay`).
+            // fold on an iPhone Duo (`StatusBannerOverlay`). Lifted above the
+            // tab bar wherever one holds that band, by the layout actually
+            // drawn, not the raw size class: a Plus / Max iPhone in landscape
+            // is regular-width but still shows the tab bar.
             .overlay {
                 StatusBannerOverlay(
                     isOffline: isOffline,
                     failedSends: failedSends,
-                    bottomInset: bannerBottomInset,
+                    layout: shellLayout,
                     action: actionHandler(for:)
                 )
                 .animation(.default, value: isOffline)
@@ -125,7 +128,8 @@ struct SignedInRootView: View {
             // read it.
             .windowSheetPlacement()
             // Whether the system draws this window's bars in a side strip
-            // (`\.barsAreVertical`), for the tab roles and the reader's bar.
+            // (`\.barsAreVertical`), for the tab roles, the reader's bar and
+            // the banners' lift.
             .verticalBars()
             .task { await observeReachability() }
             .task(id: appState.client.map { ObjectIdentifier($0) }) { await failedSends.observe(appState.client) }
@@ -229,14 +233,6 @@ struct SignedInRootView: View {
             compactTab: navigator.compactTab,
             folderName: navigator.selectedFolder?.name
         )
-    }
-
-    /// Lift the banners above the tab bar wherever one occupies that band —
-    /// see `StatusBannerPlacement`. Keyed on the layout actually drawn, not
-    /// the raw size class: a Plus / Max iPhone in landscape is regular-width
-    /// but still shows the tab bar.
-    private var bannerBottomInset: CGFloat {
-        StatusBannerPlacement.bottomInset(in: shellLayout)
     }
 
     /// Builds the banner's trailing action. A `copyAddress` toast copies and

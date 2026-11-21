@@ -11,7 +11,7 @@ instead of reconstructing it from the git log.
 | 1 -- Shared vocabulary and small parities | Shipped in 1.22.0 (2026-09-25) |
 | 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android (2026-11-18): the first of its two PRs, flags on feed items, merged as #2498; the second, the per-flag filter, merged as #2502; neither is in a release yet (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
-| 4 -- Feed rules | Started (2026-11-18): the storage decision is answered (`feedRules` beside `rules`). Terraform (#2497) and server (#2501) merged 2026-11-19, on stage and checked there, not yet in prod; Apple and Android not started |
+| 4 -- Feed rules | Server in prod with 1.56.0 (2026-11-19): Terraform (#2497) and server (#2501), checked on stage first; the rule format was accepted as written that day. Apple (Kit and the Feed items editor) merged as #2509 (2026-11-20 UTC), not in a release yet. Android not started |
 | 5 -- Cross-media views: flagged and search | Not started (2026-11-08) |
 | 6 -- Ambient surfaces: Spotlight | Not started (2026-11-08) |
 
@@ -651,16 +651,21 @@ an article and the received mail carries the link and the summary.
 
 ## Phase 4 -- Feed rules
 
-**Status:** Started (2026-11-18). The storage decision is answered:
-`feedRules` beside `rules`, with a plain subscriber index and a flag-list
-check at ingest (`flags-and-cross-media.md`, decision 6, which also
-records the rule format). The Terraform (4a, item 1) merged as #2497 and
-the server (4a, items 2 to 4) as #2501, both on 2026-11-19; both are on
-stage, where the API check and the synthetic check pass
-(`flags-and-cross-media.md`, the Verified note under B4.2), and neither
-is in prod yet. The Apple and Android work is not started.
+**Status:** Server in prod, Apple merged and not yet promoted (2026-11-20). The storage
+decision is answered: `feedRules` beside `rules`, with a plain subscriber
+index and a flag-list check at ingest (`flags-and-cross-media.md`,
+decision 6, which also records the rule format, accepted as written on
+2026-11-19). The Terraform (4a, item 1) merged as #2497 and the server
+(4a, items 2 to 4) as #2501, both on 2026-11-19; the API check and the
+synthetic check passed on stage (`flags-and-cross-media.md`, the
+Verified note under B4.2), and both shipped in 1.56.0 the same day. The
+Apple work (4b on Apple) merged as #2509 on 2026-11-20 UTC and is not in
+a release yet: `flags-and-cross-media.md`
+decision 12 has what its scope settled, and the Built note under its
+B4.3 line what was built and run. The Android work is not started
+(`android-parity.md`, leg L3, after the Apple leg is promoted).
 `flags-and-cross-media.md`
-gates the client work on fixes owned by other plans, and those have all
+gated the client work on fixes owned by other plans, and those have all
 merged:
 
 - #1903: an unreadable 200 from `/set_rules` is no longer read as a
@@ -669,9 +674,9 @@ merged:
   clients.
 - #2040: VoiceOver reads each rule's switch as a switch.
 
-What is left is this plan's own order. Phase 2 has shipped on Apple
-(the last of it in 1.53.0, 2026-11-13), and the storage decision is
-answered, so that is the Terraform and server work in prod.
+This plan's own order is met as well: Phase 2 has shipped on Apple (the
+last of it in 1.53.0, 2026-11-13), the storage decision is answered, and
+the Terraform and server work is in prod.
 
 ### 4a. Server and infrastructure
 
@@ -715,6 +720,14 @@ answered, so that is the Terraform and server work in prod.
    edited to pass.
 1. **Template.** A "Flag matching items" feed template beside the
    existing `muteNewsletter` mail template.
+
+As built on Apple (#2509), the editor differs from items 1 and 2 in two
+ways the scope settled (`flags-and-cross-media.md`, decision 12). The
+validator is a type of its own, `FeedRulesValidator`, sharing
+`RulesValidator`'s checks as the server shares them. And `feed` is not
+one of the condition rows: the editor shows it as the rule's Feed, a
+picker of its own above the Title, Author and Summary conditions,
+because the server allows one to a rule and matches it exactly.
 
 Acceptance: a rule "title contains 'release' in feed X, flag
 Releases" flags the next matching item on ingest, on every device,

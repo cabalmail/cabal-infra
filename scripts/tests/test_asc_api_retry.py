@@ -20,6 +20,11 @@ the ordering that keeps HTTPError in its own branch — URLError is its
 parent class, so an `except URLError` placed first would swallow every
 status the suite above asserts on.
 
+Two classes pin what the lookups match rather than how they retry:
+AppLookupTests (an app by exact bundle id, not App Store Connect's prefix
+match) and BuildLookupPlatformTests (a build by number *and* platform,
+#2518).
+
 PyJWT is a CI-step dependency of the scripts, not of this suite, so `jwt`
 is faked in sys.modules before the module under test is imported.
 
@@ -149,6 +154,32 @@ class RetryHarness(unittest.TestCase):
 
 
 OK = json.dumps({"data": [{"id": "GRP1", "attributes": {"name": "stage"}}]}).encode()
+
+
+def builds_payload(*rows):
+    """A `GET /v1/builds?include=preReleaseVersion` body.
+
+    Each row is (build id, platform) or (build id, platform, processingState).
+    As in App Store Connect's answer, a build names its preReleaseVersion by
+    id and the platform sits on that preReleaseVersion in `included`.
+    """
+    data, included = [], []
+    for build_id, platform, *state in rows:
+        attributes = {"processingState": state[0]} if state else {}
+        data.append({
+            "id": build_id,
+            "type": "builds",
+            "attributes": attributes,
+            "relationships": {
+                "preReleaseVersion": {"data": {"type": "preReleaseVersions", "id": f"PRV-{build_id}"}}
+            },
+        })
+        included.append({
+            "id": f"PRV-{build_id}",
+            "type": "preReleaseVersions",
+            "attributes": {"platform": platform, "version": "1.56.0"},
+        })
+    return json.dumps({"data": data, "included": included}).encode()
 
 
 class TransientFailureRetryTests(RetryHarness):
@@ -345,13 +376,13 @@ class ReportedTransportPathTests(RetryHarness):
     """The exact frame both reports name: find_build, from the attach loop."""
 
     def test_find_build_survives_a_connect_timeout(self):
-        payload = json.dumps({"data": [{"id": "B1"}]}).encode()
+        payload = builds_payload(("B1", "IOS"))
         transport = Transport(
             urllib.error.URLError(TimeoutError("timed out")), payload
         )
         with mock.patch.object(asc_api.urllib.request, "urlopen", transport), \
                 mock.patch.object(asc_api.time, "sleep", lambda _s: None):
-            build = asc_api.find_build("APP1", "42", token_factory)
+            build = asc_api.find_build("APP1", "42", "IOS", token_factory)
         self.assertEqual(build["id"], "B1")
         self.assertEqual(transport.attempts, 2)
 
@@ -369,9 +400,7 @@ class ReportedTransportPathTests(RetryHarness):
                 {"data": [{"id": "GRP1", "attributes": {"name": "stage"}}]}
             ).encode(),
             urllib.error.URLError(TimeoutError("timed out")),
-            json.dumps(
-                {"data": [{"id": "B1", "attributes": {"processingState": "VALID"}}]}
-            ).encode(),
+            builds_payload(("B1", "IOS", "VALID")),
             b"",
         )
         with tempfile.NamedTemporaryFile("w", suffix=".p8") as key_file:
@@ -383,6 +412,7 @@ class ReportedTransportPathTests(RetryHarness):
                 "ASC_KEY_PATH": key_file.name,
                 "BUNDLE_ID": "com.cabalmail.Cabalmail",
                 "BUILD_NUMBER": "42",
+                "ASC_PLATFORM": "IOS",
                 "TF_GROUP": "stage",
             }
             with mock.patch.dict(os.environ, env, clear=False), \
@@ -441,6 +471,106 @@ class AppLookupTests(RetryHarness):
         self.assertIn("limit=200", transport.calls[0][1])
 
 
+class BuildLookupPlatformTests(RetryHarness):
+    """find_build must return the build of the platform asked for (#2518).
+
+    The iOS and visionOS apps share one app record, and each upload leg
+    stamps its build number from the clock, so two legs can stamp the same
+    number (their archive steps once started a second apart). The lookup
+    used to take the first row of `filter[app]` + `filter[version]`, which
+    could be the other platform's build: that build attached twice, this
+    one left outside every group, every job green.
+    """
+
+    APP = json.dumps(
+        {"data": [{"id": "APP1", "attributes": {"bundleId": "com.cabalmail.Cabalmail"}}]}
+    ).encode()
+    GROUP = json.dumps({"data": [{"id": "GRP1", "attributes": {"name": "stage"}}]}).encode()
+    # Both platforms under build 42, the other platform listed first.
+    SHARED = builds_payload(("B-VISION", "VISION_OS", "VALID"), ("B-IOS", "IOS", "VALID"))
+
+    def lookup(self, platform, payload):
+        transport = Transport(payload)
+        with mock.patch.object(asc_api.urllib.request, "urlopen", transport):
+            return asc_api.find_build("APP1", "42", platform, token_factory), transport
+
+    def run_main(self, main, transport, **env):
+        """Run a script's main() over `transport` with the env it requires."""
+        with tempfile.TemporaryDirectory() as tmp:
+            key_path = os.path.join(tmp, "AuthKey_K1.p8")
+            with open(key_path, "w", encoding="utf-8") as handle:
+                handle.write("-----BEGIN PRIVATE KEY-----\n")
+            changelog = os.path.join(tmp, "CHANGELOG.md")
+            with open(changelog, "w", encoding="utf-8") as handle:
+                handle.write("## [1.56.0] - 2026-11-20\n\n### Fixed:\n\n- Apple: **A fix.** Details.\n")
+            base = {
+                "ASC_KEY_ID": "K1",
+                "ASC_ISSUER_ID": "I1",
+                "ASC_KEY_PATH": key_path,
+                "BUNDLE_ID": "com.cabalmail.Cabalmail",
+                "BUILD_NUMBER": "42",
+                "MARKETING_VERSION": "1.56.0",
+                "CHANGELOG_PATH": changelog,
+                "TF_GROUP": "stage",
+            }
+            with mock.patch.dict(os.environ, {**base, **env}, clear=False), \
+                    mock.patch.object(asc_api.urllib.request, "urlopen", transport), \
+                    mock.patch.object(asc_api.time, "sleep", lambda _s: None):
+                return main()
+
+    def test_the_ios_lookup_passes_over_a_visionos_build_listed_first(self):
+        build, _ = self.lookup("IOS", self.SHARED)
+        self.assertEqual(build["id"], "B-IOS")
+
+    def test_the_visionos_lookup_takes_its_own_build(self):
+        build, _ = self.lookup("VISION_OS", self.SHARED)
+        self.assertEqual(build["id"], "B-VISION")
+
+    def test_only_the_other_platforms_build_is_not_found(self):
+        # Not found means "keep polling": this platform's build has not
+        # surfaced yet, whatever else carries the number.
+        build, _ = self.lookup("IOS", builds_payload(("B-VISION", "VISION_OS", "VALID")))
+        self.assertIsNone(build)
+
+    def test_a_build_with_no_linked_prerelease_version_is_not_found(self):
+        payload = json.dumps(
+            {"data": [{"id": "B1", "attributes": {"processingState": "PROCESSING"}}]}
+        ).encode()
+        build, _ = self.lookup("IOS", payload)
+        self.assertIsNone(build)
+
+    def test_the_query_includes_the_prerelease_version_and_every_platform(self):
+        _, transport = self.lookup("IOS", self.SHARED)
+        url = transport.calls[0][1]
+        self.assertIn("include=preReleaseVersion", url)
+        self.assertNotIn("limit=1&", url + "&")
+
+    def test_the_attach_loop_attaches_its_own_platforms_build(self):
+        transport = Transport(self.APP, self.GROUP, self.SHARED, b"")
+        self.assertEqual(self.run_main(assign.main, transport, ASC_PLATFORM="IOS"), 0)
+        self.assertEqual(
+            transport.calls[3],
+            ("POST", f"{asc_api.API_BASE}/v1/builds/B-IOS/relationships/betaGroups"),
+        )
+
+    def test_the_notes_go_on_their_own_platforms_build(self):
+        no_localization = json.dumps({"data": []}).encode()
+        transport = Transport(self.APP, self.SHARED, no_localization, b"")
+        self.run_main(notes_script.main, transport, ASC_PLATFORM="IOS")
+        method, url = transport.calls[2]
+        self.assertEqual(method, "GET")
+        self.assertIn("filter%5Bbuild%5D=B-IOS&", url)
+
+    def test_a_platform_spelt_the_workflow_way_is_refused_before_any_request(self):
+        for name, main in (("assign", assign.main), ("notes", notes_script.main)):
+            with self.subTest(script=name):
+                transport = Transport(self.APP)
+                with self.assertRaises(RuntimeError) as caught:
+                    self.run_main(main, transport, ASC_PLATFORM="visionOS")
+                self.assertIn("VISION_OS", str(caught.exception))
+                self.assertEqual(transport.attempts, 0)
+
+
 class RetryAfterTests(RetryHarness):
     """The server's own pacing wins, up to the cap."""
 
@@ -492,8 +622,8 @@ class ReportedCallPathTests(RetryHarness):
              json.dumps(
                  {"data": [{"id": "APP1", "attributes": {"bundleId": "com.cabalmail.Cabalmail"}}]}
              ).encode()),
-            (lambda: asc_api.find_build("APP1", "42", token_factory),
-             json.dumps({"data": [{"id": "B1"}]}).encode()),
+            (lambda: asc_api.find_build("APP1", "42", "IOS", token_factory),
+             builds_payload(("B1", "IOS"))),
         ):
             with self.subTest(call=call):
                 transport = Transport((500, {}), payload)

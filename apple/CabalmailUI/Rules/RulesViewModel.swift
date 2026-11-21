@@ -3,16 +3,23 @@ import Observation
 import CabalmailKit
 
 /// The slice of the client the rules editor needs, narrowed so tests can
-/// fake four methods instead of conforming to the whole `ApiClient`.
+/// fake five methods instead of conforming to the whole `ApiClient`.
 protocol RulesBackend: Sendable {
     func fetchRules() async throws -> RuleSet
-    func saveRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet
+    /// Saves the mail rules and, when `feedRules` is not nil, the feed
+    /// rules with them. Nil leaves the stored feed rules as they are.
+    func saveRules(
+        _ rules: [Rule], feedRules: [FeedRule]?, expectedVersion: Int
+    ) async throws -> RuleSet
     func listFolders() async throws -> [Folder]
     func createFolder(name: String, parent: String?) async throws
+    /// The user's feed subscriptions, for a feed rule's Feed picker.
+    func listSubscriptions() async throws -> [RssSubscription]
 }
 
 /// Production backend: rules via the Lambda pair, folders via the same
-/// IMAP surface the sidebar and the move sheet use.
+/// IMAP surface the sidebar and the move sheet use, subscriptions from the
+/// feed store the Feeds sidebar reads.
 struct LiveRulesBackend: RulesBackend {
     let client: CabalmailClient
 
@@ -20,8 +27,17 @@ struct LiveRulesBackend: RulesBackend {
         try await client.rules()
     }
 
-    func saveRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet {
-        try await client.saveRules(rules, expectedVersion: expectedVersion)
+    func saveRules(
+        _ rules: [Rule], feedRules: [FeedRule]?, expectedVersion: Int
+    ) async throws -> RuleSet {
+        try await client.saveRules(rules, feedRules: feedRules, expectedVersion: expectedVersion)
+    }
+
+    /// The device's synced copy, as the Feeds sidebar shows it, rather than
+    /// a request of its own: the picker should offer the feeds the user
+    /// sees. Empty on a bare client, which has no feed store.
+    func listSubscriptions() async throws -> [RssSubscription] {
+        try await client.rssStore?.subscriptions() ?? []
     }
 
     func listFolders() async throws -> [Folder] {
@@ -33,9 +49,11 @@ struct LiveRulesBackend: RulesBackend {
     }
 }
 
-/// State for the mail-rules editor (`docs/1.x/user-mail-rules-plan.md`,
-/// Phase 4): the ordered rule array, the optimistic-concurrency version, and
-/// the debounced whole-set auto-save.
+/// State for the rules editor (`docs/1.x/user-mail-rules-plan.md`,
+/// Phase 4): the ordered mail rule array, the optimistic-concurrency version,
+/// and the debounced whole-set auto-save. The feed rules, which the server
+/// keeps beside the mail rules under the same version, are `feed`'s; this
+/// model saves both lists in one request.
 ///
 /// Every mutation goes through `update` / `add` / `delete` / `move`, which
 /// splice the local array and schedule one debounced PUT of the entire set —
@@ -51,7 +69,11 @@ final class RulesViewModel {
     }
 
     private let backend: RulesBackend
-    private(set) var rules: [Rule] = []
+    private var mail = RuleList<Rule>(maxCount: RulesValidator.maxRules)
+    /// The mail rules, in precedence order.
+    var rules: [Rule] { mail.rules }
+    /// The feed rules and their edits. Its changes save through this model.
+    let feed = FeedRulesEditor()
     private(set) var version = 0
     private(set) var isLoading = true
     private(set) var loadError: String?
@@ -77,12 +99,14 @@ final class RulesViewModel {
 
     init(backend: RulesBackend) {
         self.backend = backend
+        feed.onChange = { [weak self] in self?.scheduleSave() }
     }
 
     // MARK: - Loading
 
-    /// Fetches the rule set (replacing all local state — also the conflict
-    /// alert's Reload path) and refreshes the folder list best-effort.
+    /// Fetches both rule lists (replacing all local state — also the
+    /// conflict alert's Reload path) and refreshes the folder list and the
+    /// subscriptions best-effort.
     func load() async {
         isLoading = true
         loadError = nil
@@ -91,7 +115,8 @@ final class RulesViewModel {
             // Legacy move/archive + continue renders and saves as the Copy
             // it compiles to (truthful Continue, decision 2). One-way; the
             // normalized form persists on the next edit's save.
-            rules = ruleSet.rules.map { $0.normalizingLegacyContinue() }
+            mail.replace(with: ruleSet.rules.map { $0.normalizingLegacyContinue() })
+            feed.load(ruleSet.feedRules)
             version = ruleSet.version
             saveState = .idle
             pendingSave = false
@@ -113,6 +138,14 @@ final class RulesViewModel {
         hasAttemptedLoad = true
         isLoading = false
         await refreshFolders()
+        await refreshSubscriptions()
+    }
+
+    /// Subscriptions for a feed rule's Feed picker. Best-effort, as the
+    /// folder list is: a failure leaves the picker with "All feeds" alone.
+    func refreshSubscriptions() async {
+        guard let all = try? await backend.listSubscriptions() else { return }
+        feed.setSubscriptions(all)
     }
 
     /// Folder list for the destination pickers: existing folders minus
@@ -144,7 +177,7 @@ final class RulesViewModel {
     // MARK: - Mutations
 
     func rule(withID id: String) -> Rule? {
-        rules.first { $0.id == id }
+        mail.rule(withID: id)
     }
 
     /// Writes an edited rule back. A rule the editors render read-only
@@ -153,12 +186,7 @@ final class RulesViewModel {
     /// copy of a rule we can't represent would drop whatever the newer
     /// writer meant (#1901).
     func update(_ rule: Rule) {
-        guard let index = rules.firstIndex(where: { $0.id == rule.id }),
-              rules[index].isEditable,
-              rules[index] != rule
-        else { return }
-        rules[index] = rule
-        scheduleSave()
+        if mail.update(rule) { scheduleSave() }
     }
 
     /// Appends and returns the new rule's id so the caller can navigate to
@@ -171,42 +199,31 @@ final class RulesViewModel {
     /// below it the moment it is dragged up (#2031).
     @discardableResult
     func add(_ rule: Rule = Rule(name: "New rule", enabled: false)) -> String? {
-        guard rules.count < RulesValidator.maxRules else { return nil }
-        rules.append(rule)
+        guard let id = mail.add(rule) else { return nil }
         scheduleSave()
-        return rule.id
+        return id
     }
 
+    /// Nil for a rule this build can't render: its copy would be a new rule
+    /// this build can't express, and the row hides Duplicate for one.
     @discardableResult
     func duplicate(_ id: String) -> String? {
-        guard let original = rule(withID: id),
-              // A copy of an unrenderable rule would be a new rule this
-              // build can't express; the row hides Duplicate for one.
-              original.isEditable,
-              let index = rules.firstIndex(where: { $0.id == id }),
-              rules.count < RulesValidator.maxRules
-        else { return nil }
-        var copy = original
-        copy.id = Rule.mintID()
-        copy.name = original.name + " copy"
-        rules.insert(copy, at: index + 1)
+        guard let copy = mail.duplicate(id, mintID: Rule.mintID) else { return nil }
         scheduleSave()
-        return copy.id
+        return copy
     }
 
     func delete(at offsets: IndexSet) {
-        rules.remove(atOffsets: offsets)
+        mail.delete(at: offsets)
         scheduleSave()
     }
 
     func delete(id: String) {
-        guard let index = rules.firstIndex(where: { $0.id == id }) else { return }
-        rules.remove(at: index)
-        scheduleSave()
+        if mail.delete(id: id) { scheduleSave() }
     }
 
     func move(from source: IndexSet, to destination: Int) {
-        rules.move(fromOffsets: source, toOffset: destination)
+        mail.move(from: source, to: destination)
         scheduleSave()
     }
 
@@ -216,23 +233,16 @@ final class RulesViewModel {
     /// row's other actions. Past either end, or for a rule that is gone,
     /// nothing moves and nothing is saved.
     func move(id: String, by offset: Int) {
-        guard canMove(id: id, by: offset),
-              let index = rules.firstIndex(where: { $0.id == id })
-        else { return }
-        rules.insert(rules.remove(at: index), at: index + offset)
-        scheduleSave()
+        if mail.move(id: id, by: offset) { scheduleSave() }
     }
 
     /// Whether `move(id:by:)` would move the rule, for the menus' enabling.
     func canMove(id: String, by offset: Int) -> Bool {
-        guard offset != 0, let index = rules.firstIndex(where: { $0.id == id }) else { return false }
-        return rules.indices.contains(index + offset)
+        mail.canMove(id: id, by: offset)
     }
 
     func setEnabled(_ id: String, _ enabled: Bool) {
-        guard var rule = rule(withID: id) else { return }
-        rule.enabled = enabled
-        update(rule)
+        if mail.setEnabled(id, enabled) { scheduleSave() }
     }
 
     // MARK: - Saving
@@ -262,10 +272,20 @@ final class RulesViewModel {
             pendingSave = true
             return
         }
+        // The feed list rides this request only when it differs from what
+        // the server holds. Left off, the server keeps its list, so an edit
+        // to the mail rules sends what a build from before feed rules sends
+        // and cannot rewrite a feed rule (see `FeedRulesEditor`).
+        let feedSnapshot = feed.rules
+        let feedToSend = feed.hasUnsavedChanges ? feedSnapshot : nil
         // A set the validator rejects is a set the server 400s (or strips);
         // hold the PUT and surface the first problem instead. The next
-        // mutation reschedules, so fixing the field resumes saving.
-        if let issue = RulesValidator.validate(rules).first {
+        // mutation reschedules, so fixing the field resumes saving. A feed
+        // list that is not being sent is the server's own and is not judged:
+        // it must not hold a mail save.
+        let issues = RulesValidator.validate(rules)
+            + (feedToSend.map(FeedRulesValidator.validate) ?? [])
+        if let issue = issues.first {
             saveState = .error(issue.message)
             return
         }
@@ -273,14 +293,10 @@ final class RulesViewModel {
         saveState = .saving
         let snapshot = rules
         do {
-            let saved = try await backend.saveRules(snapshot, expectedVersion: version)
-            version = saved.version
-            // Adopt the server-canonical set (ids it re-minted, forwards it
-            // stripped) only if nothing changed locally mid-flight; edits
-            // during the PUT have already scheduled their own save.
-            if rules == snapshot {
-                rules = saved.rules.map { $0.normalizingLegacyContinue() }
-            }
+            let saved = try await backend.saveRules(
+                snapshot, feedRules: feedToSend, expectedVersion: version
+            )
+            adopt(saved, sentAs: snapshot, feedSentAs: feedSnapshot)
             saveState = .saved
         } catch CabalmailError.decoding {
             // `/set_rules` commits before it answers, so a 200 whose body
@@ -288,7 +304,7 @@ final class RulesViewModel {
             // Reporting it as a failed save left `version` behind the
             // server's, and the next save's 409 then told the user another
             // device had edited their rules (#1903). Re-read instead.
-            await resyncAfterUnreadableSave(snapshot)
+            await resyncAfterUnreadableSave(snapshot, feedSnapshot)
         } catch is RuleSetConflictError {
             conflict = true
             saveState = .idle
@@ -302,20 +318,36 @@ final class RulesViewModel {
         }
     }
 
+    /// Takes the server's answer to a save sent while the lists read
+    /// `snapshot` and `feedSnapshot`: its version is the one the next save
+    /// has to quote, and its canonical lists (ids it re-minted, forwards it
+    /// stripped, the feed rules the row now holds) replace the local ones,
+    /// each only if nothing changed in it mid-flight; edits during the PUT
+    /// have already scheduled their own save.
+    ///
+    /// And only if the server's list differs from the local one. Nearly
+    /// every answer is the list as it was sent, and replacing the rules
+    /// with an equal copy is not free: a decoded condition has a new local
+    /// `id`, so the editor's condition rows would be rebuilt and the field
+    /// being typed in would lose the keyboard each time a save landed.
+    private func adopt(_ saved: RuleSet, sentAs snapshot: [Rule], feedSentAs feedSnapshot: [FeedRule]) {
+        version = saved.version
+        let canonical = saved.rules.map { $0.normalizingLegacyContinue() }
+        if rules == snapshot, canonical != snapshot {
+            mail.replace(with: canonical)
+        }
+        feed.adopt(saved: saved.feedRules, sentAs: feedSnapshot)
+    }
+
     /// Re-reads the set after a save whose reply was unreadable. The PUT
     /// committed, so the server's version is the one the next save has to
-    /// quote, and its canonical set (re-minted ids, stripped forwards) is
-    /// the one to show — but only if nothing was edited mid-flight, the
-    /// same guard the readable path uses. A re-read that fails leaves the
-    /// save in the error state it would have had, with `version` stale:
+    /// quote, and its canonical lists are the ones to show, under the same
+    /// mid-flight guard the readable path uses. A re-read that fails leaves
+    /// the save in the error state it would have had, with `version` stale:
     /// the next save's 409 is then a real race the Reload alert resolves.
-    private func resyncAfterUnreadableSave(_ snapshot: [Rule]) async {
+    private func resyncAfterUnreadableSave(_ snapshot: [Rule], _ feedSnapshot: [FeedRule]) async {
         do {
-            let saved = try await backend.fetchRules()
-            version = saved.version
-            if rules == snapshot {
-                rules = saved.rules.map { $0.normalizingLegacyContinue() }
-            }
+            adopt(try await backend.fetchRules(), sentAs: snapshot, feedSentAs: feedSnapshot)
             saveState = .saved
         } catch {
             saveState = .error(error.localizedDescription)

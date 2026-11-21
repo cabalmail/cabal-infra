@@ -447,7 +447,7 @@ are expanded in the sections further down.
 9. **Create the TestFlight internal groups CI distributes to.** On
    **each** app record (iOS and macOS), create two internal testing
    groups named exactly **`stage`** and **`prod`** (lowercase — the
-   upload jobs look the group up by name):
+   `testflight-assign` job looks the group up by name):
    - App Store Connect → your app → **TestFlight** tab → **Internal
      Testing** → **+**.
    - Add your Apple ID (with an App Store Connect role) as a tester to
@@ -456,11 +456,11 @@ are expanded in the sections further down.
      creation dialog. CI attaches each uploaded build to the group
      matching its branch (`stage` pushes → `stage`, `main` → `prod`)
      via the App Store Connect API (`assign-testflight-group.py`), and
-     fails the upload job if the attach doesn't succeed. Automatic
-     distribution would give every group every build, erasing the
-     branch routing — and the API refuses explicit attaches to such
-     groups, so the assign step would fail. The explicit attach exists
-     to replace it, not to supplement it.
+     fails that platform's `testflight-assign` leg if the attach doesn't
+     succeed. Automatic distribution would give every group every build,
+     erasing the branch routing — and the API refuses explicit attaches
+     to such groups, so the assign step would fail. The explicit attach
+     exists to replace it, not to supplement it.
    - The distribution mode is **immutable after creation** — the
      checkbox exists only in the create dialog, and the group Settings
      tab merely displays the resulting "Build Distribution" state. To
@@ -774,8 +774,9 @@ own CI files, on pushes to `main` and `stage` that do, and on
 | `app-build` | PRs, and `workflow_dispatch` from a branch other than `main` or `stage` | Unsigned `xcodebuild build`: `CabalmailVision` (visionOS) and `CabalmailWatch` (watchOS) on a PR, where the two test suites already build the iOS and Mac apps; all four schemes, adding `Cabalmail` (iOS) and `CabalmailMac` (macOS), from another branch. Skipped on `main` and `stage` runs, whose upload archives are the device builds |
 | `apple-gate` | Every run | The one check that sums up the test and build jobs above |
 | `approval` | Every run but a PR's | The `gate-*` environment in front of the uploads, after the three test jobs pass and `ios-duo-test` passes or is skipped, or straight after `promotion-verdict` on a `main` push it reports tested |
-| `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → attach to the branch's internal test group |
-| `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact → attach to the branch's internal test group |
+| `upload-ios` | `main` and `stage` runs, with the iOS signing secrets configured | Manual-signed archives of `Cabalmail` (iOS, embedding the watch app) and `CabalmailVision` (visionOS) → TestFlight upload → hand the build number to `testflight-assign` |
+| `upload-mac` | `main` and `stage` runs, with the Mac signing secrets configured | Manual-signed App Store `.pkg` → TestFlight upload → hand the build number to `testflight-assign`, plus (optional) a Developer ID export → `notarytool submit --wait` → `stapler staple` → uploaded as a workflow artifact |
+| `testflight-assign` | `main` and `stage` runs, after the upload jobs | One Ubuntu leg per platform: waits for App Store Connect to ingest the build the upload leg handed it, attaches it to the branch's internal test group, and on `main` sets the build's "What to Test" notes. The waiting runs here rather than on the macOS runner that uploaded |
 
 Both upload jobs no-op, with a workflow warning, when their required
 secrets are missing. Because `app-build` skips `main` and `stage` runs,
@@ -813,8 +814,8 @@ and `CabalmailKit/Package.swift`.
 ## Installing a build from TestFlight
 
 After a successful CI upload and App Store Connect processing (5–30 min),
-the build appears in your app's **Builds** list, and the upload job
-attaches it to the internal group matching the branch it was built from
+the build appears in your app's **Builds** list, and the
+`testflight-assign` job attaches it to the internal group matching the branch it was built from
 (`stage` pushes → the `stage` group, `main` → `prod`) — see the group
 setup in [Apple Developer account setup](#apple-developer-account-setup).
 To install one:
@@ -826,9 +827,9 @@ To install one:
 
 macOS follows the same flow using the macOS TestFlight app (install
 from the Mac App Store). If a build you expected never shows up, check
-the upload job's **Assign build to TestFlight group** step — it fails
-(with the build number in the error) when the build could not be
-attached, and the fallback is attaching that build by hand from the
+that platform's **Assign <platform> build to TestFlight group** job —
+it fails (with the build number in the error) when the build could not
+be attached, and the fallback is attaching that build by hand from the
 group's **Builds** tab.
 
 ## Setting Cabalmail as the default mail handler
@@ -1142,7 +1143,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | `Compose/` | `ComposeView`, `ComposeViewModel` (with its autosave loops, `ComposeAutosaveLoops`, and what it starts from, `ComposeSnapshot`), the From picker, drafts, the failed-send banner, and what a closed composer reports (`ComposeOutcomeReport`) |
 | `Compose/Recipients/`, `Compose/Editor/`, `Compose/Windows/` | The To / Cc / Bcc fields and contacts picker; the rich-text editor; how a composer opens and closes (`ComposeCoordinator`, which sends each compose request to one main window's compose surface and keeps the ones a window cannot show yet; that surface, `ComposeRequestRouter`; the slot registry; the scene; and the move from a sheet to a window, `ComposeWindowMove` and its hand-off table, `ComposeHandoffs`), and on iPad each main window's scene session, so a notification finds the window it was shown over and a compose window iPadOS restores lands on a main window (the one last used) when it closes |
 | `Addresses/` | The address list, its view model, New Address, address titles in menus |
-| `Rules/` | The rule list, the rule editor and its view model |
+| `Rules/` | The rule list (mail rules, then feed rules), the two rule editors, the view model that saves both lists in one request, and the feed list's own editor (`FeedRulesEditor`) |
 | `Admin/` | Administrator screens, listed in Settings only when the session's token names the `admin` group (`SessionManager.isAdmin`): the Users list, each account's page (confirm, enable or disable, delete, domain access) and `UsersViewModel`. The server refuses every admin call to anyone else; a 403 shows as "Administrators only" |
 | `Settings/` | The Settings screens, the iPad Settings sheet, preference sync |
 | `Shared/Chrome/` | Feature-neutral chrome: the filter pill every pill row draws (`FilterPill` over `FilterPillFace`, and `FilterPillStrip`, which stacks pills in a narrow column), the Flagged pill of the two list bars as a menu (`FlagFilterPill`, the same face in a `Menu` with no chevron, and `FlagFilterMenuPolicy` for when it is one, which is once Settings > Flags holds a flag of the user's own, and for its rows, every flag then Any flag then Clear filter, and the word and number on it), the sidebar count badge (`CountBadge`, which draws `FolderCountBadge`'s rule on folder and feed rows alike), the item rows' marks (`UnreadDot`, and `FlagDots` with `FlagDotMark`, which works out the flags a mail row, a feed row and the reader's chips draw: the system flag as one more palette entry, in palette order), the flag the one-press controls act on (`FlagToggle`: the swipe, the shortcuts, the bulk bar, the reader's button and the first flag item of the menus set the palette's default flag, the first entry, on a message and on a feed item alike, in the entry's name and color; the Flagged filters name the built-in flag's entry while they are not lit on another flag; there is always one of each, since no flag can be switched off), the flag menu both readers and both row menus draw (`FlagMenuPolicy` for its rows and its identity, `FlagMenuToggles` for the checkmark rows: every flag in Settings > Flags, then any the item carries whose flag was deleted, and no rows at all while the default flag is the only one), the reader headers' named flags (`FlagChips`), the sidebar tree row (`SidebarTreeRowLabel`, which indents, discloses and tints mail folders and feeds by `FolderIconTint` and `FolderNameTint`), sidebar header and filter rows, the list title menus' shared rows and hosts (`TitleSwitchMenu.swift`), toolbar priority, the reader toolbar's budgets and placement for both readers (`ReaderToolbarPolicy`; each reader's action lists stay with it, in `ReaderToolbarLayout` and `FeedReaderToolbarLayout`), the faces of the toggles both readers share (`ReaderToggleFace`: read, flag, reader view, remote content, and mail's plain text, each glyph naming the action its label names), branding |
@@ -1386,8 +1387,11 @@ and From, To, Cc, Bcc, Subject and the attachments below it
 in one `ForEach`, so a fold rebuilds no row and the editor keeps its web
 view, caret and undo). The arrangement reads the window's fold and the
 form's own pieces with the keyboard ignored, the software keyboard's
-frame (`onSoftwareKeyboardChange`, a `Platform/` adapter) and the form's
-scroll. The body's height comes from where it and the From header sat at
+frame (`onSoftwareKeyboardChange`, a `Platform/` adapter, which brings
+the frame from the screen's coordinates into the window's, the ones the
+fold is in, so the two agree where the window does not fill the screen)
+and the form's scroll. The body's height comes from where it and the
+From header sat at
 rest (sampled only at the form's top, idle, with the keyboard down): it
 reaches the fold, and any space the rows leave is padding under it that
 carries the header below the band (`ComposeLaptopPolicy.bodyFrame`);
@@ -1499,6 +1503,9 @@ phone's Search tab takes no search role
 (`CompactTab.role(in:barsAreVertical:)`), because the strip can hand that
 role's button to the selected tab's own search field (#1963); it is an
 ordinary tab there, and opens the Search screen with its field at the top.
+The status banners drop the lift that clears the phone's tab bar there too
+(`StatusBannerPlacement.bottomInset(in:barsAreVertical:)`): the bar is in
+the strip, so nothing holds the window's bottom band.
 
 **The reader's actions in the strip.** While the bars are vertical the mail
 reader's actions are five separate system bottom-bar items

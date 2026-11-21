@@ -21,11 +21,12 @@ struct StatusBannerOverlay: View {
     @Environment(AppState.self) private var appState
     @Environment(\.commandWindowID) private var windowID
     @Environment(\.foldState) private var fold
+    @Environment(\.barsAreVertical) private var barsAreVertical
     let isOffline: Bool
     let failedSends: FailedSendMonitor
-    /// The gap under the banners at the window's bottom edge
-    /// (`StatusBannerPlacement.bottomInset(in:)`).
-    let bottomInset: CGFloat
+    /// The window's layout shell. Passed in: the overlay hangs beside the
+    /// shells, outside the `\.shellLayout` they read.
+    let layout: ShellLayout
     /// A toast's trailing action, which the window showing it builds.
     let action: (Toast) -> (() -> Void)?
 
@@ -49,6 +50,14 @@ struct StatusBannerOverlay: View {
             }
         }
         .onFoldPiecesChange { pieces = $0 }
+    }
+
+    /// The gap under the banners at the window's bottom edge: lifted above
+    /// the tab bar wherever one holds that band, which the tabs' bar does
+    /// not while the system draws it in a side strip
+    /// (`StatusBannerPlacement.bottomInset(in:barsAreVertical:)`).
+    private var bottomInset: CGFloat {
+        StatusBannerPlacement.bottomInset(in: layout, barsAreVertical: barsAreVertical)
     }
 
     /// The banners showing now.

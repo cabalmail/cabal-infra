@@ -120,7 +120,7 @@ enum RequestReplayRows {
             _ = try await $0.saveSyncedSettings(["k": "v"], expectedVersion: 1)
         },
         ApiRow("set_nav_state", .sentAgain) { try await $0.saveNavState(NavState(folder: "INBOX", clientID: "A")) },
-        ApiRow("set_rules", .sentOnce) { _ = try await $0.setRules([], expectedVersion: 1) },
+        ApiRow("set_rules", .sentOnce) { _ = try await $0.setRules([], feedRules: nil, expectedVersion: 1) },
         ApiRow("push_register", .sentAgain) {
             try await $0.registerPushDevice(PushDeviceRegistration(
                 deviceToken: "ab12", bundleId: "com.cabalmail.Cabalmail", appVersion: "1", locale: "en_US"

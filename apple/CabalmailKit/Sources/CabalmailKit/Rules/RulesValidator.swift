@@ -32,13 +32,17 @@ public enum RulesValidator {
 
     /// One structured finding, mirroring the Lambda's
     /// `{rule, field, error}` entries. `ruleIndex` is nil for set-level
-    /// findings (the rule-count cap).
+    /// findings (the rule-count cap). `list` is nil for a mail rule and
+    /// `"feedRules"` for a feed rule, as in the Lambda's entries: it says
+    /// which list `ruleIndex` counts in.
     public struct Issue: Equatable, Sendable {
+        public let list: String?
         public let ruleIndex: Int?
         public let field: String
         public let message: String
 
-        public init(ruleIndex: Int?, field: String, message: String) {
+        public init(list: String? = nil, ruleIndex: Int?, field: String, message: String) {
+            self.list = list
             self.ruleIndex = ruleIndex
             self.field = field
             self.message = message
@@ -70,7 +74,7 @@ public enum RulesValidator {
     public static func validate(_ rule: Rule, at index: Int = 0) -> [Issue] {
         guard rule.isEditable else { return [] }
         var issues = scalarIssues(rule, at: index)
-        issues += conditionIssues(rule.conditions, at: index)
+        issues += conditionIssues(rule.conditions.map(\.value), at: index)
         issues += copyFolderIssues(rule.copyFolders, at: index)
         issues += forwardIssues(rule.forward, at: index)
         issues += ruleFlagsIssues(rule.flags, at: index)
@@ -99,11 +103,15 @@ public enum RulesValidator {
     /// `cabal-flag-01..20` atoms, unique, bounded. Palette membership is
     /// deliberately NOT checked here (nor server-side at write): like a
     /// deleted destination folder, a slot that leaves the palette makes
-    /// the compiler skip the rule rather than wedging the save.
-    private static func ruleFlagsIssues(_ flags: [String], at index: Int) -> [Issue] {
+    /// the compiler skip the rule rather than wedging the save. Shared with
+    /// `FeedRulesValidator`, as the Lambda shares `_rule_flags_errors`;
+    /// `list` labels the issues.
+    static func ruleFlagsIssues(
+        _ flags: [String], at index: Int, list: String? = nil
+    ) -> [Issue] {
         if flags.count > maxRuleFlags {
             return [Issue(
-                ruleIndex: index, field: "flags",
+                list: list, ruleIndex: index, field: "flags",
                 message: "At most \(maxRuleFlags) flags per rule."
             )]
         }
@@ -112,12 +120,12 @@ public enum RulesValidator {
         for (position, slot) in flags.enumerated() {
             if !FlagPalette.slots.contains(slot) {
                 issues.append(Issue(
-                    ruleIndex: index, field: "flags[\(position)]",
+                    list: list, ruleIndex: index, field: "flags[\(position)]",
                     message: "Unknown flag slot."
                 ))
             } else if !seen.insert(slot).inserted {
                 issues.append(Issue(
-                    ruleIndex: index, field: "flags[\(position)]",
+                    list: list, ruleIndex: index, field: "flags[\(position)]",
                     message: "Duplicate flag slot."
                 ))
             }
@@ -147,13 +155,8 @@ public enum RulesValidator {
 
     private static func scalarIssues(_ rule: Rule, at index: Int) -> [Issue] {
         var issues: [Issue] = []
-        let trimmedName = rule.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedName.isEmpty || scalarCount(trimmedName) > maxNameLength
-            || containsForbiddenControls(rule.name) {
-            issues.append(Issue(
-                ruleIndex: index, field: "name",
-                message: "Must be 1-\(maxNameLength) characters, no control characters."
-            ))
+        if let nameIssue = nameIssue(rule.name, at: index) {
+            issues.append(nameIssue)
         }
         if let folderMessage = folderIssue(rule.moveFolder) {
             issues.append(Issue(ruleIndex: index, field: "moveFolder", message: folderMessage))
@@ -172,20 +175,42 @@ public enum RulesValidator {
         return issues
     }
 
-    private static func conditionIssues(_ conditions: [Rule.Condition], at index: Int) -> [Issue] {
-        if conditions.count > maxConditions {
+    /// The Lambda's name check in `_name_and_bool_errors`, which mail and
+    /// feed rules share: 1 to 100 code points once trimmed, no control
+    /// characters.
+    static func nameIssue(_ name: String, at index: Int, list: String? = nil) -> Issue? {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedName.isEmpty || scalarCount(trimmedName) > maxNameLength
+            || containsForbiddenControls(name)
+        else { return nil }
+        return Issue(
+            list: list, ruleIndex: index, field: "name",
+            message: "Must be 1-\(maxNameLength) characters, no control characters."
+        )
+    }
+
+    /// The Lambda's `_condition_errors` over a rule's condition values, in
+    /// order: the count cap alone when it is exceeded, else one issue per
+    /// value that is empty, too long or carries a control character. Which
+    /// fields a condition may name is the model's business (an unknown one
+    /// keeps the rule opaque), so only the values come here; mail and feed
+    /// rules share the check as the Lambda does.
+    static func conditionIssues(
+        _ values: [String], at index: Int, list: String? = nil
+    ) -> [Issue] {
+        if values.count > maxConditions {
             return [Issue(
-                ruleIndex: index, field: "conditions",
+                list: list, ruleIndex: index, field: "conditions",
                 message: "At most \(maxConditions) conditions per rule."
             )]
         }
-        return conditions.enumerated().compactMap { position, condition in
-            let count = scalarCount(condition.value)
+        return values.enumerated().compactMap { position, value in
+            let count = scalarCount(value)
             guard count < 1 || count > maxValueLength
-                || containsForbiddenControls(condition.value)
+                || containsForbiddenControls(value)
             else { return nil }
             return Issue(
-                ruleIndex: index, field: "conditions[\(position)].value",
+                list: list, ruleIndex: index, field: "conditions[\(position)].value",
                 message: "Must be 1-\(maxValueLength) characters, no control characters."
             )
         }

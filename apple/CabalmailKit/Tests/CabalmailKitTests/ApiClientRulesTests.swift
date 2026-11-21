@@ -63,7 +63,7 @@ final class ApiClientRulesTests: XCTestCase {
             action: .move,
             moveFolder: "Receipts"
         )
-        let saved = try await makeClient(http).setRules([rule], expectedVersion: 3)
+        let saved = try await makeClient(http).setRules([rule], feedRules: nil, expectedVersion: 3)
         // The 200 body's extra `stripped` / `warnings` keys must not break
         // the RuleSet decode; version propagates for the next save.
         XCTAssertEqual(saved.version, 4)
@@ -92,7 +92,7 @@ final class ApiClientRulesTests: XCTestCase {
         let body = #"{"Error": "Rules changed on another device; reload.", "version": 9}"#
         let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 409)])
         do {
-            _ = try await makeClient(http).setRules([], expectedVersion: 2)
+            _ = try await makeClient(http).setRules([], feedRules: nil, expectedVersion: 2)
             XCTFail("expected RuleSetConflictError")
         } catch let conflict as RuleSetConflictError {
             XCTAssertEqual(conflict.serverVersion, 9)
@@ -106,7 +106,7 @@ final class ApiClientRulesTests: XCTestCase {
             + #""error": "Must be 1-100 characters, no control characters."}]}"#
         let http = RecordingHTTPTransport(responses: [(Data(body.utf8), 400)])
         do {
-            _ = try await makeClient(http).setRules([Rule()], expectedVersion: 0)
+            _ = try await makeClient(http).setRules([Rule()], feedRules: nil, expectedVersion: 0)
             XCTFail("expected CabalmailError.http")
         } catch let CabalmailError.http(status, _) {
             XCTAssertEqual(status, 400)

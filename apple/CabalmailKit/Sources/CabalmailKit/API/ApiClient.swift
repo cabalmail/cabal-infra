@@ -159,20 +159,28 @@ public protocol ApiClient: Sendable {
         _ changes: [String: String], expectedVersion: Int?
     ) async throws -> SyncedSettingsSaveResult
 
-    // MARK: Mail rules
-    /// Fetches the caller's whole ordered rule set from `/get_rules`. A user
-    /// with no rules reads as `{rules: [], version: 0}` — never an error.
+    // MARK: Mail and feed rules
+    /// Fetches the caller's mail rules (ordered) and feed rules from
+    /// `/get_rules`. A user with no rules reads as
+    /// `{rules: [], feedRules: [], version: 0}` — never an error.
     /// The Lambda reads consistently, so a reload right after a
     /// `RuleSetConflictError` is guaranteed to see the winning write.
     func listRules() async throws -> RuleSet
 
-    /// Replaces the caller's whole rule set via `/set_rules` (array order is
-    /// precedence). `expectedVersion` carries optimistic concurrency: the
-    /// server rejects a stale writer with 409, surfaced as
-    /// `RuleSetConflictError` so the UI can offer a reload instead of
-    /// interleaving two devices' orderings. Returns the canonicalized set
-    /// (server-assigned ids, invalid forwards stripped) and the new version.
-    func setRules(_ rules: [Rule], expectedVersion: Int) async throws -> RuleSet
+    /// Replaces the caller's whole mail rule list via `/set_rules` (array
+    /// order is precedence) and, when `feedRules` is not nil, the whole feed
+    /// rule list in the same write. A nil `feedRules` sends no `feedRules`
+    /// key, which the server reads as "leave the stored list alone": it is
+    /// the request every build from before feed rules sends. An empty list
+    /// clears the stored one. `expectedVersion` carries optimistic
+    /// concurrency for both lists: the server rejects a stale writer with
+    /// 409, surfaced as `RuleSetConflictError` so the UI can offer a reload
+    /// instead of interleaving two devices' edits. Returns the canonicalized
+    /// set (server-assigned ids, invalid forwards stripped, and the feed
+    /// rules the row holds after the write) and the new version.
+    func setRules(
+        _ rules: [Rule], feedRules: [FeedRule]?, expectedVersion: Int
+    ) async throws -> RuleSet
 
     // MARK: Administration
     // Admin only: the server answers anyone outside the `admin` group with

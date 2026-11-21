@@ -23,9 +23,10 @@ on:
       - '.github/scripts/runner-hung-before-tests.py'
   # The PR gate: every PR touching Apple code builds and tests before merge,
   # so a regression is caught on its own PR instead of on the stage push
-  # after it lands. A PR run stops at the test and build jobs: `approval`
-  # and both upload jobs are skipped for pull_request, so no environment
-  # gate, signing secret, or TestFlight upload is reachable from a PR.
+  # after it lands. A PR run stops at the test and build jobs: `approval`,
+  # both upload jobs and testflight-assign are skipped for pull_request, so
+  # no environment gate, signing or App Store Connect secret, or TestFlight
+  # upload is reachable from a PR.
   # `apple-gate` is the one stable check name to require in branch
   # protection.
   pull_request:
@@ -817,6 +818,12 @@ jobs:
     if: ${{ !cancelled() && needs.approval.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
     runs-on: xcode-27
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    # Each leg's handoff to testflight-assign, named by platform: the two
+    # legs share these outputs, and a name both legs wrote would keep
+    # whichever leg finished last.
+    outputs:
+      handoff_iOS: ${{ steps.handoff.outputs.handoff_iOS }}
+      handoff_visionOS: ${{ steps.handoff.outputs.handoff_visionOS }}
     strategy:
       # Never cancel a leg mid-upload because the other leg failed.
       fail-fast: false
@@ -954,7 +961,9 @@ jobs:
           # ~/.appstoreconnect/private_keys/ is the canonical one and also
           # works for notarytool. With manual signing, xcodebuild itself
           # doesn't need the key any more — it's only still used by altool
-          # at upload time (and notarytool in the macOS job).
+          # at upload time (and notarytool in the macOS job). The scripts
+          # that call the App Store Connect API run in testflight-assign,
+          # which installs the key itself.
           KEY_DIR="$HOME/.appstoreconnect/private_keys"
           mkdir -p "$KEY_DIR"
           KEY_FILE="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
@@ -968,7 +977,6 @@ jobs:
             echo "::error::APP_STORE_CONNECT_API_KEY_P8 decoded to $SIZE bytes but does not start with the PEM header. Re-encode the .p8 with 'base64 -i AuthKey_<KEYID>.p8 | pbcopy' and update the secret."
             exit 1
           fi
-          echo "ASC_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
 
       - name: Install iOS App Store provisioning profile
         if: steps.check.outputs.enabled == 'true'
@@ -1045,9 +1053,10 @@ jobs:
           BUILD_NUMBER="$(date -u +%s)"
           echo "Marketing version: $MARKETING_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
-          # Export both for the TestFlight-notes step, which needs the build
-          # number to find this exact build in App Store Connect (BUILD_NUMBER
-          # is a per-run timestamp and can't be recomputed later).
+          # Export both for the handoff step, which passes them to
+          # testflight-assign: that job needs the build number to find this
+          # exact build in App Store Connect (BUILD_NUMBER is a per-run
+          # timestamp and can't be recomputed later).
           echo "MARKETING_VERSION=$MARKETING_VERSION" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           # CODE_SIGN_STYLE / CODE_SIGN_IDENTITY / PROVISIONING_PROFILE_SPECIFIER
@@ -1148,6 +1157,7 @@ jobs:
             | xcbeautify --renderer github-actions
 
       - name: Upload to TestFlight
+        id: upload
         if: steps.check.outputs.enabled == 'true'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -1188,54 +1198,26 @@ jobs:
             echo "- Track: App Store Connect → Cabalmail → TestFlight"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Assign build to TestFlight group
-        # Deterministic distribution: attach this build to the internal
-        # test group matching the branch instead of relying on App Store
-        # Connect's automatic distribution, which fires once per build and
-        # never retries — a misfire strands a fully-processed build outside
-        # every group with CI already green. Requires groups named exactly
-        # `stage` and `prod` on the app record, with automatic distribution
-        # switched off (see docs/apple.md). Fails the step if the build
-        # can't be attached, so a stranded build is visible for once.
-        if: steps.check.outputs.enabled == 'true'
+      - name: Hand the build to testflight-assign
+        # always(), so testflight-assign hears how this leg ended even when
+        # an earlier step failed; see that job for what it does with each
+        # status.
+        id: handoff
+        if: always()
         env:
-          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
-          BUNDLE_ID: com.cabalmail.Cabalmail
-          TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+          ENABLED: ${{ steps.check.outputs.enabled }}
+          UPLOAD: ${{ steps.upload.outcome }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
-          set -euo pipefail
-          # Isolated venv: the runner's Homebrew python is externally
-          # managed (PEP 668), so a bare `pip install` is refused. The
-          # notes step below reuses the venv when it runs.
-          if [ ! -d "$RUNNER_TEMP/ascvenv" ]; then
-            python3 -m venv "$RUNNER_TEMP/ascvenv"
-            "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
+          if [ "$ENABLED" = 'false' ]; then
+            STATUS=skipped
+          elif [ "$UPLOAD" = 'success' ]; then
+            STATUS=uploaded
+          else
+            STATUS=failed
           fi
-          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/assign-testflight-group.py"
-
-      - name: Set TestFlight "What to Test" notes (prod only)
-        # Prod releases only - the stage track is the developer's own and
-        # ships no notes. Best-effort: the binary is already uploaded, so the
-        # script warns and exits 0 on any failure rather than failing release.
-        # iOS leg only: the script matches builds by CFBundleVersion, and the
-        # legs stamp different timestamps — one notes pass per release is
-        # enough until the script grows platform awareness.
-        if: steps.check.outputs.enabled == 'true' && github.ref_name == 'main' && matrix.platform == 'iOS'
-        env:
-          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
-          BUNDLE_ID: com.cabalmail.Cabalmail
-          CHANGELOG_PATH: ${{ github.workspace }}/CHANGELOG.md
-        run: |
-          set -euo pipefail
-          # The venv usually exists already (group-assignment step above);
-          # create it only if that step was skipped.
-          if [ ! -d "$RUNNER_TEMP/ascvenv" ]; then
-            python3 -m venv "$RUNNER_TEMP/ascvenv"
-            "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
-          fi
-          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/set-testflight-notes.py"
+          printf 'handoff_%s={"status":"%s","build_number":"%s","marketing_version":"%s"}\n' \
+            "$PLATFORM" "$STATUS" "${BUILD_NUMBER:-}" "${MARKETING_VERSION:-}" >> "$GITHUB_OUTPUT"
 
       - name: Clean up keychain and API key
         if: always() && steps.check.outputs.enabled == 'true'
@@ -1262,6 +1244,9 @@ jobs:
     if: ${{ !cancelled() && needs.approval.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
     runs-on: xcode-27
     environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    # The handoff to testflight-assign, named like upload-ios's.
+    outputs:
+      handoff_macOS: ${{ steps.handoff.outputs.handoff_macOS }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -1464,7 +1449,7 @@ jobs:
           BUILD_NUMBER="$(date -u +%s)"
           echo "Marketing version: $MARKETING_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "Build number: $BUILD_NUMBER" >> "$GITHUB_STEP_SUMMARY"
-          # Export both for the TestFlight-notes step. See the iOS archive step.
+          # Export both for the handoff step. See the iOS archive step.
           echo "MARKETING_VERSION=$MARKETING_VERSION" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           # See the iOS archive step for why the signing settings live on
@@ -1546,6 +1531,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload macOS to TestFlight
+        id: upload
         if: steps.check.outputs.enabled == 'true'
         env:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -1575,6 +1561,26 @@ jobs:
             echo "::warning::altool logged transient error(s) but recovered - final verdict was UPLOAD SUCCEEDED."
           fi
           echo "::notice::altool upload completed cleanly."
+
+      - name: Hand the build to testflight-assign
+        # Same as upload-ios's handoff. It sits ahead of the Developer ID
+        # steps, so a notarization failure cannot keep an uploaded build out
+        # of its TestFlight group.
+        id: handoff
+        if: always()
+        env:
+          ENABLED: ${{ steps.check.outputs.enabled }}
+          UPLOAD: ${{ steps.upload.outcome }}
+        run: |
+          if [ "$ENABLED" = 'false' ]; then
+            STATUS=skipped
+          elif [ "$UPLOAD" = 'success' ]; then
+            STATUS=uploaded
+          else
+            STATUS=failed
+          fi
+          printf 'handoff_macOS={"status":"%s","build_number":"%s","marketing_version":"%s"}\n' \
+            "$STATUS" "${BUILD_NUMBER:-}" "${MARKETING_VERSION:-}" >> "$GITHUB_OUTPUT"
 
       - name: Check for Developer ID certificate and profile
         if: steps.check.outputs.enabled == 'true'
@@ -1713,47 +1719,6 @@ jobs:
           path: ${{ env.NOTARIZED_ZIP }}
           retention-days: 30
 
-      # The ASC-polling steps run last - after the notarized artifact is
-      # produced - so an up-to-20-minute processing poll never blocks it.
-      - name: Assign build to TestFlight group
-        # See the iOS job for rationale. Unlike the notes step this is NOT
-        # best-effort: a build that can't be attached never reaches testers,
-        # so the failure must be visible.
-        if: steps.check.outputs.enabled == 'true'
-        env:
-          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
-          BUNDLE_ID: com.cabalmail.CabalmailMac
-          TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
-        run: |
-          set -euo pipefail
-          # Isolated venv: the runner's Homebrew python is externally
-          # managed (PEP 668), so a bare `pip install` is refused. The
-          # notes step below reuses the venv when it runs.
-          if [ ! -d "$RUNNER_TEMP/ascvenv" ]; then
-            python3 -m venv "$RUNNER_TEMP/ascvenv"
-            "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
-          fi
-          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/assign-testflight-group.py"
-
-      - name: Set TestFlight "What to Test" notes (prod only)
-        # Prod releases only. Best-effort - see the iOS job for rationale.
-        if: github.ref_name == 'main' && steps.check.outputs.enabled == 'true'
-        env:
-          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
-          BUNDLE_ID: com.cabalmail.CabalmailMac
-          CHANGELOG_PATH: ${{ github.workspace }}/CHANGELOG.md
-        run: |
-          set -euo pipefail
-          # The venv usually exists already (group-assignment step above);
-          # create it only if that step was skipped.
-          if [ ! -d "$RUNNER_TEMP/ascvenv" ]; then
-            python3 -m venv "$RUNNER_TEMP/ascvenv"
-            "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check pyjwt cryptography
-          fi
-          "$RUNNER_TEMP/ascvenv/bin/python" "$GITHUB_WORKSPACE/.github/scripts/set-testflight-notes.py"
-
       - name: Clean up keychain and API key
         if: always() && steps.check.outputs.enabled == 'true'
         run: |
@@ -1764,3 +1729,157 @@ jobs:
       - name: Surface raw xcodebuild output on failure
         if: failure()
         run: .github/scripts/dump-xcodebuild-raw.sh
+
+  # -----------------------------------------------------------------------
+  # Attach each uploaded build to the TestFlight internal group matching the
+  # branch, and on main set its "What to Test" notes. Both scripts poll App
+  # Store Connect until Apple has ingested the build: 1.5 to 5 minutes per
+  # build on recent pushes, with a ceiling of 40 minutes for the attach
+  # (ASC_POLL_TIMEOUT in assign-testflight-group.py). They are Python
+  # against the App Store Connect API and need nothing from macOS, so they
+  # wait here, on Linux, rather than on the macOS runner that uploaded the
+  # build: PR runs queue for those runners (see app-build).
+  #
+  # Attaching rather than relying on App Store Connect's automatic
+  # distribution is deliberate: that fires once per build and never
+  # retries, and a misfire strands a fully processed build outside every
+  # group with CI already green. It needs groups named exactly `stage` and
+  # `prod` on each app record, with automatic distribution off (see
+  # docs/apple.md). The attach step fails when the build can't be attached,
+  # so a stranded build shows up as a red leg.
+  #
+  # Each upload leg hands this job a JSON object in an output named for its
+  # platform (handoff_<platform>): its status, and for an uploaded build the
+  # build and marketing versions it stamped. "skipped" (signing secrets
+  # missing) and "failed" (the upload job is already red) leave nothing to
+  # attach. An empty handoff means the leg ended before its handoff step,
+  # GitHub withheld the output, or this job reads a name the upload jobs do
+  # not set. All three fail the leg, so a broken handoff cannot leave an
+  # uploaded build outside its group with every job green.
+  #
+  # The key the scripts sign with goes under $RUNNER_TEMP, which the runner
+  # empties at the end of the job, so there is no clean-up step.
+  # -----------------------------------------------------------------------
+  testflight-assign:
+    name: Assign ${{ matrix.platform }} build to TestFlight group
+    needs: [approval, upload-ios, upload-mac]
+    # The upload jobs' own condition. !cancelled() lets it run past a failed
+    # upload leg, whose handoff says so.
+    if: ${{ !cancelled() && needs.approval.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'stage') }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # asc_platform: App Store Connect's name for the platform. The iOS
+        # and visionOS builds share one app record and can share a build
+        # number, so the scripts look a build up by number and platform
+        # (#2518).
+        include:
+          - platform: iOS
+            asc_platform: IOS
+            bundle_id: com.cabalmail.Cabalmail
+            handoff: ${{ needs.upload-ios.outputs.handoff_iOS }}
+          - platform: visionOS
+            asc_platform: VISION_OS
+            bundle_id: com.cabalmail.Cabalmail
+            handoff: ${{ needs.upload-ios.outputs.handoff_visionOS }}
+          - platform: macOS
+            asc_platform: MAC_OS
+            bundle_id: com.cabalmail.CabalmailMac
+            handoff: ${{ needs.upload-mac.outputs.handoff_macOS }}
+    steps:
+      - name: Read the upload leg's handoff
+        id: handoff
+        env:
+          HANDOFF: ${{ matrix.handoff }}
+          PLATFORM: ${{ matrix.platform }}
+          TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HANDOFF" ]; then
+            echo "::error::No handoff from the $PLATFORM upload leg: it ended before its handoff step, or the output was withheld or misnamed. If that leg's log shows UPLOAD SUCCEEDED, attach its build to the $TF_GROUP group by hand."
+            exit 1
+          fi
+          STATUS=$(jq -r '.status' <<<"$HANDOFF")
+          case "$STATUS" in
+            uploaded)
+              BUILD_NUMBER=$(jq -r '.build_number' <<<"$HANDOFF")
+              if ! [[ "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+                echo "::error::The $PLATFORM upload leg handed off build number '$BUILD_NUMBER'. Attach its build to the $TF_GROUP group by hand."
+                exit 1
+              fi
+              {
+                echo "BUILD_NUMBER=$BUILD_NUMBER"
+                echo "MARKETING_VERSION=$(jq -r '.marketing_version' <<<"$HANDOFF")"
+              } >> "$GITHUB_ENV"
+              echo "uploaded=true" >> "$GITHUB_OUTPUT"
+              ;;
+            skipped)
+              echo "::notice::The $PLATFORM upload leg skipped its upload (signing secrets missing); nothing to attach."
+              ;;
+            failed)
+              echo "::notice::The $PLATFORM upload did not complete; nothing to attach. The upload job's log has the failure."
+              ;;
+            *)
+              echo "::error::Unknown handoff status '$STATUS' from the $PLATFORM upload leg."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        if: steps.handoff.outputs.uploaded == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: setup-python
+        if: steps.handoff.outputs.uploaded == 'true'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.13'
+
+      - name: Install the App Store Connect API client dependencies
+        if: steps.handoff.outputs.uploaded == 'true'
+        run: pip install --quiet --disable-pip-version-check pyjwt cryptography
+
+      - name: Install App Store Connect API key
+        if: steps.handoff.outputs.uploaded == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: |
+          set -euo pipefail
+          KEY_DIR="$RUNNER_TEMP/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_FILE="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+          # Same tolerant decode and PEM check as the upload jobs.
+          printf '%s' "$ASC_KEY_P8" | tr -d '[:space:]' | base64 --decode > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          if ! head -c 27 "$KEY_FILE" | grep -q '^-----BEGIN PRIVATE KEY-----$'; then
+            SIZE=$(wc -c < "$KEY_FILE" | tr -d ' ')
+            echo "::error::APP_STORE_CONNECT_API_KEY_P8 decoded to $SIZE bytes but does not start with the PEM header. Re-encode the .p8 with 'base64 -i AuthKey_<KEYID>.p8 | pbcopy' and update the secret."
+            exit 1
+          fi
+          echo "ASC_KEY_PATH=$KEY_FILE" >> "$GITHUB_ENV"
+
+      - name: Assign build to TestFlight group
+        if: steps.handoff.outputs.uploaded == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          BUNDLE_ID: ${{ matrix.bundle_id }}
+          ASC_PLATFORM: ${{ matrix.asc_platform }}
+          TF_GROUP: ${{ github.ref_name == 'main' && 'prod' || 'stage' }}
+        run: python .github/scripts/assign-testflight-group.py
+
+      - name: Set TestFlight "What to Test" notes (prod only)
+        # Prod releases only - the stage track is the developer's own and
+        # ships no notes. Best-effort: the binary is already uploaded, so the
+        # script warns and exits 0 on any failure rather than failing release.
+        if: steps.handoff.outputs.uploaded == 'true' && github.ref_name == 'main'
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          BUNDLE_ID: ${{ matrix.bundle_id }}
+          ASC_PLATFORM: ${{ matrix.asc_platform }}
+          CHANGELOG_PATH: ${{ github.workspace }}/CHANGELOG.md
+        run: python .github/scripts/set-testflight-notes.py

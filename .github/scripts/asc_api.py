@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Shared App Store Connect API helpers for CI scripts.
 
-Used by set-testflight-notes.py and assign-testflight-group.py, which run
-from an ephemeral venv in apple.yml's upload jobs (PyJWT + cryptography are
-installed at step time). Python resolves this module without any packaging
+Used by set-testflight-notes.py and assign-testflight-group.py, which run in
+apple.yml's testflight-assign job and extensions.yml's Safari upload job
+(PyJWT + cryptography are installed at step time). Python resolves this module without any packaging
 because it sits next to the entry-point scripts: sys.path[0] is the
 directory of the script being run.
 
@@ -70,6 +70,25 @@ def require_env(name):
     if not value:
         raise RuntimeError(f"missing required environment variable {name}")
     return value
+
+
+# App Store Connect's Platform values, as a preReleaseVersion's `platform`
+# attribute carries them.
+PLATFORMS = ("IOS", "MAC_OS", "TV_OS", "VISION_OS")
+
+
+def require_platform():
+    """Return ASC_PLATFORM, or raise unless it is one of PLATFORMS.
+
+    Checked before any request, so a value spelt the workflow's way
+    ("visionOS") fails at once with the accepted values in the message.
+    """
+    platform = require_env("ASC_PLATFORM")
+    if platform not in PLATFORMS:
+        raise RuntimeError(
+            f"ASC_PLATFORM is {platform!r}; expected one of {', '.join(PLATFORMS)}"
+        )
+    return platform
 
 
 def make_token(key_id, issuer_id, private_key):
@@ -201,15 +220,48 @@ def find_app_id(bundle_id, token_factory):
     return None
 
 
-def find_build(app_id, build_number, token_factory):
-    """Return the build resource for `app_id` + CFBundleVersion, or None."""
+def find_build(app_id, build_number, platform, token_factory):
+    """Return the `platform` build of `app_id` + CFBundleVersion, or None.
+
+    The platform is part of the key: one app record holds a build per
+    platform (the iOS and visionOS apps share one), and their
+    CFBundleVersions can be equal. The lookup used to take the first row
+    of the app + version query, which could be the other platform's build
+    (#2518).
+
+    The platform is read from each build's included preReleaseVersion
+    rather than sent as `filter[preReleaseVersion.platform]`. Apple's spec
+    lists that filter, but fastlane's client filters by platform after
+    fetching and notes the query filter as unavailable, and a filter the
+    server ignored would bring the ambiguity back unseen. A build whose
+    preReleaseVersion has not been linked yet counts as not found, so the
+    callers' polling waits for it.
+    """
     query = urllib.parse.urlencode(
         {
             "filter[app]": app_id,
             "filter[version]": build_number,
-            "limit": 1,
+            "include": "preReleaseVersion",
+            # At most one build per platform carries a given version.
+            "limit": 10,
         }
     )
     result = api_request("GET", f"/v1/builds?{query}", token_factory)
-    data = result.get("data") or []
-    return data[0] if data else None
+    platforms = {
+        item.get("id"): (item.get("attributes") or {}).get("platform")
+        for item in result.get("included") or []
+        if item.get("type") == "preReleaseVersions"
+    }
+
+    def platform_of(build):
+        relationship = (build.get("relationships") or {}).get("preReleaseVersion") or {}
+        return platforms.get((relationship.get("data") or {}).get("id"))
+
+    builds = result.get("data") or []
+    for build in builds:
+        if platform_of(build) == platform:
+            return build
+    if builds:
+        seen = ", ".join(sorted(str(platform_of(build)) for build in builds))
+        print(f"Build {build_number} is listed for {seen}, not {platform}; waiting.")
+    return None

@@ -1,9 +1,11 @@
 import SwiftUI
 import CabalmailKit
 
-/// Mail-rules editor entry point (`docs/1.x/user-mail-rules-plan.md`,
-/// Phase 4): the ordered rule list with reorder / enable / add / duplicate /
-/// delete, pushing `RuleEditorView` for the detail form.
+/// Rules editor entry point (`docs/1.x/user-mail-rules-plan.md`, Phase 4,
+/// and `docs/1.x/cross-media-ux-plan.md`, Phase 4): the ordered mail rule
+/// list and, in a section after it, the feed rules, each with reorder /
+/// enable / add / duplicate / delete, pushing `RuleEditorView` or
+/// `FeedRuleEditorView` for the detail form.
 ///
 /// Reached as the Rules category's detail screen in Settings on every
 /// platform — the category row leads straight here, and the detail column's
@@ -22,7 +24,7 @@ struct RulesView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationTitle("Mail rules")
+        .navigationTitle("Rules")
         .inlineNavigationTitle()
         .task {
             // Building the model and loading it are separate questions: on
@@ -55,6 +57,11 @@ struct RulesView: View {
             + "the first match applies unless it continues to the next rule. "
             + reorder
     }
+
+    /// The feed rules' footer. It says nothing about order because there is
+    /// none to explain: nothing is filed, so every matching rule applies.
+    static let feedListFooter = "Every enabled rule that matches applies to a new item "
+        + "when its feed is fetched, before you open the feed. Order doesn't matter."
 }
 
 /// The loaded list: master side of the master/detail flow.
@@ -64,6 +71,8 @@ private struct RulesListView: View {
     /// editor through their own `NavigationLink`; adding has no link to
     /// follow, so it pushes by value instead (#2031).
     @State private var addedRuleID: String?
+    /// The same for a feed rule, which has an editor of its own.
+    @State private var addedFeedRuleID: String?
 
     var body: some View {
         AsyncContentView(
@@ -72,8 +81,10 @@ private struct RulesListView: View {
             errorMessage: model.loadError,
             retry: { Task { await model.load() } },
             content: {
-                if model.rules.isEmpty {
-                    RulesEmptyState(model: model, addedRuleID: $addedRuleID)
+                if model.rules.isEmpty && model.feed.rules.isEmpty {
+                    RulesEmptyState(
+                        model: model, addedRuleID: $addedRuleID, addedFeedRuleID: $addedFeedRuleID
+                    )
                 } else {
                     rulesList
                 }
@@ -81,6 +92,9 @@ private struct RulesListView: View {
         )
         .navigationDestination(item: $addedRuleID) { id in
             RuleEditorView(model: model, ruleID: id)
+        }
+        .navigationDestination(item: $addedFeedRuleID) { id in
+            FeedRuleEditorView(model: model.feed, ruleID: id)
         }
         .editButtonToolbar()
         .safeAreaInset(edge: .bottom) { RulesSaveStatusBar(model: model) }
@@ -106,43 +120,147 @@ private struct RulesListView: View {
     /// Down in each row's menus (`RuleRow.rowActions`). iOS and visionOS
     /// forms are list-backed, so `onMove` and `onDelete` keep working there
     /// in edit mode and by swipe, as Flags' `onMove` already does in a Form.
+    ///
+    /// Two sections of the one form: the mail rules, then the feed rules
+    /// (`cross-media-ux-plan.md`, Phase 4). Each list reorders and deletes
+    /// within itself.
     private var rulesList: some View {
         Form {
-            Section {
-                ForEach(model.rules) { rule in
-                    RuleRow(model: model, rule: rule)
-                }
-                .onMove { source, destination in
-                    model.move(from: source, to: destination)
-                }
-                .onDelete { offsets in
-                    model.delete(at: offsets)
-                }
-                // Add sits at the foot of the list on every platform, as
-                // "Add flag" does in the Flags screen, rather than as a
-                // toolbar "+" (which never rendered reliably in the macOS
-                // Settings window either). Delete is on the rows (see
-                // RuleRow).
-                Button {
-                    addedRuleID = model.add()
-                } label: {
-                    Label("Add rule", systemImage: "plus")
-                }
-                .disabled(model.rules.count >= RulesValidator.maxRules)
-            } footer: {
-                FormSectionFooter {
-                    Text(RulesView.listFooter(on: .current))
-                        .sectionFooter()
-                }
-            }
+            mailSection
+            feedSection
         }
         .groupedFormStyleOnMac()
     }
+
+    private var mailSection: some View {
+        Section {
+            ForEach(model.rules) { rule in
+                RuleRow(
+                    item: RuleRowItem(rule),
+                    actions: RuleRowActions(
+                        setEnabled: { model.setEnabled(rule.id, $0) },
+                        move: { model.move(id: rule.id, by: $0) },
+                        canMove: { model.canMove(id: rule.id, by: $0) },
+                        duplicate: { model.duplicate(rule.id) },
+                        delete: { model.delete(id: rule.id) }
+                    ),
+                    editor: { RuleEditorView(model: model, ruleID: rule.id) }
+                )
+            }
+            .onMove { source, destination in
+                model.move(from: source, to: destination)
+            }
+            .onDelete { offsets in
+                model.delete(at: offsets)
+            }
+            // Add sits at the foot of the list on every platform, as
+            // "Add flag" does in the Flags screen, rather than as a
+            // toolbar "+" (which never rendered reliably in the macOS
+            // Settings window either). Delete is on the rows (see
+            // RuleRow).
+            Button {
+                addedRuleID = model.add()
+            } label: {
+                Label("Add rule", systemImage: "plus")
+            }
+            .disabled(model.rules.count >= RulesValidator.maxRules)
+        } header: {
+            FormSectionHeader {
+                Text("Email messages")
+            }
+        } footer: {
+            FormSectionFooter {
+                Text(RulesView.listFooter(on: .current))
+                    .sectionFooter()
+            }
+        }
+    }
+
+    private var feedSection: some View {
+        Section {
+            ForEach(model.feed.rules) { rule in
+                RuleRow(
+                    item: RuleRowItem(rule, feedTitle: feedTitle(of: rule)),
+                    actions: RuleRowActions(
+                        setEnabled: { model.feed.setEnabled(rule.id, $0) },
+                        move: { model.feed.move(id: rule.id, by: $0) },
+                        canMove: { model.feed.canMove(id: rule.id, by: $0) },
+                        duplicate: { model.feed.duplicate(rule.id) },
+                        delete: { model.feed.delete(id: rule.id) }
+                    ),
+                    editor: { FeedRuleEditorView(model: model.feed, ruleID: rule.id) }
+                )
+            }
+            .onMove { source, destination in
+                model.feed.move(from: source, to: destination)
+            }
+            .onDelete { offsets in
+                model.feed.delete(at: offsets)
+            }
+            Button {
+                addedFeedRuleID = model.feed.add()
+            } label: {
+                Label("Add rule", systemImage: "plus")
+            }
+            .disabled(model.feed.isFull)
+        } header: {
+            FormSectionHeader {
+                Text("Feed items")
+            }
+        } footer: {
+            FormSectionFooter {
+                Text(RulesView.feedListFooter)
+                    .sectionFooter()
+            }
+        }
+    }
+
+    private func feedTitle(of rule: FeedRule) -> String? {
+        rule.feedSubscriptionID.flatMap { model.feed.subscriptionTitle(for: $0) }
+    }
 }
 
-private struct RuleRow: View {
-    @Bindable var model: RulesViewModel
-    let rule: Rule
+/// What a rule's row draws, whichever list the rule is in.
+private struct RuleRowItem {
+    let name: String
+    let enabled: Bool
+    /// False for a rule this build can't render (#1901): no editor to push,
+    /// no switch, no Duplicate.
+    let isEditable: Bool
+    let summary: String
+
+    init(_ rule: Rule) {
+        name = rule.name
+        enabled = rule.enabled
+        isEditable = rule.isEditable
+        summary = RuleSummary.describe(rule)
+    }
+
+    init(_ rule: FeedRule, feedTitle: String?) {
+        name = rule.name
+        enabled = rule.enabled
+        isEditable = rule.isEditable
+        summary = FeedRuleSummary.describe(rule, feedTitle: feedTitle)
+    }
+}
+
+/// What a rule's row can do to its rule, bound to the list the rule is in.
+/// `move` and `canMove` take -1 for Move Up and +1 for Move Down.
+private struct RuleRowActions {
+    let setEnabled: (Bool) -> Void
+    let move: (Int) -> Void
+    let canMove: (Int) -> Bool
+    let duplicate: () -> Void
+    let delete: () -> Void
+}
+
+/// One rule's row, for a mail rule or a feed rule: the row takes what it
+/// draws and does as values and builds the rule's editor from `editor`, so
+/// the two lists share one row and its one platform split.
+private struct RuleRow<Editor: View>: View {
+    let item: RuleRowItem
+    let actions: RuleRowActions
+    @ViewBuilder let editor: () -> Editor
 
     var body: some View {
         #if os(macOS)
@@ -154,9 +272,9 @@ private struct RuleRow: View {
         // the switch trailing, where the grouped form puts every other
         // Settings switch.
         HStack(spacing: 12) {
-            if rule.isEditable {
+            if item.isEditable {
                 NavigationLink {
-                    RuleEditorView(model: model, ruleID: rule.id)
+                    editor()
                 } label: {
                     summary
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,9 +306,9 @@ private struct RuleRow: View {
         // shows what it uses and stays read-only (#1901). Reorder and
         // delete still apply — neither rewrites the rule.
         Group {
-            if rule.isEditable {
+            if item.isEditable {
                 NavigationLink {
-                    RuleEditorView(model: model, ruleID: rule.id)
+                    editor()
                 } label: {
                     HStack(spacing: 12) {
                         enabledToggle
@@ -216,28 +334,28 @@ private struct RuleRow: View {
         // in the old list) and the label that keeps the control speaking as
         // a switch rather than a toggle button (#2040).
         RowSwitch(label: "Enabled", isOn: Binding(
-            get: { rule.enabled },
-            set: { model.setEnabled(rule.id, $0) }
+            get: { item.enabled },
+            set: { actions.setEnabled($0) }
         ))
         // Enabling is an edit like any other, and the model refuses one on
         // a rule it can't render, so the switch reads as broken unless it
         // is disabled with it.
-        .disabled(!rule.isEditable)
+        .disabled(!item.isEditable)
     }
 
     private var summary: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
-                Text(rule.name.isEmpty ? "Untitled rule" : rule.name)
-                    .foregroundStyle(rule.enabled ? .primary : .secondary)
-                if !rule.isEditable {
+                Text(item.name.isEmpty ? "Untitled rule" : item.name)
+                    .foregroundStyle(item.enabled ? .primary : .secondary)
+                if !item.isEditable {
                     Image(systemName: "lock")
                         .appFont(.caption)
                         .foregroundStyle(.secondary)
                         .accessibilityLabel("Read-only")
                 }
             }
-            Text(RuleSummary.describe(rule))
+            Text(item.summary)
                 .appFont(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
@@ -250,27 +368,27 @@ private struct RuleRow: View {
     @ViewBuilder
     private var rowActions: some View {
         Button {
-            model.move(id: rule.id, by: -1)
+            actions.move(-1)
         } label: {
             Label("Move Up", systemImage: "arrow.up")
         }
-        .disabled(!model.canMove(id: rule.id, by: -1))
+        .disabled(!actions.canMove(-1))
         Button {
-            model.move(id: rule.id, by: 1)
+            actions.move(1)
         } label: {
             Label("Move Down", systemImage: "arrow.down")
         }
-        .disabled(!model.canMove(id: rule.id, by: 1))
+        .disabled(!actions.canMove(1))
         Divider()
-        if rule.isEditable {
+        if item.isEditable {
             Button {
-                model.duplicate(rule.id)
+                actions.duplicate()
             } label: {
                 Label("Duplicate", systemImage: "plus.square.on.square")
             }
         }
         Button(role: .destructive) {
-            model.delete(id: rule.id)
+            actions.delete()
         } label: {
             Label("Delete", systemImage: "trash")
         }
@@ -317,14 +435,17 @@ private struct RulesSaveStatusBar: View {
     }
 }
 
-/// First-run screen: the plan's three starter templates plus a blank rule.
-/// Templates arrive disabled with their destination (or sender, or reply
-/// text) left for the user — a template never names a folder that may not
-/// exist and never creates one.
+/// First-run screen, shown while both lists are empty: the plan's three
+/// starter mail templates, the feed template, and a blank rule of either
+/// kind. Templates arrive disabled with their destination (or sender, or
+/// reply text, or word to look for) left for the user — a template never
+/// names a folder that may not exist and never creates one.
 private struct RulesEmptyState: View {
     @Bindable var model: RulesViewModel
     /// Set to the new rule's id so `RulesListView` pushes its editor.
     @Binding var addedRuleID: String?
+    /// The same for a new feed rule.
+    @Binding var addedFeedRuleID: String?
 
     var body: some View {
         ScrollView {
@@ -335,7 +456,8 @@ private struct RulesEmptyState: View {
                 Text("No rules yet")
                     .appFont(.title3, weight: .semibold)
                 Text(
-                    "Rules file, flag, forward, or answer incoming mail for you. "
+                    "Rules file, flag, forward, or answer incoming mail for you, "
+                    + "and flag or mark read new feed items. "
                     + "Start from a template or a blank rule."
                 )
                     .appFont(.callout)
@@ -357,11 +479,20 @@ private struct RulesEmptyState: View {
                         subtitle: "Answer every message with an away note",
                         template: RuleTemplates.vacationReply()
                     )
+                    feedTemplateButton(
+                        "Flag matching items",
+                        subtitle: "Flag new feed items whose title has a word you pick",
+                        template: RuleTemplates.flagMatchingItems()
+                    )
                 }
                 Button("Start with a blank rule") {
                     addedRuleID = model.add()
                 }
                 .buttonStyle(.borderedProminent)
+                Button("Start with a blank feed rule") {
+                    addedFeedRuleID = model.feed.add()
+                }
+                .buttonStyle(.bordered)
             }
             .padding(24)
             .frame(maxWidth: 480)
@@ -373,118 +504,28 @@ private struct RulesEmptyState: View {
         Button {
             addedRuleID = model.add(template)
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).appFont(.body, weight: .medium)
-                Text(subtitle).appFont(.caption).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+            templateLabel(title, subtitle: subtitle)
         }
         .buttonStyle(.bordered)
     }
-}
 
-/// The plan's quick-start templates. All start disabled: each needs a user
-/// decision (a destination folder, the real sender, the reply wording)
-/// before it should act on mail.
-enum RuleTemplates {
-    static func fileReceipts() -> Rule {
-        Rule(
-            name: "File AWS receipts",
-            enabled: false,
-            conditions: [Rule.Condition(field: .from, value: "aws.amazon.com")],
-            action: .move
-        )
-    }
-
-    static func muteNewsletter() -> Rule {
-        Rule(
-            name: "Mute a newsletter",
-            enabled: false,
-            conditions: [Rule.Condition(field: .from, value: "newsletter@example.com")],
-            action: .archive,
-            markRead: true
-        )
-    }
-
-    static func vacationReply() -> Rule {
-        Rule(
-            name: "Vacation reply",
-            enabled: false,
-            reply: true,
-            replyBody: "I'm away right now and will reply when I return."
-        )
-    }
-}
-
-/// One-line rule summary for the list rows, in the spirit of the design
-/// handoff's `describeRule`.
-enum RuleSummary {
-    static func describe(_ rule: Rule) -> String {
-        // A rule carrying a field or action this build doesn't know is
-        // summarized by what it uses instead of by a guess: every other
-        // phrase below would have to render a value with no meaning here
-        // (#1901).
-        if !rule.isEditable {
-            return "Uses \(rule.unknownWireValues.joined(separator: ", ")), "
-                + "which this version doesn't understand — kept unchanged"
+    private func feedTemplateButton(
+        _ title: String, subtitle: String, template: FeedRule
+    ) -> some View {
+        Button {
+            addedFeedRuleID = model.feed.add(template)
+        } label: {
+            templateLabel(title, subtitle: subtitle)
         }
-        var parts = [conditionsPhrase(rule.conditions)]
-        // A continuing None rule neither files nor stops; "no filing" would
-        // just be noise, so a decorate-only rule reads "flag · continue".
-        if !(rule.action == .none && rule.continueToNext) {
-            parts.append(actionPhrase(rule))
-        }
-        if rule.flag { parts.append("flag") }
-        // Custom flags by count: the summary is pure (no palette access),
-        // so labels can't resolve here — the editor shows them.
-        if !rule.flags.isEmpty {
-            parts.append(rule.flags.count == 1
-                ? "1 custom flag" : "\(rule.flags.count) custom flags")
-        }
-        if rule.markRead { parts.append("mark read") }
-        if !rule.forward.isEmpty { parts.append("forward to \(rule.forward.joined(separator: ", "))") }
-        if rule.reply { parts.append("reply") }
-        // "continue" last, so a spill-through rule reads as what it is:
-        // "copy to Receipts · continue" (truthful Continue, Phase 1).
-        if rule.continueToNext { parts.append("continue") }
-        return parts.joined(separator: " · ")
+        .buttonStyle(.bordered)
     }
 
-    private static func conditionsPhrase(_ conditions: [Rule.Condition]) -> String {
-        guard let first = conditions.first else { return "Every message" }
-        let phrase = "\(fieldName(first.field)) contains “\(first.value)”"
-        let rest = conditions.count - 1
-        return rest > 0 ? "\(phrase) + \(rest) more" : phrase
-    }
-
-    private static func actionPhrase(_ rule: Rule) -> String {
-        switch rule.action {
-        case .move:
-            return rule.moveFolder.isEmpty
-                ? "move (pick a folder)" : "move to \(rule.moveFolder)"
-        case .copy:
-            return rule.copyFolders.isEmpty
-                ? "copy (pick folders)" : "copy to \(rule.copyFolders.joined(separator: ", "))"
-        case .delete:
-            return "delete"
-        case .archive:
-            return "archive"
-        case .none:
-            return "no filing"
-        case .unknown(let value):
-            return value
+    private func templateLabel(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).appFont(.body, weight: .medium)
+            Text(subtitle).appFont(.caption).foregroundStyle(.secondary)
         }
-    }
-
-    private static func fieldName(_ field: Rule.Field) -> String {
-        switch field {
-        case .from: return "From"
-        case .to: return "To"
-        case .cc: return "Cc"
-        case .subject: return "Subject"
-        case .body: return "Body"
-        case .unknown(let value): return value
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }

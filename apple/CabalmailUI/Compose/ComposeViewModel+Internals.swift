@@ -278,13 +278,14 @@ extension ComposeViewModel {
         return false
     }
 
-    /// Debounced server-side draft push (the `serverAutosaveInterval`
-    /// loop). Quietly skips when there's nothing to save, no From to
-    /// authorize against, a send is running, or another server save is in
-    /// flight. Failures are silent on purpose: the 5-second local autosave
-    /// is the durability story, and the next tick — or the always-pushed
-    /// close-without-send — retries, which is the offline behavior the
-    /// plan calls for without a second persistent queue.
+    /// Debounced server-side draft push (the loop on
+    /// `ComposeAutosaveTiming.serverInterval`). Quietly skips when there's
+    /// nothing to save, no From to authorize against, a send is running, or
+    /// another server save is in flight. Failures are silent on purpose: the
+    /// 5-second local autosave is the durability story, and the next tick —
+    /// or the always-pushed close-without-send — retries, which is the
+    /// offline behavior the plan calls for without a second persistent
+    /// queue.
     func autosaveToServer() async {
         guard !isSending, serverDraftQueue.acceptsAutosave else { return }
         // Same reasoning as `cancel()`: with the bridge dead every body
