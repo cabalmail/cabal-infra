@@ -20,11 +20,11 @@ Pass 1 started on 2026-11-21 against `stage` at `344859cda` (release 1.56.0 plus
 
 | Work item | Status |
 |---|---|
-| Decisions 1 and 2 | Asked again in pass 1's scope doc (2026-11-21); unanswered, so pass 1 runs on the defaults (No and No) until the maintainer answers. |
+| Decisions 1 and 2 | Decision 2: **Yes** (the maintainer, 2026-11-21), so PR 2 ran. Decision 1: asked again in pass 1's scope doc (2026-11-21) and still unanswered, so its default (No) stands until the maintainer answers. |
 | PR 6. `FakeImapClient`'s call gate | Done (2026-11-21): PR #2522. |
 | PR 3a. `ComposeAutosave` | Done (2026-11-21): PR #2523 finished what #2256 (duo-support.md's PR 7b) began under the name `ComposeAutosaveLoops`: the loop exit, the injected interval and sleep, `flush()` and the tests. |
 | PR 1. `MailNavigationState` (the navigator split) | Done (2026-11-21): PR #2529, held as a draft until release 1.57.0 had shipped the feed rules, so it is the one structural change in the release after 1.57.0 (the maintainer's choice). Its merge clears gate G4 of flags-and-cross-media.md. |
-| PR 2. The split's width write (only if decision 2 is Yes) | Not run in pass 1 (2026-11-21): decision 2 was unanswered, so its default, No, applied. `SplitShell.swift` was free and the width is still written and never read, so a Yes can run it at any time. |
+| PR 2. The split's width write (only if decision 2 is Yes) | Done (2026-11-21): PR #2535, after the maintainer's Yes to decision 2 the same day. |
 | PR 3b. `SendCoordinator` | Partly done (2026-10-28), under another name: #2256 moved the after-Send, Save Draft and Discard effects into `ComposeOutcomeReport`. The tests, `FolderTree.draftsPath` and the toast value are not started. |
 | PR 4. `MessageRenderer` (measure first) | Not started (2026-10-15). |
 | PR 5 | Moved to sqlite-mail-store.md's Phase 3; not this plan's work. |
@@ -37,7 +37,7 @@ Pass 1 started on 2026-11-21 against `stage` at `344859cda` (release 1.56.0 plus
 ## Decisions for the maintainer
 
 1. **Give global search its own model class now?** **No (recommended).** Consequence: global search stays a message-list model in "search" mode, and the question moves to sqlite-mail-store.md's Phase 3 question list, which already holds it (its line 203); that phase reshapes both lists anyway. Yes adds PR 7 (size L, pass 2) and approves moving one source-scan test's anchor (`MessageListRefreshRoutingTests.swift:60`). Default if unanswered: No.
-2. **Remove the iPad split's unused width measurement?** **Yes (recommended).** Consequence: the split stops measuring a width nothing reads. One source-scan test ends its slice on a comment that goes away, so its end marker moves to the next heading in the same file; none of its checks change. Default if unanswered: No, and PR 2 is dropped, because a scan change needs your yes.
+2. **Remove the iPad split's unused width measurement?** **Yes (recommended).** Consequence: the split stops measuring a width nothing reads. One source-scan test ends its slice on a comment that goes away, so its end marker moves to the next heading in the same file; none of its checks change. Default if unanswered: No, and PR 2 is dropped, because a scan change needs your yes. **Answered 2026-11-21: Yes** ("Yes, remove the unused width measurement."), after pass 1's three PRs had merged on the default; PR 2 followed the same day.
 
 ## What you'll see change
 
@@ -124,7 +124,11 @@ Counts strip blank and comment-only lines, as SwiftLint does. The script reprodu
 - Scope: delete `contentColumnWidth`, its `.onGeometryChange` and `recordContentColumnWidth`, and move `ColumnToolbarOccupantsSourceScanTests`' end marker (`:114`) to `// MARK: - Floating folder panel` (`SplitShell.swift:191`) with every assertion unchanged. `ReaderColumnFloorSourceScanTests` and `SidebarToggleRemovalSourceScanTests` also read the file and stay unedited and green.
 - Verify: CI, then the fold check on the iPad and the unfolded Duo. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Done (2026-11-21), PR #2535, on `stage` at `7fe9241ca` (which holds PR 1, unreleased).
+
+- **What went.** `contentColumnWidth`, the one `.onGeometryChange(for: CGFloat.self)` on the list column that wrote it, and `recordContentColumnWidth`. The split's other two geometry readers (`splitFrame` and `windowIsTall`) and the Mac window's own `contentColumnWidth` in `DesktopShell.swift`, which its search field reads, are untouched.
+- **The scan.** `ColumnToolbarOccupantsSourceScanTests` ends its column-bar slice at `// MARK: - Floating folder panel`; no assertion changed. Five mutations in the headless harness each fail a named test of it: a gear in the last function before the new marker, a Settings request beside the folder toggle, the toggle's action removed, the marker's heading renamed in the source, and the old marker put back in the test. The other four scans that read the file (`ReaderColumnFloorSourceScanTests`, `SidebarToggleRemovalSourceScanTests`, `SplitRetileWiringSourceScanTests`, `LaptopAddressesWiringSourceScanTests`) pass unedited.
+- **Fold check** (headless simulators on the MacBook, one simulator per device with the `stage` build and then this PR's): on the iPad Pro 11-inch the full 25-step tour (713.5 pt, 375 pt and back) gave 20 identical trees, 18 of them identical to the pixel; three differ only in how far a flick scrolled, and two narrow steps differ in how a row's sender line truncates. That last difference is not this PR: six repeats of that step, alternating the builds, gave each truncation on both builds. On the iPhone Duo, 10 steps closed, open, half open and half open turned (a message, a feed item, a search) gave 10 identical trees, frames included. visionOS was not run: `SplitShell` is the iPad and unfolded-Duo shell.
 
 **End of pass 1.** PR 1 is the one structural change in its release, so a fold regression traces to one PR; the maintainer picks which release, avoiding duo-support.md's R1 and ipad-layout-and-keyboard.md's Session 1 release where possible. Hand off to the soak. The session can stop here; pass 2 resumes from this plan when its files are free.
 
