@@ -145,6 +145,7 @@ struct ComposeView: View {
             }
             .onChange(of: scenePhase, initial: true) { _, phase in
                 model.handoff?.sceneIsActive = phase == .active
+                if phase == .background { model.autosave.flush() }
             }
             // VoiceOver's escape asks what Cancel asks: the sheet cannot be
             // swiped away, and an escape that did nothing would strand it.
