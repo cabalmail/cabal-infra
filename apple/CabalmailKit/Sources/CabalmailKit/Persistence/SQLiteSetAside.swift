@@ -14,6 +14,10 @@ struct SQLiteSetAside {
 
     /// The store's live database file.
     let database: URL
+    /// How long folding the write-ahead log in waits for a lock another
+    /// connection holds (`SQLiteDatabase.init`). A test that holds one on
+    /// purpose shortens it.
+    var busyTimeoutMilliseconds = SQLiteDatabase.defaultBusyTimeoutMilliseconds
     private let fileManager = FileManager.default
 
     var directory: URL {
@@ -98,7 +102,9 @@ struct SQLiteSetAside {
     /// write even if a side file's move then fails. Best effort: a damaged
     /// file refuses, and its side files are moved as they are.
     private func foldInWriteAheadLog() {
-        guard let connection = try? SQLiteDatabase(path: database.path, existing: true) else { return }
+        guard let connection = try? SQLiteDatabase(
+            path: database.path, existing: true, busyTimeoutMilliseconds: busyTimeoutMilliseconds
+        ) else { return }
         try? connection.exec("PRAGMA wal_checkpoint(TRUNCATE)")
         connection.close()
     }

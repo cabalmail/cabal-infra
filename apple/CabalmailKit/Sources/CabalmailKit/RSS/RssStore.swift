@@ -49,10 +49,19 @@ public actor RssStore {
     /// `recoveringSetAside` also brings back the unsent changes of files set
     /// aside in `directory` (`recoverSetAside`), which `openRecovering` asks
     /// for and a test opening a store by hand does not.
-    init(directory: URL, recoveringSetAside: Bool) throws {
+    /// `busyTimeoutMilliseconds` is the store's connection's
+    /// (`SQLiteDatabase.init`), for a test that locks the file under it.
+    init(
+        directory: URL,
+        recoveringSetAside: Bool,
+        busyTimeoutMilliseconds: Int32 = SQLiteDatabase.defaultBusyTimeoutMilliseconds
+    ) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         self.directory = directory
-        let database = try SQLiteDatabase(path: directory.appendingPathComponent("rss.sqlite").path)
+        let database = try SQLiteDatabase(
+            path: directory.appendingPathComponent("rss.sqlite").path,
+            busyTimeoutMilliseconds: busyTimeoutMilliseconds
+        )
         self.database = database
         try database.exec("PRAGMA journal_mode = WAL")
         try database.exec("PRAGMA synchronous = NORMAL")

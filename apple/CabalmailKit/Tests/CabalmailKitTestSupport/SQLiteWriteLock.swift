@@ -8,6 +8,19 @@ import XCTest
 /// disk, a damaged index), and is how a test shows that a write which could
 /// not start changed nothing.
 public final class SQLiteWriteLock {
+    /// The busy timeout, in milliseconds, for a test to give the connection
+    /// it locks out, in place of the two seconds a shipped store waits. The
+    /// lock is held until the test lets go, so the write fails the same way
+    /// after any wait, and the test need not sit out the long one.
+    ///
+    /// Not zero, which would take the busy handler away: at five the write
+    /// is still retried (after 1, 2 and 2 ms) before it fails. And no
+    /// longer, because the wait is a run of short sleeps and a test process
+    /// at a background quality of service, as on CI's macOS leg, has each
+    /// one stretched: the same tests took four seconds there against two on
+    /// the simulators, and 50 ms came to half a second.
+    public static let shortBusyTimeoutMilliseconds: Int32 = 5
+
     private var handle: OpaquePointer?
 
     /// Opens `path`, which must exist, and takes its write lock.
