@@ -2,8 +2,8 @@
 #
 # Cut a release from the stage branch: collate the pending changelog.d/
 # fragments into a dated CHANGELOG.md section, commit on stage, push, and open
-# the stage -> main PR. Stops before merge - merging to the protected main
-# branch (prod) stays a deliberate manual step.
+# the stage -> main PR, labelled `no-changelog`. Stops before merge - merging
+# to the protected main branch (prod) stays a deliberate manual step.
 #
 # This is the operator's release trigger; it is run by a human in their shell,
 # not by CI. CI never calls it.
@@ -155,6 +155,23 @@ else
     --body "Promote stage to prod for ${VERSION}. See CHANGELOG.md.")" \
     || die "gh pr create failed"
   log "opened PR: ${pr_url}"
+fi
+
+# Label the release PR `no-changelog`. The client changelog gates
+# (apple-changelog.yml, android-changelog.yml) diff the whole release, and by
+# now the fragments are collated away. They accept an `Apple:`/`Android:` line
+# added to CHANGELOG.md in their place, but a release whose only client changes
+# each shipped under `no-changelog` adds no such line and fails the gate. Every
+# PR in the release already passed that gate on its way into stage, so the
+# release PR has nothing left for it to check. Runs for an already-open PR too
+# (adding a label twice is a no-op). Applied after the PR exists rather than
+# with `gh pr create --label`, and best-effort: by this point stage is pushed,
+# so a labelling failure must not abort the release - the label can be added by
+# hand, and the gates re-run on `labeled`.
+if gh pr edit "${pr_url}" --add-label no-changelog >/dev/null; then
+  log "labelled the PR 'no-changelog'."
+else
+  log "WARNING: could not add the 'no-changelog' label to ${pr_url}; add it by hand if the Apple/Android changelog checks fail."
 fi
 
 if [ "${NO_WATCH}" -eq 1 ]; then
