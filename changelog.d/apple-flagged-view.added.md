@@ -15,9 +15,11 @@
   connection returns. A row keeps its own swipes, and a message's dispose
   acts in the folder the message is in: Restore inside Archive. A row
   whose flag is cleared leaves the list at once, message or feed item,
-  and setting the flag again in the open reader brings it back. A window
-  the system restores comes back on the view with its message or article
-  open, and so does one whose layout changes (an iPhone Duo closing or
-  opening, an iPad window narrowing). B5.2 of
+  and setting the flag again in the open reader brings it back. On the
+  Mac, the Message and Feeds menus' Mark as Read/Unread and Flag/Unflag,
+  and the Message menu's Move, act on the item open from the list. A
+  window the system restores comes back on the view with its message or
+  article open, and so does one whose layout changes (an iPhone Duo
+  closing or opening, an iPad window narrowing). B5.2 of
   `docs/1.x/post-wave-3/flags-and-cross-media.md`, built on the server's
   search ahead of the SQLite mail store's flagged query.
