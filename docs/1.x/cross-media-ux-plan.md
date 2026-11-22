@@ -13,7 +13,7 @@ instead of reconstructing it from the git log.
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Server in prod with 1.56.0 (2026-11-19): Terraform (#2497) and server (#2501), checked on stage first; the rule format was accepted as written that day. Apple (Kit and the Feed items editor) merged as #2509 (2026-11-20 UTC), in prod with 1.57.0 (2026-11-21). Android merged as #2536 (2026-11-21), in prod with 1.58.0 (2026-11-22) (`android-parity.md`, leg L3) |
 | 5 -- Cross-media views: flagged and search | Structure (item 1) merged on Apple (2026-11-22) as #2539, in prod with 1.59.0 (2026-11-22); the views are not started (`flags-and-cross-media.md`, Sessions 4 and 5) |
-| 6 -- Ambient surfaces: Spotlight | Spotlight for feed items (item 1) built and checked on Apple (2026-11-22), PR #2553 (`flags-and-cross-media.md`, Session 4, B6.1). Feed notification settings (item 2) wait for delivery, as written |
+| 6 -- Ambient surfaces: Spotlight | Spotlight for feed items (item 1) merged on Apple (2026-11-22) as #2553, not in a release yet (`flags-and-cross-media.md`, Session 4, B6.1). Feed notification settings (item 2) wait for delivery, as written |
 
 This document is the design: what each phase builds and why. The
 sequencing, the gates against other plans, the verification lanes, and
@@ -792,7 +792,7 @@ the article flagged on the phone in Phase 2 beside a flagged message.
 
 ## Phase 6 -- Ambient surfaces: Spotlight
 
-**Status:** Item 1 built and checked on Apple (2026-11-22), PR #2553;
+**Status:** Item 1 merged on Apple (2026-11-22) as #2553, not in a release yet;
 `flags-and-cross-media.md` (Session 4, B6.1) has what was built and run.
 Item 2 waits for delivery, as written.
 
