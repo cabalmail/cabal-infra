@@ -276,21 +276,28 @@ final class SignInCharacterizationTests: XCTestCase {
     }
 }
 
-/// Characterization suite for workstream 0.8: a sign-in that starts while a
-/// session is already wired. `signIn` has no guard for it (restore has one: it
-/// returns while a client is wired). SignInView is its only caller and is
-/// shown only while signed out. #1826's status-only exits (a stray
+/// A sign-in that arrives while a session is already wired (#2559). One
+/// account per install: `signIn` refuses it, logs a line and changes
+/// nothing, so the only way to another account is Sign Out, then Sign In.
+/// SignInView is `signIn`'s only caller and is shown only while signed out,
+/// so no screen reaches this; #1826's status-only exits (a stray
 /// `submitMfaCode` or `cancelMfaChallenge` put the sign-in form over a client
 /// that was still wired) were the app's way here, and both are now ignored
-/// off the code form. The per-account session manager will own exactly this
-/// case (an account added beside another), so what happens to the first
-/// session is pinned: nothing ends it.
+/// off the code form.
+///
+/// Workstream 0.8 pinned what used to happen instead, as latent defects: the
+/// second sign-in replaced the first session without ending it (no push
+/// deregistration, no wipe), another account's sign-in wiped the shared
+/// cache under a session nobody ended, and a failed one left an error on the
+/// status over a session that kept running. Each test below is one of those
+/// pins, turned into a test of the rule (account-isolation.md, decision 3).
 ///
 /// The harness builds each client over a cache directory of its own, where
 /// production builds every client over one shared Application Support
-/// directory. Where that matters (another account's sign-in wiping the cache
-/// the first session still uses), the second client is seated over the first
-/// client's caches to stand in for the shared directory.
+/// directory. Where that matters (another account's sign-in must not wipe
+/// the cache the session uses), the clients the environment would build next
+/// are seated over the first client's caches to stand in for the shared
+/// directory.
 @MainActor
 final class SignInOverASessionCharacterizationTests: XCTestCase {
     private var world: SessionHarness!
@@ -304,88 +311,74 @@ final class SignInOverASessionCharacterizationTests: XCTestCase {
         world = nil
     }
 
-    /// While the second sign-in loads its configuration the first session is
-    /// still wired and observed, under `.signingIn`.
-    func testTheFirstSessionStaysWiredWhileTheSecondSignInLoads() async throws {
+    /// The refusal comes before anything is shown or asked for: the status
+    /// never leaves `.signedIn` for `.signingIn`, and no configuration is
+    /// loaded.
+    func testASignInOverASessionIsRefusedBeforeAnythingLoads() async throws {
         let first = try await signInFirst()
         let observer = try XCTUnwrap(world.appState.sessionManager.sessionExpiryTask)
-        await world.cognito.script(.passwordSignIn, .tokens(id: "ID-B"))
-        world.holdNextConfigurationLoad()
+        let before = world.events.count
 
-        let second = Task { await self.signIn(as: "alice") }
-        await SignInScript.awaitHeldLoad(in: world)
+        await signIn(as: "alice")
 
-        XCTAssertEqual(world.appState.status, .signingIn)
+        XCTAssertEqual(world.appState.status, .signedIn)
         XCTAssertTrue(world.appState.client === first)
         XCTAssertFalse(observer.isCancelled)
-        world.releaseConfigurationLoad()
-        await second.value
-        XCTAssertEqual(world.appState.status, .signedIn)
+        XCTAssertEqual(Array(world.events.dropFirst(before)), [], "no configuration load, nothing built")
     }
 
-    /// Pins current behaviour, which looks like a latent defect: the second
-    /// session replaces the first's client, navigation and observer, but
-    /// nothing ends the first: no `sessionWillEnd` (push deregistration), no
-    /// local wipe, no `sessionDidEnd`. The badge and feed pollers the first
-    /// sign-in started keep running (each reads `client` on every tick, so
-    /// they now poll the new client), so the badge prompt is not requested
-    /// again; the contacts prompt and the platform hooks are.
-    /// Tracked in #1826.
-    func testASecondSignInReplacesTheSessionWithoutEndingTheFirst() async throws {
+    /// A second sign-in as the same account replaces nothing: the first
+    /// session keeps its client, navigation, observer, tokens and cached
+    /// mail, no client is built, and Cognito is not asked.
+    func testASecondSignInOverASessionReplacesNothing() async throws {
         let first = try await signInFirst()
         let firstNavigation = try XCTUnwrap(world.appState.navCoordinator)
         let firstObserver = try XCTUnwrap(world.appState.sessionManager.sessionExpiryTask)
         let firstMail = SignInCachedMail(of: first)
         try await firstMail.seed()
         let before = world.events.count
-        await world.cognito.script(.passwordSignIn, .tokens(id: "ID-B"))
+        let asked = await world.cognito.trail
 
         await signIn(as: "alice")
 
-        XCTAssertEqual(Array(world.events.dropFirst(before)), SignInScript.rewired("alice"))
+        XCTAssertEqual(Array(world.events.dropFirst(before)), [])
         XCTAssertEqual(world.appState.status, .signedIn)
-        XCTAssertTrue(world.appState.client === world.clients.last)
-        XCTAssertFalse(world.appState.client === first)
-        XCTAssertFalse(world.appState.navCoordinator === firstNavigation)
-        XCTAssertTrue(firstObserver.isCancelled, "observing again replaced the first observer")
-        XCTAssertEqual(world.appState.sessionManager.sessionExpiryTask?.isCancelled, false)
+        XCTAssertEqual(world.clients.count, 1)
+        XCTAssertTrue(world.appState.client === first)
+        XCTAssertTrue(world.appState.navCoordinator === firstNavigation)
+        XCTAssertFalse(firstObserver.isCancelled)
+        XCTAssertTrue(world.appState.sessionManager.sessionExpiryTask == firstObserver)
         await firstMail.assertPresent(true)
         let tokens = await world.appState.client?.authService.currentTokens()
-        XCTAssertEqual(tokens?.idToken, "ID-B", "the second sign-in's tokens replaced the first's")
+        XCTAssertEqual(tokens?.idToken, "ID-A", "the first session's tokens stand")
+        let trail = await world.cognito.trail
+        XCTAssertEqual(trail, asked, "Cognito was not asked")
     }
 
-    /// Pins current behaviour, which looks like a latent defect: another
-    /// account's sign-in does not end the first account's session either. No
-    /// `sessionWillEnd` runs, so the first account's push registration (a row
-    /// per user and device token) is never withdrawn, and no `sessionDidEnd`;
-    /// the watch is simply handed the second account. What does run is the
-    /// different-user rule, on the new client, and because production's
-    /// clients share one cache directory, that wipe takes the first account's
-    /// cached mail out from under a session nobody ended.
-    /// Tracked in #1826.
-    func testASignInAsAnotherAccountOverASessionWipesTheSharedCacheButNeverEndsTheFirst() async throws {
+    /// Another account's sign-in over a session is refused like any other:
+    /// the different-account wipe does not run, so the cached mail the
+    /// session is using stays, the remembered account stays, and the watch
+    /// is handed nothing.
+    func testASignInAsAnotherAccountOverASessionWipesNothing() async throws {
         let first = try await signInFirst()
         let sharedMail = SignInCachedMail(of: first)
         try await sharedMail.seed()
         SignInScript.seatClients(of: world, over: sharedMail)
         let before = world.events.count
-        await world.cognito.script(.passwordSignIn, .tokens(id: "ID-B"))
 
         await signIn(as: "bob")
 
-        XCTAssertEqual(Array(world.events.dropFirst(before)), SignInScript.rewired("bob"))
+        XCTAssertEqual(Array(world.events.dropFirst(before)), [])
         XCTAssertEqual(world.appState.status, .signedIn)
-        XCTAssertFalse(world.appState.client === first)
-        XCTAssertEqual(world.defaults.string(forKey: SignInScript.usernameKey), "bob")
-        await sharedMail.assertPresent(false)
+        XCTAssertTrue(world.appState.client === first)
+        XCTAssertEqual(world.defaults.string(forKey: SignInScript.usernameKey), "alice")
+        await sharedMail.assertPresent(true)
     }
 
-    /// Pins current behaviour, which looks like a latent defect: a second
-    /// sign-in that fails puts its error on the status while the first
-    /// session stays wired and observed with its tokens stored. The status
-    /// says the sign-in form; the client, observer and pollers say signed in.
-    /// Tracked in #1826.
-    func testAFailedSignInOverASessionShowsAnErrorWhileTheSessionStaysWired() async throws {
+    /// A sign-in that Cognito would refuse never reaches Cognito: the
+    /// status keeps saying signed in, as the client, observer and stored
+    /// tokens do, and no error is put over the session.
+    func testASignInThatWouldFailOverASessionShowsNoError() async throws {
         let first = try await signInFirst()
         let observer = try XCTUnwrap(world.appState.sessionManager.sessionExpiryTask)
         let before = world.events.count
@@ -393,11 +386,25 @@ final class SignInOverASessionCharacterizationTests: XCTestCase {
 
         await signIn(as: "alice")
 
-        XCTAssertEqual(world.appState.status, .error("Incorrect username or password."))
+        XCTAssertEqual(world.appState.status, .signedIn)
         XCTAssertTrue(world.appState.client === first)
         XCTAssertFalse(observer.isCancelled)
-        XCTAssertEqual(Array(world.events.dropFirst(before)), SignInScript.clientBuilt)
+        XCTAssertEqual(Array(world.events.dropFirst(before)), [])
         XCTAssertTrue(world.hasStoredTokens, "the first session's tokens are still stored")
+    }
+
+    /// After a Sign Out the same sign-in goes through: the rule refuses a
+    /// sign-in over a session, not a second sign-in.
+    func testASignInAfterSignOutIsNotRefused() async throws {
+        let first = try await signInFirst()
+        await world.appState.signOut()
+        await world.cognito.script(.passwordSignIn, .tokens(id: "ID-B"))
+
+        await signIn(as: "bob")
+
+        XCTAssertEqual(world.appState.status, .signedIn)
+        XCTAssertFalse(world.appState.client === first)
+        XCTAssertEqual(world.defaults.string(forKey: SignInScript.usernameKey), "bob")
     }
 
     private func signIn(as username: String) async {

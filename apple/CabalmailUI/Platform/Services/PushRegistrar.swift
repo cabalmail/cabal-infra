@@ -72,7 +72,7 @@ enum PushSettings {
     /// Raw `PushFolderScope` value; absent means `.inboxOnly`.
     static let folderScopeKey = "cabalmail.push.folderScope"
     /// `/`-delimited folder paths for the `.custom` scope.
-    static let chosenFoldersKey = "cabalmail.push.chosenFolders"
+    static let chosenFoldersKey = DefaultsKey.pushChosenFolders
 
     // The `defaults` parameters are `PushRegistrar`'s, which is
     // `.standard` everywhere but the tests.
