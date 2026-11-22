@@ -131,6 +131,25 @@ extension RssStore {
                     [.init(feedId), .init(sortKey)]).first.map(Self.item(from:))
     }
 
+    /// The newest `limit` items of a feed as a search index sees them, each
+    /// text cut at `maxTextLength`. Reads the plain text the store keeps for
+    /// its own search, so nothing is parsed and no HTML is loaded: this is
+    /// what makes giving a whole feed to the device's index cheap enough to
+    /// do at every session start.
+    public func newestItemText(feedId: String, limit: Int, maxTextLength: Int) throws -> [RssItemText] {
+        try database.rows("""
+            SELECT i.feed_id, i.sort_key, i.title, i.author, i.published_at, substr(i.body_text, 1, ?)
+            FROM items i WHERE i.feed_id = ?
+            ORDER BY \(Self.orderClause(.newestFirst)) LIMIT ?
+            """, [.init(maxTextLength), .init(feedId), .init(limit)]
+        ).map { row in
+            RssItemText(
+                feedId: row.string(0), sortKey: row.string(1), title: row.string(2), author: row.string(3),
+                publishedAt: row.string(4), text: row.string(5)
+            )
+        }
+    }
+
     /// Unread counts keyed by subscription id (absent = zero).
     public func unreadCounts() throws -> [String: Int] {
         let rows = try database.rows("""
