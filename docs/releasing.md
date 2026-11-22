@@ -24,8 +24,7 @@ This will:
    fragments.
 2. Show you the staged diff and ask for confirmation.
 3. Commit on `stage` (`Set release date for version VERSION`), push `stage`,
-   and open the `stage -> main` PR, labelled `no-changelog` (see
-   [The `no-changelog` label](#the-no-changelog-label) below).
+   and open the `stage -> main` PR.
 4. Watch the PR checks and report.
 
 Merging the PR is left to you - promotion to prod stays a deliberate manual
@@ -37,21 +36,19 @@ step.
 - `--yes` - skip the confirmation prompt.
 - `--date YYYY-MM-DD` - override the release date.
 
-### The `no-changelog` label
+### Changelog gates on the release PR
 
-`promote.sh` adds the `no-changelog` label to the release PR, whether it opened
-the PR or found one already open. The Apple and Android changelog gates
-(`apple-changelog.yml`, `android-changelog.yml`) diff the whole release, and on
-a release PR the fragments are already collated away. They accept an `Apple:` /
-`Android:` line added to `CHANGELOG.md` in their place, but a release whose
-only client changes each shipped under `no-changelog` adds no such line and
-would fail. Every PR in the release already passed the gate on its way into
-`stage`, so the label waives a check that has nothing left to decide.
+The three changelog gates (`changelog-fragment`, `apple-changelog`,
+`android-changelog`) skip a `stage -> main` PR by its branch names: every change
+in a release already passed them on its own PR into `stage`, and by now the
+fragments are collated away.
 
-Labelling is best-effort: if it fails, the script warns and carries on, since
-`stage` is already pushed by then. Add the label by hand in that case, or when
-you open the release PR yourself (`--no-push`, or no `gh` on the machine); the
-gates re-run when a label is added.
+So the release PR needs no `no-changelog` label, and should not be given one.
+The Apple and Android gates re-run when a label is added or removed; a label
+added while the first run is still going cancels that run, and the cancelled
+check stays on the head commit, where the release dashboard counts it as failing
+and holds the merge. If that happens, re-run the cancelled workflow run from the
+Actions tab and the check turns green.
 
 ## GitHub release (automatic)
 

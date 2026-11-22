@@ -69,8 +69,7 @@ drift: checkov-graph-guard
 
 # --- Release / changelog ---------------------------------------------------
 # changelog: collate changelog.d/ fragments into a dated CHANGELOG.md section.
-# promote:   do that, then commit on stage, push, and open the stage->main PR
-#            (labelled `no-changelog`).
+# promote:   do that, then commit on stage, push, and open the stage->main PR.
 # Pass the version (or a bump keyword) via VERSION=:
 #   make changelog VERSION=0.10.14
 #   make promote   VERSION=0.10.14      # also: patch / minor / major
