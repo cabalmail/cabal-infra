@@ -134,8 +134,16 @@ struct FlaggedNavigationState: Equatable {
     /// starts on the list. Nothing is recorded: the window is where it was.
     /// A row already parked, by a tree this one replaced before its list
     /// took it, stays parked.
+    ///
+    /// A view the stack had backed out of goes for good: the stack that was
+    /// sliding it away went with the old tree, and a door left named would
+    /// hold the new tree's stack on its first column whatever the window
+    /// went on to open.
     mutating func handOff() {
-        guard isOpen else { return }
+        guard isOpen else {
+            door = nil
+            return
+        }
         if let item { parked = .row(item) }
         item = nil
         column = .content

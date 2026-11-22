@@ -97,8 +97,25 @@ extension SceneNavigator {
             closeFlagged()
             return false
         }
-        if gate(of: door).canWrite(tree) { applyFlagged(flaggedPlace.move { $0.setColumn(column) }) }
+        guard gate(of: door).canWrite(tree) else { return true }
+        let records = flaggedPlace.move { $0.setColumn(column) }
+        applyFlagged(records)
+        if records.contains(.closed) { backOutBeneath(door) }
         return true
+    }
+
+    /// Back from the view's list is Back to its door's own list, so the
+    /// medium beneath goes there with it, as its own Back leaves it: nothing
+    /// picked, which puts it on its first column. A stack that opened the
+    /// view from that list is there already. One a layout swap built is
+    /// not: the wide layout always has a folder or a feed list open beneath
+    /// the view, and a picked row in the list the stack lands on pushes it
+    /// forward again.
+    private func backOutBeneath(_ door: FlaggedDoor) {
+        switch section(of: door) {
+        case .mail: selectFolder(nil)
+        case .feeds: selectFeedScope(nil)
+        }
     }
 
     /// The window's own medium was picked or navigated to: the view closes
@@ -156,25 +173,28 @@ extension SceneNavigator {
     /// system restores reopens on them. The resume session, which a new
     /// window and another device pick up from, has no place for the view:
     /// an open row records what its own medium's reader records (a message
-    /// in its own folder, an article in its own feed's list), and with no
-    /// row open the session goes back to the folder or feed beneath.
+    /// in its own folder, an article in its own feed's list). When the row
+    /// closes, the session records that too, as that reader's Back does,
+    /// and then goes back to the folder or feed beneath, if there is one.
     private func applyFlagged(_ records: [FlaggedNavigationState.Record]) {
         for record in records {
+            // The row the reader had open, read before the route moves on.
+            let wasOpen = route.smartItem?.ref
             switch record {
             case .opened(let door):
                 setSmartRoute(.flagged, door: door, item: nil)
             case .closed:
                 setSmartRoute(nil, door: nil, item: nil)
                 flaggedPlace.endVisit()
-                becameLastUsed()
+                recordFlaggedItemClosed(wasOpen)
             case .item(let row):
                 setSmartRoute(.flagged, door: flaggedPlace.state.door, item: row?.ref)
-                recordFlaggedItem(row)
+                if let row { recordFlaggedItem(row) } else { recordFlaggedItemClosed(wasOpen) }
             }
         }
     }
 
-    private func recordFlaggedItem(_ row: FlaggedRow?) {
+    private func recordFlaggedItem(_ row: FlaggedRow) {
         switch row {
         case .mail(_, let ref):
             recorder.folder(ref.folder)
@@ -182,8 +202,21 @@ extension SceneNavigator {
         case .feed(let item):
             if !item.subscriptionId.isEmpty { recorder.feedScope(.subscription(item.subscriptionId)) }
             recorder.feedItem(item)
-        case nil:
-            becameLastUsed()
         }
+    }
+
+    /// The view's reader closed on `ref`, or the view closed around it. The
+    /// session stops naming the row as open before it is handed the place
+    /// beneath: with no folder or feed list beneath (the view opened from a
+    /// tab's first column) that hand-over leaves the half alone, and the
+    /// row would stay recorded as open, for the next layout or another
+    /// device to reopen.
+    private func recordFlaggedItemClosed(_ ref: ItemRef?) {
+        switch ref {
+        case .mail(let message): recorder.noMessage(folderPath: message.folder)
+        case .feed: recorder.feedItem(nil)
+        case nil: break
+        }
+        becameLastUsed()
     }
 }
