@@ -63,9 +63,15 @@ public actor RssSyncEngine {
     func feedSyncWaiterCount(_ feedId: String) -> Int { feedFlights[feedId]?.run.waiterCount ?? 0 }
     var queuedDrainWaiterCount: Int { get async { await pending.queuedWaiterCount } }
 
-    public init(client: RssClient, store: RssStore) {
+    /// What mirrors the stored items outside the store (the Spotlight
+    /// index); told of each page after the store has it, and of the feeds
+    /// a catalog refresh removed. Never waited for (`RssItemIndexing`).
+    private let itemIndex: RssItemIndexing?
+
+    public init(client: RssClient, store: RssStore, itemIndex: RssItemIndexing? = nil) {
         self.client = client
         self.store = store
+        self.itemIndex = itemIndex
         let unsentSettings = RssUnsentSettingsHook()
         self.unsentSettings = unsentSettings
         pending = RssPendingDrain(client: client, store: store, unsentSettings: unsentSettings)
@@ -86,7 +92,17 @@ public actor RssSyncEngine {
     @discardableResult
     public func refreshCatalog() async throws -> RssStore.CatalogDiff {
         let catalog = try await client.listSubscriptions()
-        return try await store.replaceCatalog(catalog)
+        let diff = try await store.replaceCatalog(catalog)
+        itemIndex?.feedsRemoved(diff.removedFeedIds)
+        return diff
+    }
+
+    /// Writes a page of items from the server to the store, then tells the
+    /// index. In that order: a store that refuses the write (one retired at
+    /// sign-out, #1937) leaves the index untold.
+    private func storeItems(_ items: [RssItem]) async throws {
+        try await store.upsertItems(items)
+        itemIndex?.itemsStored(items)
     }
 
     // MARK: - Items
@@ -148,7 +164,7 @@ public actor RssSyncEngine {
             let page = try await client.listItems(
                 scope: .subscription(subscription.subscriptionId), filter: .all, order: .newest,
                 limit: initialPageSize, cursor: nil)
-            try await store.upsertItems(page.items)
+            try await storeItems(page.items)
             received += page.items.count
             state.sinceCursor = page.items.map(\.fetchedKey).max() ?? Self.sentinelCursor
             try await store.setOlderCursor(feedId: subscription.feedId, olderCursor: page.nextCursor ?? "",
@@ -159,7 +175,7 @@ public actor RssSyncEngine {
         while pages < maxPagesPerRun {
             let page = try await client.syncItems(
                 subscriptionId: subscription.subscriptionId, since: since, limit: pageSize)
-            try await store.upsertItems(page.items)
+            try await storeItems(page.items)
             received += page.items.count
             pages += 1
             if !page.nextSince.isEmpty { since = page.nextSince }
@@ -191,7 +207,7 @@ public actor RssSyncEngine {
         let page = try await client.listItems(
             scope: .subscription(subscription.subscriptionId), filter: .all, order: .newest,
             limit: pageSize, cursor: state.olderCursor.isEmpty ? nil : state.olderCursor)
-        try await store.upsertItems(page.items)
+        try await storeItems(page.items)
         // Only the older cursor: a sync of this feed may have moved its own
         // cursors since this read the row (#1938).
         try await store.setOlderCursor(feedId: subscription.feedId, olderCursor: page.nextCursor ?? "",

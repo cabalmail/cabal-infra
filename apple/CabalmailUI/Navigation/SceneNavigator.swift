@@ -130,7 +130,7 @@ final class SceneNavigator {
     /// The router deep links reach this window through (`open(_:)`).
     private let deepLinks: DeepLinkRouter
     /// A deep link's lookup in flight (`open(_:)`): the landing waits on it.
-    @ObservationIgnored private var opening: Task<Void, Never>?
+    @ObservationIgnored private(set) var opening: Task<Void, Never>?
     private let feedsLaunchTarget: @MainActor (NavStateCoordinator, AppRoute.Feeds) async
         -> NavStateCoordinator.FeedLaunchTarget?
 
@@ -690,8 +690,9 @@ extension SceneNavigator {
 // coordinator.
 extension SceneNavigator {
     /// A deep link the router delivered to this window. A notification's or
-    /// Siri's opens at once; a Spotlight result once its Message-ID is
-    /// looked up. With no session to open it in, it goes back to the router.
+    /// Siri's opens at once; a Spotlight result once its Message-ID, or its
+    /// feed item, is looked up. With no session to open it in, it goes back
+    /// to the router.
     func open(_ link: DeepLink) {
         if composeLock.holds(link) { return }
         guard let coordinator = coordinator() else { return deepLinks.giveBack(link) }
@@ -709,9 +710,26 @@ extension SceneNavigator {
     /// Opens `link` once its cursor is known, unless a later link or a
     /// navigation has come since `generation` (`DeepLinkRouter.generation`).
     private func open(_ link: DeepLink, _ coordinator: NavStateCoordinator, ifStill generation: Int) async {
+        if case .feedItem(let feedID, let sortKey) = link {
+            let target = await coordinator.feedItemTarget(feedID: feedID, sortKey: sortKey)
+            guard deepLinks.generation == generation, let target else { return }
+            return openFeedItem(target, coordinator)
+        }
         let cursor = await coordinator.cursor(for: link)
         guard deepLinks.generation == generation else { return }
         navigate(to: cursor)
+    }
+
+    /// A feed item's link, looked up: this window goes to the item's feed
+    /// and its list opens the item, as for a tapped feed banner
+    /// (`navigateFeeds`). Like `navigate(to:)` it takes the launch's place:
+    /// a window that had not landed has landed here, so its Mail tab does
+    /// not then land on the session's folder and record the session out of
+    /// the feed, and a window opened after it lands where the user went.
+    private func openFeedItem(_ target: NavStateCoordinator.FeedLaunchTarget, _ coordinator: NavStateCoordinator) {
+        coordinator.endLaunchSnapshot()
+        didLand = true
+        navigateFeeds(to: target)
     }
 }
 

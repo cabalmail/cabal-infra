@@ -36,16 +36,20 @@ extension CabalmailClient {
     /// A client that carries on, such as a new account's whose cache a
     /// different user left behind, uses `clearLocalData()`.
     public func clearLocalDataEndingSession() async {
+        // First, so nothing the ending session still stores is indexed
+        // behind the wipe below.
+        await spotlightIndexer?.stop()
         try? await rssStore?.retire()
         await clearLocalData()
     }
 
-    /// Kicks the Spotlight sweep for the current session — refreshes the
+    /// Kicks the Spotlight sweep for the current session — indexes each
+    /// subscribed feed's newest items from the feed store, refreshes the
     /// subscribed-folder set and indexes each subscribed folder's top page.
     /// Called (fire-and-forget) by `wireSession` on sign-in / restore.
     public func refreshSpotlightIndex() async {
         guard let spotlightIndexer else { return }
-        await spotlightIndexer.sweep(imap: imapClient, envelopeCache: envelopeCache)
+        await spotlightIndexer.sweep(imap: imapClient, envelopeCache: envelopeCache, feedStore: rssStore)
     }
 
     /// Activate or deactivate MetricKit diagnostic collection. The Settings

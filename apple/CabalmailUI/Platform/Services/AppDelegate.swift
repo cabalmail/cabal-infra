@@ -119,8 +119,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void
     ) -> Bool {
         guard userActivity.activityType == CSSearchableItemActionType else { return false }
-        if let ref = SpotlightMessageRef(activity: userActivity) {
-            DeepLinkRouter.shared.open(.spotlight(ref))
+        if let link = DeepLink(spotlightActivity: userActivity) {
+            DeepLinkRouter.shared.open(link)
         }
         return true
     }
