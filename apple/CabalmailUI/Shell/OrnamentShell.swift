@@ -42,7 +42,19 @@ struct OrnamentShell: View {
     /// The Folders tab's selection: the window's folder. A pick there also
     /// switches to Mail (`SceneNavigator`).
     private var folderSelection: Binding<Folder?> {
-        Binding(get: { navigator.folder(in: tree) }, set: { navigator.selectFolder($0) })
+        Binding(
+            get: { navigator.flaggedIsOpen(in: tree, door: .mail) ? nil : navigator.folder(in: tree) },
+            set: { navigator.selectFolder($0) }
+        )
+    }
+
+    /// The Folders tab's Flagged row: a pick opens the view in the Mail
+    /// tab, as a folder pick opens the folder there (`SceneNavigator`).
+    private var smartViewSelection: Binding<SmartView?> {
+        Binding(
+            get: { navigator.flaggedIsOpen(in: tree, door: .mail) ? .flagged : nil },
+            set: { if $0 == .flagged { navigator.showFlagged(from: tree, door: .mail) } }
+        )
     }
 
     var body: some View {
@@ -94,6 +106,7 @@ struct OrnamentShell: View {
     private var foldersTab: some View {
         NavigationStack {
             FolderListView(selection: folderSelection, externalFilter: nil)
+                .environment(\.sidebarSmartView, smartViewSelection)
         }
     }
 
@@ -128,6 +141,16 @@ private struct VisionMailPane: View {
     private var selectedFolder: Folder? { navigator.folder(in: tree) }
     private var selectedEnvelope: Envelope? { navigator.envelope(in: tree) }
 
+    /// Whether the pane shows the Flagged view, picked on the Folders tab
+    /// in a folder's place.
+    private var showsFlagged: Bool { navigator.flaggedIsOpen(in: tree, door: .mail) }
+    private var flaggedItem: FlaggedRow? { navigator.flaggedItem(in: tree, door: .mail) }
+    private var menuReport: FlaggedMenuReport { FlaggedMenuReport(showsFlagged: showsFlagged, item: flaggedItem) }
+
+    private var flaggedSelection: Binding<FlaggedRow?> {
+        Binding(get: { flaggedItem }, set: { navigator.selectFlaggedItem($0, from: tree, door: .mail) })
+    }
+
     /// The list's selection, through the navigator. The Mail tab has no
     /// search of its own (Search is a tab), so the open message is always
     /// the folder's.
@@ -151,14 +174,20 @@ private struct VisionMailPane: View {
         // actually act on (see `MessageMenuAvailability`), as the other
         // shells' mail does (#1995).
         .reportsMessageMenuAvailability(
-            selectedCount: listSelectionCount,
-            hasOpenMessage: selectedEnvelope != nil
+            selectedCount: menuReport.messageCount(else: listSelectionCount),
+            hasOpenMessage: menuReport.hasMessage(else: selectedEnvelope != nil)
         )
     }
 
     @ViewBuilder
     private var listColumn: some View {
-        if let selectedFolder {
+        if showsFlagged {
+            FlaggedListView(
+                selection: flaggedSelection,
+                takeParked: { [navigator, tree] in navigator.takeParkedFlaggedItem(in: tree, door: .mail) }
+            )
+            .id("flagged#\(navigator.flaggedPlace.state.visit)")
+        } else if let selectedFolder {
             MessageListView(
                 scope: .folder(selectedFolder),
                 selection: envelopeSelection,
@@ -177,12 +206,17 @@ private struct VisionMailPane: View {
         }
     }
 
+    @ViewBuilder
     private var detailColumn: some View {
-        MailReaderColumn(
-            selectionCount: listSelectionCount,
-            envelope: selectedEnvelope,
-            sidebarFolder: selectedFolder
-        )
+        if showsFlagged {
+            FlaggedReaderColumn(item: flaggedItem)
+        } else {
+            MailReaderColumn(
+                selectionCount: listSelectionCount,
+                envelope: selectedEnvelope,
+                sidebarFolder: selectedFolder
+            )
+        }
     }
 }
 #endif

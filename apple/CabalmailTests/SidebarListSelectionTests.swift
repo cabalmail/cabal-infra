@@ -130,13 +130,85 @@ final class SidebarListSelectionTests: XCTestCase {
         XCTAssertEqual(split.write(for: nil, folders: folders, folder: nil, feedScope: .all), .folder(nil))
     }
 
-    func testNoRowSelectsASmartViewYet() {
+    // MARK: The smart view
+
+    /// The Flagged entry is a row of the list's own selection on every
+    /// layout, the iPad's split included, where feed rows are not.
+    func testASmartViewRowWritesTheSmartView() {
         for rule in [mac, split] {
             XCTAssertEqual(
                 rule.write(for: .smartView(.flagged), folders: folders, folder: inbox, feedScope: nil),
-                .nothing
+                .smartView(.flagged)
             )
         }
+    }
+
+    /// The window on the view: its row is the selection, over the folder
+    /// and the feed list that keep their places beneath it.
+    func testTheSmartViewIsTheSelectedRowOverWhatIsBeneath() {
+        for rule in [mac, split] {
+            XCTAssertEqual(rule.current(folder: inbox, feedScope: nil, smartView: .flagged), .smartView(.flagged))
+            XCTAssertEqual(rule.current(folder: nil, feedScope: .all, smartView: .flagged), .smartView(.flagged))
+            XCTAssertEqual(rule.current(folder: inbox, feedScope: nil, smartView: nil), .mailFolder(path: "INBOX"))
+        }
+    }
+
+    /// A click on the sidebar's empty space while the view is up clears
+    /// nothing: the folder beneath is not the selection to clear.
+    func testClearingTheSelectionLeavesTheSmartViewOpen() {
+        for rule in [mac, split] {
+            XCTAssertEqual(
+                rule.write(for: nil, folders: folders, folder: inbox, feedScope: nil, smartView: .flagged), .nothing
+            )
+        }
+    }
+
+    /// A folder or a feed picked while the view is up is written as ever;
+    /// closing the view is the window's part (`SceneNavigator.selectFolder`).
+    func testAFolderPickedOverTheSmartViewWritesTheFolder() {
+        XCTAssertEqual(
+            mac.write(for: .mailFolder(path: "INBOX"), folders: folders, folder: inbox, feedScope: nil,
+                      smartView: .flagged),
+            .folder(inbox)
+        )
+        XCTAssertEqual(
+            mac.write(for: .feedScope(.all), folders: folders, folder: inbox, feedScope: nil, smartView: .flagged),
+            .feedScope(.all)
+        )
+    }
+
+    @MainActor
+    func testTheBindingReadsAndWritesTheSmartView() {
+        var view: SmartView?
+        var folder: Folder? = inbox
+        let folders = folders
+        let binding = split.binding(
+            folder: Binding(get: { folder }, set: { folder = $0 }), feedScope: nil,
+            smartView: Binding(get: { view }, set: { view = $0 }), folders: { folders }
+        )
+        XCTAssertEqual(binding.wrappedValue, .mailFolder(path: "INBOX"))
+
+        binding.wrappedValue = .smartView(.flagged)
+
+        XCTAssertEqual(view, .flagged)
+        XCTAssertEqual(binding.wrappedValue, .smartView(.flagged))
+        XCTAssertEqual(folder, inbox, "the folder keeps its place beneath")
+    }
+
+    /// A list handed no smart view offers no row for one, and a pick of
+    /// one writes nowhere.
+    @MainActor
+    func testWithNoSmartViewBindingAPickOfOneIsDropped() {
+        var folder: Folder? = inbox
+        let folders = folders
+        let binding = mac.binding(
+            folder: Binding(get: { folder }, set: { folder = $0 }), feedScope: nil, folders: { folders }
+        )
+
+        binding.wrappedValue = .smartView(.flagged)
+
+        XCTAssertEqual(binding.wrappedValue, .mailFolder(path: "INBOX"))
+        XCTAssertEqual(folder, inbox)
     }
 
     // MARK: The binding

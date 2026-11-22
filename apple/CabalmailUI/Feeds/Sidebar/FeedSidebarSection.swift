@@ -72,6 +72,9 @@ struct FeedSidebarRowLabel: View {
 /// rows with native list selection, plus a header for refresh.
 struct FeedSidebarList: View {
     @Binding var selection: RssItemScope?
+    /// The Flagged entry, drawn above All Feeds: the Feeds tab's door to
+    /// the view that lists flagged mail and flagged feed items together.
+    var flagged: FlaggedEntry?
     @Environment(AppState.self) private var appState
     @State private var model: FeedSidebarViewModel?
     @State private var management: FeedManagementViewModel?
@@ -176,6 +179,9 @@ struct FeedSidebarList: View {
 
     private var list: some View {
         List(selection: $selection) {
+            if let flagged {
+                FlaggedEntryButton(isSelected: flagged.isSelected, open: flagged.open)
+            }
             if let model {
                 FeedSidebarContent(
                     style: .listSelection, model: model, selection: $selection,

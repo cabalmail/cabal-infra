@@ -77,6 +77,31 @@ struct WideMail {
         selectedFeedScope == nil ? nil : navigator.feeds.item(in: tree)
     }
 
+    /// Whether the window is on the Flagged view, which stands over the
+    /// folder or the feed list: its entry is the sidebar's selected row, and
+    /// neither of theirs is.
+    var flaggedOpen: Bool { navigator.flaggedIsOpen(in: tree, door: .split) }
+
+    /// Whether the content and reader columns show the Flagged view: the
+    /// window is on it and no search has the columns.
+    var showsFlagged: Bool { flaggedOpen && !isSearching }
+
+    /// The row open in the Flagged view's reader.
+    var flaggedItem: FlaggedRow? {
+        showsFlagged ? navigator.flaggedItem(in: tree, door: .split) : nil
+    }
+
+    /// Whether the reader column shows the feed reader rather than mail's:
+    /// a feed item open from the Flagged view, or the feed list's own.
+    var readerShowsFeeds: Bool {
+        if isSearching { return false }
+        if flaggedOpen {
+            if case .feed = flaggedItem { return true }
+            return false
+        }
+        return selectedFeedScope != nil
+    }
+
     /// Whether the content column should show search results rather than the
     /// selected folder: the search field is focused, holds a query, or a
     /// search is currently active.
@@ -116,7 +141,7 @@ struct WideMail {
     /// and an `onChange` does not.
     var sidebarSelection: Binding<Folder?> {
         Binding(
-            get: { selectedFolder },
+            get: { flaggedOpen ? nil : selectedFolder },
             set: { picked in
                 if ContentColumnPolicy.pickEndsSearch(isSearching: isSearching, picked: picked?.path) {
                     endGlobalSearch()
@@ -135,7 +160,7 @@ struct WideMail {
     /// folder pick (`sidebarSelection`) clears this in turn.
     var feedSidebarSelection: Binding<RssItemScope?> {
         Binding(
-            get: { selectedFeedScope },
+            get: { flaggedOpen ? nil : selectedFeedScope },
             set: { picked in
                 if picked != nil { feedListOpened(endingSearch: true) }
                 navigator.showFeeds(picked)
@@ -146,6 +171,30 @@ struct WideMail {
     /// The item list's selection, through the navigator.
     var feedItemSelection: Binding<RssItem?> {
         Binding(get: { selectedFeedItem }, set: { navigator.selectFeedItem($0, from: tree) })
+    }
+
+    /// The sidebar's Flagged entry. A pick ends a search and closes the
+    /// folder panel, as a folder's or a feed's does, and so does a pick of
+    /// the entry already selected, which a binding's setter sees (#1217).
+    var smartViewSelection: Binding<SmartView?> {
+        Binding(
+            get: { flaggedOpen ? .flagged : nil },
+            set: { picked in
+                guard picked == .flagged else { return }
+                if isSearching { endGlobalSearch() }
+                listOpening()
+                setListSelectionCount(0)
+                navigator.showFlagged(from: tree, door: .split)
+            }
+        )
+    }
+
+    /// The Flagged list's selection, through the navigator.
+    var flaggedSelection: Binding<FlaggedRow?> {
+        Binding(
+            get: { navigator.flaggedItem(in: tree, door: .split) },
+            set: { navigator.selectFlaggedItem($0, from: tree, door: .split) }
+        )
     }
 
     /// The binding `.inspector(isPresented:)` drives, filtered through
@@ -253,17 +302,24 @@ struct WideMail {
             // the fetched folder in for a stand-in
             // (`SceneNavigator.foldersLoaded`).
             onFoldersLoaded: { navigator.foldersLoaded($0) },
+            smartView: smartViewSelection,
             header: header
         )
     }
 
-    /// The content column: the feed list, the search results or the folder's
-    /// messages. The header is where a shell hosts its search field.
+    /// The content column: the Flagged list, the feed list, the search
+    /// results or the folder's messages. The header is where a shell hosts
+    /// its search field.
     func content<Header: View>(
         onLeadingToolbarWidthChanged: @escaping (CGFloat) -> Void = { _ in },
         @ViewBuilder header: @escaping () -> Header
     ) -> MailContentColumn<Header> {
         MailContentColumn(
+            flagged: flaggedOpen ? FlaggedListSelection(
+                visit: navigator.flaggedPlace.state.visit,
+                selection: flaggedSelection,
+                takeParked: { [navigator, tree] in navigator.takeParkedFlaggedItem(in: tree, door: .split) }
+            ) : nil,
             feedList: selectedFeedScope.map {
                 FeedListSelection(
                     scope: $0,
@@ -288,14 +344,17 @@ struct WideMail {
         )
     }
 
-    /// The reader: the feed reader while a feed scope is selected, else the
-    /// mail reader, the multi-selection count or the empty prompt. The
+    /// The reader: the open row's own reader while the window is on the
+    /// Flagged view; the feed reader while a feed scope is selected; else
+    /// the mail reader, the multi-selection count or the empty prompt. The
     /// placeholders' chrome is the shell's.
     func reader<MailChrome: ViewModifier, FeedChrome: ViewModifier>(
         mailPlaceholder: MailChrome, feedPlaceholder: FeedChrome
     ) -> some View {
         Group {
-            if selectedFeedScope != nil, !isSearching {
+            if showsFlagged {
+                FlaggedReaderColumn(item: flaggedItem, placeholderChrome: mailPlaceholder)
+            } else if selectedFeedScope != nil, !isSearching {
                 FeedReaderColumn(item: selectedFeedItem, placeholderChrome: feedPlaceholder)
             } else {
                 MailReaderColumn(
@@ -352,12 +411,16 @@ private struct WideMailReporting: ViewModifier {
         // Nothing, while the laptop panel's address list covers the reader
         // (`LaptopAddressesPolicy`).
         let covered = mail.laptopPanelShowsAddresses
+        // On the Flagged view the reader's open row is what a menu acts on,
+        // whichever medium it is.
+        let open = FlaggedMenuReport(showsFlagged: mail.showsFlagged, item: mail.flaggedItem)
         let message = LaptopAddressesPolicy.reported(
-            selectionCount: mail.listSelectionCount, isOpen: mail.selectedEnvelope != nil, covered: covered
+            selectionCount: open.messageCount(else: mail.listSelectionCount),
+            isOpen: open.hasMessage(else: mail.selectedEnvelope != nil), covered: covered
         )
         let item = LaptopAddressesPolicy.reported(
-            selectionCount: mail.selectedFeedItem == nil ? 0 : 1,
-            isOpen: mail.selectedFeedItem != nil,
+            selectionCount: open.hasFeedItem(else: mail.selectedFeedItem != nil) ? 1 : 0,
+            isOpen: open.hasFeedItem(else: mail.selectedFeedItem != nil),
             covered: covered
         )
         return content
@@ -376,10 +439,10 @@ private struct WideMailReporting: ViewModifier {
                 selectedCount: item.selectionCount,
                 hasOpenItem: item.isOpen,
                 hasScope: LaptopAddressesPolicy.reportsScope(
-                    mail.selectedFeedScope != nil && !mail.isSearching, covered: covered
+                    mail.selectedFeedScope != nil && !mail.flaggedOpen && !mail.isSearching, covered: covered
                 )
             )
-            .reportsActiveSection(mail.selectedFeedScope != nil && !mail.isSearching ? .feeds : .mail)
+            .reportsActiveSection(mail.readerShowsFeeds ? .feeds : .mail)
             // Track the split view's overall width so the list column's max
             // can be clamped to leave the reading pane a floor.
             .onGeometryChange(for: CGFloat.self) { proxy in

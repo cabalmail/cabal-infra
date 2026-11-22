@@ -34,8 +34,12 @@ enum MainWindowTitle {
         isWide: Bool,
         splitShowsFeeds: Bool,
         compactTab: CompactTab,
-        folderName: String?
+        folderName: String?,
+        showsFlagged: Bool = false
     ) -> String {
+        // The Flagged view names the window while it is in front, over the
+        // folder or feed beneath it.
+        if showsFlagged { return SmartView.flagged.title }
         if isWide {
             return splitShowsFeeds ? CompactTab.feeds.title : mailTitle(folderName)
         }

@@ -9,7 +9,7 @@ import CabalmailKit
 /// data task they fail with `cancelledError` when the calling task is
 /// cancelled, for the cancellation tests (#1908).
 actor FakeRssClient: RssClient {
-    enum HeldCall: Hashable, Sendable { case catalog, items }
+    enum HeldCall: Hashable, Sendable { case catalog, items, push }
 
     private(set) var catalogCalls = 0
     private(set) var itemsCalls = 0
@@ -185,6 +185,7 @@ actor FakeRssClient: RssClient {
     }
 
     func setItemState(_ changes: [RssItemStateChange]) async throws -> Int {
+        try await pass(.push)
         if let pushError { throw pushError }
         return changes.count
     }
