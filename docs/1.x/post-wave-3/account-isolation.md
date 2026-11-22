@@ -18,13 +18,13 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 
 | Work item | Status |
 | --- | --- |
-| Decisions 1, 3 and 4 | Unanswered (2026-10-15); decision 2 is recorded, not asked |
+| Decisions 1, 3 and 4 | Answered 2026-11-22: 1 Yes, 3 Refuse, 4 No; the smaller calls as stated. Decision 2 is recorded, not asked |
 | Scope doc and the three issues | Not started (2026-10-15) |
 | PR B. Sign-in rules | Not started (2026-10-15) |
 | PR C1. Account leftovers | Not started (2026-10-15) |
 | PR C2. A failed wipe is reported | Not started (2026-10-15) |
-| PR A. Server stamp (decision 4 Stamp only) | Not started (2026-10-15) |
-| PR D. Apple stamp check (Stamp only) | Not started (2026-10-15) |
+| PR A. Server stamp (decision 4 Stamp only) | Not built (2026-11-22): decision 4 is No |
+| PR D. Apple stamp check (Stamp only) | Not built (2026-11-22): decision 4 is No |
 
 ## Decisions for the maintainer
 
@@ -35,6 +35,7 @@ Four items; only 1 and 3 need thought. Answer 1 before PR B and before sqlite-ma
    - No: several accounts at once becomes its own project (an account picker, per-account storage, push routing, and a `push_register` change, since #1897 deletes every other account's row for a device token). Decision 2 reopens, and decision 3 should be End first.
    - Evidence: 1.3 left it out of scope (its scope doc: "More than one signed-in account at once. There is no UI for it; the manager holds at most one current session."). #1897, which you merged, rests on an install being "signed in to one account at a time" (`lambda/api/push_register/function.py:10-11`). No title among the repo's 523 issues asks for more than one account.
    - Default: Yes.
+   - **Answered 2026-11-22: Yes.**
 2. **Recorded, not asked: no per-account `Session` container.** Your 2.1 answer stands: one `MailSessionStore`, reset in place. 2.1's scope doc asked whether to keep one store reset in place and drop the per-account store from the plan, since a store per session would add only that a late answer lands in a discarded object instead of being refused by the sign-out gate, and would reopen `AppState.swift` and `SessionManager.swift`; you answered "2. Yes, keep it." (the maintainer, 2026-10-08). Nothing new argues against it. sqlite-mail-store.md's per-account directory (its decision 3) is the disk half and needs no in-memory container. It is listed here so sqlite-mail-store.md, whose gate G0 names "decisions 1 and 2", has one place to cite. It reopens only if decision 1 is No.
 3. **A sign-in that arrives while a session is wired should:** **Refuse (recommended)**, End first, or Stay pinned.
    - No screen reaches this today *(inferred, high confidence)*. Three pins record what would happen: the first session is replaced without being ended, a different user's sign-in wipes the cache under it, and a failed attempt leaves it wired under an error.
@@ -44,14 +45,18 @@ Four items; only 1 and 3 need thought. Answer 1 before PR B and before sqlite-ma
    - Stay pinned: a new issue is filed and the three "Tracked in #1826" comments point to it.
    - What changed since 1.3 kept them: 1.3 kept them so a high-risk refactor changed no behaviour (its decision 7, recorded in the PR #1887 body), and #1826 closed on 2026-10-09 without ever listing them.
    - Default if unanswered: Stay pinned, because expected values cannot change without your yes.
+   - **Answered 2026-11-22: Refuse.** The maintainer: "Update the tests so that they are locked to the designed behavior." That is the yes to changing the expected values of the four tests named above, and of no others.
 4. **Stamp each push with its account?** **No (recommended)** or Stamp.
    - For #1883 you chose "#1883: Server cleanup" (#1897) over the stamp (the maintainer, 2026-10-06). In that discussion the reviewers noted: "Stage and prod both push through production APNs to the same device token... Cleanup can't reach the other deployment's table, and a stamp only catches this if it names the deployment". #1897's description listed what cleanup cannot reach and offered the stamp "if you ever want it".
    - One point is new *(inferred from code, not reproduced)*: on an iPhone, a push for another account can show a message from the signed-in account as its sender, subject and preview. `/push_envelope` searches the signed-in account's folder for the Message-ID and, on a miss, uses the push's UID hint (`lambda/api/push_envelope/function.py:110`). #1883 said this only of the Mac.
    - No: the residual stays accepted, and PR B adds the banner point to `docs/push-notifications.md:72-82`. The cases are tester-shaped (leaving prod offline and signing in to stage, a next account with notifications off, two Mac app instances on different accounts), and a wrong banner shows mail the device's own user can already read.
    - Stamp: PR A (server) and PR D (Apple), and android-parity.md L6 adds Android. Size becomes M.
    - Default: No.
+   - **Answered 2026-11-22: No.** The maintainer first answered Stamp, asked what each choice would cost a month on, and changed the answer to No the same day. PRs A and D are not built, and PR B adds the banner point to `docs/push-notifications.md`.
 
 **Smaller calls**, which the scope doc states with their defaults for a one-word veto: on a different-account sign-in, clear the debug log (Keep would keep the last sign-out's lines for diagnosis), and reset only the custom notification folder list (the Inbox, All or Chosen scope and the master toggle stay, since `PushSettings` is "per *device* by design", `PushRegistrar.swift:59-66`). The new issues close on their tests with your OK at the soak, as #1883 and #1886 did, because only the test harness reproduces them.
+
+- **Answered 2026-11-22: as stated.** The debug log is cleared, only the custom notification folder list is reset, and the new issues close on their tests with the maintainer's OK at the soak.
 
 ## What you'll see change
 
@@ -89,6 +94,7 @@ One session. It writes a short scope doc with decisions 1, 3 and 4 and the small
 
 **PR B. Sign-in rules** (decisions 1 and 3).
 - Different-account rule: compare server and username, not username alone (`SessionManager.swift:689`). The server is trimmed, stripped of `https://` or `http://` and lowercased; the username stays exact, as the case pin requires. The same rule drives `owner.accountChanged`.
+  - **Answered 2026-11-22 (sqlite-mail-store.md's kick-off scope doc):** the comparison is one function, over the normalized server and the username exactly as typed, and sqlite-mail-store.md's PR 1.1 names the account directory by a hex hash of the same two values. Write it where PR 1.1 can call it, so the rule and the directory name cannot disagree. The maintainer does not want usernames that differ only by case encouraged or supported, only kept apart if one slips in; settings keep their lowercased scope key, and no issue is filed for that.
 - Decision 3: under Refuse, a guard after `awaitTeardown()` at the top of `signIn` logs and returns while a client is wired. Under End first, it runs the sign-out teardown through the gate, then proceeds. Under Stay pinned, only the three comments change, to the new issue.
 - Docs: decisions 1 and 2 in the `Session/` row of `docs/apple.md` (:1024) and the one-account premise in `docs/push-notifications.md`; under decision 4 No, the banner point joins the residual paragraph (:72-82). The leftovers header comment (`SignOutLeftoversCharacterizationTests.swift:10-13`) is corrected; it is a comment, not an expected value.
 - Tests: an expired launch restore for `alice` on server A, then `alice` on server B, wipes the cache and outbox; the same server retyped with a scheme, spaces or capitals keeps them; `Alice` after `alice` still wipes. Under Refuse or End first, the four named tests become tests of the rule, each listed in the PR with before and after.
