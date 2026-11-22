@@ -18,7 +18,7 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 
 | Work item | Status |
 |---|---|
-| Decisions 1 to 10 | 4 and 5 answered 2026-11-10, each with its default: outbox and drafts stay; downgrades are supported. No answer is recorded for the others. |
+| Decisions 1 to 10 | 3 to 7 are answered. 4 and 5 on 2026-11-10, each with its default: outbox and drafts stay; downgrades are supported. 3, 6 and 7 on 2026-11-22, each with its default: per account; (a) mail and feeds; this first. 8 to 10 are asked before their phase. The kick-off scope doc's other answers (2026-11-22) are under gate G0's table. |
 | Phase 0: Standalone fixes and the SQLite foundation (PRs 0.1 to 0.4) | Done (2026-11-11). The three bugs and the count landed as standalone fixes: #1871 in #2092, #1956 in #2117, #1957 in #2118, the not-deleted count in #2161. PR 0.1 (the SQLite foundation) is #2403 and the rest of PR 0.2 is #2404, both promoted to prod as 1.50.0 (2026-11-11). Both of PR 0.2's live checks ran on 2026-11-11; the Status line under Phase 0 says what they covered. |
 | Phase 1: The account directory (PRs 1.1 and 1.2) | Not started (2026-10-15) |
 | Phase 2: Envelopes into SQLite (PRs 2.1 to 2.5) | Not started (2026-11-09), except PR 2.5 (#1836), done ahead on the JSON cache (2026-10-21): #2161, #2162, #2174, #2178 |
@@ -45,6 +45,7 @@ Answer 1 and 2 from this plan now. Answer 3 to 7 when the project opens, togethe
 **When the project opens (before Phase 1)**
 
 3. **Data on disk: one directory per account, or one shared directory as today?** **Per account (recommended)**: a late write from a signed-out session cannot land in the next account's files (#1937's shape), and sign-out removes one directory. Shared: sign-out keeps emptying each store in turn. Your 2.1 answer, one `MailSessionStore` reset in place, stands either way. Default: Per account.
+   - **Answered 2026-11-22: Per account.**
 4. **Outbox and drafts: Stay or Move?** **Stay (recommended)**: unsent mail and draft buffers never move in this project, so no migration can lose them; sign-out still wipes them, as today. Move: they join the account directory in a later release with a copy, verify and remove step. Default: Stay.
    - **Answered 2026-11-10: Stay.**
 5. **Downgrades: Supported or Unsupported?** **Supported (recommended)**: a tester can install an older TestFlight build and come back without losing unsent mail, drafts or queued changes; saved lists may refetch. It costs migrations that re-run safely at every launch. Default: Supported.
@@ -53,7 +54,10 @@ Answer 1 and 2 from this plan now. Answer 3 to 7 when the project opens, togethe
 
    > **Erratum (2026-10-16):** hardening-web-and-writes.md has no note saying this plan "later replaces this queue". It says instead (PR 5's Risk line) that under 6(a) the outbox stays separate, so its fix is permanent. The choice between (a), (b) and (c) is unchanged.
 
+   - **Answered 2026-11-22: (a).**
+
 7. **Order against kit-split.md: This first or Split first?** **This first (recommended)**: Phase 0 puts `SQLiteDatabase` in the Kit's existing `Persistence/` folder, which kit-split later turns into a target; the split runs after this project, or between Phase 2's promotion and Phase 4's Kit work. Split first: this project waits for one more session, about two weeks *(inferred)*. Default: This first.
+   - **Answered 2026-11-22: This first.**
 
 **Before their phase**
 
@@ -112,6 +116,8 @@ Not asked again, on purpose: GRDB or any third-party SQLite library (operator de
 | Cache of server state | envelope rows, message bodies, folder list and counts, the address list, feed catalog and items, the Spotlight index | refetched online; an offline launch right after shows less |
 | Irreplaceable | the outbox (unsent mail and attachments), draft buffers (edits newer than the last `/save_draft`), feed `pending` rows, the new mail queue | gone for good |
 
+> **Note (2026-11-22):** an unsent settings change is irreplaceable too (the maintainer, 2026-11-22). #2435 and #2446 keep a settings change the server has not taken and send it again later. It is not a file: the settings and their unsent mark (`Preferences.hasUnsentChanges`) are in `UserDefaults` under the account's settings scope. It never moves into the account directory or the queue, sign-out and the directory delete leave it alone as today, and the downgrade drill checks that one survives. PR 4.5 keeps the feed drain's rule of asking for that settings push before it drops a refused flag add.
+
 The feed `pending` rows are irreplaceable but sit inside a cache file that recovery deletes (`RssStore.swift:78-87`). Sign-out deliberately deletes both classes today (`CabalmailClient+Maintenance.swift:17-29`); the Phase 4 list asks whether it should warn first.
 
 1. A cache file may be deleted and rebuilt whenever it is corrupt, written by a newer schema, or older than legacy files beside it. Recovery code never deletes an irreplaceable file: it sets it aside and logs it, as `RecordQuarantine` does.
@@ -135,6 +141,8 @@ The feed `pending` rows are irreplaceable but sit inside a cache file that recov
 | The newer build again | legacy files win (rule 4); other accounts' directories deleted (account-isolation.md decision 1) | unchanged | replayed; changes older than the age limit go to the failed list |
 
 This plan keeps `rss.sqlite` at `user_version` 6 until PR 4.5. flags-and-cross-media.md plans its schema 7 between PR 0.2's release (1.50.0) and PR 4.5 (its decision 5). An older build from 1.50.0 on sets a schema 7 file aside instead of deleting it (1.49.0 and earlier still delete it), and PR 0.2's import recovers its pending rows when a build that reads schema 7 returns. PR 4.5 then moves schema 7 rows, flag slots included, into the queue.
+
+> **Erratum (2026-11-22):** #2411 took `rss.sqlite` to schema 7 on 2026-11-11, so this project holds it at 7, not 6, until PR 4.5.
 
 While an older build runs, its sign-out wipes only the old paths, so the account directory stays on disk until a newer build launches and deletes it. Accepted for TestFlight testers *(inferred risk, low)*.
 
@@ -174,6 +182,7 @@ Verify: Kit tests on CI; on the Mini, #1871 with the tester's fixture (`zzc`, `z
 Kit thread. Hotspots: `SessionManager.swift`, `SessionEnvironment.swift`, `CabalmailClient.swift`, `CabalmailClient+Maintenance.swift`, `SignInCharacterizationTests.swift`.
 
 - **PR 1.1 Account directory.** `Application Support/Cabalmail/accounts/<scope>/`, where `<scope>` is `Preferences.scopeIdentifier`, computed inside the Kit (for example `CabalmailClient.make(…, account:)`), since that function is internal; preferences and files then share one key. By default the envelope, body and folder-state caches open there. The scope doc picks how the client learns its account: passed to `make` (sign-in knows the typed username; restore and `borrowClient` know `lastUsername`), or the caches open when the session is wired. Recommended: the first *(inferred: smaller)*. A directory made by a sign-in that then fails is removed. A process-wide registry gives every client of one account the same store objects, and later one drain lease (PR 4.1).
+  - **Answered 2026-11-22:** `<scope>` is not `Preferences.scopeIdentifier`, which lowercases the username. The maintainer asked for a case-sensitive name: a hex hash of the normalized server and the username exactly as typed, from the same function as account-isolation.md PR B's different-account comparison. Two accounts whose usernames differ only by case then get two directories, also on the Mac's case-insensitive disk, and PR 1.2 deletes every directory whose name is not this account's. Preferences keep their own lowercased key, so files and preferences do not share one key after all.
 - **PR 1.2 Migration and sign-out.** Rule 4's re-runnable step: legacy caches belong to `lastUsername` (sign-out and the different-user rule wipe them otherwise), so they move in by rename on the same volume; with no owner they are deleted. Sign-out closes the stores, deletes the account directory, logs a failure and retries at the next launch. That replaces account-isolation.md PR C2's "wipe pending" flag for the caches: if C2 has not merged, it keeps only its logging; if it has, PR 1.2 removes the flag. Sign-in and launch delete every other account's directory (account-isolation.md decision 1). The outbox, drafts, address cache and `rss/` stay put by default. Rewrites the sign-in pin, a test that records today's sign-in behaviour (`SignInCharacterizationTests.swift:366`, as account-isolation.md PR B left it), with the maintainer's yes.
 
 Verify: Kit and app-layer tests with fixture directories, and two clients of one account seeing one write; the drill; on the Mini, sign in as test account 1, sign out, sign in as test account 2 (MFA on), and inspect the container; the device upgrade. Risk: medium (the session lifecycle 1.3 settled). `no-changelog` unless the scope doc finds something visible.
@@ -244,6 +253,14 @@ Verify: Kit tests with the fault switch and a scripted transport; Mini offline l
 | G4 | PR 4.4 merges | PR 4.0 in prod; #1973 and #1903's fix merged; Phase 3 promoted |
 | G5 | PR 4.5 merges | Phase 4's first release soaked; flags-and-cross-media.md not open in `RSS/` |
 | G6 | Phase 5 | Phase 4 promoted |
+
+> **Gate G0 (2026-11-22).** The kick-off scope doc went to the maintainer on 2026-11-22 and every question in it was answered that day. With decisions 3, 6 and 7 above and account-isolation.md's decisions 1, 3 and 4 (Yes, Refuse, No), G0 now waits only on account-isolation.md's PR B. The rest of what the maintainer answered:
+>
+> - *live-verification.md's baseline:* trimmed. Its account-switch step (Step 3) runs before account-isolation.md's PR B, and its big-folder fixture (Step 1) is seeded before Phase 2; the rest is waived for this project. That plan's decision 2 (which account holds the fixture) is still to be asked before Phase 2.
+> - *swift6-and-strict-checking.md's session A:* waived for Phase 1. Ask again before Phase 2.
+> - *The priority line's "after the Duo round":* account isolation and Phases 1 and 2 may start now.
+> - *Phase 3 against the Duo work:* the one-tree merge (duo-support.md's Session 3) goes first, so gate G2 also needs that merge.
+> - *Rigs:* a session tells the maintainer and waits for a go-ahead before it takes the Mini's or the Studio's screen or signs in a test account; one rig at a time; the rigs stay signed in as test account 1 and the helper serves test accounts 2 and 3 only; sign-out and switch checks run on a throwaway simulator clone; no credential is printed or rotated; any account state changed is restored. The maintainer may adjust these as the work goes.
 
 In parallel: Phase 0's Lambda PR beside its Kit PRs; the next phase's scope doc while the current one is in review; PR 4.0 and PRs 4.1 to 4.3 during Phase 3's review. Never two open PRs in one hotspot, and no more than two open Apple PRs across the project, since one Apple PR run takes six to eight macOS jobs and the account runs about five at once. One structural change per release. Releases: one for Phase 0, then six or seven (Phase 3 one or two, Phase 4 two). Estimate: five to seven weeks of project time after Phase 0, plus waits on other plans *(inferred, low confidence)*.
 
