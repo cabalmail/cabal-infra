@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
@@ -353,14 +354,27 @@ private fun NoticeLine(
     }
 }
 
-/** A row under its medium's glyph, in a gutter of its own so neither medium's row is redrawn to make room. */
+/**
+ * A row under its medium's glyph, in a gutter of its own so neither
+ * medium's row is redrawn to make room. The gutter takes the open row's
+ * tint with the row, so the tint runs edge to edge.
+ */
 @Composable
 private fun MediumGutter(
     glyph: Painter,
     description: String,
+    highlighted: Boolean,
     content: @Composable () -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val rowColor =
+        if (highlighted) {
+            MaterialTheme.colorScheme.primary
+                .copy(alpha = 0.12f)
+                .compositeOver(MaterialTheme.colorScheme.surface)
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.background(rowColor)) {
         Icon(
             glyph,
             contentDescription = description,
@@ -382,7 +396,7 @@ private fun MailRow(
     highlighted: Boolean,
 ) {
     val defaultFlag = FlagToggle.defaultFlag(LocalFlagPalette.current)
-    MediumGutter(rememberVectorPainter(Icons.Default.Email), stringResource(R.string.flagged_row_mail)) {
+    MediumGutter(rememberVectorPainter(Icons.Default.Email), stringResource(R.string.flagged_row_mail), highlighted) {
         CrossFolderMailRow(
             envelope = envelope,
             bimiLookup = bimiLookup,
@@ -413,7 +427,7 @@ private fun FeedRow(
     val flag = FlagToggle.defaultFlag(palette)
     val isFlagSet = item.carries(flag.slot)
     var menuOpen by remember(item.id) { mutableStateOf(false) }
-    MediumGutter(painterResource(R.drawable.ic_rss_feed), stringResource(R.string.flagged_row_feed)) {
+    MediumGutter(painterResource(R.drawable.ic_rss_feed), stringResource(R.string.flagged_row_feed), highlighted) {
         FeedSwipeRow(
             isRead = item.isRead,
             flag = flag,
