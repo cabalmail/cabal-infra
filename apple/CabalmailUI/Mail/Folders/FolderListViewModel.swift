@@ -114,7 +114,7 @@ final class FolderListViewModel {
             // than from whatever `Folder` value the selection happens to hold
             // — a navigate request selects a stand-in `Folder(path:)` whose
             // flag is a default, not a fact.
-            mailStore.counts.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
+            publishSubscribedFolders(all)
             errorMessage = nil
             // Keep the Spotlight indexer's subscription gate current — it
             // also purges the index domains of folders unsubscribed or
@@ -140,8 +140,18 @@ final class FolderListViewModel {
     private func showSavedCopy(_ all: [Folder]) async {
         folders = sortForSidebar(all)
         isShowingSavedCopy = true
-        mailStore.counts.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
+        publishSubscribedFolders(all)
         await seedSavedCounts()
+    }
+
+    /// The store's subscribed set, from a list this model's client fetched
+    /// or saved. A list that answers once its session has ended stays in
+    /// this model: published, it would be the last account's subscriptions
+    /// in the store the next account reads, deciding that account's
+    /// unsubscribed-folder banner until its own list answered (#2561).
+    private func publishSubscribedFolders(_ all: [Folder]) {
+        guard mailStore.acceptsCounts(from: client) else { return }
+        mailStore.counts.setSubscribedFolders(Set(all.filter(\.isSubscribed).map(\.path)))
     }
 
     /// Badges from the counts saved by the last successful STATUS (and the
@@ -202,7 +212,9 @@ final class FolderListViewModel {
         )
         // The selection binding still holds the pre-toggle `Folder` value;
         // the published set is what lets the open list's banner follow the
-        // toggle without a re-select.
+        // toggle without a re-select. A failed toggle's revert that lands
+        // once the session has ended is not published (#2561).
+        guard mailStore.acceptsCounts(from: client) else { return }
         mailStore.counts.setSubscription(folderPath: path, isSubscribed: subscribed)
     }
 
