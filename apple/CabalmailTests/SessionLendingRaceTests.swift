@@ -165,7 +165,7 @@ final class SessionLendingRaceTests: XCTestCase {
     private func installClients(over transport: HTTPTransport) {
         let imap = harness.imap
         let scratch = self.scratch!
-        harness.appState.sessionManager.sessionEnvironment.makeClient = { configuration, store, monitor in
+        harness.appState.sessionManager.sessionEnvironment.makeClient = { configuration, store, monitor, _ in
             let auth = CognitoAuthService(
                 configuration: configuration, transport: transport, secureStore: store, sessionInvalidation: monitor
             )

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Which account a session is for: the server it signs in to and the
@@ -42,5 +43,29 @@ public struct AccountIdentity: Hashable, Sendable {
             server.removeFirst("http://".count)
         }
         return server.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The name of this account's directory under
+    /// `Application Support/Cabalmail/accounts/` (`AccountDirectory`): the
+    /// SHA-256 of the normalized server and the username as typed, as 64
+    /// lowercase hex digits.
+    ///
+    /// A digest, not the username itself, so the name is the same length for
+    /// every account, holds no character a file system refuses, and keeps
+    /// two usernames that differ only by case apart on the Mac's
+    /// case-insensitive disk, where "Alice" and "alice" would be one
+    /// directory. Two identities that compare equal get one name: both parts
+    /// are hashed in their canonical composed form, because `==` on a
+    /// `String` already treats the composed and decomposed spellings of a
+    /// letter as equal. The server's length goes in front so that no two
+    /// (server, username) pairs spell the same input.
+    ///
+    /// The name is on disk in every install, so it must not change between
+    /// releases: `AccountDirectoryTests` pins one.
+    public var directoryName: String {
+        let server = self.server.precomposedStringWithCanonicalMapping
+        let username = self.username.precomposedStringWithCanonicalMapping
+        let input = Data("\(server.utf8.count):\(server)\(username)".utf8)
+        return SHA256.hash(data: input).map { String(format: "%02x", $0) }.joined()
     }
 }
