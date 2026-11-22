@@ -43,6 +43,17 @@ public enum HostPlatform {
         self == .visionOS
     }
 
+    /// Whether the feeds that share the mail sidebar are rows of its list's
+    /// selection, beside the folders, so a feed is picked with the mouse or
+    /// the arrow keys as a folder is: the Mac. In the iPad's split they are
+    /// buttons in that list, which is how every wide layout drew them; iOS
+    /// keeps that until its windows become one tab tree, where Feeds has a
+    /// sidebar of its own. visionOS and the tab layout already give Feeds
+    /// its own (`FeedSidebarList`).
+    var sidebarSelectsFeeds: Bool {
+        self == .macOS
+    }
+
     /// Whether Settings opens with its category list and a category side by
     /// side: the Mac's Settings window and the visionOS Settings tab. iOS
     /// opens on the list alone, on the phone's tab and in the iPad's sheet,

@@ -94,14 +94,16 @@ extension FolderListView {
     }
 
     /// The Feeds section (RSS plan, phase 5): the feed list both sidebars
-    /// draw (`FeedSidebarContent`), here as buttons inside the mail list,
-    /// under the mail sections' header chrome.
+    /// draw (`FeedSidebarContent`), here inside the mail list, under the
+    /// mail sections' header chrome. Its rows are rows of the list's
+    /// selection on the Mac and buttons in the iPad's split
+    /// (`FeedSidebarContent.Style.inMailSidebar`).
     @ViewBuilder
     func feedsSection(selection: Binding<RssItemScope?>) -> some View {
         Section {
             if feedsExpandedBinding.wrappedValue, let feedModel {
                 FeedSidebarContent(
-                    style: .rowButtons, model: feedModel, selection: selection,
+                    style: .inMailSidebar(on: .current), model: feedModel, selection: selection,
                     rows: feedModel.rows(
                         collapsed: feedsCollapsed,
                         filter: activeFilterText,
