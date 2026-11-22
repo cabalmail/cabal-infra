@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -207,8 +208,18 @@ internal fun CrossFolderMailRow(
     onSetFlag: (slot: String, value: Boolean) -> Unit,
     onDispose: () -> Unit,
     onConfirmPurge: () -> Unit,
+    /** Whether the message is the one open in a pane beside the list. */
+    highlighted: Boolean = false,
 ) {
     val disposeIntent = standardDisposeIntent(envelope.folder.orEmpty())
+    val rowColor =
+        if (highlighted) {
+            MaterialTheme.colorScheme.primary
+                .copy(alpha = 0.12f)
+                .compositeOver(MaterialTheme.colorScheme.surface)
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
     SwipeRow(
         isSeen = envelope.isSeen,
         flags = envelope.flags,
@@ -216,6 +227,7 @@ internal fun CrossFolderMailRow(
         onSetFlag = onSetFlag,
         onDispose = { if (disposeIntent == DisposeIntent.Purge) onConfirmPurge() else onDispose() },
         disposeIntent = disposeIntent,
+        containerColor = rowColor,
     ) {
         EnvelopeRow(
             envelope = envelope,

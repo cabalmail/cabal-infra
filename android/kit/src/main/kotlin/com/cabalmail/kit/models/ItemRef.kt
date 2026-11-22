@@ -27,6 +27,34 @@ sealed interface ItemRef {
     ) : ItemRef {
         override val key: String get() = "feed:$feedId#$sortKey"
     }
+
+    companion object {
+        private const val MAIL = "mail:"
+        private const val FEED = "feed:"
+
+        /**
+         * The ref a [key] was made from, or null for anything else. A
+         * folder path may hold `/`, so a message's UID is what follows the
+         * last one; a feed id holds no `#`, and a sort key may, so a feed
+         * item's parts divide at the first.
+         */
+        fun parse(key: String): ItemRef? =
+            when {
+                key.startsWith(MAIL) -> {
+                    val rest = key.removePrefix(MAIL)
+                    val folder = rest.substringBeforeLast('/', "")
+                    val uid = rest.substringAfterLast('/', "").toLongOrNull()
+                    if (folder.isEmpty() || uid == null) null else Mail(folder, uid)
+                }
+                key.startsWith(FEED) -> {
+                    val rest = key.removePrefix(FEED)
+                    val feedId = rest.substringBefore('#', "")
+                    val sortKey = rest.substringAfter('#', "")
+                    if (feedId.isEmpty() || sortKey.isEmpty()) null else Feed(feedId, sortKey)
+                }
+                else -> null
+            }
+    }
 }
 
 /**

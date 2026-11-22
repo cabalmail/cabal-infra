@@ -92,6 +92,8 @@ fun FlaggedScreen(
     onOpenItem: (RssItem) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The key of the row open in a pane beside the list ([com.cabalmail.kit.models.ItemRef.key]), if any. */
+    highlightedKey: String? = null,
 ) {
     val palette = LocalFlagPalette.current
     var pendingPurge by remember { mutableStateOf<Envelope?>(null) }
@@ -139,6 +141,7 @@ fun FlaggedScreen(
                     onOpenMessage = onOpenMessage,
                     onOpenItem = onOpenItem,
                     onConfirmPurge = { pendingPurge = it },
+                    highlightedKey = highlightedKey,
                 )
             }
         }
@@ -167,6 +170,7 @@ private fun FlaggedRows(
     onOpenMessage: (Envelope) -> Unit,
     onOpenItem: (RssItem) -> Unit,
     onConfirmPurge: (Envelope) -> Unit,
+    highlightedKey: String?,
 ) {
     val listState = rememberLazyListState()
     // A list that begins afresh (the open, a pick) opens at the top: left
@@ -236,6 +240,7 @@ private fun FlaggedRows(
                             mailDomains = mailDomains,
                             onOpenMessage = onOpenMessage,
                             onConfirmPurge = onConfirmPurge,
+                            highlighted = row.ref.key == highlightedKey,
                         )
                     is FlaggedRow.Feed ->
                         FeedRow(
@@ -244,6 +249,7 @@ private fun FlaggedRows(
                             viewModel = viewModel,
                             palette = palette,
                             onOpenItem = onOpenItem,
+                            highlighted = row.ref.key == highlightedKey,
                         )
                 }
                 HorizontalDivider()
@@ -373,6 +379,7 @@ private fun MailRow(
     mailDomains: List<String>,
     onOpenMessage: (Envelope) -> Unit,
     onConfirmPurge: (Envelope) -> Unit,
+    highlighted: Boolean,
 ) {
     val defaultFlag = FlagToggle.defaultFlag(LocalFlagPalette.current)
     MediumGutter(rememberVectorPainter(Icons.Default.Email), stringResource(R.string.flagged_row_mail)) {
@@ -389,6 +396,7 @@ private fun MailRow(
             onSetFlag = { slot, value -> viewModel.setMailFlag(envelope, slot, value) },
             onDispose = { viewModel.dispose(envelope) },
             onConfirmPurge = { onConfirmPurge(envelope) },
+            highlighted = highlighted,
         )
     }
 }
@@ -400,6 +408,7 @@ private fun FeedRow(
     viewModel: FlaggedViewModel,
     palette: List<FlagPaletteEntry>,
     onOpenItem: (RssItem) -> Unit,
+    highlighted: Boolean,
 ) {
     val flag = FlagToggle.defaultFlag(palette)
     val isFlagSet = item.carries(flag.slot)
@@ -411,7 +420,7 @@ private fun FeedRow(
             isFlagSet = isFlagSet,
             onToggleRead = { viewModel.setRead(item, !item.isRead) },
             onToggleFlag = { viewModel.setFeedFlag(item, flag.slot, !isFlagSet) },
-            highlighted = false,
+            highlighted = highlighted,
         ) {
             FeedItemRow(
                 item = item,
