@@ -41,7 +41,9 @@ import kotlinx.coroutines.launch
  * The detail pane shows whichever reader the open row needs, the mail
  * reader for a message and the feed reader for a feed item, each as it is
  * in its own medium's pane. Opening a row selects the detail pane, keyed
- * by the row's [ItemRef.key]; system back clears it.
+ * by the row's [ItemRef.key]. System back clears the pane where the window
+ * shows one pane at a time; where both show it leaves the view, as it
+ * does in the mail and feed layouts.
  *
  * There is no leading pane: the view belongs to neither medium, so
  * neither's folder list or feed tree leads it, and Back from the list
