@@ -51,10 +51,15 @@ final class LocalWipeReportTests: XCTestCase {
     /// The mail itself. The caches' own `try?` hid this one even from the
     /// wipe: the directory was recreated over what could not be removed.
     func testAWipeWhoseMailCachesCannotBeRemovedSaysSoForEach() async throws {
-        let refusing = RefusingFileManager(token: token)
+        // One refusing manager each: a cache is an actor and keeps the one
+        // it is handed.
         let client = try makeClient(
-            envelopeCache: EnvelopeCache(directory: root.appendingPathComponent("envelopes"), fileManager: refusing),
-            bodyCache: MessageBodyCache(directory: root.appendingPathComponent("bodies"), fileManager: refusing)
+            envelopeCache: EnvelopeCache(
+                directory: root.appendingPathComponent("envelopes"), fileManager: RefusingFileManager(token: token)
+            ),
+            bodyCache: MessageBodyCache(
+                directory: root.appendingPathComponent("bodies"), fileManager: RefusingFileManager(token: token)
+            )
         )
         try await seedMail(in: client)
 
