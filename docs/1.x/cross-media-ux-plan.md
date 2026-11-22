@@ -12,8 +12,8 @@ instead of reconstructing it from the git log.
 | 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android (2026-11-18): the first of its two PRs, flags on feed items, merged as #2498; the second, the per-flag filter, merged as #2502; neither is in a release yet (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Server in prod with 1.56.0 (2026-11-19): Terraform (#2497) and server (#2501), checked on stage first; the rule format was accepted as written that day. Apple (Kit and the Feed items editor) merged as #2509 (2026-11-20 UTC), in prod with 1.57.0 (2026-11-21). Android merged as #2536 (2026-11-21), in prod with 1.58.0 (2026-11-22) (`android-parity.md`, leg L3) |
-| 5 -- Cross-media views: flagged and search | Structure (item 1) merged on Apple (2026-11-22) as #2539, not in a release yet; the views are not started (`flags-and-cross-media.md`, Sessions 4 and 5) |
-| 6 -- Ambient surfaces: Spotlight | Not started (2026-11-08) |
+| 5 -- Cross-media views: flagged and search | Structure (item 1) merged on Apple (2026-11-22) as #2539, in prod with 1.59.0 (2026-11-22); the views are not started (`flags-and-cross-media.md`, Sessions 4 and 5) |
+| 6 -- Ambient surfaces: Spotlight | Spotlight for feed items (item 1) built and checked on Apple (2026-11-22), PR #2553 (`flags-and-cross-media.md`, Session 4, B6.1). Feed notification settings (item 2) wait for delivery, as written |
 
 This document is the design: what each phase builds and why. The
 sequencing, the gates against other plans, the verification lanes, and
@@ -792,7 +792,9 @@ the article flagged on the phone in Phase 2 beside a flagged message.
 
 ## Phase 6 -- Ambient surfaces: Spotlight
 
-**Status:** Not started (2026-11-08).
+**Status:** Item 1 built and checked on Apple (2026-11-22), PR #2553;
+`flags-and-cross-media.md` (Session 4, B6.1) has what was built and run.
+Item 2 waits for delivery, as written.
 
 1. **Spotlight for feed items** (Apple). `SpotlightIndexer` indexes
    envelopes and message bodies today. It gains a feed-item path fed by

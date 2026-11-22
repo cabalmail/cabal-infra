@@ -113,6 +113,7 @@ No PRs. Each check ends in one GitHub comment on the item it checked (stage SHA,
 - Build tag 1.22.6 in a throwaway worktree, capped at 45 minutes. It is the scrub's starting point and the pre-fix control for #1825, #1848, #1851 and #1852 (fixed in 1.24.0 and 1.25.0). If today's Xcode cannot build it, record the scrub as test-only and drop the controls.
 - Shim probe, capped at 90 minutes, on the Mac and on an iPhone clone: hold a named endpoint for a set time, fail one endpoint with a 500, go fully offline, log request paths (and bodies if possible). Record what works; each check below names what it needs. If the shim is gone, rebuild it outside the repo within the cap.
 - Spotlight, 30 minutes: find out why the Mini's Spotlight never lists Cabalmail (System Settings, Spotlight; `mdutil -s /`; whether the debug build's location is indexed). Record the answer. With decision 4 Yes, install the TestFlight Mac build and repeat the probe against it.
+  - Seen 2026-11-22, in B6.1's pass (flags-and-cross-media.md): the signed debug build's every donation to Core Spotlight fails on the Mini, messages and feed items alike, with `CSIndexErrorDomain` -1003 over a Cocoa 4097, "Couldn't communicate with a helper application", launched through `open` or directly. `mdutil -s /` says indexing is enabled. So the app never reaches the index there; why the helper is unreachable is still to find.
 - Check whether the Mac debug build may badge its Dock icon (System Settings, Notifications). That decides #1886.
 
 **Status:** Not started (2026-10-15).
