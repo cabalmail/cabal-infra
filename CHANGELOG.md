@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.59.2] - 2026-11-22
+
+### Changed
+- **Mac app-layer tests no longer wait 0.1 s on every async fixture.**
+  XCTest waits for an async `setUp`, test or `tearDown` by running the main
+  run loop in slices of up to 0.1 s that end early only when a run-loop
+  source is handled, so in the idle host app each one cost a tenth of a
+  second however quickly it finished. `CabalmailMacTests` now has a principal
+  class, `TestRunLoopKeepAwake`, that signals a do-nothing source a thousand
+  times a second. The suite's 3,080 tests ran in 140 s instead of 298 s on
+  the same machine and build.
+- **Four CabalmailKit tests no longer wait out SQLite's two-second busy
+  timeout.** Each holds a lock on a store's file and asserts that the
+  store's write fails, and the write waited the whole timeout first: about
+  2.2 s per test on the iOS and visionOS simulator legs of `apple.yml` and
+  about 4 s on the macOS leg, where the timeout's short sleeps are
+  stretched. `SQLiteDatabase`, `SQLiteSetAside` and `RssStore`'s internal
+  initializer now take the timeout as a parameter that defaults to the
+  same 2,000 ms, so nothing that ships waits any differently, and the four
+  tests pass 5 ms. Their assertions are unchanged.
+
 ## [1.59.1] - 2026-11-22
 
 ### Fixed
