@@ -36,6 +36,20 @@ step.
 - `--yes` - skip the confirmation prompt.
 - `--date YYYY-MM-DD` - override the release date.
 
+### Changelog gates on the release PR
+
+The three changelog gates (`changelog-fragment`, `apple-changelog`,
+`android-changelog`) skip a `stage -> main` PR by its branch names: every change
+in a release already passed them on its own PR into `stage`, and by now the
+fragments are collated away.
+
+So the release PR needs no `no-changelog` label, and should not be given one.
+The Apple and Android gates re-run when a label is added or removed; a label
+added while the first run is still going cancels that run, and the cancelled
+check stays on the head commit, where the release dashboard counts it as failing
+and holds the merge. If that happens, re-run the cancelled workflow run from the
+Actions tab and the check turns green.
+
 ## GitHub release (automatic)
 
 Once the `stage -> main` PR merges, the `release.yml` workflow

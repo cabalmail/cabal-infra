@@ -157,6 +157,13 @@ else
   log "opened PR: ${pr_url}"
 fi
 
+# Do not label the release PR. The changelog gates skip a stage -> main PR by
+# its refs (check-changelog-fragment.sh, check-client-changelog.sh), so it
+# needs no `no-changelog` label - and adding any label here would hurt: the
+# gates' workflows re-run on `labeled` and cancel the run the PR's opening
+# started, and that cancelled check run stays on the head commit, where the
+# release dashboard counts it as failing and holds the merge.
+
 if [ "${NO_WATCH}" -eq 1 ]; then
   log "not watching checks (--no-watch). Review and merge to promote to prod: ${pr_url}"
   exit 0
