@@ -918,13 +918,25 @@ private suspend fun NavHostController.restoreLaunchSession(
             launchSingleTop = true
             restoreState = true
         }
-        val scope = session.feedScope?.let(RssItemScope::fromToken)
-        val scopeExists = scope != null && container.rssStore.scopeExists(scope)
+        val saved =
+            session.feedScope
+                ?.let(RssItemScope::fromToken)
+                ?.takeIf { container.rssStore.scopeExists(it) }
         val item =
             session.feedItemId
                 ?.let(FeedRoutes::splitItemId)
                 ?.let { (feedId, sortKey) -> runCatching { container.rssStore.item(feedId, sortKey) }.getOrNull() }
-        LaunchDestination.feedRoutes(scope.takeIf { scopeExists }, item, compactWidth).forEach { step ->
+        val savedHoldsItem =
+            saved != null &&
+                item != null &&
+                runCatching { item.feedId in container.rssStore.feedIds(saved) }.getOrDefault(false)
+        // An item opened from the Flagged view has no scope list of its
+        // own on record; it comes back under its feed's.
+        val scope =
+            LaunchDestination
+                .feedScope(saved, savedNamed = session.feedScope != null, item, savedHoldsItem)
+                ?.takeIf { it == saved || container.rssStore.scopeExists(it) }
+        LaunchDestination.feedRoutes(scope, item, compactWidth).forEach { step ->
             navigate(step.route) {
                 step.popUpTo?.let { popUpTo(it) }
                 launchSingleTop = true
