@@ -80,6 +80,9 @@ import com.cabalmail.android.ui.feeds.FeedRoutes
 import com.cabalmail.android.ui.feeds.FeedScopeSwitchMenu
 import com.cabalmail.android.ui.feeds.FeedsViewModel
 import com.cabalmail.android.ui.feeds.scopeTitle
+import com.cabalmail.android.ui.flagged.FlaggedRoutes
+import com.cabalmail.android.ui.flagged.FlaggedScreen
+import com.cabalmail.android.ui.flagged.FlaggedViewModel
 import com.cabalmail.android.ui.folders.FoldersAdminScreen
 import com.cabalmail.android.ui.folders.FoldersAdminViewModel
 import com.cabalmail.android.ui.mail.FolderListScreen
@@ -130,9 +133,22 @@ enum class TopLevel(
     SETTINGS("settings", R.string.settings_title, Icons.Default.Settings),
 }
 
-/** Routes that belong to the Mail tab even though they are nested. */
+/**
+ * Routes that belong to the Mail tab even though they are nested. The
+ * Flagged view is one when it was opened from the folder list; opened from
+ * the feed tree it is one of [FEED_ROUTES].
+ */
 private val MAIL_ROUTES =
-    setOf("folders", "messages/{folder}?uid={uid}", "search?folder={folder}", "message/{folder}/{uid}")
+    setOf(
+        "folders",
+        "messages/{folder}?uid={uid}",
+        "search?folder={folder}",
+        "message/{folder}/{uid}",
+        FlaggedRoutes.FROM_MAIL,
+    )
+
+/** Routes that belong to the Feeds tab. */
+private val FEED_ROUTES = FeedRoutes.ALL + FlaggedRoutes.FROM_FEEDS
 
 /**
  * Navigation shell: the suite (bar / rail), the graph, and the app-wide
@@ -258,7 +274,7 @@ fun CabalmailNavHost(
                 val selected =
                     backStackEntry?.destination?.hierarchy?.any { it.route == destination.route } == true ||
                         (destination == TopLevel.MAIL && currentRoute in MAIL_ROUTES) ||
-                        (destination == TopLevel.FEEDS && currentRoute in FeedRoutes.ALL)
+                        (destination == TopLevel.FEEDS && currentRoute in FEED_ROUTES)
                 item(
                     selected = selected,
                     onClick = {
@@ -387,7 +403,7 @@ fun CabalmailNavHost(
                     // their view models; only the section moves here.
                     LaunchedEffect(currentRoute) {
                         when (currentRoute) {
-                            in FeedRoutes.ALL -> container.resumeSession.noteSection(ResumeSection.FEEDS)
+                            in FEED_ROUTES -> container.resumeSession.noteSection(ResumeSection.FEEDS)
                             in MAIL_ROUTES -> container.resumeSession.noteSection(ResumeSection.MAIL)
                             else -> Unit
                         }
@@ -461,6 +477,7 @@ private fun MailNavGraph(
                 onEmptyTrash = viewModel::emptyTrash,
                 onMarkAllRead = viewModel::markAllRead,
                 onCompose = composeNew,
+                onOpenFlagged = { navController.navigate(FlaggedRoutes.FROM_MAIL) { launchSingleTop = true } },
             )
         }
 
@@ -560,6 +577,9 @@ private fun MailNavGraph(
                             onPoll = foldersViewModel::poll,
                             scroll = foldersViewModel.paneScroll,
                             onScrollChange = { foldersViewModel.paneScroll = it },
+                            onOpenFlagged = {
+                                navController.navigate(FlaggedRoutes.FROM_MAIL) { launchSingleTop = true }
+                            },
                         )
                     },
                 )
@@ -652,6 +672,10 @@ private fun MailNavGraph(
                 },
             )
         }
+
+        // The Flagged view from Mail's door; the feed tree's door is in
+        // the feeds graph. One screen behind both.
+        composable(FlaggedRoutes.FROM_MAIL) { FlaggedDestination(navController, container) }
 
         feedsGraph(navController, container, compactWidth)
 
@@ -842,6 +866,39 @@ private fun MailNavGraph(
 }
 
 /**
+ * The Flagged view, behind either door (`FlaggedRoutes`): flagged mail and
+ * flagged feed items in one list. A row opens its medium's own reader over
+ * the list at every width, as a search result does, and that reader
+ * records the resume position it always records; the view itself is not
+ * one, so a cold launch lands on the list the door is in.
+ */
+@Composable
+private fun FlaggedDestination(
+    navController: NavHostController,
+    container: AppContainer,
+) {
+    val viewModel: FlaggedViewModel = viewModel(factory = FlaggedViewModel.factory(container))
+    val state by viewModel.state.collectAsState()
+    val config by container.configService.config.collectAsState()
+    val online by container.connectivity.online.collectAsState()
+    FlaggedScreen(
+        state = state,
+        viewModel = viewModel,
+        online = online,
+        bimiLookup = container.bimiLookup,
+        mailDomains = config?.mailDomains.orEmpty(),
+        onOpenMessage = { envelope ->
+            // Rows span folders; each carries its own.
+            envelope.folder?.let { source ->
+                navController.navigate("message/${Uri.encode(source)}/${envelope.id}")
+            }
+        },
+        onOpenItem = { item -> navController.navigate(FeedRoutes.item(item.feedId, item.sortKey)) },
+        onBack = { navController.popBackStack() },
+    )
+}
+
+/**
  * The launch restore (resume-session plan, Phase B). Reads the session
  * snapshot, verifies the saved position against the local caches, and
  * navigates the ladder `LaunchDestination` lays out: a feeds session
@@ -996,6 +1053,10 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
         }
     }
 
+    val openFlagged: () -> Unit = {
+        navController.navigate(FlaggedRoutes.FROM_FEEDS) { launchSingleTop = true }
+    }
+
     composable(FeedRoutes.HUB) {
         // Back at the feed tree: the next cold launch opens here, not the
         // list that was popped (the section itself is recorded above).
@@ -1028,8 +1089,11 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
             onRefresh = viewModel::refresh,
             onPoll = viewModel::poll,
             onOpenScope = openScope,
+            onOpenFlagged = openFlagged,
         )
     }
+
+    composable(FlaggedRoutes.FROM_FEEDS) { FlaggedDestination(navController, container) }
 
     composable(
         route = FeedRoutes.ITEMS,
@@ -1146,6 +1210,7 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
                         management = management,
                         scroll = feedsViewModel.treeScroll,
                         onScrollChange = { feedsViewModel.treeScroll = it },
+                        onOpenFlagged = openFlagged,
                     )
                 },
             )
