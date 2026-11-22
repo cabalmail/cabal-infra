@@ -17,13 +17,23 @@ extension CabalmailClient {
     /// has left that account's data on disk, so each one says so in the log
     /// (`WipeReport`; the address and folder caches report their own).
     public func clearLocalData() async {
+        await clearLocalData(feedsAlreadyRetired: false)
+    }
+
+    /// The wipe's steps. The feeds step is skipped for a store the caller
+    /// has already retired: the retire is that step (it clears, then closes
+    /// the store), so a second clear could only fail on the closed database
+    /// and report feeds as left behind on every healthy sign-out (#2568).
+    private func clearLocalData(feedsAlreadyRetired: Bool) async {
         await addressCache.clear()
         await folderStateCache.clear()
         do { try await envelopeCache.clearAll() } catch { WipeReport.failed("saved message lists", error) }
         do { try await bodyCache.clearAll() } catch { WipeReport.failed("saved message bodies", error) }
         do { try await draftStore.removeAll() } catch { WipeReport.failed("drafts", error) }
         do { try await outbox.removeAll() } catch { WipeReport.failed("outbox", error) }
-        do { try await rssStore?.clear() } catch { WipeReport.failed("feeds", error) }
+        if !feedsAlreadyRetired {
+            do { try await rssStore?.clear() } catch { WipeReport.failed("feeds", error) }
+        }
         // Explicit rather than relying on the cache change stream's
         // `.cleared` event: sign-out must not race a fire-and-forget task
         // with the next account's sign-in.
@@ -41,8 +51,11 @@ extension CabalmailClient {
         // First, so nothing the ending session still stores is indexed
         // behind the wipe below.
         await spotlightIndexer?.stop()
+        // The feeds step of this wipe, whether it throws or not: a retire
+        // that fails has still closed the store, so there is nothing a
+        // second attempt could clear, and its one line is the report.
         do { try await rssStore?.retire() } catch { WipeReport.failed("feed store (retiring)", error) }
-        await clearLocalData()
+        await clearLocalData(feedsAlreadyRetired: true)
     }
 
     /// Kicks the Spotlight sweep for the current session — indexes each
