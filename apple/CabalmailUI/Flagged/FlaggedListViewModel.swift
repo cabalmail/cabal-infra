@@ -44,9 +44,6 @@ enum FlaggedAwaitedItem: Equatable {
 @Observable
 @MainActor
 final class FlaggedListViewModel {
-    typealias Removals = FlaggedRemovals
-    typealias Awaited = FlaggedAwaitedItem
-
     /// What the view is narrowed to. Any flag unless the user picks one,
     /// for the visit.
     private(set) var criterion: FlagCriterion = .any
@@ -59,7 +56,7 @@ final class FlaggedListViewModel {
     /// Counts the lists that began afresh (the open, a pick), so the view
     /// scrolls to the top.
     private(set) var listEpoch = 0
-    private(set) var removals = Removals()
+    private(set) var removals = FlaggedRemovals()
     /// The mail request in flight; a pick or a refresh replaces it.
     private(set) var mailTask: Task<Void, Never>?
 
@@ -144,7 +141,7 @@ final class FlaggedListViewModel {
         }
     }
 
-    func awaited(_ ref: ItemRef) -> Awaited {
+    func awaited(_ ref: ItemRef) -> FlaggedAwaitedItem {
         if let row = row(for: ref) { return .found(row) }
         return mailLoading || !feed.loaded ? .waiting : .gone
     }
@@ -345,15 +342,23 @@ final class FlaggedListViewModel {
     /// restore carries its unread state with it.
     func dispose(_ ref: MessageRef) async {
         let intent = disposeIntent(for: ref)
-        guard let destination = intent.destinationFolder, destination != ref.folder,
-              let envelope = mail.row(for: ref)?.envelope
-        else { return }
-        // The row leaves before the first suspension, so a second dispose
-        // of the same message finds no row and sends nothing.
+        guard let destination = intent.destinationFolder else { return }
+        await move(ref, to: destination, markingSeen: intent != .restore)
+    }
+
+    /// Moves the message `ref` names out of its own folder to
+    /// `destination`: the Message menu's Move, and what a dispose comes to.
+    /// The row leaves at once and a refused move puts it back. The message
+    /// keeps its flag where it lands, under a number this list cannot know,
+    /// so it is listed again from the next refresh.
+    func move(_ ref: MessageRef, to destination: String, markingSeen: Bool = false) async {
+        guard destination != ref.folder, let envelope = mail.row(for: ref)?.envelope else { return }
+        // The row leaves before the first suspension, so a second move of
+        // the same message finds no row and sends nothing.
         let wasUnread = !envelope.flags.contains(.seen)
         remove([ref])
         let outcome = await mailStore.mutations.remove(
-            [ref], .move(to: destination, markingSeen: intent != .restore && wasUnread),
+            [ref], .move(to: destination, markingSeen: markingSeen && wasUnread),
             unread: wasUnread ? [ref] : [], flagged: envelope.flags.contains(.flagged) ? [ref] : [],
             by: .list(self, through: client)
         ).value
@@ -371,7 +376,7 @@ final class FlaggedListViewModel {
     private func remove(_ refs: Set<MessageRef>) {
         let taken = mail.remove(refs)
         guard !taken.isEmpty else { return }
-        removals = Removals(tick: removals.tick + 1, refs: taken)
+        removals = FlaggedRemovals(tick: removals.tick + 1, refs: taken)
         rebuild()
     }
 
@@ -379,6 +384,13 @@ final class FlaggedListViewModel {
 
     func setRead(_ item: RssItem, _ isRead: Bool) async {
         await mark(item, .read(isRead))
+    }
+
+    /// Read to unread and back, judged by what the store holds: the
+    /// caller's copy can be the reader's, older than the last mark.
+    func toggleRead(_ item: RssItem) async {
+        let stored = await feedStore.stored(item) ?? item
+        await setRead(item, !stored.isRead)
     }
 
     func toggleDefaultFlag(on item: RssItem) async {

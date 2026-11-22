@@ -55,6 +55,7 @@ struct FlaggedListView: View {
             guard let model else { return }
             Task { await model.refresh() }
         }
+        .modifier(FlaggedItemCommands(model: model, row: selection))
         .task {
             guard let client = appState.client else { return }
             let window = navigator?.flaggedList(client: client, preferences: preferences, mailStore: appState.mailStore)
