@@ -124,7 +124,73 @@ final class SessionClientAccountTests: XCTestCase {
         try await waitUntilOnMainActor { !FileManager.default.fileExists(atPath: home.path) }
     }
 
+    // MARK: - Another account's directory (PR 1.2)
+
+    /// Alice is the remembered account and her session ended without its
+    /// wipe, so her directory is still there. A sign-in as Bob that is
+    /// refused must not take it: the typed name may be a typo of hers.
+    func testARefusedSignInAsAnotherAccountLeavesTheRememberedAccountsDirectory() async throws {
+        seatFactoryClients()
+        seatLaunchStep()
+        let kept = try leaveTheRememberedAccountsDirectory()
+        let bob = try XCTUnwrap(Self.account(SignInScript.domain, "bob"))
+        await harness.cognito.script(.passwordSignIn, .error(type: "NotAuthorizedException"))
+
+        await harness.appState.signIn(
+            controlDomain: SignInScript.domain, username: "bob", password: SignInScript.password
+        )
+
+        XCTAssertNotEqual(harness.appState.status, .signedIn)
+        let refused = try XCTUnwrap(factoryClients.first)
+        try await waitUntilOnMainActor { await refused.isShutDown }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path))
+        let made = AccountDirectory.url(for: bob, in: scratch)
+        try await waitUntilOnMainActor { !FileManager.default.fileExists(atPath: made.path) }
+    }
+
+    /// Once Bob's sign-in has succeeded, Alice's directory goes: nothing
+    /// else would ever remove it, and Bob's client never opens it.
+    func testASignInAsAnotherAccountRemovesTheLastAccountsDirectoryOnceItSucceeds() async throws {
+        seatFactoryClients()
+        seatLaunchStep()
+        let kept = try leaveTheRememberedAccountsDirectory()
+        let bob = try XCTUnwrap(Self.account(SignInScript.domain, "bob"))
+        await harness.cognito.script(.passwordSignIn, .tokens(id: "ID-1"))
+
+        await harness.appState.signIn(
+            controlDomain: SignInScript.domain, username: "bob", password: SignInScript.password
+        )
+
+        XCTAssertEqual(harness.appState.status, .signedIn)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: kept.deletingLastPathComponent().path))
+        let accounts = scratch.appendingPathComponent(AccountDirectory.containerName)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: accounts.path), [bob.directoryName])
+    }
+
     // MARK: - Helpers
+
+    /// Remembers alice and leaves her a directory with a file in it, as a
+    /// session that ended without its wipe does. Returns the file.
+    private func leaveTheRememberedAccountsDirectory() throws -> URL {
+        harness.seedLastSession(controlDomain: SignInScript.domain, username: "alice")
+        let alice = try XCTUnwrap(Self.account(SignInScript.domain, "alice"))
+        let home = AccountDirectory.url(for: alice, in: scratch)
+        let kept = home.appendingPathComponent("kept")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try Data("saved".utf8).write(to: kept)
+        return kept
+    }
+
+    /// Has the environment run the launch step the app runs, over the cache
+    /// root in `scratch`. Not part of `seatFactoryClients()`: with nobody
+    /// remembered the step removes every account directory, and the tests
+    /// above it start from one that is already there.
+    private func seatLaunchStep() {
+        let root = scratch
+        harness.appState.sessionManager.sessionEnvironment.prepareAccountStorage = { remembered in
+            await AccountDirectory.prepareAtLaunch(root: root, remembered: remembered)
+        }
+    }
 
     /// The clients `seatFactoryClients()` built, oldest first.
     private var factoryClients: [CabalmailClient] = []

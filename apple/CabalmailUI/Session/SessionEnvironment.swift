@@ -39,6 +39,14 @@ struct SessionEnvironment {
     /// Mirrors the control domain to the embedded Safari extension.
     var publishControlDomain: @MainActor (String) -> Void
     var hooks: SessionHooks
+    /// The cache root's launch step, run once per process before the first
+    /// client is built, with the account the install remembers (nil for
+    /// none): other accounts' saved mail and what a failed removal left are
+    /// deleted, and caches from before the account directory move into the
+    /// remembered account's (`AccountDirectory.prepareAtLaunch`). Does
+    /// nothing unless set, for an environment whose clients keep no account
+    /// directory.
+    var prepareAccountStorage: @MainActor (_ remembered: AccountIdentity?) async -> Void = { _ in }
 
     static var live: SessionEnvironment {
         SessionEnvironment(
@@ -57,7 +65,12 @@ struct SessionEnvironment {
             makeNavCoordinator: { NavStateCoordinator(client: $0) },
             lastSessionDefaults: .standard,
             publishControlDomain: { ExtensionControlDomainStore.publish($0) },
-            hooks: .live
+            hooks: .live,
+            prepareAccountStorage: { remembered in
+                // Without a cache root no client is built either.
+                guard let root = try? liveCacheDirectory() else { return }
+                await AccountDirectory.prepareAtLaunch(root: root, remembered: remembered)
+            }
         )
     }
 }
