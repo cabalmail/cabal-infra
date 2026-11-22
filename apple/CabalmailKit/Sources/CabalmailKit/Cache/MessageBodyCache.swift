@@ -57,9 +57,12 @@ public actor MessageBodyCache {
     /// next account to sign in on this device can't read the previous user's
     /// message bodies from disk. The directory is recreated empty so the
     /// actor stays usable (the cache lives in a shared, non-user-scoped path).
+    /// Throws when the bodies could not be removed, after recreating the
+    /// directory, so the wipe can report that they are still on disk.
     public func clearAll() throws {
-        try? fileManager.removeItem(at: directory)
+        let failure = WipeReport.remove(directory, using: fileManager)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        if let failure { throw failure }
     }
 
     // MARK: - Internals

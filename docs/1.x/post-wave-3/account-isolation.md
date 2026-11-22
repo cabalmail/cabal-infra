@@ -21,8 +21,8 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 | Decisions 1, 3 and 4 | Answered 2026-11-22: 1 Yes, 3 Refuse, 4 No; the smaller calls as stated. Decision 2 is recorded, not asked |
 | Scope doc and the three issues | Done (2026-11-22). The scope doc was sqlite-mail-store.md's kick-off scope doc, answered the same day. Issues #2559 (a sign-in over a wired session), #2560 (the cross-server wipe) and #2561 (the late folder list) are filed |
 | PR B. Sign-in rules | Merged to stage as #2563 (2026-11-22), addressing #2559 and #2560. The Mini regression run has not happened |
-| PR C1. Account leftovers | Open as a PR (2026-11-22), addressing #2561. The Mini run has not happened |
-| PR C2. A failed wipe is reported | Not started (2026-10-15) |
+| PR C1. Account leftovers | Merged to stage as #2564 (2026-11-22), addressing #2561. The Mini run has not happened |
+| PR C2. A failed wipe is reported | Open as a PR (2026-11-22) |
 | PR A. Server stamp (decision 4 Stamp only) | Not built (2026-11-22): decision 4 is No |
 | PR D. Apple stamp check (Stamp only) | Not built (2026-11-22): decision 4 is No |
 
@@ -111,14 +111,14 @@ One session. It writes a short scope doc with decisions 1, 3 and 4 and the small
 - Tests: a folder list answering after Sign Out leaves `subscribedFolderPaths` nil (a held fake, as `SignOutLateCountTests` do); a revert landing after Sign Out writes nothing; the keys and log reset for another account and stay for the same one, the same server retyped included.
 - Verify: CI; on the Mini, PR B's run with a group collapsed and Settings > Debug Log open. Fragment: `Apple:` fixed. Risk: low.
 
-**Status:** Open as a PR (2026-11-22), addressing #2561. The three writers ask `acceptsCounts(from:)` through `FolderListViewModel.publishSubscribedFolders` and `applySubscription`. The resets are `AccountLeftovers` (`Session/AccountLeftovers.swift`), run from `completeInteractiveSignIn` on the same `AccountIdentity` rule as PR B's wipe, not from `AppState.accountChanged`: the keys live in the defaults the session environment already holds, which is what lets the tests reach them. W3 had merged, so `DefaultsKey` gained the folder tree's key and the notification list's (`PushSettings` is not compiled on visionOS), and `FolderListView.swift` changed by the one line that names the key. The Mini run has not happened.
+**Status:** Merged to stage as #2564 (2026-11-22), addressing #2561. The three writers ask `acceptsCounts(from:)` through `FolderListViewModel.publishSubscribedFolders` and `applySubscription`. The resets are `AccountLeftovers` (`Session/AccountLeftovers.swift`), run from `completeInteractiveSignIn` on the same `AccountIdentity` rule as PR B's wipe, not from `AppState.accountChanged`: the keys live in the defaults the session environment already holds, which is what lets the tests reach them. W3 had merged, so `DefaultsKey` gained the folder tree's key and the notification list's (`PushSettings` is not compiled on visionOS), and `FolderListView.swift` changed by the one line that names the key. The Mini run has not happened.
 
 **PR C2. A failed wipe is reported.**
 - `clearLocalData` and `clearLocalDataEndingSession` (`CabalmailClient+Maintenance.swift:17-41`) log each failed step through `CabalmailLog` (06 F11: "Make the sign-out wipe report failure").
 - No retry flag. A different user's next sign-in already wipes again before wiring (`SessionManager.swift:689-691`), the same user reading their own cache is harmless, and sqlite-mail-store.md's PR 1.2 adds a retry for the caches. The logging still matters after that, because the outbox and drafts stay in the shared directory under sqlite-mail-store.md's default.
 - Tests: a Kit test where one step throws (the scope doc picks the seam). `no-changelog`. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Open as a PR (2026-11-22). Each throwing step of `clearLocalData` and `clearLocalDataEndingSession` logs through `WipeReport` (category `LocalWipe`, error level). Wider than the two functions, for one reason found on the re-check: `EnvelopeCache.clearAll` and `MessageBodyCache.clearAll` each discarded a failed removal themselves and then recreated the directory, so the wipe never saw the mail caches fail; both now throw it after finishing, and `AddressCache.clear` and `FolderStateCache.clear`, which do not throw, log their own. The seam is a `FileManager` whose removals throw, handed to the outbox and the caches (`LocalWipeReportTests`). It carries an `Apple:` fixed fragment instead of the `no-changelog` label, since the line shows in Settings > Debug Log.
 
 **PR A. Server stamp** (decision 4 Stamp only; no macOS runner, so it may run beside one Apple PR).
 - `push_register` gives each token row a random stamp on its first write (`if_not_exists`, beside :201) and returns it as `account_stamp` in its 200 body (:243). `push_dispatch` adds the row's stamp as `acct` to `msgRef` (:230) and the FCM data map (:253-260), building the payload per row instead of per signal. A row written before PR A carries no stamp until its next register.

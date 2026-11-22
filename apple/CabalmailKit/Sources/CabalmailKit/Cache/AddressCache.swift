@@ -68,8 +68,8 @@ public actor AddressCache {
     /// next account on the device doesn't inherit this one's addresses.
     public func clear() {
         invalidate()
-        if let fileURL {
-            try? FileManager.default.removeItem(at: fileURL)
+        if let fileURL, let failure = WipeReport.remove(fileURL, using: .default) {
+            WipeReport.failed("saved address list", failure)
         }
     }
 
