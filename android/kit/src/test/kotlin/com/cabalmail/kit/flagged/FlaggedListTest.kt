@@ -245,4 +245,34 @@ class FlaggedListTest {
         // A feed whose id reads like a folder cannot share a key with that folder's message.
         assertNotEquals(ItemRef.Mail("INBOX", 7).key, ItemRef.Feed("INBOX", "7").key)
     }
+
+    @Test
+    fun `a ref comes back from its key`() {
+        val refs =
+            listOf(
+                ItemRef.Mail("INBOX", 7),
+                // A nested folder's path holds the separator the key uses.
+                ItemRef.Mail("Clients/Acme/2026", 12),
+                ItemRef.Mail("feed:odd", 1),
+                // A sort key holds the separator too, after the feed id.
+                ItemRef.Feed("f1", "2026-03-01T00:00:00+00:00#i1"),
+                ItemRef.Feed("f1", "a#b#c"),
+            )
+        refs.forEach { assertEquals(it, ItemRef.parse(it.key), it.key) }
+
+        listOf(
+            "",
+            "INBOX/7",
+            "mail:",
+            "mail:INBOX",
+            "mail:/7",
+            "mail:INBOX/x",
+            "feed:",
+            "feed:f1",
+            "feed:#k",
+            "feed:f1#",
+        ).forEach {
+            assertNull(ItemRef.parse(it), "'$it' names nothing")
+        }
+    }
 }

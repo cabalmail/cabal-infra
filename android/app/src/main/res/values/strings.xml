@@ -190,6 +190,7 @@
     <string name="flagged_scope">Mail from %1$s</string>
     <string name="flagged_row_mail">Message</string>
     <string name="flagged_row_feed">Feed item</string>
+    <string name="flagged_select_item">Select a message or a feed item to read it</string>
     <string name="nav_mail">Mail</string>
     <string name="nav_feeds">Feeds</string>
     <string name="nav_folders">Folders</string>

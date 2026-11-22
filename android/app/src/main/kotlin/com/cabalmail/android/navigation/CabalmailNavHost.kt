@@ -80,6 +80,7 @@ import com.cabalmail.android.ui.feeds.FeedRoutes
 import com.cabalmail.android.ui.feeds.FeedScopeSwitchMenu
 import com.cabalmail.android.ui.feeds.FeedsViewModel
 import com.cabalmail.android.ui.feeds.scopeTitle
+import com.cabalmail.android.ui.flagged.FlaggedListDetailScreen
 import com.cabalmail.android.ui.flagged.FlaggedRoutes
 import com.cabalmail.android.ui.flagged.FlaggedScreen
 import com.cabalmail.android.ui.flagged.FlaggedViewModel
@@ -675,9 +676,11 @@ private fun MailNavGraph(
 
         // The Flagged view from Mail's door; the feed tree's door is in
         // the feeds graph. One screen behind both.
-        composable(FlaggedRoutes.FROM_MAIL) { FlaggedDestination(navController, container) }
+        composable(FlaggedRoutes.FROM_MAIL) {
+            FlaggedDestination(navController, container, compactWidth, openCompose)
+        }
 
-        feedsGraph(navController, container, compactWidth)
+        feedsGraph(navController, container, compactWidth, openCompose)
 
         composable("addresses") {
             val viewModel: AddressesViewModel =
@@ -867,18 +870,31 @@ private fun MailNavGraph(
 
 /**
  * The Flagged view, behind either door (`FlaggedRoutes`): flagged mail and
- * flagged feed items in one list. A row opens its medium's own reader over
- * the list at every width, as a search result does, and that reader
- * records the resume position it always records; the view itself is not
- * one, so a cold launch lands on the list the door is in.
+ * flagged feed items in one list. On a phone a row opens its medium's own
+ * reader over the list; on a wide window the list and the open item sit
+ * side by side. Either way the reader records the resume position it
+ * always records; the view itself is not one, so a cold launch lands on
+ * the list the door is in.
  */
 @Composable
 private fun FlaggedDestination(
     navController: NavHostController,
     container: AppContainer,
+    compactWidth: Boolean,
+    openCompose: (String) -> Unit,
 ) {
     val viewModel: FlaggedViewModel = viewModel(factory = FlaggedViewModel.factory(container))
     val state by viewModel.state.collectAsState()
+    if (!compactWidth) {
+        FlaggedListDetailScreen(
+            container = container,
+            state = state,
+            viewModel = viewModel,
+            onBack = { navController.popBackStack() },
+            openCompose = openCompose,
+        )
+        return
+    }
     val config by container.configService.config.collectAsState()
     val online by container.connectivity.online.collectAsState()
     FlaggedScreen(
@@ -1057,6 +1073,7 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
     navController: NavHostController,
     container: AppContainer,
     compactWidth: Boolean,
+    openCompose: (String) -> Unit,
 ) {
     val openScope: (RssItemScope) -> Unit = { scope ->
         navController.navigate(FeedRoutes.items(scope)) {
@@ -1105,7 +1122,9 @@ private fun androidx.navigation.NavGraphBuilder.feedsGraph(
         )
     }
 
-    composable(FlaggedRoutes.FROM_FEEDS) { FlaggedDestination(navController, container) }
+    composable(FlaggedRoutes.FROM_FEEDS) {
+        FlaggedDestination(navController, container, compactWidth, openCompose)
+    }
 
     composable(
         route = FeedRoutes.ITEMS,
