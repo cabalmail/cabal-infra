@@ -71,9 +71,21 @@ final class SQLiteDatabase {
     let faults = SQLiteFaultProbe()
     #endif
 
+    /// How long a statement waits for a lock another connection holds
+    /// before it fails as busy, unless whoever opens the file says otherwise.
+    static let defaultBusyTimeoutMilliseconds: Int32 = 2_000
+
     /// Opens the file at `path`, creating it unless `existing` says it must
     /// already be there.
-    init(path: String, existing: Bool = false) throws {
+    ///
+    /// `busyTimeoutMilliseconds` is for a test that holds the lock on
+    /// purpose and should not sit out the whole default; everything that
+    /// ships leaves it alone.
+    init(
+        path: String,
+        existing: Bool = false,
+        busyTimeoutMilliseconds: Int32 = SQLiteDatabase.defaultBusyTimeoutMilliseconds
+    ) throws {
         var opened: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | (existing ? 0 : SQLITE_OPEN_CREATE)
         let status = sqlite3_open_v2(path, &opened, flags, nil)
@@ -83,7 +95,7 @@ final class SQLiteDatabase {
             throw Self.failure(status, message)
         }
         handle = opened
-        sqlite3_busy_timeout(opened, 2_000)
+        sqlite3_busy_timeout(opened, busyTimeoutMilliseconds)
         #if DEBUG
         faults.watch(opened)
         #endif

@@ -1,4 +1,5 @@
 import XCTest
+import CabalmailKitTestSupport
 @testable import CabalmailKit
 
 /// `SQLiteSetAside`: a database file moved out of its store's way with
@@ -80,6 +81,12 @@ final class SQLiteSetAsideTests: XCTestCase {
         XCTAssertEqual(try reader.rows("SELECT COUNT(*) FROM notes").first?.int(0), 1)
         try writer.run("INSERT INTO notes (body) VALUES ('after the reader')")
         let logSize = size(of: database.path + "-wal")
+        // The fold-in waits on the reader for as long as its connection's
+        // busy timeout and then gives up, which is the case under test.
+        let aside = SQLiteSetAside(
+            database: database,
+            busyTimeoutMilliseconds: SQLiteWriteLock.shortBusyTimeoutMilliseconds
+        )
 
         XCTAssertTrue(aside.setAside(reason: "test"))
 

@@ -18,8 +18,10 @@ final class SQLiteDatabaseTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func makeDatabase() throws -> SQLiteDatabase {
-        let database = try SQLiteDatabase(path: path)
+    private func makeDatabase(
+        busyTimeoutMilliseconds: Int32 = SQLiteDatabase.defaultBusyTimeoutMilliseconds
+    ) throws -> SQLiteDatabase {
+        let database = try SQLiteDatabase(path: path, busyTimeoutMilliseconds: busyTimeoutMilliseconds)
         try database.exec("CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL)")
         return database
     }
@@ -85,7 +87,7 @@ final class SQLiteDatabaseTests: XCTestCase {
     /// write: with another connection holding it, the body never runs. A
     /// deferred `BEGIN` would run the body's reads and fail at its write.
     func testATransactionTakesTheWriteLockBeforeItsBodyRuns() throws {
-        let database = try makeDatabase()
+        let database = try makeDatabase(busyTimeoutMilliseconds: SQLiteWriteLock.shortBusyTimeoutMilliseconds)
         let lock = try SQLiteWriteLock(path: path)
         defer { lock.release() }
         var bodyRan = false
