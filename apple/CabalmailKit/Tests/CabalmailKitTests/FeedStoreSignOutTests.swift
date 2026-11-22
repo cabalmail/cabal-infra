@@ -50,7 +50,7 @@ final class FeedStoreSignOutTests: XCTestCase {
     /// session's store open and taking writes — exactly what the retire
     /// exists to prevent (#1957).
     func testAStoreWhoseClearFailsIsStillRetired() async throws {
-        let store = try RssStore(directory: root)
+        let store = try makeStoreThatGivesUpOnALockSoon()
         try await store.upsertSubscription(departing)
         // A second connection holding a write lock makes the clear time out
         // busy, standing in for the failures that are not reproducible here.
@@ -105,7 +105,7 @@ final class FeedStoreSignOutTests: XCTestCase {
     /// The control for the arm above: the lock really does stop a write, so
     /// the retire there failed on the injected failure and not on nothing.
     func testTheLockRefusesAnOrdinaryWrite() async throws {
-        let store = try RssStore(directory: root)
+        let store = try makeStoreThatGivesUpOnALockSoon()
         let lock = try lockTheStoreFile()
         defer { lock.release() }
 
@@ -113,6 +113,16 @@ final class FeedStoreSignOutTests: XCTestCase {
             try await store.upsertSubscription(departing)
             XCTFail("the lock let a write through")
         } catch {}
+    }
+
+    /// The store `RssStore(directory:)` opens, but for how long its
+    /// connection waits on the lock below before a write fails.
+    private func makeStoreThatGivesUpOnALockSoon() throws -> RssStore {
+        try RssStore(
+            directory: root,
+            recoveringSetAside: false,
+            busyTimeoutMilliseconds: SQLiteWriteLock.shortBusyTimeoutMilliseconds
+        )
     }
 
     /// A second connection to the store's own file, holding its write lock.
