@@ -1127,7 +1127,7 @@ Loose files in a feature folder are shared by that feature's subfolders.
 | Folder | What lives there |
 | --- | --- |
 | `App/` | `AppState` and all of its extension files, and the app-level types it holds: the toast, the signed-out reason, the drag-and-drop move request. `AppState` holds the compose coordinator and slot registry, drag and drop, contacts, BIMI and `mailStore`, and what the app does once as it leaves and returns to the foreground (`appScenePhaseChanged(to:)`, called by each app entry's scene-level handler); its session surface (`status`, `client`, `navCoordinator`, sign-in and sign-out) forwards to its `SessionManager` |
-| `Session/` | The session lifecycle, in `SessionManager`: sign-in and its second factor, restoring the last session, signing out and its ordering (`SessionTeardownGate`), the session's client, cursor, preferences sync and expiry observer, the Inbox badge and feed pollers (`SessionPollers`), and lending the client to the push and App Intents paths (`borrowClient()`, one client per account). `SessionEnvironment` and `SessionHooks` are its seams to the outside; `SessionOwnerHooks` are what a session does to `AppState`'s state. Also the sign-in screen and its error wording |
+| `Session/` | The session lifecycle, in `SessionManager`: sign-in and its second factor, restoring the last session, signing out and its ordering (`SessionTeardownGate`), the session's client, cursor, preferences sync and expiry observer, the Inbox badge and feed pollers (`SessionPollers`), and lending the client to the push and App Intents paths (`borrowClient()`, one client per account). `SessionEnvironment` and `SessionHooks` are its seams to the outside; `SessionOwnerHooks` are what a session does to `AppState`'s state. Also the sign-in screen and its error wording. One signed-in account per install, and no per-account session container: see "One account per install" below |
 | `Navigation/` | Each main window's `SceneNavigator` (its `AppRoute`, landing, search model, and the hand-off to a tree a layout swap rebuilds), with the feed reader's `FeedNavigationState` and the `TreeGate` both use, the window's `WindowRestores` (the message, list place, reading position and feed item its lists and reader take once ready), its `FolderListHold` (the folder list's selection, which a layout swap hands on, multi-selection included, and where that list is scrolled, as a `ListAnchor`: its top row by Message-ID, UID and position), its `ListFlagPicks` (two `FlagPickHold`s, one for the folder list and one for the feed list: the flag picked from the Flagged pill's menu for the visit, which the same folder's or feed's next list opens on, however it came to be rebuilt, and which a list for another folder or feed drops; never stored), its `StoredRoute` (the route its scene storage keeps, and where its folder list was scrolled, for the account they were stored for) and its `WindowRecorder` (only the window last used records the place the app resumes from); `NavStateCoordinator` (the per-install resume session, which also keeps where the last-used window's folder list was scrolled, on this device only, reading positions and the cross-device cursor); `DeepLinkRouter` (a notification, a Spotlight result or Siri's Open Folder opens in one main window: the system's target, else the window last used) with the `WindowRegistry` it finds windows in, and Spotlight routing; `SidebarSelection` (what a sidebar's list has selected: a mail folder by path, a feed list, or a `SmartView`, which no sidebar offers yet) and `SidebarListSelection`, the rule between that one selection and the two things a window holds, its mail folder and its feed list, which stay two because a folder pick and a feed pick are different transitions of the navigator. A route may name a smart view (`AppRoute.smartView`): the key is optional and read leniently, so a route stored by an older build restores, an older build reads a newer route by ignoring the key, and a view a build does not know reads as none. `AppRoute.openItem` names the window's open item as the Kit's `ItemRef`, the one identity for a message or a feed item |
 | `Commands/` | The Message, Mailbox and Feeds menu commands, when each is enabled, and which window it acts on |
 | `Shell/` | How a window is laid out. The sign-in / signed-in router resolves the window's `ShellLayout` and draws one of four layout shells: `DesktopShell` (the Mac window), `SplitShell` (the iPad split, and iPhone Duo unfolded), `TabShell` (the iPhone tab bar, a narrowed iPad window and Duo folded) and `OrnamentShell` (the Vision Pro tabs). `WideMail` is what the two wide shells share, `CompactTab` is the tab list as data, and `CompactMailStack` is the phone's Mail tab. Also here: the layout and column policies, the split's Settings sheet presenter, the per-window theme, and the main window root's launch and lifecycle chain both app entries apply (`appRootLifecycle`) |
@@ -1208,6 +1208,43 @@ The script is standard-library Python and runs anywhere
 ```sh
 python3 scripts/check-platform-conditionals.py
 ```
+
+### One account per install
+
+An install is signed in to one account at a time, as policy (decided
+2026-11-22; `docs/1.x/post-wave-3/account-isolation.md`, decision 1).
+There is no account picker, and switching accounts is Sign Out, then Sign
+In. What follows from it:
+
+- **A sign-in over a session is refused.** `SessionManager.signIn` logs a
+  line and returns while a client is wired, changing nothing. No screen
+  offers one (`SignInView` shows only while signed out); the guard is for
+  whatever reaches it anyway (#2559).
+- **One rule says which account a sign-in is for.** `AccountIdentity`
+  (CabalmailKit) is the server and the username together. The server is
+  compared trimmed, lowercased and without a leading `https://` or
+  `http://`, so the same server retyped is the same account; the username
+  is compared exactly as typed, so `Alice` and `alice` are two accounts.
+  Usernames that differ only by case are kept apart, not encouraged.
+- **Another account's sign-in starts from an empty cache.** Sign Out wipes
+  the local data, but a session can end without that wipe: a force quit,
+  or a launch whose token refresh is refused, which removes the tokens and
+  keeps the cache and the remembered server and username. So an
+  interactive sign-in whose `AccountIdentity` differs from the remembered
+  one clears the local data before the session is wired, and drops what
+  was parked for the last account (#2560). The same username on another
+  server is another account.
+- **No per-account session container.** `AppState` keeps one
+  `MailSessionStore` for its life, reset in place at sign-out (decision 2
+  of the same plan); a late answer from an ended session is refused by
+  the sign-out gate (`acceptsCounts(from:)`) rather than landing in a
+  discarded object.
+
+Settings are the one thing kept per account across sign-outs
+(`Preferences.scopeIdentifier`). That key is older than `AccountIdentity`
+and lowercases the username, so two usernames that differ only by case
+would share settings; it stays as it is, because changing it would orphan
+every stored settings scope.
 
 ### iPhone Duo: the fold and the side strip
 

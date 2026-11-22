@@ -132,8 +132,13 @@ public final class SessionManager {
         pollers.inboxUnreadChanged = { [weak self] in self?.owner.inboxUnreadChanged($0) }
     }
 
+    /// One account per install: while a session is wired, a sign-in is
+    /// refused and changes nothing, so switching accounts is Sign Out, then
+    /// Sign In. No screen offers a sign-in over a session; one that arrived
+    /// anyway used to replace the session without ending it (#2559).
     func signIn(controlDomain: String, username: String, password: String) async {
         await teardownGate.awaitTeardown()
+        guard !refusesSignInOverASession() else { return }
         status = .signingIn
         mfaError = nil
         abandonPendingMfa()
@@ -377,13 +382,15 @@ extension SessionManager {
     /// badge polling, the contacts prompt, push registration (iOS/macOS),
     /// and the watch hand-off.
     private func wireSession(client newClient: CabalmailClient, username: String) async {
-        // A sign-in over a wired session (#1826) replaces its client.
+        // `signIn` refuses over a wired session (#2559) and a restore
+        // returns, so there is none to replace; one that got here anyway
+        // has its client let go below.
         let replaced = client
         self.client = newClient
         if let standby = takeStandby(), standby !== newClient { letGo(of: standby) }
         owner.clientInstalled(newClient)
         self.navCoordinator = sessionEnvironment.makeNavCoordinator(newClient)
-        // The session this one replaces (#1826) stops syncing first: a pull
+        // A session this one replaced (see above) stops syncing first: a pull
         // or push of its still in flight must not land in, or clear the
         // unsent mark of, the scope activated below.
         prefsCoordinator?.stop()
@@ -723,15 +730,26 @@ extension SessionManager {
         letGo(of: submitted)
     }
 
+    /// Whether a session is wired, which is what refuses a sign-in (#2559);
+    /// says so in the log when it does.
+    fileprivate func refusesSignInOverASession() -> Bool {
+        guard client != nil else { return false }
+        CabalmailLog.warn("Session", "sign-in refused: a session is already signed in; sign out first")
+        return true
+    }
+
     /// Shared tail of `signIn` and `submitMfaCode` once tokens exist.
     func completeInteractiveSignIn(
         client newClient: CabalmailClient, controlDomain: String, username: String
     ) async {
-        // Defense in depth for the force-kill path: a clean sign-out wipes
-        // the shared on-disk cache, but a hard quit doesn't. If a different
-        // account just signed in on this device, clear the prior user's
-        // cached mail before the new session populates it.
-        if !lastUsername.isEmpty, lastUsername != username {
+        // Defense in depth for the paths that end a session without its
+        // wipe: a clean sign-out wipes the shared on-disk cache, but a hard
+        // quit doesn't, and neither does a launch whose refresh is refused.
+        // If a different account just signed in on this device, clear the
+        // prior user's cached mail before the new session populates it.
+        // Another server is another account, whatever the username (#2560).
+        let previous = AccountIdentity(controlDomain: self.controlDomain, username: lastUsername)
+        if let previous, previous != AccountIdentity(controlDomain: controlDomain, username: username) {
             await newClient.clearLocalData()
             // A Spotlight result parked while signed out was indexed for the
             // last account (#1825).

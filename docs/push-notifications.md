@@ -81,6 +81,20 @@ flowchart LR
    instances on one Mac share a token, so instances signed in to different
    accounts take the registration from each other on every launch.
 
+   One signed-in account per install is the policy the cleanup rests on
+   (`docs/apple.md`, "One account per install"), and a push still names
+   no account, by decision (2026-11-22): the cases above are accepted
+   rather than closed with an account stamp in the payload. One more
+   follows from them. A push that reaches a device signed in to another
+   account is enriched there with that account's own credentials:
+   `/push_envelope` searches the signed-in account's folder for the
+   push's Message-ID and, on a miss, falls back to the push's UID. So
+   the banner for another account's mail can show the sender, subject
+   and preview of whichever of the signed-in account's messages has that
+   UID, and its Mark as Read and Archive act on that message (read from
+   the code, not reproduced). It is mail
+   the device's own user can already read, never the other account's.
+
 What APNs sees per push: the device token it already knows, the app's bundle
 id, an AWS egress IP, and a payload containing only the alert text `"New
 mail"`, a folder name, a UID integer, and a Message-ID string.
