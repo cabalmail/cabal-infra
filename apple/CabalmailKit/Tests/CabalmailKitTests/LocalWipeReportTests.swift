@@ -84,6 +84,88 @@ final class LocalWipeReportTests: XCTestCase {
         XCTAssertEqual(new.map(\.message), [])
     }
 
+    // MARK: - The feed store
+
+    // Whole-client tests on a real feed store, on macOS only for the reason
+    // `FeedStoreSignOutTests` gives: the wipe empties the Spotlight index,
+    // which stalls on a simulator with no host app. The clients above come
+    // from the plain initializer, which has no feed store, so their wipes
+    // never ran the feeds step at all; that is how the report below went
+    // unseen until a sign-out on a device (#2568).
+    #if os(macOS)
+    /// An ordinary sign-out. The ending session's store is retired, which
+    /// clears it and closes it, and the wipe then cleared it a second time:
+    /// that attempt failed on the closed database and said the feeds might
+    /// still be on the device, on every sign-out.
+    func testAHealthySignOutWipeWithAFeedStoreReportsNothing() async throws {
+        let client = try makeFactoryClient()
+        let store = try XCTUnwrap(client.rssStore)
+        try await store.upsertSubscription(RssSubscription(subscriptionId: "s1", feedId: "f1"))
+        let before = Set(wipeLines().map(\.id))
+
+        await client.clearLocalDataEndingSession()
+
+        let new = wipeLines().filter { !before.contains($0.id) }
+        XCTAssertEqual(new.map(\.message), [])
+        // The feeds did go, and the store is retired.
+        let next = try RssStore(directory: root.appendingPathComponent("rss"))
+        let left = try await next.subscriptions()
+        XCTAssertEqual(left, [])
+        do {
+            try await store.upsertSubscription(RssSubscription(subscriptionId: "s2", feedId: "f2"))
+            XCTFail("the ending session's store took a write after the wipe")
+        } catch {}
+        await client.shutdown()
+    }
+
+    /// The control: a client that carries on clears its feeds in the wipe
+    /// itself, and a healthy one reports nothing either.
+    func testAHealthyWipeThatKeepsTheSessionClearsTheFeedsAndReportsNothing() async throws {
+        let client = try makeFactoryClient()
+        let store = try XCTUnwrap(client.rssStore)
+        try await store.upsertSubscription(RssSubscription(subscriptionId: "s1", feedId: "f1"))
+        let before = Set(wipeLines().map(\.id))
+
+        await client.clearLocalData()
+
+        let new = wipeLines().filter { !before.contains($0.id) }
+        XCTAssertEqual(new.map(\.message), [])
+        let left = try await store.subscriptions()
+        XCTAssertEqual(left, [])
+        await client.shutdown()
+    }
+
+    #if DEBUG
+    /// A retire that really fails is still reported, and once: the failed
+    /// clear inside it is the feeds step, not a first attempt at it.
+    func testASignOutWipeWhoseFeedStoreCannotBeClearedSaysSoOnce() async throws {
+        let client = try makeFactoryClient()
+        let store = try XCTUnwrap(client.rssStore)
+        try await store.upsertSubscription(RssSubscription(subscriptionId: "s1", feedId: "f1"))
+        await store.failNextWipeWriteForTests()
+        let before = Set(wipeLines().map(\.id))
+
+        await client.clearLocalDataEndingSession()
+
+        let new = wipeLines().filter { !before.contains($0.id) }
+        XCTAssertEqual(new.count, 1, "\(new.map(\.message))")
+        XCTAssertEqual(new.first?.level, .error)
+        XCTAssertTrue(new.first?.message.hasPrefix("feed store (retiring) not cleared") ?? false, "\(new)")
+        await client.shutdown()
+    }
+    #endif
+
+    /// A client as the app builds one, feed store included.
+    private func makeFactoryClient() throws -> CabalmailClient {
+        try CabalmailClient.make(
+            configuration: TestFixtures.makeConfiguration(),
+            secureStore: InMemorySecureStore(),
+            httpTransport: ScriptedHTTPTransport { _ in throw CabalmailError.network("offline") },
+            cacheDirectory: root
+        )
+    }
+    #endif
+
     // MARK: - The caches
 
     func testClearingAnEnvelopeCacheThatCannotBeRemovedThrowsAndLeavesItUsable() async throws {
@@ -201,3 +283,13 @@ private final class RefusingFileManager: FileManager {
         throw Refusal(description: "removal refused (\(token))")
     }
 }
+
+#if DEBUG
+private extension RssStore {
+    /// Arms this store's connection to fail its next write to a table the
+    /// clear empties, so the clear, and the retire around it, throws.
+    func failNextWipeWriteForTests() {
+        database.faults.arm(table: "folders")
+    }
+}
+#endif
