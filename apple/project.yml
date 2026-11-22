@@ -823,6 +823,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.cabalmail.CabalmailMacTests
         GENERATE_INFOPLIST_FILE: YES
+        # XCTest makes one of these when it loads the bundle. It keeps the
+        # host app's main run loop from idling through the 0.1 s slices
+        # XCTest waits on async fixtures in: see the class.
+        INFOPLIST_KEY_NSPrincipalClass: TestRunLoopKeepAwake
         # This bundle compiles with zero warnings and keeps it that way
         # (#1842): a concurrency warning here is a real isolation question
         # about a test, and 248 of them accumulated unnoticed because
