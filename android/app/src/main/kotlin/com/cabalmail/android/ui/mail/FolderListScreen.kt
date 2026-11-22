@@ -48,6 +48,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.flagged.FlaggedEntryRow
 import com.cabalmail.android.ui.theme.LocalLogoTint
 import com.cabalmail.kit.models.FolderStatus
 import com.cabalmail.kit.settings.FolderCountDisplay
@@ -70,6 +71,8 @@ fun FolderListScreen(
     onFilter: (FolderFilterPill) -> Unit = {},
     /** Marks every message in the folder read, after the row's confirmation. */
     onMarkAllRead: (String) -> Unit = {},
+    /** Opens the Flagged view from the row above the folders; null draws no row. */
+    onOpenFlagged: (() -> Unit)? = null,
 ) {
     ForegroundPolling(onPoll)
 
@@ -107,6 +110,7 @@ fun FolderListScreen(
                     onOpenFolder = onOpenFolder,
                     onEmptyTrash = onEmptyTrash,
                     onMarkAllRead = onMarkAllRead,
+                    onOpenFlagged = onOpenFlagged,
                 )
             }
         }
@@ -137,6 +141,8 @@ fun FolderPane(
     scroll: FolderPaneScroll = FolderPaneScroll(),
     onScrollChange: (FolderPaneScroll) -> Unit = {},
     onMarkAllRead: (String) -> Unit = {},
+    /** Opens the Flagged view from the row above the folders; null draws no row. */
+    onOpenFlagged: (() -> Unit)? = null,
 ) {
     ForegroundPolling(onPoll)
     val listState = rememberLazyListState(scroll.index, scroll.offset)
@@ -160,6 +166,7 @@ fun FolderPane(
             onMarkAllRead = onMarkAllRead,
             selectedFolder = selectedFolder,
             listState = listState,
+            onOpenFlagged = onOpenFlagged,
         )
     }
 }
@@ -201,6 +208,9 @@ private fun FolderFilterPill.labelRes(): Int =
         FolderFilterPill.UNREAD -> R.string.filter_unread
     }
 
+/** The Flagged row's key in the folder list, whose other rows are keyed by folder path. */
+private const val FLAGGED_ROW_KEY = 0
+
 /** The folder rows shared by the full-screen list and the wide-window pane. */
 @Composable
 private fun FolderListContent(
@@ -213,6 +223,7 @@ private fun FolderListContent(
     modifier: Modifier = Modifier,
     selectedFolder: String? = null,
     listState: LazyListState = rememberLazyListState(),
+    onOpenFlagged: (() -> Unit)? = null,
 ) {
     var confirmingEmptyTrash by remember { mutableStateOf(false) }
     // The folder whose mark-all-read confirmation is up, if any.
@@ -237,6 +248,14 @@ private fun FolderListContent(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(16.dp),
                 )
+            }
+        }
+        if (onOpenFlagged != null) {
+            // Above the folders, as a mail app keeps its flagged mailbox.
+            // The key is not a string, so no folder's path can equal it.
+            item(key = FLAGGED_ROW_KEY) {
+                FlaggedEntryRow(onOpen = onOpenFlagged)
+                HorizontalDivider()
             }
         }
         items(rows, key = { it }) { folder ->

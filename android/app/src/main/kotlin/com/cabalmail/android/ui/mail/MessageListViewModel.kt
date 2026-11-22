@@ -13,7 +13,6 @@ import com.cabalmail.kit.models.SearchFilters
 import com.cabalmail.kit.settings.AppPreferences
 import com.cabalmail.kit.settings.DefaultSort
 import com.cabalmail.kit.settings.FlagCriterion
-import com.cabalmail.kit.settings.FlagPalette
 import com.cabalmail.kit.settings.MailFolderFilter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -157,13 +156,12 @@ data class MessageListUiState(
             when (flagPick) {
                 null ->
                     SearchFilters(unread = filter == MessageFilter.UNREAD, flagged = filter == MessageFilter.FLAGGED)
-                FlagCriterion.AnyFlag -> SearchFilters(anyFlag = true)
-                is FlagCriterion.Slot ->
-                    if (flagPick.slot == FlagPalette.SYSTEM_SLOT) {
-                        SearchFilters(flagged = true)
-                    } else {
-                        SearchFilters(keyword = flagPick.slot)
-                    }
+                // What each criterion asks of the server is the kit's to
+                // say, for this list and the Flagged view alike. A slot it
+                // will not vouch for is sent as it stands, for the server
+                // to refuse, as it always was.
+                FlagCriterion.AnyFlag -> flagPick.mailSearch() ?: SearchFilters(anyFlag = true)
+                is FlagCriterion.Slot -> flagPick.mailSearch() ?: SearchFilters(keyword = flagPick.slot)
             }
 }
 

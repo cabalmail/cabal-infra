@@ -524,7 +524,7 @@ private fun OlderFooter(
  * actions settle the row back.
  */
 @Composable
-private fun FeedSwipeRow(
+internal fun FeedSwipeRow(
     isRead: Boolean,
     flag: FlagToggle,
     isFlagSet: Boolean,
@@ -605,7 +605,7 @@ private fun FeedSwipeRow(
  * plain item: "Flag" / "Remove flag", or the flag's own name.
  */
 @Composable
-private fun FeedItemRowMenu(
+internal fun FeedItemRowMenu(
     item: RssItem,
     palette: List<FlagPaletteEntry>,
     expanded: Boolean,

@@ -62,6 +62,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.cabalmail.android.R
+import com.cabalmail.android.ui.flagged.FlaggedEntryRow
 import com.cabalmail.android.ui.mail.FolderSections
 import com.cabalmail.android.ui.mail.ForegroundPolling
 import com.cabalmail.android.ui.theme.ColorTokens
@@ -97,6 +98,8 @@ fun FeedListScreen(
     onUnreadOnly: (Boolean) -> Unit = {},
     /** What the row badges show, shared with the mail folder list. */
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
+    /** Opens the Flagged view from the row above All Feeds; null draws no row. */
+    onOpenFlagged: (() -> Unit)? = null,
 ) {
     ForegroundPolling(onPoll, FEED_POLL_MS)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -138,6 +141,7 @@ fun FeedListScreen(
                     onToggleCollapsed = onToggleCollapsed,
                     onOpenScope = onOpenScope,
                     management = management,
+                    onOpenFlagged = onOpenFlagged,
                 )
             }
         }
@@ -175,6 +179,8 @@ fun FeedPane(
     unreadOnly: Boolean = true,
     onUnreadOnly: (Boolean) -> Unit = {},
     countDisplay: FolderCountDisplay = FolderCountDisplay.UNREAD,
+    /** Opens the Flagged view from the row above All Feeds; null draws no row. */
+    onOpenFlagged: (() -> Unit)? = null,
 ) {
     ForegroundPolling(onPoll, FEED_POLL_MS)
     val listState = rememberLazyListState(scroll.index, scroll.offset)
@@ -209,6 +215,7 @@ fun FeedPane(
             selectedScope = selectedScope,
             management = management,
             listState = listState,
+            onOpenFlagged = onOpenFlagged,
         )
     }
 }
@@ -300,6 +307,9 @@ private fun FeedExportButton(management: FeedManagementViewModel) {
     }
 }
 
+/** The Flagged row's key in the feed tree, whose other rows are keyed by strings. */
+private const val FLAGGED_ROW_KEY = 0
+
 @Composable
 private fun FeedTreeContent(
     state: FeedsUiState,
@@ -312,6 +322,7 @@ private fun FeedTreeContent(
     selectedScope: RssItemScope? = null,
     management: FeedManagementViewModel? = null,
     listState: LazyListState = rememberLazyListState(),
+    onOpenFlagged: (() -> Unit)? = null,
 ) {
     val rows =
         FeedTree.rows(
@@ -335,6 +346,13 @@ private fun FeedTreeContent(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(16.dp),
                 )
+            }
+        }
+        if (onOpenFlagged != null) {
+            // Above All Feeds: the view holds mail too, so it is no feed scope.
+            item(key = FLAGGED_ROW_KEY) {
+                FlaggedEntryRow(onOpen = onOpenFlagged)
+                HorizontalDivider()
             }
         }
         item(key = "all") {

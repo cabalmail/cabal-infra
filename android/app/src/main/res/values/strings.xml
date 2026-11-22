@@ -178,6 +178,18 @@
     <string name="new_address_preview">%1$s@%2$s.%3$s</string>
 
     <!-- Shell -->
+    <string name="flagged_title">Flagged</string>
+    <string name="flagged_empty_any">Nothing is flagged</string>
+    <string name="flagged_empty_flag">Nothing is marked %1$s</string>
+    <string name="flagged_empty_body">Flagged messages and feed items are listed here together.</string>
+    <string name="flagged_loading">Loading flagged mail…</string>
+    <string name="flagged_mail_offline">Flagged mail needs a connection. Showing flagged feed items only.</string>
+    <string name="flagged_mail_stale">Flagged mail could not be refreshed. Showing it as it was last loaded.</string>
+    <string name="flagged_mail_more_failed">Older flagged items could not be loaded.</string>
+    <string name="flagged_mail_truncated">More than 5,000 messages are flagged. Some are not listed.</string>
+    <string name="flagged_scope">Mail from %1$s</string>
+    <string name="flagged_row_mail">Message</string>
+    <string name="flagged_row_feed">Feed item</string>
     <string name="nav_mail">Mail</string>
     <string name="nav_feeds">Feeds</string>
     <string name="nav_folders">Folders</string>
