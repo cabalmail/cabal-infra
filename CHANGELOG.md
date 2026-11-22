@@ -7,14 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.59.1] - 2026-11-22
 
-### Changed
-- **Release PRs are labelled `no-changelog` by `make promote`.**
-  `promote.sh` now adds the label to the `stage` -> `main` PR it opens (or
-  finds already open). The Apple and Android changelog gates passed a release
-  PR only when the collated `CHANGELOG.md` gained an `Apple:`/`Android:` line,
-  so a release whose only client changes each shipped under `no-changelog`
-  failed until someone added the label by hand. A failed label call is a
-  warning, not a failed release.
+### Fixed
+- **Release PRs skip the Apple and Android changelog gates.**
+  `check-client-changelog.sh` now passes a `stage` -> `main` PR by its branch
+  names, as `check-changelog-fragment.sh` already did: every change in a
+  release passed the gate on its own PR into `stage`. The gate used to look
+  for an `Apple:`/`Android:` line added to the collated `CHANGELOG.md`
+  instead. That failed a release whose client changes had each shipped under
+  the `no-changelog` label, until someone labelled the release PR by hand,
+  and it failed at random on larger releases, where `grep -q` closed the pipe
+  early and `pipefail` turned `git diff`'s SIGPIPE into a miss. A release PR
+  now needs no label and should not be given one: the gates re-run when a
+  label is added, and one added while they run cancels the in-flight run and
+  leaves a cancelled check on the commit.
 
 ## [1.59.0] - 2026-11-22
 
