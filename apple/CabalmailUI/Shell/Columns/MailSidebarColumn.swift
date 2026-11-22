@@ -24,6 +24,9 @@ struct MailSidebarColumn<Header: View>: View {
     /// The first folder load, which finishes the window's launch landing
     /// (`SceneNavigator.foldersLoaded`).
     let onFoldersLoaded: ([Folder]) -> Void
+    /// The window's smart view, where this sidebar offers the Flagged entry
+    /// (`SidebarSelectionList` draws it); nil draws none.
+    var smartView: Binding<SmartView?>?
     @ViewBuilder let header: () -> Header
 
     var body: some View {
@@ -44,6 +47,7 @@ struct MailSidebarColumn<Header: View>: View {
                 onFoldersLoaded: onFoldersLoaded
             )
         }
+        .environment(\.sidebarSmartView, smartView)
         // Sidebar branding (see `SidebarBranding.swift`): the wash paints this
         // column only — the entire folder screen on compact iPhone, where
         // this column IS the screen; the floating sidebar on iPad; the sidebar

@@ -13,7 +13,15 @@ import CabalmailKit
 /// `HostPlatform.sidebarSelectsFeeds` says the list selects feeds, with
 /// `sidebarFeedRow(_:)`. A row with neither is not selectable: a section's
 /// filter pills, a hint, a feed row drawn as a button.
+///
+/// The Flagged entry is this list's own first row, above the caller's,
+/// wherever a shell publishes the window's smart view (`\.sidebarSmartView`):
+/// the Mac's and the iPad split's one sidebar, the Mail tab's folder list
+/// and visionOS's Folders tab. It is read from the environment and drawn
+/// here because the caller, `FolderListView`, has no room for it: its body
+/// is at SwiftLint's cap.
 struct SidebarSelectionList<Rows: View>: View {
+    @Environment(\.sidebarSmartView) private var smartView
     @Binding private var folder: Folder?
     private let feedScope: Binding<RssItemScope?>?
     private let folders: [Folder]
@@ -36,14 +44,27 @@ struct SidebarSelectionList<Rows: View>: View {
     }
 
     var body: some View {
-        List(selection: selection) { rows }
+        List(selection: selection) {
+            if let smartView {
+                FlaggedSidebarRow(isSelected: smartView.wrappedValue == .flagged)
+                    .tag(SidebarSelection.smartView(.flagged))
+            }
+            rows
+        }
     }
 
     private var selection: Binding<SidebarSelection?> {
         let folders = folders
         return SidebarListSelection(selectsFeeds: HostPlatform.current.sidebarSelectsFeeds)
-            .binding(folder: $folder, feedScope: feedScope, folders: { folders })
+            .binding(folder: $folder, feedScope: feedScope, smartView: smartView, folders: { folders })
     }
+}
+
+extension EnvironmentValues {
+    /// The smart view the window is on, as its sidebar's list selects it: a
+    /// shell sets this on the sidebar it wants the Flagged entry in, and a
+    /// pick of that row writes it. Nil, the default, draws no entry.
+    @Entry var sidebarSmartView: Binding<SmartView?>?
 }
 
 extension View {

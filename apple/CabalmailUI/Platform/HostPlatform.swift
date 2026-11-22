@@ -135,4 +135,12 @@ public enum HostPlatform {
     var focusesPickerFilterOnOpen: Bool {
         self == .macOS
     }
+
+    /// Whether a list's own bar offers a Refresh button: everywhere but the
+    /// Mac, where the list column's toolbar section holds Compose alone
+    /// beside the search field (`ToolbarSearchFieldWidth`) and refresh is a
+    /// menu command.
+    var listBarOffersRefresh: Bool {
+        self != .macOS
+    }
 }

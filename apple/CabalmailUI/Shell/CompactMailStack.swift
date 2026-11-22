@@ -30,8 +30,32 @@ struct CompactMailStack: View {
     private var selectedFolder: Folder? { navigator.folder(in: tree) }
     private var selectedEnvelope: Envelope? { navigator.envelope(in: tree) }
 
+    /// Whether the stack's content and reader columns draw the Flagged
+    /// view, which was opened from this tab's folder list. Still true once
+    /// the stack has backed out of it, so the view slides away whole.
+    private var flaggedHere: Bool { navigator.flaggedOccupies(tree, door: .mail) }
+    private var flaggedItem: FlaggedRow? { navigator.flaggedItem(in: tree, door: .mail) }
+    private var menuReport: FlaggedMenuReport { FlaggedMenuReport(showsFlagged: flaggedHere, item: flaggedItem) }
+
+    /// The folder list's selected folder: none while the window is on the
+    /// Flagged view, whose own row is the selection then.
     private var folderSelection: Binding<Folder?> {
-        Binding(get: { selectedFolder }, set: { navigator.selectFolder($0) })
+        Binding(
+            get: { navigator.flaggedIsOpen(in: tree, door: .mail) ? nil : selectedFolder },
+            set: { navigator.selectFolder($0) }
+        )
+    }
+
+    /// The Flagged row at the top of the folder list.
+    private var smartViewSelection: Binding<SmartView?> {
+        Binding(
+            get: { navigator.flaggedIsOpen(in: tree, door: .mail) ? .flagged : nil },
+            set: { if $0 == .flagged { navigator.showFlagged(from: tree, door: .mail) } }
+        )
+    }
+
+    private var flaggedSelection: Binding<FlaggedRow?> {
+        Binding(get: { flaggedItem }, set: { navigator.selectFlaggedItem($0, from: tree, door: .mail) })
     }
 
     /// The list's selection, through the navigator, which records it. The
@@ -48,10 +72,18 @@ struct CompactMailStack: View {
     /// push the reader for a tapped row on its own: a selected message shows
     /// `.detail`, a selected folder `.content`, and navigating back drops the
     /// selection (`SceneNavigator.setCompactColumn`).
+    ///
+    /// While the Flagged view is in the stack the column is that view's: its
+    /// list is `.content`, an open row `.detail`, and Back from the list
+    /// ends the visit (`SceneNavigator.setFlaggedColumn`).
     private var columnSelection: Binding<NavigationSplitViewColumn> {
         Binding(
-            get: { navigator.compactColumn(in: tree) },
-            set: { navigator.setCompactColumn($0, isSearching: false, from: tree) }
+            get: { navigator.flaggedColumn(in: tree, door: .mail) ?? navigator.compactColumn(in: tree) },
+            set: { column in
+                if !navigator.setFlaggedColumn(column, from: tree, door: .mail) {
+                    navigator.setCompactColumn(column, isSearching: false, from: tree)
+                }
+            }
         )
     }
 
@@ -64,10 +96,16 @@ struct CompactMailStack: View {
                 // swaps the fetched folder in for a stand-in
                 // (`SceneNavigator.foldersLoaded`).
                 onFoldersLoaded: { navigator.foldersLoaded($0) },
+                smartView: smartViewSelection,
                 header: { EmptyView() }
             )
         } content: {
             MailContentColumn(
+                flagged: flaggedHere ? FlaggedListSelection(
+                    visit: navigator.flaggedPlace.state.visit,
+                    selection: flaggedSelection,
+                    takeParked: { [navigator, tree] in navigator.takeParkedFlaggedItem(in: tree, door: .mail) }
+                ) : nil,
                 folder: selectedFolder,
                 selection: envelopeSelection,
                 onSelectionCountChanged: { listSelectionCount = $0 },
@@ -75,17 +113,22 @@ struct CompactMailStack: View {
                 header: { EmptyView() }
             )
         } detail: {
-            MailReaderColumn(
-                selectionCount: listSelectionCount,
-                envelope: selectedEnvelope,
-                sidebarFolder: selectedFolder
-            )
+            if flaggedHere {
+                FlaggedReaderColumn(item: flaggedItem)
+            } else {
+                MailReaderColumn(
+                    selectionCount: listSelectionCount,
+                    envelope: selectedEnvelope,
+                    sidebarFolder: selectedFolder
+                )
+            }
         }
         // Keep the Message menu's commands validated against what they'd
-        // actually act on (see `MessageMenuAvailability`).
+        // actually act on (see `MessageMenuAvailability`): on the Flagged
+        // view, the message open from it.
         .reportsMessageMenuAvailability(
-            selectedCount: listSelectionCount,
-            hasOpenMessage: selectedEnvelope != nil
+            selectedCount: menuReport.messageCount(else: listSelectionCount),
+            hasOpenMessage: menuReport.hasMessage(else: selectedEnvelope != nil)
         )
         // Switching folders drops any multi-selection with the old mailbox.
         .onChange(of: selectedFolder?.path) {

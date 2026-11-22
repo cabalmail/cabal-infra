@@ -381,7 +381,9 @@ extension MessageListView {
     }
 }
 
-private struct MessageRow: View {
+/// One message's row. Internal, not private: the Flagged view draws its
+/// messages with the same row (`FlaggedMailRow`).
+struct MessageRow: View {
     let envelope: Envelope
     let isChecked: Bool
     let bulkMode: Bool

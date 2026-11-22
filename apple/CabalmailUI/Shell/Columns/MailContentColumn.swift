@@ -9,9 +9,18 @@ struct FeedListSelection {
     let onSwitchScope: (RssItemScope) -> Void
 }
 
-/// The content column every mail shell shows: a header slot, then the feed
-/// item list, the window's search results, the folder's message list, or the
-/// "Select a folder" prompt.
+/// The Flagged list open in a shell's content column: which visit it is
+/// (each one builds its list afresh), the open row, and the row parked for
+/// the list by a layout swap or a restore.
+struct FlaggedListSelection {
+    let visit: Int
+    let selection: Binding<FlaggedRow?>
+    let takeParked: () -> FlaggedNavigationState.Parked?
+}
+
+/// The content column every mail shell shows: a header slot, then the
+/// Flagged list, the feed item list, the window's search results, the
+/// folder's message list, or the "Select a folder" prompt.
 ///
 /// What differs by shell comes in as values: the header is where the split
 /// hosts its search field (`GlobalSearchFieldPlacement`), and the feed list
@@ -20,6 +29,9 @@ struct FeedListSelection {
 /// is `ContentColumnPolicy`'s, beside the rule a folder pick has to satisfy
 /// against it (#1217).
 struct MailContentColumn<Header: View>: View {
+    /// The Flagged list, while the window is on that view: it stands over
+    /// the feed list and the folder, and under a search.
+    var flagged: FlaggedListSelection?
     /// The feed list, when a wide shell is in its feeds section.
     var feedList: FeedListSelection?
     /// The window's search model, for a shell that hosts the search field.
@@ -49,7 +61,10 @@ struct MailContentColumn<Header: View>: View {
 
     @ViewBuilder
     private var list: some View {
-        if let feedList, !isSearching {
+        if let flagged, !isSearching {
+            FlaggedListView(selection: flagged.selection, takeParked: flagged.takeParked)
+                .id("flagged#\(flagged.visit)")
+        } else if let feedList, !isSearching {
             FeedItemListView(
                 scope: feedList.scope,
                 selection: feedList.selection,

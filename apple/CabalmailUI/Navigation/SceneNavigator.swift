@@ -75,6 +75,10 @@ final class SceneNavigator {
     /// trees (`FeedNavigationState`).
     private(set) var feeds = FeedNavigationState()
 
+    /// The window's Flagged view, which stands over either of the two
+    /// (`FlaggedPlace`; the transitions are in `SceneNavigator+Flagged.swift`).
+    let flaggedPlace = FlaggedPlace()
+
     /// What this window's lists and reader take once they are ready.
     let restores = WindowRestores()
 
@@ -172,9 +176,7 @@ final class SceneNavigator {
         route = storedRoute ?? AppRoute(section: section)
         compactTab = CompactTab.initial(for: section)
         hasShownMail = section == .mail
-        // No sidebar offers a smart view yet, so a stored one (another
-        // build's) opens on the route's mail or feeds place.
-        route.smartView = nil
+        flaggedPlace.restore(from: route)
     }
 
     // MARK: Trees
@@ -192,6 +194,7 @@ final class SceneNavigator {
     ///   lands on INBOX as the wide split does.
     func mailTreeAppeared(_ tree: UUID, isWide: Bool, startsOnFolderList: Bool = false) async {
         let isRebuild = mail.appear(tree, startsOnFolderList: startsOnFolderList && !isWide)
+        let carriesFlagged = isRebuild && flaggedTreeChanged()
         layoutIsWide = isWide
         if isWide {
             hasShownMail = true
@@ -206,6 +209,7 @@ final class SceneNavigator {
         // A tree that a second swap replaced while this one waited on the
         // feed store takes nothing over.
         guard isCurrent(tree, isWide: isWide) else { return }
+        if isWide, carriesFlagged { flaggedFollowsSection() }
         mail.mount(tree)
     }
 
@@ -416,6 +420,7 @@ final class SceneNavigator {
         guard let coordinator = coordinator() else { return }
         deepLinks.discardParked()
         coordinator.endLaunchSnapshot()
+        flaggedGivesWay(to: .mail)
         restores.dropListAnchor()
         restores.schedule(cursor, priming: recorder.recording)
         if selectedFolder?.path != cursor.folder {
@@ -432,6 +437,7 @@ final class SceneNavigator {
     /// view end a search on it (#1217). On the wide split, a folder picked
     /// while it shows feeds closes the feed list, and that is recorded.
     func selectFolder(_ folder: Folder?) {
+        if folder != nil { flaggedGivesWay(to: .mail) }
         if folder != nil, layoutIsWide, splitShowsFeeds { record(feeds.selectScope(nil)) }
         setFolder(folder)
         if folder != nil { followSplit() }
@@ -466,7 +472,7 @@ final class SceneNavigator {
     /// message — so a swap to the compact layout opens on that section. A
     /// rebuilt tree restoring what the window had is not an action, so a
     /// utility tab survives a round trip with nothing picked.
-    private func followSplit() {
+    func followSplit() {
         if layoutIsWide { compactTab = CompactTab.initial(for: route.section) }
     }
 }
@@ -593,6 +599,7 @@ extension SceneNavigator {
         let wasShowing = splitShowsFeeds
         guard scope != nil || wasShowing else { return }
         if scope != nil {
+            flaggedGivesWay(to: .feeds)
             enterFeeds()
             followSplit()
         }
@@ -601,6 +608,7 @@ extension SceneNavigator {
 
     /// A scope picked in the Feeds tab's sidebar or its list's switcher.
     func selectFeedScope(_ scope: RssItemScope?) {
+        if scope != nil { flaggedGivesWay(to: .feeds) }
         record(feeds.selectScope(scope))
     }
 
@@ -623,6 +631,7 @@ extension SceneNavigator {
     /// selects once it has appeared and loaded, or at once if it is on screen.
     func navigateFeeds(to target: NavStateCoordinator.FeedLaunchTarget) {
         let scope = restores.park(target)
+        flaggedGivesWay(to: .feeds)
         feeds.markLanded()
         feedNavigations += 1
         if layoutIsWide {
@@ -654,7 +663,9 @@ extension SceneNavigator {
     /// it has appeared and loaded (#1664), unless the list already waits on
     /// one (a banner's); a wide split showing mail keeps it for the Feeds tab.
     private func feedTreeArrived(_ tree: UUID, showsReader: Bool) {
-        if feeds.appear(tree), showsReader, let scope = feeds.scope,
+        let isRebuild = feeds.appear(tree)
+        if isRebuild { _ = flaggedTreeChanged() }
+        if isRebuild, showsReader, let scope = feeds.scope,
            let item = feeds.takeItemForHandOff(), restores.pendingFeedRestore?.scope != scope {
             restores.parkFeedItem(item, in: scope)
         }
@@ -730,6 +741,16 @@ extension SceneNavigator {
         coordinator.endLaunchSnapshot()
         didLand = true
         navigateFeeds(to: target)
+    }
+}
+
+// The Flagged view's place in the route (`SceneNavigator+Flagged.swift`), in
+// the same file so it can write the route.
+extension SceneNavigator {
+    func setSmartRoute(_ view: SmartView?, door: ResumeSession.Section?, item: ItemRef?) {
+        route.smartView = view
+        route.smartDoor = view == nil ? nil : door
+        route.smartItem = view == nil ? nil : item.map(AppRoute.SmartItem.init)
     }
 }
 
