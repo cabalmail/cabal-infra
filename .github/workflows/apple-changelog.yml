@@ -43,6 +43,9 @@ jobs:
       env:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # Release PRs (stage -> main) are skipped by the script; see its header.
+        BASE_REF: ${{ github.event.pull_request.base.ref }}
+        HEAD_REF: ${{ github.event.pull_request.head.ref }}
         OPT_OUT: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
       # Scoped to shipped client code - the app, watch, and extension targets
       # plus the Kit's sources; not Tests/, Tools/, scripts/, project.yml, or

@@ -81,6 +81,11 @@ entry out of the TestFlight notes. The label does not waive the fragment
 itself - write it unprefixed to satisfy the repo-wide `changelog-fragment`
 check.
 
+Release PRs (`stage` -> `main`) are exempt from this check, as from
+`changelog-fragment`: each change in the release passed it on its own PR. Do
+not label a release PR `no-changelog`; see
+[`docs/releasing.md`](../docs/releasing.md).
+
 ## Android client entries
 
 Likewise, any fragment describing a change to the Android client (the
@@ -108,7 +113,7 @@ headlines, not bodies.
 A PR that touches the Android client sources fails the
 `.github/workflows/android-changelog.yml` check unless it adds such a
 fragment; as for Apple, the `no-changelog` label waives only the `Android:`
-prefix, and the unprefixed fragment is still required.
+prefix, the unprefixed fragment is still required, and release PRs are exempt.
 
 ## Releasing
 

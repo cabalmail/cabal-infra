@@ -20,6 +20,15 @@
 # The label waives only the prefix: the PR still needs an unprefixed fragment,
 # enforced by check-changelog-fragment.sh (the repo-wide changelog gate).
 #
+# Release PRs (stage -> main) are exempt, as they are from
+# check-changelog-fragment.sh: every change in a release already passed this
+# gate on its own PR into stage, promote has collated the fragments away, and
+# the base...head diff is the whole release. Identified by base ref `main` +
+# head ref `stage`. The exemption is structural rather than the `no-changelog`
+# label on purpose: a label is added after the PR opens, the `labeled` event
+# starts a second run that cancels the first, and the cancelled check run
+# stays on the head commit, where the release dashboard counts it as failing.
+#
 # Runs from the apple-changelog.yml / android-changelog.yml workflows on every
 # pull_request event (including labeled/unlabeled). No path filter: this script
 # self-gates by diffing the PR range and exits 0 early when none of the client's
@@ -35,6 +44,8 @@
 #   HEAD_SHA  PR head commit     (github.event.pull_request.head.sha)
 # Optional env:
 #   OPT_OUT   "true" when the PR carries the no-changelog label; skips the check
+#   BASE_REF  PR base branch name } together they identify a release PR
+#   HEAD_REF  PR head branch name } (main <- stage), which is skipped
 
 set -euo pipefail
 
@@ -44,6 +55,11 @@ SRC_RE="${2:?usage: check-client-changelog.sh <Prefix> <source-regex>}"
 : "${HEAD_SHA:?missing HEAD_SHA}"
 
 tag="$(printf '%s' "$PREFIX" | tr '[:upper:]' '[:lower:]')-changelog"
+
+if [ "${BASE_REF:-}" = "main" ] && [ "${HEAD_REF:-}" = "stage" ]; then
+  echo "[$tag] Release PR (stage -> main): every change in it passed this gate on its way into stage. Skipping."
+  exit 0
+fi
 
 # Three-dot: changes on the PR head since it diverged from base, matching what
 # dorny/paths-filter reports (ignores unrelated commits landed on base since).
@@ -79,17 +95,6 @@ while IFS= read -r file; do
     exit 0
   fi
 done <<< "$changed"
-
-# Release PRs (stage -> main) carry no fragments: collate-changelog.sh has
-# already folded them into CHANGELOG.md and deleted the fragment files, so the
-# base...head diff shows the collated CHANGELOG.md gaining the entries and no
-# surviving changelog.d/*.md. Accept a prefixed line added to CHANGELOG.md as
-# equivalent to a fragment - the notes scripts read the collated CHANGELOG.md.
-if git diff "${BASE_SHA}...${HEAD_SHA}" -- CHANGELOG.md \
-     | grep -qE "^\+- ${PREFIX}:"; then
-  echo "[$tag] Found $PREFIX entry added to CHANGELOG.md (release PR)."
-  exit 0
-fi
 
 echo "::error::$PREFIX client sources changed but no '$PREFIX:'-prefixed changelog fragment was added."
 cat >&2 <<MSG
