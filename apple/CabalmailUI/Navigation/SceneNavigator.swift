@@ -102,8 +102,9 @@ final class SceneNavigator {
     private(set) var shellHandOff = ShellHandOff()
 
     /// The sidebar's fetched folders, so a navigate request can select the
-    /// real `Folder` the sidebar tags its row with rather than a stand-in
-    /// (#1535).
+    /// fetched `Folder`, with its attributes and subscription, rather than
+    /// a stand-in for its path (#1535). The sidebar finds the row by path
+    /// either way (`SidebarSelection`).
     private(set) var loadedFolders: [Folder] = []
 
     /// Whether this window has landed: on the session's folder, provisionally,
@@ -171,6 +172,9 @@ final class SceneNavigator {
         route = storedRoute ?? AppRoute(section: section)
         compactTab = CompactTab.initial(for: section)
         hasShownMail = section == .mail
+        // No sidebar offers a smart view yet, so a stored one (another
+        // build's) opens on the route's mail or feeds place.
+        route.smartView = nil
     }
 
     // MARK: Trees

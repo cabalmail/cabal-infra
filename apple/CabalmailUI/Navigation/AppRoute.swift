@@ -13,10 +13,20 @@ import CabalmailKit
 /// What is deliberately not here: the compact tab and column (layout, kept on
 /// the navigator beside the route), search (its results are not meant to
 /// outlive the process), and the list selection.
+///
+/// **Stored routes.** A route a build stored is read by the builds before and
+/// after it. A key added here is optional and read leniently (`init(from:)`),
+/// and a build that does not know a key ignores it, so a window restored by
+/// another build opens on the part of the route that build understands.
 struct AppRoute: Codable, Hashable, Sendable {
     var section: ResumeSession.Section
     var mail = Mail()
     var feeds = Feeds()
+    /// The view of both media the window is on, in place of its mail folder
+    /// or feed list, which keep their places beneath it. Nil in every route
+    /// stored before this was kept, and in every route yet: no sidebar
+    /// offers one (`SmartView`).
+    var smartView: SmartView?
 
     struct Mail: Codable, Hashable, Sendable {
         var folderPath: String?
@@ -39,6 +49,43 @@ struct AppRoute: Codable, Hashable, Sendable {
             feedID = item.feedId
             sortKey = item.sortKey
         }
+    }
+}
+
+extension AppRoute {
+    /// The item open in the window's section, by the identity the two media
+    /// share.
+    var openItem: ItemRef? {
+        switch section {
+        case .mail: return mail.message.map(ItemRef.mail)
+        case .feeds: return feeds.item.map { .feed(feedID: $0.feedID, sortKey: $0.sortKey) }
+        }
+    }
+
+    private enum StoredKeys: String, CodingKey {
+        case section, mail, feeds, smartView
+    }
+
+    /// Reads a stored route. The section and the two halves are required,
+    /// as they always were. The smart view is not: a route stored before it
+    /// was kept has none, and one that names a view this build does not know
+    /// (a later build's) reads as none rather than failing the whole route,
+    /// which would cost the window its folder and its open message too.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: StoredKeys.self)
+        section = try container.decode(ResumeSession.Section.self, forKey: .section)
+        mail = try container.decode(Mail.self, forKey: .mail)
+        feeds = try container.decode(Feeds.self, forKey: .feeds)
+        let name = try? container.decodeIfPresent(String.self, forKey: .smartView)
+        smartView = name.flatMap(SmartView.init(rawValue:))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: StoredKeys.self)
+        try container.encode(section, forKey: .section)
+        try container.encode(mail, forKey: .mail)
+        try container.encode(feeds, forKey: .feeds)
+        try container.encodeIfPresent(smartView, forKey: .smartView)
     }
 }
 

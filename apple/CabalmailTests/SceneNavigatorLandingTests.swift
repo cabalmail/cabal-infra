@@ -125,7 +125,7 @@ final class SceneNavigatorLandingTests: XCTestCase {
     // MARK: The folder list's first load
 
     /// #1535: the provisional stand-in is swapped for the fetched folder —
-    /// the value the sidebar tags its row with — without clearing the open
+    /// the value the sidebar draws its row from — without clearing the open
     /// message or recording the folder again.
     func testTheStandInSwapKeepsTheMessageAndDoesNotReRecord() async throws {
         let coordinator = try makeCoordinator()

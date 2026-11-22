@@ -30,8 +30,8 @@ struct FeedSidebarRowLabel: View {
             // drawn when the mode hides the count.
             CountBadge(display: preferences.folderCountDisplay, unread: row.unread, total: row.total)
         }
-        // The whole row is the hit target of the wide layout's row button,
-        // spacer included.
+        // The whole row is the hit target of the row button the iPad's split
+        // draws, spacer included.
         .contentShape(Rectangle())
     }
 
