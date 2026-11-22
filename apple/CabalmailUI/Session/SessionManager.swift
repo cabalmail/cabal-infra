@@ -750,9 +750,12 @@ extension SessionManager {
         // Another server is another account, whatever the username (#2560).
         let previous = AccountIdentity(controlDomain: self.controlDomain, username: lastUsername)
         if let previous, previous != AccountIdentity(controlDomain: controlDomain, username: username) {
+            AccountLeftovers.clearDebugLog()
             await newClient.clearLocalData()
             // A Spotlight result parked while signed out was indexed for the
-            // last account (#1825).
+            // last account (#1825), and the per-install leftovers name its
+            // folders and feeds.
+            AccountLeftovers.resetDefaults(in: sessionEnvironment.lastSessionDefaults)
             owner.accountChanged()
         }
         self.controlDomain = controlDomain
