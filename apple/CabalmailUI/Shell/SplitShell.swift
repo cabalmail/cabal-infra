@@ -42,8 +42,6 @@ struct SplitShell: View {
     /// split view's own sidebar reveal — see `folderPanelOverlay`. Starts
     /// hidden every launch, like the collapsed sidebar it replaced.
     @State private var folderPanelPresented = false
-    /// Live width of the content (message list) column.
-    @State private var contentColumnWidth: CGFloat = 0
     /// Whether the split view was first laid out too narrow to tile, and so
     /// has to be built again at the window's real width (#1988).
     @State private var retile = SplitRetilePolicy()
@@ -271,11 +269,6 @@ struct SplitShell: View {
             // crease's keep-out (`CreaseClearance`); the bars' and rows'
             // backgrounds still reach the column's edge. 0 with no fold.
             .safeAreaPadding(.trailing, listCreaseClearance)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.width
-            } action: { newWidth in
-                recordContentColumnWidth(newWidth)
-            }
             // The system sidebar toggle is removed on the sidebar column
             // above, which is where iPadOS 26 hosts it. iOS 27 on a
             // phone-idiom host (iPhone Duo's inner display) hosts it on this
@@ -349,15 +342,6 @@ struct SplitShell: View {
         } else {
             Color.clear
         }
-    }
-
-    /// Records the measured content-column width, as the wide layouts have
-    /// since the search field first rode the column's bar (#1047). iPadOS
-    /// draws that field in the column's header instead, so nothing on this
-    /// shell reads the width today; the write moved here with the split
-    /// unchanged.
-    private func recordContentColumnWidth(_ width: CGFloat) {
-        contentColumnWidth = width
     }
 }
 

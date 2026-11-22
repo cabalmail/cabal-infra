@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.58.0] - 2026-11-22
+
+### Added
+- Android: **Rules for feed items.** Settings > Rules (it was "Mail
+  rules") has a second list, "Feed items", under the mail rules: a feed
+  rule flags a new feed item or marks it read when its feed is fetched,
+  before you open the feed. A rule has the feed it applies to (All feeds,
+  or one subscription), conditions on the item's title, author and
+  summary, and any of your flags and Mark as read. The Add button asks
+  which kind of rule to add, and the first-run screen has a "Flag
+  matching items" template. The two lists are saved together under one
+  version, so a save from another device is a conflict for either; an
+  edit to the mail rules alone leaves the feed rules untouched. A feed
+  rule that uses something this version does not know is listed
+  read-only and kept as it is. The kit gains `FeedRule`,
+  `FeedRulesValidator` and an optional feed list on the rules save call.
+
+### Changed
+- **A window's place in mail is a value type of its own.** The sidebar's
+  folder, the open message, the collapsed split's column and the tree
+  that owns them sat in `SceneNavigator`'s class body, which had reached
+  SwiftLint's 250-line cap, so the next member added to it failed CI.
+  They move into `MailNavigationState`, built like
+  `FeedNavigationState`: each transition changes the place and returns
+  what follows from it, and the navigator applies that to the route, the
+  resume session, the folder list's hold and the tab. The navigator's
+  body drops from 250 to 187 counted lines. Every fold, narrow, widen
+  and launch behaves as before, and every navigator test passes
+  unchanged. `MailNavigationStateTests` covers each transition and the
+  tree gate; `SceneNavigatorMailPlaceTests` holds that a write which
+  changes nothing redraws nothing.
+- **The iPad split no longer measures a width nothing reads.**
+  `SplitShell` kept a `contentColumnWidth` state, written from a geometry
+  reader on the list column and read by nothing since iPadOS began
+  drawing the search field in the column's header. The state, the reader
+  and `recordContentColumnWidth` are gone. The Mac window's own width
+  measurement, which its search field does read, is untouched, and
+  nothing visible changes. One source scan
+  (`ColumnToolbarOccupantsSourceScanTests`) ended its slice on the
+  deleted function's comment; its end marker is now the next heading in
+  the file, with every assertion unchanged.
+
 ## [1.57.0] - 2026-11-21
 
 ### Added

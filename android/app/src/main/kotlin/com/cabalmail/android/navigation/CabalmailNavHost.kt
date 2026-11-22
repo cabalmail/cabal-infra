@@ -96,7 +96,9 @@ import com.cabalmail.android.ui.mail.SearchViewModel
 import com.cabalmail.android.ui.mail.disposeAdvanceTarget
 import com.cabalmail.android.ui.mail.fitsThreePanes
 import com.cabalmail.android.ui.mail.folderListFilter
+import com.cabalmail.android.ui.rules.FeedRuleEditorScreen
 import com.cabalmail.android.ui.rules.RuleEditorScreen
+import com.cabalmail.android.ui.rules.RuleRowActions
 import com.cabalmail.android.ui.rules.RulesScreen
 import com.cabalmail.android.ui.rules.RulesViewModel
 import com.cabalmail.android.ui.settings.RecoveryEmailScreen
@@ -694,6 +696,9 @@ private fun MailNavGraph(
                     val rulesViewModel: RulesViewModel =
                         viewModel(factory = RulesViewModel.factory(container))
                     val rulesState by rulesViewModel.state.collectAsState()
+                    // Each visit to the pane, not only the view model's
+                    // first load: the rows name each feed rule's feed.
+                    LaunchedEffect(rulesViewModel) { rulesViewModel.refreshSubscriptions() }
                     RulesScreen(
                         state = rulesState,
                         onAdd = { template ->
@@ -701,11 +706,31 @@ private fun MailNavGraph(
                                 if (template == null) rulesViewModel.add() else rulesViewModel.add(template)
                             added?.let { navController.navigate("rules/$it") }
                         },
-                        onOpenRule = { navController.navigate("rules/$it") },
-                        onSetEnabled = rulesViewModel::setEnabled,
-                        onMove = rulesViewModel::move,
-                        onDuplicate = { rulesViewModel.duplicate(it) },
-                        onDelete = rulesViewModel::delete,
+                        mailRows =
+                            RuleRowActions(
+                                onOpen = { navController.navigate("rules/$it") },
+                                onSetEnabled = rulesViewModel::setEnabled,
+                                onMove = rulesViewModel::move,
+                                onDuplicate = { rulesViewModel.duplicate(it) },
+                                onDelete = rulesViewModel::delete,
+                            ),
+                        onAddFeed = { template ->
+                            val added =
+                                if (template == null) {
+                                    rulesViewModel.addFeedRule()
+                                } else {
+                                    rulesViewModel.addFeedRule(template)
+                                }
+                            added?.let { navController.navigate("feedRules/$it") }
+                        },
+                        feedRows =
+                            RuleRowActions(
+                                onOpen = { navController.navigate("feedRules/$it") },
+                                onSetEnabled = rulesViewModel::setFeedRuleEnabled,
+                                onMove = rulesViewModel::moveFeedRule,
+                                onDuplicate = { rulesViewModel.duplicateFeedRule(it) },
+                                onDelete = rulesViewModel::deleteFeedRule,
+                            ),
                         onReload = rulesViewModel::load,
                         onRetrySave = rulesViewModel::retrySave,
                         onBack = onBack,
@@ -772,6 +797,27 @@ private fun MailNavGraph(
                 ruleId = entry.arguments?.getString("ruleId").orEmpty(),
                 onUpdate = viewModel::update,
                 onCreateArchiveFolder = viewModel::createArchiveFolder,
+                onReload = viewModel::load,
+                onBack = { navController.popBackStack() },
+                palette = preferences.flagPalette,
+            )
+        }
+
+        composable("feedRules/{ruleId}") { entry ->
+            // A feed rule's editor, on the same view model as the mail
+            // rule's above: the two lists are one save under one version.
+            val parentEntry = remember(entry) { navController.getBackStackEntry("settings") }
+            val viewModel: RulesViewModel =
+                viewModel(parentEntry, factory = RulesViewModel.factory(container))
+            val state by viewModel.state.collectAsState()
+            val preferences by container.preferences.preferences.collectAsState()
+            // The Feed picker offers the feeds as they are now, not as they
+            // were when Settings was first opened in this run of the app.
+            LaunchedEffect(viewModel) { viewModel.refreshSubscriptions() }
+            FeedRuleEditorScreen(
+                state = state,
+                ruleId = entry.arguments?.getString("ruleId").orEmpty(),
+                onUpdate = viewModel::updateFeedRule,
                 onReload = viewModel::load,
                 onBack = { navController.popBackStack() },
                 palette = preferences.flagPalette,
