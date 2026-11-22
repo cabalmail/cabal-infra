@@ -6,11 +6,15 @@ import CabalmailKit
 public enum DeepLink: Equatable, Sendable {
     /// A message (or folder) by cursor: a notification tap.
     case message(NavState)
-    /// A Spotlight result, whose Message-ID the receiving window looks up
-    /// in the envelope cache.
+    /// A Spotlight result for a message, whose Message-ID the receiving
+    /// window looks up in the envelope cache.
     case spotlight(SpotlightMessageRef)
     /// A folder to open: Siri's Open Folder.
     case folder(String)
+    /// A feed item, by the pair `ItemRef.feed` names it by: a Spotlight
+    /// result for an article. The receiving window looks the item up in the
+    /// feed store and opens it in its own feed's list.
+    case feedItem(feedID: String, sortKey: String)
 }
 
 /// Delivers each deep link to exactly one main window.
@@ -129,7 +133,7 @@ extension NavStateCoordinator {
         switch link {
         case .message(let cursor): cursor
         case .folder(let path): NavState(folder: path, clientID: clientID)
-        case .spotlight: nil
+        case .spotlight, .feedItem: nil
         }
     }
 
@@ -145,6 +149,31 @@ extension NavStateCoordinator {
         case .spotlight(let ref):
             let messageID = await client.envelopeCache.snapshot(for: ref.folder)?.envelopes[ref.uid]?.messageId
             return NavState(folder: ref.folder, messageID: messageID, uid: ref.uid, clientID: clientID)
+        case .feedItem(let feedID, let sortKey):
+            return Self.feedCursor(feedID: feedID, sortKey: sortKey, clientID: clientID)
         }
+    }
+
+    private static func feedCursor(feedID: String, sortKey: String, clientID: String) -> NavState {
+        .feed(itemID: "\(feedID)#\(sortKey)", scope: nil, clientID: clientID)
+    }
+
+    /// What a feed item's link opens: the item, in its own feed's list.
+    ///
+    /// Nil when it cannot be opened. An account that no longer has the feed
+    /// (it was left on another device after its items were indexed here) has
+    /// the feed's results taken out of Spotlight, so they stop coming up.
+    /// An item of a feed the account does have, missing from the device (a
+    /// feed store that was set aside and started again), is fetched, as a
+    /// feed banner's is.
+    func feedItemTarget(feedID: String, sortKey: String) async -> FeedLaunchTarget? {
+        guard let store = client.rssStore, let subscriptions = try? await store.subscriptions() else { return nil }
+        guard let subscription = subscriptions.first(where: { $0.feedId == feedID }) else {
+            await client.spotlightIndexer?.feeds.removeFeeds([feedID])
+            return nil
+        }
+        let cursor = Self.feedCursor(feedID: feedID, sortKey: sortKey, clientID: clientID)
+        guard let item = await feedItem(for: cursor) else { return nil }
+        return FeedLaunchTarget(scope: .subscription(subscription.subscriptionId), item: item)
     }
 }

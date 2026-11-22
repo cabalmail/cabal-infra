@@ -34,7 +34,7 @@ public actor CabalmailClient {
     public nonisolated let rssStore: RssStore?
     public nonisolated let rssSync: RssSyncEngine?
 
-    /// On-device Core Spotlight mirror of subscribed folders. Wired by
+    /// On-device Core Spotlight mirror of subscribed folders and feeds. Wired by
     /// `make(...)` on platforms with CoreSpotlight; nil under the memberwise
     /// initializer (tests) and on watchOS, and every consumer no-ops through
     /// the optional.
@@ -55,7 +55,8 @@ public actor CabalmailClient {
     #endif
 
     /// The task feeding `spotlightIndexer` from the envelope cache's change
-    /// stream; `shutdown()` cancels it. Nil when there is no indexer.
+    /// stream and from the feed sync's writes; `shutdown()` cancels it. Nil
+    /// when there is no indexer.
     private nonisolated let spotlightBinding: Task<Void, Never>?
 
     /// Set by `shutdown()`.
@@ -115,6 +116,9 @@ public actor CabalmailClient {
     /// dropped still reaches the observer. Defaults to nil: a client nobody
     /// is observing behaves exactly as it did before.
     ///
+    /// `searchableIndex` stands in for the device's Spotlight index, which
+    /// is what a client gets without one; a test passes a recording fake.
+    ///
     /// As of issue #371 the IMAP and SMTP work happens behind the Lambda
     /// API rather than via direct mail-protocol sockets — `imapClient` is
     /// an `ApiBackedImapClient`, and `send(_:)` posts to `/send`.
@@ -124,7 +128,8 @@ public actor CabalmailClient {
         httpTransport: HTTPTransport = URLSessionHTTPTransport(),
         cacheDirectory: URL,
         bodyCacheCapacityBytes: UInt64 = 200 * 1024 * 1024,
-        sessionInvalidation: SessionInvalidationMonitor? = nil
+        sessionInvalidation: SessionInvalidationMonitor? = nil,
+        searchableIndex: SearchableIndexing? = nil
     ) throws -> CabalmailClient {
         let auth = CognitoAuthService(
             configuration: configuration,
@@ -151,9 +156,9 @@ public actor CabalmailClient {
         // A broken feed cache must not stop mail: recreate it, else no feeds.
         let rssStore = RssStore.openRecovering(directory: cacheDirectory.appendingPathComponent("rss"))
         #if canImport(CoreSpotlight)
-        let spotlight: SpotlightIndexer? = SpotlightIndexer(index: LiveSearchableIndex())
+        let spotlight: SpotlightIndexer? = SpotlightIndexer(index: searchableIndex ?? LiveSearchableIndex())
         #else
-        let spotlight: SpotlightIndexer? = nil
+        let spotlight: SpotlightIndexer? = searchableIndex.map { SpotlightIndexer(index: $0) }
         #endif
         return CabalmailClient(
             configuration: configuration,
@@ -206,15 +211,24 @@ public actor CabalmailClient {
         self.spotlightIndexer = spotlightIndexer
         self.rss = rss
         self.rssStore = rssStore
-        // Built from the same feed client, so the two can't disagree.
-        self.rssSync = rss.flatMap { rss in rssStore.map { RssSyncEngine(client: rss, store: $0) } }
+        // Built from the same feed client, so the two can't disagree. The
+        // engine tells the Spotlight indexer what it stores.
+        self.rssSync = rss.flatMap { rss in
+            rssStore.map { RssSyncEngine(client: rss, store: $0, itemIndex: spotlightIndexer?.feeds) }
+        }
         self.metricKitCollector = .shared
         if let spotlightIndexer {
-            // Feed the indexer from the envelope cache's change stream until
-            // `shutdown()` cancels this task. The task holds the cache, so
-            // the stream does not end on its own while the process runs.
+            // Feed the indexer from the envelope cache's change stream, and
+            // from what the feed sync tells it, until `shutdown()` cancels
+            // this task. The task holds the cache, so the stream does not
+            // end on its own while the process runs.
             let cache = envelopeCache
-            self.spotlightBinding = Task { await spotlightIndexer.bind(to: cache) }
+            self.spotlightBinding = Task {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { await spotlightIndexer.bind(to: cache) }
+                    group.addTask { await spotlightIndexer.feeds.bind() }
+                }
+            }
         } else {
             self.spotlightBinding = nil
         }

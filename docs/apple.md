@@ -2546,6 +2546,32 @@ front, else the window opened last. With no main window yet, as on a cold
 launch, the link parks for the first window to open; a sign-out or another
 account's sign-in drops it.
 
+**Spotlight.** Mail and feed items are both in the device's Spotlight index,
+and nothing in it leaves the device. `SpotlightIndexer` (CabalmailKit) keeps
+the messages of subscribed folders there, fed by the envelope cache's change
+stream and a session-start sweep of each folder's top page. Its `feeds`, a
+`SpotlightFeedIndexer`, keeps feed items there. `RssSyncEngine` tells it
+each page of items it stores and the feeds a catalog refresh removed
+(`RssItemIndexing`); those calls only queue, so a feed sync never waits on
+Spotlight. Each session start also gives every subscribed feed's newest 200
+items again, read as text from the feed store: Spotlight drops an entry
+about 30 days after it was last given, and that pass is what indexes the
+items already on a device when a build first has the path. A feed item's
+entry carries its title, author and text, is named by its feed and sort key
+(`SpotlightFeedItemRef`), and sits in a domain of its feed's own, so
+unsubscribing is one delete. Sign-out wipes the whole index, after stopping
+the ending session's indexer so a sync still in flight puts nothing back.
+
+A chosen result comes back as a user activity (on the Mac through the AppKit
+delegate only) and `DeepLink(spotlightActivity:)` reads it as a message's
+link or a feed item's (`DeepLink.feedItem`). The window that takes a feed
+item's link looks the item up in the feed store and goes to the item's own
+feed, whose list opens it; a cold launch from a result lands there instead
+of on the session's place. A result for a feed the account has since left
+opens nothing and takes that feed's entries out of the index.
+`CabalmailClient.make` takes the index to use (`searchableIndex`), which is
+how tests record what is indexed without writing to the device's index.
+
 ### Platform polish
 
 - **Reachability banner.** `SignedInRootView` overlays a capsule banner

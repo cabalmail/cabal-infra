@@ -2,11 +2,12 @@ import Foundation
 import CoreSpotlight
 import CabalmailKit
 
-// Routes a tapped Spotlight result to the message it names, in one window
-// (`DeepLinkRouter`). The searchable item's identifier encodes (folder, uid);
-// the window that takes the result recovers the durable Message-ID from the
-// envelope cache, so the list can still find a message another client has
-// since moved.
+// Routes a tapped Spotlight result to the message or the feed item it names,
+// in one window (`DeepLinkRouter`). A message's identifier encodes (folder,
+// uid); the window that takes the result recovers the durable Message-ID
+// from the envelope cache, so the list can still find a message another
+// client has since moved. A feed item's encodes (feed, sort key), and the
+// window looks the item up in the feed store.
 //
 // iOS and visionOS receive the result in a main window's
 // `.onContinueUserActivity`, which knows its window. macOS never delivers it
@@ -17,8 +18,8 @@ extension AppState {
     /// Entry point for `.onContinueUserActivity(CSSearchableItemActionType)`.
     /// - Parameter window: the main window that received the result.
     public func handleSpotlightActivity(_ activity: NSUserActivity, in window: UUID? = nil) {
-        guard let ref = SpotlightMessageRef(activity: activity) else { return }
-        routeSpotlightRef(ref, in: window)
+        guard let link = DeepLink(spotlightActivity: activity) else { return }
+        deepLinks.open(link, in: window)
     }
 
     /// Opens a Spotlight result in `window`, else the window last used.
@@ -30,11 +31,17 @@ extension AppState {
     }
 }
 
-extension SpotlightMessageRef {
-    /// The message a Spotlight result activity names; nil for an activity
-    /// that is not one of ours.
-    public init?(activity: NSUserActivity) {
+extension DeepLink {
+    /// The link a chosen Spotlight result opens: a message's or a feed
+    /// item's. Nil for an activity that is not one of ours.
+    init?(spotlightActivity activity: NSUserActivity) {
         guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String else { return nil }
-        self.init(string: identifier)
+        if let message = SpotlightMessageRef(string: identifier) {
+            self = .spotlight(message)
+        } else if let item = SpotlightFeedItemRef(string: identifier) {
+            self = .feedItem(feedID: item.feedID, sortKey: item.sortKey)
+        } else {
+            return nil
+        }
     }
 }

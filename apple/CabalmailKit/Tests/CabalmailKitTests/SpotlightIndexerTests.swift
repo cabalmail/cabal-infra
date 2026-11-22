@@ -1,36 +1,8 @@
 import XCTest
 import CoreSpotlight
 import UniformTypeIdentifiers
+import CabalmailKitTestSupport
 @testable import CabalmailKit
-
-/// Records every `SearchableIndexing` operation for assertions. An actor so
-/// the indexer's concurrent sweep tasks can't race the recording.
-actor FakeSearchableIndex: SearchableIndexing {
-    nonisolated var isAvailable: Bool { true }
-
-    private(set) var indexedBatches: [[SpotlightEntry]] = []
-    private(set) var deletedIdentifiers: [[String]] = []
-    private(set) var deletedDomains: [[String]] = []
-    private(set) var deleteAllCount = 0
-
-    var indexedEntries: [SpotlightEntry] { indexedBatches.flatMap { $0 } }
-
-    func index(_ entries: [SpotlightEntry]) async throws {
-        indexedBatches.append(entries)
-    }
-
-    func deleteIdentifiers(_ identifiers: [String]) async throws {
-        deletedIdentifiers.append(identifiers)
-    }
-
-    func deleteDomains(_ domains: [String]) async throws {
-        deletedDomains.append(domains)
-    }
-
-    func deleteAll() async throws {
-        deleteAllCount += 1
-    }
-}
 
 final class SpotlightIndexerTests: XCTestCase {
     private var fake: FakeSearchableIndex!

@@ -95,7 +95,8 @@ public struct SpotlightEntry: Sendable, Hashable {
     }
 
     /// First ~200 characters of the body with whitespace runs collapsed.
-    private static func snippet(from text: String?) -> String? {
+    /// A feed entry's second line is cut the same way (`SpotlightFeedEntry`).
+    static func snippet(from text: String?) -> String? {
         guard let text else { return nil }
         let collapsed = text
             .components(separatedBy: .whitespacesAndNewlines)
@@ -109,16 +110,18 @@ public struct SpotlightEntry: Sendable, Hashable {
 // MARK: - base64url
 
 // RFC 4648 §5 without padding: the encoded folder rides inside a
-// `|`-separated identifier, so `+`, `/`, and `=` are all swapped out.
+// `|`-separated identifier, so `+`, `/`, and `=` are all swapped out. A feed
+// item's identifier encodes its two parts the same way
+// (`SpotlightFeedItemRef`).
 extension Data {
-    fileprivate func base64URLEncoded() -> String {
+    func base64URLEncoded() -> String {
         base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
     }
 
-    fileprivate init?(base64URLEncoded string: String) {
+    init?(base64URLEncoded string: String) {
         var base64 = string
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")

@@ -14,6 +14,9 @@ public protocol SearchableIndexing: Sendable {
     /// the indexer turns itself into a no-op rather than erroring.
     var isAvailable: Bool { get }
     func index(_ entries: [SpotlightEntry]) async throws
+    /// Donates feed items, which have an entry type of their own: a
+    /// message's entry is built from an envelope and named by folder and UID.
+    func indexFeedItems(_ entries: [SpotlightFeedEntry]) async throws
     func deleteIdentifiers(_ identifiers: [String]) async throws
     func deleteDomains(_ domains: [String]) async throws
     func deleteAll() async throws
@@ -29,6 +32,10 @@ public struct LiveSearchableIndex: SearchableIndexing {
     public var isAvailable: Bool { CSSearchableIndex.isIndexingAvailable() }
 
     public func index(_ entries: [SpotlightEntry]) async throws {
+        try await CSSearchableIndex.default().indexSearchableItems(entries.map { $0.searchableItem() })
+    }
+
+    public func indexFeedItems(_ entries: [SpotlightFeedEntry]) async throws {
         try await CSSearchableIndex.default().indexSearchableItems(entries.map { $0.searchableItem() })
     }
 
@@ -78,6 +85,32 @@ extension SpotlightEntry {
         // making items invisible, and the default ~30-day expiry is
         // refreshed by the session sweep (top pages) and by every folder
         // open, so mail the user actually touches stays indexed.
+        return CSSearchableItem(
+            uniqueIdentifier: uniqueIdentifier,
+            domainIdentifier: domainIdentifier,
+            attributeSet: attributes
+        )
+    }
+}
+
+extension SpotlightFeedEntry {
+    /// Maps the value type onto CoreSpotlight's attribute set.
+    ///
+    /// `.text`, as a message's item is, and for the reason given there: it
+    /// is the content type under which a chosen result comes back to the
+    /// app that donated it. `displayName` is set for the same reason too.
+    /// The item's web address is deliberately not donated: a result opens
+    /// the item in the app, not the page in a browser.
+    func searchableItem() -> CSSearchableItem {
+        let attributes = CSSearchableItemAttributeSet(contentType: .text)
+        attributes.title = title
+        attributes.displayName = title
+        attributes.authorNames = authorNames
+        attributes.contentCreationDate = date
+        attributes.contentDescription = contentDescription
+        attributes.textContent = textContent
+        // The default expiry stands, as for a message: the session-start
+        // refresh donates each feed's newest items again.
         return CSSearchableItem(
             uniqueIdentifier: uniqueIdentifier,
             domainIdentifier: domainIdentifier,

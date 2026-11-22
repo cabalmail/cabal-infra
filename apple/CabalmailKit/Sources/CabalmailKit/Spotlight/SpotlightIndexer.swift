@@ -27,6 +27,9 @@ import Foundation
 /// Subscription is the user's attention signal (see `FolderListViewModel`):
 /// unsubscribed folders never reach Spotlight, and unsubscribing purges the
 /// folder's domain from the index.
+///
+/// Feed items are indexed too, by `feeds` (`SpotlightFeedIndexer`), which
+/// shares this index and is swept, stopped and wiped with it.
 public actor SpotlightIndexer {
     /// Bumped when already-donated items must be re-donated to be correct —
     /// e.g. the v2 content-type change (`.emailMessage` → `.text`), without
@@ -38,6 +41,13 @@ public actor SpotlightIndexer {
 
     private let index: SearchableIndexing
     private let defaults: UserDefaults
+
+    /// The feed items' half of the index.
+    public nonisolated let feeds: SpotlightFeedIndexer
+
+    /// Set by `stop()`: nothing more is indexed.
+    private var isStopped = false
+    private var canIndex: Bool { index.isAvailable && !isStopped }
 
     /// Nil until the first folder list arrives (`setSubscribedFolders`);
     /// upserts are dropped until then so an unsubscribed folder's envelopes
@@ -76,6 +86,7 @@ public actor SpotlightIndexer {
     public init(index: SearchableIndexing, defaults: UserDefaults = .standard) {
         self.index = index
         self.defaults = defaults
+        feeds = SpotlightFeedIndexer(index: index)
     }
 
     // MARK: - Envelope-cache feed
@@ -130,7 +141,7 @@ public actor SpotlightIndexer {
     // MARK: - Indexing
 
     public func indexEnvelopes(_ envelopes: [Envelope], folder: String) async {
-        guard index.isAvailable,
+        guard canIndex,
               subscribedFolders?.contains(folder) == true,
               !envelopes.isEmpty else { return }
         let entries = envelopes.map { envelope in
@@ -157,7 +168,7 @@ public actor SpotlightIndexer {
     /// by the detail view after a successful load; same subscription gate as
     /// envelope upserts.
     public func indexBody(text: String, envelope: Envelope, folder: String) async {
-        guard index.isAvailable,
+        guard canIndex,
               subscribedFolders?.contains(folder) == true else { return }
         let key = Self.bodyKey(folder: folder, uid: envelope.uid)
         if bodyTexts.count >= bodyTextCapacity, bodyTexts[key] == nil,
@@ -208,6 +219,15 @@ public actor SpotlightIndexer {
         }
     }
 
+    /// The session that owns this indexer is ending: nothing more is
+    /// indexed, by any path. Deletions still apply. Called before the
+    /// sign-out's wipe, so what a sync still in flight stores after it does
+    /// not come back into the index the next account will search.
+    public func stop() async {
+        isStopped = true
+        await feeds.stop()
+    }
+
     private func purgeDomains(_ domains: [String]) async {
         let prefixes = domains.map { $0 + "\n" }
         bodyTexts = bodyTexts.filter { key, _ in
@@ -232,9 +252,14 @@ public actor SpotlightIndexer {
     /// doubles as the offline list). Best-effort throughout — a folder that
     /// fails is skipped, and the incremental feed catches it up whenever the
     /// user opens it.
-    public func sweep(imap: ImapClient, envelopeCache: EnvelopeCache) async {
-        guard index.isAvailable else { return }
+    ///
+    /// The feeds go first, from `feedStore`: local reads, so they are done
+    /// before the folder list has come back, and after the schema wipe, which
+    /// would otherwise take them out again.
+    public func sweep(imap: ImapClient, envelopeCache: EnvelopeCache, feedStore: RssStore? = nil) async {
+        guard canIndex else { return }
         await migrateSchemaIfNeeded()
+        if let feedStore { await feeds.sweep(feedStore) }
         guard let folders = try? await imap.listFolders() else {
             CabalmailLog.warn("Spotlight", "sweep skipped: folder list unavailable")
             return
