@@ -1,0 +1,52 @@
+# zizmor configuration (https://docs.zizmor.sh/configuration/).
+#
+# zizmor statically audits the workflows, the composite actions and
+# dependabot.yml under .github/. lint.yml's `zizmor` job runs it on every
+# pull request that touches one of them, and fails on a finding of medium
+# severity or above:
+#
+#     zizmor --offline --min-severity=medium .github/
+#
+# The floor lives on that command line, not here, because zizmor has no
+# setting for one. This file is found by itself (zizmor looks for
+# .github/zizmor.yml from the repository root), so the same command gives
+# the same answer on a laptop.
+#
+# What the floor leaves in force, among others:
+#
+#   - dangerous-triggers (high): `pull_request_target` and `workflow_run`.
+#     No workflow here uses either. One that starts to fails the job; if it
+#     ever has to, the exception is an `ignore` entry below with its reason.
+#   - template-injection (medium and high): an expression that an outsider,
+#     a dispatch input or a computed matrix can steer, expanded into a
+#     `run:` script. Pass it through `env:` and read the shell variable.
+#   - excessive-permissions: `id-token: write`, `security-events: write`
+#     and other write scopes belong on the job that uses them, not on the
+#     workflow.
+#   - artipacked: every `actions/checkout` states `persist-credentials`.
+#     It is `false` unless a later step needs the token in .git/config
+#     (a `git push`, or dorny/paths-filter's `git fetch` on a push), and
+#     then `true` with the reason beside it.
+#
+# What it leaves out: template-injection's informational findings
+# (`vars.*`, `secrets.*`, step outputs and literal matrix values in `run:`
+# scripts, none of which an outsider can set) and self-repository's
+# low-severity style advice. Run without --min-severity to see them.
+#
+# Keep this list short and each entry explained. Prefer fixing the
+# workflow; prefer an `ignore` for one file or line over `disable`, which
+# hides a rule's findings from the ignored count as well. A finding in a
+# composite action cannot be ignored from here, only with a
+# `# zizmor: ignore[rule]` comment on its line
+# (see .github/actions/install-provisioning-profile/action.yml).
+rules:
+  dependabot-cooldown:
+    ignore:
+      # Version updates open as soon as an upstream release or a
+      # republished base-image digest appears, with no cooldown. That is
+      # deliberate for now: the PRs target stage and are reviewed before
+      # promotion, and a cooldown would also hold back base-image security
+      # rebuilds, which is the reason the docker updater exists. Adding
+      # `cooldown:` to .github/dependabot.yml is a policy change for the
+      # maintainer to make, not a lint fix; remove this entry with it.
+      - dependabot.yml

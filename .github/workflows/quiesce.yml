@@ -10,12 +10,11 @@
 
 name: Quiesce Infrastructure
 
+# Read-only by default; the apply job grants itself the OIDC token it
+# needs for AWS auth. See docs/aws.md / docs/github.md.
 permissions:
   contents: read
   actions: read
-  # OIDC token for AWS auth (configure-aws-credentials assumes
-  # vars.AWS_DEPLOY_ROLE_ARN). See docs/aws.md / docs/github.md.
-  id-token: write
 
 on:
   workflow_dispatch:
@@ -40,8 +39,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: require-non-prod-branch-matching-input
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
         run: |
-          REF="${{ github.ref_name }}"
+          REF="$GITHUB_REF_NAME"
           if [[ "$REF" == "main" ]]; then
             echo "::error::quiesce.yml refuses to run from main (prod)."
             exit 1
@@ -52,8 +53,8 @@ jobs:
             echo "::error::quiesce.yml must run from stage or development (got '$REF')."
             exit 1
           fi
-          if [[ "$REF" != "${{ inputs.environment }}" ]]; then
-            echo "::error::Branch '$REF' does not match selected environment '${{ inputs.environment }}'. Re-run from the matching branch."
+          if [[ "$REF" != "$TARGET_ENV" ]]; then
+            echo "::error::Branch '$REF' does not match selected environment '$TARGET_ENV'. Re-run from the matching branch."
             exit 1
           fi
 
@@ -65,6 +66,8 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: generate-versions
         run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" STATE_KMS_KEY_ID="${{ vars.STATE_KMS_KEY_ID }}" ./.github/scripts/make-terraform.sh
       - name: store-artifact
@@ -75,6 +78,12 @@ jobs:
 
   apply:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     needs:
       - build
     defaults:
@@ -90,6 +99,8 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - name: configure-aws-credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:

@@ -38,12 +38,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Determine version
         id: ver
+        env:
+          # Passed through the environment, never expanded into the script:
+          # the dispatch input is free text.
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           set -euo pipefail
-          version="${{ github.event.inputs.version }}"
+          version="${INPUT_VERSION:-}"
           if [ -z "${version}" ]; then
             version="$(sed -n 's/^## \[\([0-9]*\.[0-9]*\.[0-9]*\)\].*/\1/p' CHANGELOG.md | head -1)"
           fi
@@ -60,10 +66,11 @@ jobs:
         if: steps.ver.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          if gh release view "${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
-            echo "Release ${{ steps.ver.outputs.version }} already exists; nothing to do."
+          if gh release view "${VERSION}" >/dev/null 2>&1; then
+            echo "Release ${VERSION} already exists; nothing to do."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -71,9 +78,11 @@ jobs:
 
       - name: Build release notes
         if: steps.ver.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          ./.github/scripts/changelog-section.sh "${{ steps.ver.outputs.version }}" > release-notes.md
+          ./.github/scripts/changelog-section.sh "${VERSION}" > release-notes.md
           echo "----- release notes -----"
           cat release-notes.md
 
@@ -81,10 +90,11 @@ jobs:
         if: steps.ver.outputs.skip != 'true' && steps.exists.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "${{ steps.ver.outputs.version }}" \
-            --target "${{ github.sha }}" \
-            --title "${{ steps.ver.outputs.version }}" \
+          gh release create "${VERSION}" \
+            --target "${GITHUB_SHA}" \
+            --title "${VERSION}" \
             --notes-file release-notes.md
-          echo "Created release ${{ steps.ver.outputs.version }}"
+          echo "Created release ${VERSION}"

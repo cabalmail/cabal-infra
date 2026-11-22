@@ -113,6 +113,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Look up the release PR's run on this tree
         id: verdict
@@ -149,6 +151,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
@@ -216,13 +220,15 @@ jobs:
         # creates a fresh device and passes its UDID as the destination,
         # choosing the runtime and device type together so `simctl create`
         # can't refuse the pair (select-sim-pair.jq has the policy).
+        env:
+          MATRIX_PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
-          case '${{ matrix.platform }}' in
+          case "$MATRIX_PLATFORM" in
             macOS)     echo "destination=platform=macOS" >> "$GITHUB_OUTPUT" ;;
             iOS)       .github/scripts/resolve-sim-destination.sh iOS "iPhone" ci-iOS ;;
             visionOS)  .github/scripts/resolve-sim-destination.sh visionOS "Apple Vision" ci-visionOS ;;
-            *)         echo "::error::No destination rule for ${{ matrix.platform }}."; exit 1 ;;
+            *)         echo "::error::No destination rule for $MATRIX_PLATFORM."; exit 1 ;;
           esac
 
       - name: Cache Swift packages
@@ -308,18 +314,22 @@ jobs:
         # leaves a warning annotation on the run. Booting the device before
         # the build was tried and is worse: the build then runs under the
         # same load and takes 4 to 15 minutes in place of one.
+        env:
+          # Named so it cannot be mistaken for a build setting: xcodebuild
+          # inherits this step's environment.
+          MATRIX_PLATFORM: ${{ matrix.platform }}
         run: |
           set -o pipefail
           SKIP_ARGS=""
           RETRY=""
-          if [ "${{ matrix.platform }}" = "visionOS" ]; then
+          if [ "$MATRIX_PLATFORM" = "visionOS" ]; then
             SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorFileDropTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests"
             echo "::notice title=visionOS 27 carve-out::Skipping RichTextEditorBridgeHealthTests, RichTextEditorControllerTests and RichTextEditorFileDropTests on visionOS: WKWebView creation wedged the visionOS 27.0 simulator pre-test (see workflow comment). Covered by the macOS and iOS legs."
-          elif [ "${{ matrix.platform }}" != "macOS" ]; then
+          elif [ "$MATRIX_PLATFORM" != "macOS" ]; then
             SKIP_ARGS="-skip-testing:CabalmailKitTests/RichTextEditorControllerTests -skip-testing:CabalmailKitTests/RichTextEditorFileDropTests -skip-testing:CabalmailKitTests/RichTextEditorBridgeHealthTests/testRealEditorPageBootsInThisRunner"
-            echo "::notice title=Simulator WebContent carve-out::Skipping the WKWebView-backed editor tests on ${{ matrix.platform }}: freshly created CI simulators never launch a WebContent process under a hostless runner (see workflow comment). Covered by the macOS leg."
+            echo "::notice title=Simulator WebContent carve-out::Skipping the WKWebView-backed editor tests on $MATRIX_PLATFORM: freshly created CI simulators never launch a WebContent process under a hostless runner (see workflow comment). Covered by the macOS leg."
           fi
-          if [ "${{ matrix.platform }}" != "macOS" ]; then
+          if [ "$MATRIX_PLATFORM" != "macOS" ]; then
             RETRY="--retry-hung-runner"
           fi
           "$GITHUB_WORKSPACE/.github/scripts/xcodebuild-test.sh" $RETRY "$RUNNER_TEMP/xcodebuild-raw-test.log" \
@@ -354,6 +364,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
@@ -440,6 +452,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
@@ -549,6 +563,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
@@ -651,6 +667,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90  # v1.7.0
@@ -843,6 +861,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify secrets are present
         id: check
@@ -1250,6 +1270,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify secrets are present
         # Skip-not-fail, matching the iOS job: the archive cannot succeed
@@ -1830,6 +1852,8 @@ jobs:
       - name: Checkout
         if: steps.handoff.outputs.uploaded == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: setup-python
         if: steps.handoff.outputs.uploaded == 'true'
