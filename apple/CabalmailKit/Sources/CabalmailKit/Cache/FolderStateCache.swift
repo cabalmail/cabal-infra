@@ -132,8 +132,8 @@ public actor FolderStateCache {
     /// next account on the device doesn't inherit this one's folders.
     public func clear() {
         generation += 1
-        if let fileURL {
-            try? FileManager.default.removeItem(at: fileURL)
+        if let fileURL, let failure = WipeReport.remove(fileURL, using: .default) {
+            WipeReport.failed("saved folder list and counts", failure)
         }
     }
 
