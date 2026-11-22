@@ -49,4 +49,27 @@ class AccountDirectoryTestCase: XCTestCase {
     func names(in directory: URL) throws -> [String] {
         try files.contentsOfDirectory(atPath: directory.path).sorted()
     }
+
+    /// The names in the root's `accounts/`: none when it is not there.
+    func accountNames() -> [String] {
+        let container = root.appendingPathComponent(AccountDirectory.containerName)
+        return (try? names(in: container)) ?? []
+    }
+
+    /// One message in INBOX, list and body, and a folder list.
+    func seedMail(in client: CabalmailClient, uid: UInt32) async throws {
+        try await client.envelopeCache.merge(
+            envelopes: [TestFixtures.makeEnvelope(uid: uid)], uidValidity: 1, uidNext: uid + 1, into: "INBOX"
+        )
+        try await client.bodyCache.store(folder: "INBOX", uidValidity: 1, uid: uid, bytes: Data("body \(uid)".utf8))
+        let generation = await client.folderStateCache.generation
+        await client.folderStateCache.recordFolders(
+            [Folder(path: "INBOX", isSubscribed: true)], ifUnchangedSince: generation
+        )
+    }
+
+    /// The UIDs of the messages saved for INBOX, list side.
+    func savedUIDs(in client: CabalmailClient) async -> [UInt32] {
+        await client.envelopeCache.snapshot(for: "INBOX")?.envelopes.keys.sorted() ?? []
+    }
 }

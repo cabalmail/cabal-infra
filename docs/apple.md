@@ -1819,11 +1819,27 @@ a second copy.
 - Username and password: neither is stored. `CognitoAuthService`
   scrubs the `imap.username` and `imap.password` items older builds
   wrote.
-- Envelopes: per-folder JSON files under the app support directory,
+- Envelopes: per-folder JSON files in the account directory (below),
   keyed by UIDVALIDITY — the reconnect flow (`STATUS` + UID FETCH since
   UIDNEXT) drops straight onto this.
 - Bodies: per-folder directory of raw `.eml` files, LRU-evicted by mtime
   when the total exceeds a configurable cap (default 200 MB).
+- The account directory: the envelopes, bodies and saved folder state of
+  an account are in `Application Support/Cabalmail/accounts/<name>/`
+  (`AccountDirectory`), where the name is a SHA-256 of the normalized
+  server and the username as typed (`AccountIdentity.directoryName`). The
+  session lifecycle tells the client factory whose client it builds, and
+  every client of one account shares one set of stores and one Spotlight
+  indexer (`AccountStoreRegistry`). The directory lasts as long as its
+  account is the one the install remembers. Sign-out closes the stores,
+  renames the directory to a being-deleted name and removes it; another
+  account's directory goes once a sign-in as someone else has succeeded;
+  and a launch, before its first client is built, removes every directory
+  but the remembered account's and moves in what a build from before the
+  directory left in the root (`AccountDirectory.prepareAtLaunch`). A
+  launch that finds the session expired keeps the directory. The outbox,
+  drafts, address list and feed store are in the root, shared, and emptied
+  by the wipes.
 - Feeds: one SQLite file, `rss/rss.sqlite` in WAL mode, behind `RssStore`.
   `Persistence/SQLiteDatabase` is the Kit's one wrapper over the C API,
   and every failure it meets is thrown as `CabalmailError.storage`, so a
