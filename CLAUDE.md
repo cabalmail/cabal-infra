@@ -16,13 +16,15 @@ These rules are evolving — they reflect the current solo-developer workflow an
 
 Three named branches map 1:1 to GitHub Environments and AWS accounts:
 
-| Branch        | Environment | Notes                                               |
-| ------------- | ----------- | --------------------------------------------------- |
-| `main`        | prod        | Protected. Receives only `stage` promotion PRs.     |
-| `stage`       | stage       | Direct push allowed.                                |
-| `development` | development | Direct push allowed. Quiesced by default.           |
+| Branch        | Environment | Notes                                                                     |
+| ------------- | ----------- | ------------------------------------------------------------------------- |
+| `main`        | prod        | Protected. Receives only `stage` promotion PRs.                           |
+| `stage`       | stage       | Protected. Changes land by PR; the release commit is the one direct push. |
+| `development` | development | Direct push allowed. Quiesced by default.                                 |
 
 Pushes from any other branch (feature branches, tags) do not auto-deploy. CI/CD workflows only fire on the three named branches.
+
+Work for `stage` goes on a feature branch and reaches it through a PR. GitHub rejects a direct push to `stage` from a Claude Code session (`GH006`, "Changes must be made through a pull request"), so don't plan on one: branch first, push the branch, open the PR into `stage`. The one commit that does go straight onto `stage` is the release commit `make promote` pushes from the maintainer's checkout (see "Promotion to prod").
 
 The `development` environment is a warm spare. It runs only when:
 
@@ -33,7 +35,7 @@ Otherwise leave it quiesced. All work goes `stage` -> `main` with one deliberate
 
 ### Promotion to prod
 
-The only route to `main` is promoting `stage`. The promotion is a formal release step: from a clean `stage` tree, `make promote VERSION=...` collates the pending changelog fragments, commits and pushes `stage`, and opens the `stage` -> `main` PR; merging that PR is a deliberate manual act, and `release.yml` tags and publishes the GitHub release on merge. See [docs/releasing.md](docs/releasing.md).
+The only route to `main` is promoting `stage`. The promotion is a formal release step: from a clean `stage` tree, `make promote VERSION=...` collates the pending changelog fragments, commits and pushes `stage`, and opens the `stage` -> `main` PR, labelled `no-changelog` so the Apple and Android changelog gates pass a release whose client changes left no prefixed entry; merging that PR is a deliberate manual act, and `release.yml` tags and publishes the GitHub release on merge. See [docs/releasing.md](docs/releasing.md).
 
 Never open a PR to `main` from any other branch. An earlier "direct-to-prod scaffolding" carve-out allowed purely additive feature-branch -> `main` PRs to skip stage; it was retired 2026-08-15 — the automated release flow made promotion cheap enough that skipping stage no longer pays for the risk. Shipped-era planning docs that relied on it carry errata.
 

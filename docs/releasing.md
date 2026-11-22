@@ -24,7 +24,8 @@ This will:
    fragments.
 2. Show you the staged diff and ask for confirmation.
 3. Commit on `stage` (`Set release date for version VERSION`), push `stage`,
-   and open the `stage -> main` PR.
+   and open the `stage -> main` PR, labelled `no-changelog` (see
+   [The `no-changelog` label](#the-no-changelog-label) below).
 4. Watch the PR checks and report.
 
 Merging the PR is left to you - promotion to prod stays a deliberate manual
@@ -35,6 +36,22 @@ step.
 - `--no-push` - collate and commit locally only; inspect, then push yourself.
 - `--yes` - skip the confirmation prompt.
 - `--date YYYY-MM-DD` - override the release date.
+
+### The `no-changelog` label
+
+`promote.sh` adds the `no-changelog` label to the release PR, whether it opened
+the PR or found one already open. The Apple and Android changelog gates
+(`apple-changelog.yml`, `android-changelog.yml`) diff the whole release, and on
+a release PR the fragments are already collated away. They accept an `Apple:` /
+`Android:` line added to `CHANGELOG.md` in their place, but a release whose
+only client changes each shipped under `no-changelog` adds no such line and
+would fail. Every PR in the release already passed the gate on its way into
+`stage`, so the label waives a check that has nothing left to decide.
+
+Labelling is best-effort: if it fails, the script warns and carries on, since
+`stage` is already pushed by then. Add the label by hand in that case, or when
+you open the release PR yourself (`--no-push`, or no `gh` on the machine); the
+gates re-run when a label is added.
 
 ## GitHub release (automatic)
 
