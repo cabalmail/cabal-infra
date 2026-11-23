@@ -12,7 +12,7 @@ instead of reconstructing it from the git log.
 | 2 -- Custom flags on feed items | Server in prod with 1.49.0 (2026-11-11): #2399 and #2400, accepted on stage first. Kit merged as #2411 (2026-11-11), in prod with 1.51.0. Apple: two PRs; the first, flags on feed items, merged as #2420 and shipped in 1.52.0 (2026-11-12); the second, the per-flag filter, merged as #2425 (2026-11-12); the maintainer held the release after 1.52.0 for a fix of #2421, which merged as #2435 (2026-11-12), then for the fix of #2439 and #2440 (#2446, merged 2026-11-13), and on 2026-11-13 once more, for the fix of #2450's trigger (#2457, merged 2026-11-13); the filter and those fixes shipped in that release, 1.53.0 (2026-11-13), with #2447's fix of #2437 (merged 2026-11-13). The third server PR the filter waited for, `any_flag` on `search_envelopes` (#2424), is in prod with 1.52.0. Android (2026-11-18): the first of its two PRs, flags on feed items, merged as #2498; the second, the per-flag filter, merged as #2502; neither is in a release yet (`android-parity.md`, leg L2) |
 | 3 -- Acting on feed items in bulk, and out of the reader | Not started (2026-11-08) |
 | 4 -- Feed rules | Server in prod with 1.56.0 (2026-11-19): Terraform (#2497) and server (#2501), checked on stage first; the rule format was accepted as written that day. Apple (Kit and the Feed items editor) merged as #2509 (2026-11-20 UTC), in prod with 1.57.0 (2026-11-21). Android merged as #2536 (2026-11-21), in prod with 1.58.0 (2026-11-22) (`android-parity.md`, leg L3) |
-| 5 -- Cross-media views: flagged and search | Structure (item 1) merged on Apple (2026-11-22) as #2539, in prod with 1.59.0 (2026-11-22); Apple's Flagged view (item 2) is open as #2566 (2026-11-22), built on the server's cross-folder search by the maintainer's answer that day, and its search scope (item 3) is kept and left for a later session (`flags-and-cross-media.md`, Sessions 4 and 5). The Flagged view was built on Android first, by the maintainer's choice on 2026-11-22: #2556 and its wide layout #2562, both merged that day; not in a release yet (`android-parity.md`, leg L4) |
+| 5 -- Cross-media views: flagged and search | Structure (item 1) merged on Apple (2026-11-22) as #2539, in prod with 1.59.0 (2026-11-22); Apple's Flagged view (item 2) merged as #2566 (2026-11-22), built on the server's cross-folder search by the maintainer's answer that day, soaked on stage after the merge and not in a release yet, and its search scope (item 3) is kept and left for a later session (`flags-and-cross-media.md`, Sessions 4 and 5). The Flagged view was built on Android first, by the maintainer's choice on 2026-11-22: #2556 and its wide layout #2562, both merged that day; not in a release yet (`android-parity.md`, leg L4) |
 | 6 -- Ambient surfaces: Spotlight | Spotlight for feed items (item 1) merged on Apple (2026-11-22) as #2553, not in a release yet (`flags-and-cross-media.md`, Session 4, B6.1). Feed notification settings (item 2) wait for delivery, as written |
 
 This document is the design: what each phase builds and why. The
@@ -758,8 +758,8 @@ that predates Phase 4 leaves the feed rule in place.
 1.59.0 the same day. Item 2, the Flagged view, was built on Android
 first (#2556, merged 2026-11-22; `android-parity.md`, leg L4), on the
 server's cross-folder search, with the horizon Decision 8 describes;
-Apple's is open as #2566 (2026-11-22), on the same search and the same
-horizon (`flags-and-cross-media.md`, B5.2). Item 3, the search scope,
+Apple's merged as #2566 (2026-11-22), on the same search and the same
+horizon (`flags-and-cross-media.md`, B5.2), and is not in a release yet. Item 3, the search scope,
 is kept and left for a session after that (its decision 8). Item 1 is `flags-and-cross-media.md`'s B5.1: the Kit's
 `ItemRef`, one `SidebarSelection` for the folder list on every platform
 with the Mac's feed rows as rows of it, and an optional smart view on a
