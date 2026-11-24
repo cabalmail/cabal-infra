@@ -5,6 +5,117 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.61.0] - 2026-11-24
+
+### Added
+- Android: **Flagged view for mail and feeds.** A "Flagged" row at the top
+  of the mail folder list and of the feed list opens one list of every
+  flagged message and flagged feed item, newest first, each under its
+  medium's glyph and opening in its own reader. Once Settings > Flags
+  holds a flag of your own, a pill above the list narrows it to one flag
+  for the visit. Messages come from the server's search of every
+  subscribed folder but Trash, 200 at a time; while more are still to
+  load, the list stops at the day the messages have reached, so no feed
+  item shows below a gap in the mail. Offline, flagged feed items are
+  listed alone and a line says flagged mail needs a connection. On a
+  tablet or an unfolded phone the list and the open message or article
+  sit side by side. Android leg L4 of
+  `docs/1.x/post-wave-3/android-parity.md`, built ahead of the Apple
+  view.
+- Apple: **Flagged view for mail and feeds.** "Flagged" lists every
+  flagged message and flagged feed item together, newest first, each
+  marked as a message or a feed item and opening in its own reader. It is
+  the first row of the sidebar on the Mac and in the iPad's split, a row
+  at the top of the Mail tab's folders and of the Feeds tab's list on
+  iPhone, and a row at the top of the Folders tab and of the Feeds tab on
+  Vision Pro. It shows whatever carries any flag; once Settings > Flags
+  holds a flag of your own, a pill above the list narrows it to one flag
+  for the visit and carries how many items that is. Messages come from
+  the server's search of every subscribed folder but Trash, 200 at a
+  time; while more are still to load, the list stops at the day the
+  messages have reached, so no feed item shows below a gap in the mail.
+  Offline, flagged feed items are listed alone under a line saying
+  flagged mail needs a connection, and the mail loads by itself when the
+  connection returns. A row keeps its own swipes, and a message's dispose
+  acts in the folder the message is in: Restore inside Archive. A row
+  whose flag is cleared leaves the list at once, message or feed item,
+  and setting the flag again in the open reader brings it back. On the
+  Mac, the Message and Feeds menus' Mark as Read/Unread and Flag/Unflag,
+  and the Message menu's Move, act on the item open from the list. A
+  window the system restores comes back on the view with its message or
+  article open, and so does one whose layout changes (an iPhone Duo
+  closing or opening, an iPad window narrowing). B5.2 of
+  `docs/1.x/post-wave-3/flags-and-cross-media.md`, built on the server's
+  search ahead of the SQLite mail store's flagged query.
+
+### Fixed
+- Apple: **A different account starts without the last one's leftovers.**
+  When another account signs in on a device, the folder and feed groups
+  start expanded, Settings > Debug Log starts empty, and the notification
+  "Choose folders" list is back to Inbox; whether notifications are on,
+  and the Inbox, All or Chosen choice, stay as the device had them. The
+  same account signing back in keeps all of it. A folder list, or a
+  failed subscribe or unsubscribe, that answers after Sign Out no longer
+  writes the signed-out account's subscribed folders back, where they
+  decided the next account's unsubscribed-folder banner until its own
+  folder list arrived (#2561).
+- Apple: **Signing in on another server no longer inherits the last
+  server's mail.** After a session expired at launch (or the app was force
+  quit), signing in with the same username on a different server kept the
+  last server's saved mail on screen offline and sent its unsent mail
+  through the new server. A different server now counts as a different
+  account, so its sign-in starts from an empty cache; the same server
+  retyped with `https://`, spaces or capitals is still the same account.
+  The comparison is one Kit type, `AccountIdentity` (the server
+  normalized, the username exact). A sign-in that arrives while a session
+  is already signed in is now refused instead of replacing that session
+  without ending it; no screen offers one, and switching accounts stays
+  Sign Out, then Sign In (#2559, #2560).
+- Apple: **A sign-out wipe that fails now says so.** Every step of the
+  wipe that clears an account's local data at sign-out (saved message
+  lists and bodies, drafts, the outbox, feeds, the saved address and
+  folder lists) discarded its error, and the two mail caches hid a failed
+  removal even from the wipe, so a wipe that left the last account's mail
+  on the device looked the same as one that worked. Each step that fails
+  now writes an error line to the unified log and to Settings > Debug
+  Log, naming what was not cleared, and a sign-out that works writes
+  none. The wipe is still best-effort: one failed step does not stop the
+  rest, and nothing retries here.
+
+### Security
+- **Linux client: `url` 2.5.9 for RUSTSEC-2026-0592.** `url` 2.5.8 and
+  earlier overflowed the stack in `Url::origin()` on a URL with deeply
+  nested `blob:` prefixes, which aborts the process. The client reaches
+  `url` only through `reqwest`, so this is a lockfile bump
+  (`linux/Cargo.lock`: `url` 2.5.8 to 2.5.9, and `form_urlencoded` 1.2.2
+  to 1.2.3 with it) and no source change. The advisory had turned the
+  `cargo deny` step of the Linux gate red for any pull request that runs
+  it.
+- **zizmor audit of the GitHub Actions workflows on every pull request.**
+  `lint.yml` gains a `zizmor` job (zizmor 1.33.0, offline audits) that runs
+  when a workflow, a composite action, `dependabot.yml` or the new
+  `.github/zizmor.yml` changes and fails on any finding of medium severity
+  or above, which covers the `dangerous-triggers` audit
+  (`pull_request_target`, `workflow_run`, `issue_comment`; no workflow uses
+  one, and a canary step proves the audit still fires under the checked-in
+  config). The workflows were brought to zero findings at that floor
+  first. Dispatch inputs and `github.ref_name` are no longer expanded into
+  `run:` scripts in `destroy_terraform.yml`, `nat_ami_build.yml`,
+  `quiesce.yml`, `release.yml` and `infra.yml`'s image-tag pin, nor are the
+  computed matrix values in `app.yml`'s docker job and `apple.yml`'s Kit
+  tests: each is read from the environment. `id-token: write` and
+  `security-events: write` moved from the workflow level to the jobs that
+  assume the AWS role or upload SARIF (`app.yml`, `infra.yml`,
+  `nat_ami_build.yml`, `quiesce.yml`, `codeql.yml`), and
+  `destroy_terraform.yml` gets an explicit read-only default. Every
+  `actions/checkout` now states `persist-credentials`: `false` everywhere
+  except the five whose job pushes or fetches with the token afterwards,
+  which say `true` with the reason. None of the findings was reachable
+  without write access to the repository. Two are ignored rather than
+  fixed, each with its reason beside it: Dependabot's missing cooldown,
+  and a low-confidence `github-env` report on the provisioning-profile
+  action, whose inputs are a literal and a secret.
+
 ## [1.60.0] - 2026-11-22
 
 ### Added
