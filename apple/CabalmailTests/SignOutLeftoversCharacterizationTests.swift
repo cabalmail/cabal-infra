@@ -8,9 +8,10 @@ import CabalmailKit
 /// per-account state it now clears (#1825), alongside
 /// `SignOutCharacterizationTests`, which pins what it tears down.
 /// `SessionTeardownCharacterizationTests` pins the same for a sign-out with
-/// no client. The rearchitecture (workstream 1.3) moves per-account state
-/// into a session that ends as a whole, so the leftovers are expected to
-/// change there (the preferences scope is the deliberate exception).
+/// no client. There is no per-account session object that ends as a whole:
+/// one mail store is kept and reset in place (`docs/apple.md`, "One account
+/// per install"), so each leftover here is cleared, or kept, by name (the
+/// preferences scope is the deliberate keep).
 @MainActor
 final class SignOutLeftoversCharacterizationTests: XCTestCase {
     private var harness: SessionHarness!

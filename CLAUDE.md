@@ -176,6 +176,8 @@ The client work queued after the 2026-10 Apple-client rearchitecture lives in [`
 | `dependabot.yml` | Schedule (daily) | Dependency update PRs. |
 Deploy workflows select environment based on branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys (see "Branches and environments" above).
 
+`lint.yml`'s `zizmor` job audits everything under `.github/` on any PR that touches it and fails on a finding of medium severity or above; `.github/zizmor.yml` holds the policy and the few ignores. Run it before pushing a workflow change: `pip install zizmor==1.33.0 && zizmor --offline --min-severity=medium .github/`. What it asks of a workflow edit: no `pull_request_target`, `workflow_run` or `issue_comment` trigger; a dispatch input, `github.ref_name` or a computed matrix value reaches a `run:` script through `env:`, never as `${{ }}` inside the script; write scopes (`id-token`, `security-events`, `contents`) go on the job that uses them, and a job-level `permissions:` block replaces the workflow's, so repeat the read scopes the job still needs; every `actions/checkout` sets `persist-credentials: false` unless a later step pushes or fetches with the token, and then `true` with the reason in a comment. Fix a finding rather than ignoring it; an ignore needs its reason beside it.
+
 ## Architecture Details
 
 ### Domain Model

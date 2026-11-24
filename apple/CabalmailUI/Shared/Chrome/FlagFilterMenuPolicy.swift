@@ -130,6 +130,26 @@ enum FlagFilterMenuPolicy {
         )
     }
 
+    /// The pill above the Flagged view's list, or nil while there is
+    /// nothing to pick between. The view is always narrowed to something,
+    /// Any flag until the user picks, so the pill is always lit, and its
+    /// rows are every flag of the palette in its order and then Any flag,
+    /// which is the way back: there is no Clear filter. `count` is how many
+    /// items the pick finds, nil until the view has it.
+    static func flaggedViewPill(
+        palette: [FlagPaletteEntry], current: FlagCriterion, count: Int?
+    ) -> FlagFilterPillModel? {
+        // A pick whose flag has since been deleted, the palette's last
+        // custom one, still needs its name on the pill and a way back.
+        let pickedCustom = current != .any && current != builtIn
+        guard pickedCustom || !FlagPalette.keywordEntries(in: palette).isEmpty else { return nil }
+        let name = Self.name(of: current, palette: palette)
+        return FlagFilterPillModel(
+            label: current == builtIn ? name : drawn(name), name: name, isOn: true, count: count,
+            reservedCount: nil, rows: rows(palette: palette, current: current).filter { $0.option != .clear }
+        )
+    }
+
     /// Identity for the pill's `Menu`: macOS keeps the AppKit menu it built
     /// the first time the menu opened, checkmarks and row titles included
     /// (`FlagMenuPolicy`), so the menu is replaced whenever a row changes.

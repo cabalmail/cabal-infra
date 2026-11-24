@@ -223,37 +223,39 @@ final class SessionWiringCharacterizationTests: XCTestCase {
         XCTAssertEqual(pulls, 1)
     }
 
-    /// A sign-in over a wired session (#1826) stops the replaced session's
-    /// settings sync before it activates the new account's settings (#2444,
-    /// item 3): asked afterwards, the old coordinator sends nothing, so a
-    /// push or pull of its can no longer land in, or clear the unsent mark
-    /// of, the settings that are active now.
-    func testASignInOverAWiredSessionStopsTheReplacedSettingsSync() async throws {
+    /// A sign-in over a wired session is refused (#2559), so the session's
+    /// settings sync is not replaced or stopped: the same coordinator is
+    /// still the session's and still observing, no second pull is sent, and
+    /// what the settings still owe the server is as it was. (Until the
+    /// refusal the second sign-in replaced the session, and #2444, item 3,
+    /// had the replaced session's sync stopped first; `wireSession` keeps
+    /// that stop for a session it finds in its way.)
+    func testASignInOverAWiredSessionLeavesItsSettingsSyncRunning() async throws {
         let preferences = Preferences(store: InMemoryPreferenceStore())
         harness.appState.usePreferences(preferences)
         await SignOutSuiteSteps.signIn(harness)
-        let replaced = try XCTUnwrap(harness.appState.prefsCoordinator)
-        try await waitUntilOnMainActor { preferences.onLocalChange != nil }
-
-        await SignOutSuiteSteps.signIn(harness, idToken: "ID-2")
-        XCTAssertFalse(harness.appState.prefsCoordinator === replaced)
-        // The new session's start has taken the observer and sent its pull,
-        // one for each of the two sessions.
+        let wired = try XCTUnwrap(harness.appState.prefsCoordinator)
         let cognito = harness.cognito
         try await waitUntilOnMainActor {
-            await cognito.trail.filter { $0 == "API GET /prod/get_preferences" }.count >= 2
+            await cognito.trail.contains("API GET /prod/get_preferences")
         }
-        XCTAssertNotNil(preferences.onLocalChange)
-        preferences.signature = "Unsent"
-        XCTAssertTrue(preferences.hasUnsentChanges)
-        let before = await harness.cognito.trail.count
+        try await waitUntilOnMainActor { preferences.onLocalChange != nil }
+        let unsent = preferences.hasUnsentChanges
+        let events = harness.events
 
-        let answer = await replaced.sendUnsentForFeedQueue()
+        await harness.appState.signIn(controlDomain: "cabalmail.example", username: "alice", password: "hunter2")
 
-        XCTAssertEqual(answer, .nothingUnsent)
-        let after = await harness.cognito.trail.dropFirst(before)
-        XCTAssertFalse(after.contains { $0.hasSuffix("/set_preferences") }, "the replaced session sent nothing")
-        XCTAssertTrue(preferences.hasUnsentChanges)
+        XCTAssertEqual(harness.appState.status, .signedIn)
+        XCTAssertTrue(harness.appState.prefsCoordinator === wired)
+        XCTAssertEqual(harness.events, events, "the refused sign-in asked nothing of the environment")
+        XCTAssertEqual(harness.clients.count, 1)
+        XCTAssertNotNil(preferences.onLocalChange, "the session's sync is still observing")
+        XCTAssertEqual(preferences.hasUnsentChanges, unsent)
+        // Give a pull the refused sign-in might have started every chance
+        // to show before checking that none did.
+        for _ in 0..<20 { await Task.yield() }
+        let pulls = await cognito.trail.filter { $0 == "API GET /prod/get_preferences" }.count
+        XCTAssertEqual(pulls, 1)
     }
 
     // MARK: - refreshWatchSession

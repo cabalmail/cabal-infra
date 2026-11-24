@@ -544,6 +544,7 @@ extension SplitShell {
     /// by its folder too, so a search result with another folder's UID is a
     /// new open.
     private var openReading: String? {
+        if mail.showsFlagged { return mail.flaggedItem.map { "flagged:\($0.ref)" } }
         if readerShowsFeeds { return mail.selectedFeedItem.map { "item:\($0.id)" } }
         return mail.selectedEnvelope.map { "message:\($0.folder ?? "")#\($0.uid)" }
     }
@@ -551,7 +552,13 @@ extension SplitShell {
     /// Whether the reader shows the feed reader rather than mail, by the
     /// rule `WideMail.reader` draws it by.
     private var readerShowsFeeds: Bool {
-        mail.selectedFeedScope != nil && !mail.isSearching
+        mail.readerShowsFeeds
+    }
+
+    /// The name of the list the reader's back button returns to.
+    private var listBackTitle: String {
+        if mail.showsFlagged { return SmartView.flagged.title }
+        return readerShowsFeeds ? "Articles" : "Messages"
     }
 
     /// The split's columns. Tiled, both, always: the pinned `.doubleColumn`
@@ -581,7 +588,7 @@ extension SplitShell {
                 } label: {
                     // A back button, as the spec draws it, rather than the
                     // folder panel's sidebar symbol.
-                    Label(readerShowsFeeds ? "Articles" : "Messages", systemImage: "chevron.backward")
+                    Label(listBackTitle, systemImage: "chevron.backward")
                 }
                 .accessibilityIdentifier("reader.showList")
             }
@@ -604,6 +611,9 @@ extension SplitShell {
     /// (`SceneNavigator.listMoves`), each handing the list mounting next its
     /// state.
     private func listMoves() {
+        // The Flagged list's rows and its open row are the window's, so
+        // there is nothing to hand the list that mounts next.
+        if mail.showsFlagged { return }
         if readerShowsFeeds {
             feedListHold.move()
         } else {

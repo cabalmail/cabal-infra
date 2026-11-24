@@ -18,13 +18,14 @@ Re-checked against `stage` at `5a4fa701c` (release 1.45.0) and GitHub on 2026-11
 
 | Work item | Status |
 | --- | --- |
-| Decisions 1, 3 and 4 | Unanswered (2026-10-15); decision 2 is recorded, not asked |
-| Scope doc and the three issues | Not started (2026-10-15) |
-| PR B. Sign-in rules | Not started (2026-10-15) |
-| PR C1. Account leftovers | Not started (2026-10-15) |
-| PR C2. A failed wipe is reported | Not started (2026-10-15) |
-| PR A. Server stamp (decision 4 Stamp only) | Not started (2026-10-15) |
-| PR D. Apple stamp check (Stamp only) | Not started (2026-10-15) |
+| Decisions 1, 3 and 4 | Answered 2026-11-22: 1 Yes, 3 Refuse, 4 No; the smaller calls as stated. Decision 2 is recorded, not asked |
+| Scope doc and the three issues | Done (2026-11-22). The scope doc was sqlite-mail-store.md's kick-off scope doc, answered the same day. Issues #2559 (a sign-in over a wired session), #2560 (the cross-server wipe) and #2561 (the late folder list) are filed |
+| PR B. Sign-in rules | Merged to stage as #2563 (2026-11-22), addressing #2559 and #2560. Mini run done (the row below) |
+| PR C1. Account leftovers | Merged to stage as #2564 (2026-11-22), addressing #2561. Mini run done (the row below) |
+| PR C2. A failed wipe is reported | Merged to stage as #2565 (2026-11-22). A follow-up addressing #2568 (a false "feeds not cleared" line on every sign-out) merged as #2570 (2026-11-22) |
+| Mini regression and soak (2026-11-22) | Run on the Mini's iPhone simulators on stage `e77c8e3` and on the signed macOS build of stage `fa62f09`, test accounts 1 and 2 (MFA on). **Passed:** eight ordinary sign-ins in both directions and the same account returning; a different account's sign-in clears the collapsed folder and feed groups, the custom notification folder list and the Debug Log (PR C1), and the same account returning keeps them; the server retyped with `https://` and capitals in the host counts as the same account; on the Mac, account 1 out, account 2 in with its code and out again, two windows starting fresh, a collapsed folder group reset, the Debug Log starting empty with no `LocalWipe` or error line. **Found:** #2568, fixed by #2570 and re-checked on `fa62f09` (a sign-out with 4 subscriptions and 208 feed items logged no `LocalWipe` line and left the feed store empty); #2569, older than this work and open. **Not run:** PR B's refusal rule and the cross-server wipe on a rig (no screen reaches them; they rest on their tests); the simulator legs again on `fa62f09` beyond that one sign-out (#2570 changes only the wipe's feeds step); on the Mac, the notification folder list reset (notifications are off there; the simulators covered it) and the feed groups (test account 2 has no feeds); a downgrade drill (nothing here moves or reformats stored data). **Seen once on the Mac, not re-run, no issue filed:** one read of the Account pane about 2 seconds after it opened in a freshly reopened Settings window showed account 1's username; a read 20 seconds later showed account 2's. **Restored after the run:** both test accounts' folders, counts, unread state and INBOX; not restorable were the UID counters, the resume cursors and test account 2's mark-as-read setting (now "manual", was unset, same behaviour) |
+| PR A. Server stamp (decision 4 Stamp only) | Not built (2026-11-22): decision 4 is No |
+| PR D. Apple stamp check (Stamp only) | Not built (2026-11-22): decision 4 is No |
 
 ## Decisions for the maintainer
 
@@ -35,6 +36,7 @@ Four items; only 1 and 3 need thought. Answer 1 before PR B and before sqlite-ma
    - No: several accounts at once becomes its own project (an account picker, per-account storage, push routing, and a `push_register` change, since #1897 deletes every other account's row for a device token). Decision 2 reopens, and decision 3 should be End first.
    - Evidence: 1.3 left it out of scope (its scope doc: "More than one signed-in account at once. There is no UI for it; the manager holds at most one current session."). #1897, which you merged, rests on an install being "signed in to one account at a time" (`lambda/api/push_register/function.py:10-11`). No title among the repo's 523 issues asks for more than one account.
    - Default: Yes.
+   - **Answered 2026-11-22: Yes.**
 2. **Recorded, not asked: no per-account `Session` container.** Your 2.1 answer stands: one `MailSessionStore`, reset in place. 2.1's scope doc asked whether to keep one store reset in place and drop the per-account store from the plan, since a store per session would add only that a late answer lands in a discarded object instead of being refused by the sign-out gate, and would reopen `AppState.swift` and `SessionManager.swift`; you answered "2. Yes, keep it." (the maintainer, 2026-10-08). Nothing new argues against it. sqlite-mail-store.md's per-account directory (its decision 3) is the disk half and needs no in-memory container. It is listed here so sqlite-mail-store.md, whose gate G0 names "decisions 1 and 2", has one place to cite. It reopens only if decision 1 is No.
 3. **A sign-in that arrives while a session is wired should:** **Refuse (recommended)**, End first, or Stay pinned.
    - No screen reaches this today *(inferred, high confidence)*. Three pins record what would happen: the first session is replaced without being ended, a different user's sign-in wipes the cache under it, and a failed attempt leaves it wired under an error.
@@ -44,14 +46,19 @@ Four items; only 1 and 3 need thought. Answer 1 before PR B and before sqlite-ma
    - Stay pinned: a new issue is filed and the three "Tracked in #1826" comments point to it.
    - What changed since 1.3 kept them: 1.3 kept them so a high-risk refactor changed no behaviour (its decision 7, recorded in the PR #1887 body), and #1826 closed on 2026-10-09 without ever listing them.
    - Default if unanswered: Stay pinned, because expected values cannot change without your yes.
+   - **Answered 2026-11-22: Refuse.** The maintainer: "Update the tests so that they are locked to the designed behavior." That is the yes to changing the expected values of the four tests named above, and of no others.
+   - **Answered 2026-11-22 (a fifth test):** Refuse also changes `testASignInOverAWiredSessionStopsTheReplacedSettingsSync` in `SessionWiringCharacterizationTests`, which #2444 added after this plan was written and which signs in over a wired session to show the replaced session's settings sync being stopped. Under Refuse that sign-in replaces nothing, so the test cannot pass as written. Put to the maintainer on a decision card ("Allow changing a fifth test that Refuse makes impossible to pass?"), the maintainer chose "Rewrite it for the rule": it becomes a test that a refused sign-in leaves the wired session's settings sync and unsent mark untouched (`testASignInOverAWiredSessionLeavesItsSettingsSyncRunning`). The yes covers these five tests and no others.
 4. **Stamp each push with its account?** **No (recommended)** or Stamp.
    - For #1883 you chose "#1883: Server cleanup" (#1897) over the stamp (the maintainer, 2026-10-06). In that discussion the reviewers noted: "Stage and prod both push through production APNs to the same device token... Cleanup can't reach the other deployment's table, and a stamp only catches this if it names the deployment". #1897's description listed what cleanup cannot reach and offered the stamp "if you ever want it".
    - One point is new *(inferred from code, not reproduced)*: on an iPhone, a push for another account can show a message from the signed-in account as its sender, subject and preview. `/push_envelope` searches the signed-in account's folder for the Message-ID and, on a miss, uses the push's UID hint (`lambda/api/push_envelope/function.py:110`). #1883 said this only of the Mac.
    - No: the residual stays accepted, and PR B adds the banner point to `docs/push-notifications.md:72-82`. The cases are tester-shaped (leaving prod offline and signing in to stage, a next account with notifications off, two Mac app instances on different accounts), and a wrong banner shows mail the device's own user can already read.
    - Stamp: PR A (server) and PR D (Apple), and android-parity.md L6 adds Android. Size becomes M.
    - Default: No.
+   - **Answered 2026-11-22: No.** The maintainer first answered Stamp, asked what each choice would cost a month on, and changed the answer to No the same day. PRs A and D are not built, and PR B adds the banner point to `docs/push-notifications.md`.
 
 **Smaller calls**, which the scope doc states with their defaults for a one-word veto: on a different-account sign-in, clear the debug log (Keep would keep the last sign-out's lines for diagnosis), and reset only the custom notification folder list (the Inbox, All or Chosen scope and the master toggle stay, since `PushSettings` is "per *device* by design", `PushRegistrar.swift:59-66`). The new issues close on their tests with your OK at the soak, as #1883 and #1886 did, because only the test harness reproduces them.
+
+- **Answered 2026-11-22: as stated.** The debug log is cleared, only the custom notification folder list is reset, and the new issues close on their tests with the maintainer's OK at the soak.
 
 ## What you'll see change
 
@@ -85,17 +92,18 @@ Four items; only 1 and 3 need thought. Answer 1 before PR B and before sqlite-ma
 
 One session. It writes a short scope doc with decisions 1, 3 and 4 and the smaller calls at the top, gets one batch of answers, then files one issue each for the sign-in over a wired session, the cross-server wipe and #1849's late folder list, so each PR says "Addresses #N". Each Apple PR carries tests that fail on its parent commit, and an `Apple:` fragment or the `no-changelog` label.
 
-**Status:** Not started (2026-10-15).
+**Status:** Issues filed 2026-11-22: #2559 (a sign-in over a wired session), #2560 (the cross-server wipe) and #2561 (the late folder list). The scope doc was sqlite-mail-store.md's kick-off scope doc, answered the same day; the answers are under "Decisions for the maintainer".
 
 **PR B. Sign-in rules** (decisions 1 and 3).
 - Different-account rule: compare server and username, not username alone (`SessionManager.swift:689`). The server is trimmed, stripped of `https://` or `http://` and lowercased; the username stays exact, as the case pin requires. The same rule drives `owner.accountChanged`.
+  - **Answered 2026-11-22 (sqlite-mail-store.md's kick-off scope doc):** the comparison is one function, over the normalized server and the username exactly as typed, and sqlite-mail-store.md's PR 1.1 names the account directory by a hex hash of the same two values. Write it where PR 1.1 can call it, so the rule and the directory name cannot disagree. The maintainer does not want usernames that differ only by case encouraged or supported, only kept apart if one slips in; settings keep their lowercased scope key, and no issue is filed for that.
 - Decision 3: under Refuse, a guard after `awaitTeardown()` at the top of `signIn` logs and returns while a client is wired. Under End first, it runs the sign-out teardown through the gate, then proceeds. Under Stay pinned, only the three comments change, to the new issue.
 - Docs: decisions 1 and 2 in the `Session/` row of `docs/apple.md` (:1024) and the one-account premise in `docs/push-notifications.md`; under decision 4 No, the banner point joins the residual paragraph (:72-82). The leftovers header comment (`SignOutLeftoversCharacterizationTests.swift:10-13`) is corrected; it is a comment, not an expected value.
 - Tests: an expired launch restore for `alice` on server A, then `alice` on server B, wipes the cache and outbox; the same server retyped with a scheme, spaces or capitals keeps them; `Alice` after `alice` still wipes. Under Refuse or End first, the four named tests become tests of the rule, each listed in the PR with before and after.
 - Verify: CI. On the Mini, a regression run of ordinary sign-in and sign-out with test account 1 and test account 2 (MFA on) in both directions, on the signed macOS build and the iPhone simulator. That run cannot show the fixes: no screen reaches decision 3's path, and sessions never sign in to prod. A Mac sign-out signs out every Mac app instance on the Mini, since they share a keychain (live-verification.md, risks), so announce the run and avoid the tester's run times.
 - Fragment: `Apple:` fixed. Risk: medium (sign-in code).
 
-**Status:** Not started (2026-10-15).
+**Status:** Merged to stage as #2563 (2026-11-22), addressing #2559 and #2560. Re-checked against `stage` at `2ba49d3` (release 1.60.0): `signIn` is at `SessionManager.swift:135` and the different-account rule at `:734`. The comparison is `AccountIdentity` in the Kit (`CabalmailKit/Sources/CabalmailKit/Config/AccountIdentity.swift`), which sqlite-mail-store.md's PR 1.1 calls to name the account directory; it adds no hash, which is PR 1.1's. Five tests changed their expected values, not four: the four decision 3 names, and `SessionWiringCharacterizationTests`'s `testASignInOverAWiredSessionStopsTheReplacedSettingsSync`, added by #2444 after this plan was written, which also signed in over a wired session; the maintainer allowed the fifth on 2026-11-22 ("Rewrite it for the rule"). All five are renamed for what they now assert. The Mini regression run has not happened: it waits for live-verification.md's Step 3 and the maintainer's go-ahead.
 
 **PR C1. Account leftovers** (the smaller calls).
 - Gate the subscribed-folder writers on `mailStore.acceptsCounts(from: client)`: `FolderListViewModel.swift:117`, :143 and the revert at :190.
@@ -104,14 +112,14 @@ One session. It writes a short scope doc with decisions 1, 3 and 4 and the small
 - Tests: a folder list answering after Sign Out leaves `subscribedFolderPaths` nil (a held fake, as `SignOutLateCountTests` do); a revert landing after Sign Out writes nothing; the keys and log reset for another account and stay for the same one, the same server retyped included.
 - Verify: CI; on the Mini, PR B's run with a group collapsed and Settings > Debug Log open. Fragment: `Apple:` fixed. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Merged to stage as #2564 (2026-11-22), addressing #2561. The three writers ask `acceptsCounts(from:)` through `FolderListViewModel.publishSubscribedFolders` and `applySubscription`. The resets are `AccountLeftovers` (`Session/AccountLeftovers.swift`), run from `completeInteractiveSignIn` on the same `AccountIdentity` rule as PR B's wipe, not from `AppState.accountChanged`: the keys live in the defaults the session environment already holds, which is what lets the tests reach them. W3 had merged, so `DefaultsKey` gained the folder tree's key and the notification list's (`PushSettings` is not compiled on visionOS), and `FolderListView.swift` changed by the one line that names the key. The Mini run has not happened.
 
 **PR C2. A failed wipe is reported.**
 - `clearLocalData` and `clearLocalDataEndingSession` (`CabalmailClient+Maintenance.swift:17-41`) log each failed step through `CabalmailLog` (06 F11: "Make the sign-out wipe report failure").
 - No retry flag. A different user's next sign-in already wipes again before wiring (`SessionManager.swift:689-691`), the same user reading their own cache is harmless, and sqlite-mail-store.md's PR 1.2 adds a retry for the caches. The logging still matters after that, because the outbox and drafts stay in the shared directory under sqlite-mail-store.md's default.
 - Tests: a Kit test where one step throws (the scope doc picks the seam). `no-changelog`. Risk: low.
 
-**Status:** Not started (2026-10-15).
+**Status:** Merged to stage as #2565 (2026-11-22). Each throwing step of `clearLocalData` and `clearLocalDataEndingSession` logs through `WipeReport` (category `LocalWipe`, error level). Wider than the two functions, for one reason found on the re-check: `EnvelopeCache.clearAll` and `MessageBodyCache.clearAll` each discarded a failed removal themselves and then recreated the directory, so the wipe never saw the mail caches fail; both now throw it after finishing, and `AddressCache.clear` and `FolderStateCache.clear`, which do not throw, log their own. The seam is a `FileManager` whose removals throw, handed to the outbox and the caches (`LocalWipeReportTests`). It carries an `Apple:` fixed fragment instead of the `no-changelog` label, since the line shows in Settings > Debug Log. A follow-up, merged to stage as #2570 (2026-11-22, addressing #2568), fixes what the soak on `e77c8e3` found: the ending-session wipe retired the feed store and then cleared it again, and the second clear, on the closed database, reported feeds as not cleared on every ordinary sign-out. The retire is now that path's feeds step and runs once. C2's tests missed it because their clients had no feed store; the new ones use the client the app builds.
 
 **PR A. Server stamp** (decision 4 Stamp only; no macOS runner, so it may run beside one Apple PR).
 - `push_register` gives each token row a random stamp on its first write (`if_not_exists`, beside :201) and returns it as `account_stamp` in its 200 body (:243). `push_dispatch` adds the row's stamp as `acct` to `msgRef` (:230) and the FCM data map (:253-260), building the payload per row instead of per signal. A row written before PR A carries no stamp until its next register.

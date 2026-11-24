@@ -193,11 +193,14 @@ public actor EnvelopeCache {
     /// Drops every folder snapshot. Called on sign-out so the next account
     /// to sign in on this device can't read the previous user's envelopes
     /// from disk. The directory is recreated empty so the actor stays usable
-    /// (the cache lives in a shared, non-user-scoped path).
+    /// (the cache lives in a shared, non-user-scoped path). Throws when the
+    /// snapshots could not be removed, after doing the rest, so the wipe
+    /// can report that they are still on disk.
     public func clearAll() throws {
-        try? fileManager.removeItem(at: directory)
+        let failure = WipeReport.remove(directory, using: fileManager)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         emit(.cleared)
+        if let failure { throw failure }
     }
 
     /// Folds `envelopes` into the folder's snapshot. `window` records where

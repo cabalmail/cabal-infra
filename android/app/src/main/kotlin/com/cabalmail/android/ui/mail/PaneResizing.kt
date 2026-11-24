@@ -93,6 +93,7 @@ enum class PaneLayoutScreen(
 ) {
     MAIL("mail"),
     FEEDS("feeds"),
+    FLAGGED("flagged"),
 }
 
 /**

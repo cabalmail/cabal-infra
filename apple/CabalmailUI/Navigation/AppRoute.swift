@@ -24,9 +24,15 @@ struct AppRoute: Codable, Hashable, Sendable {
     var feeds = Feeds()
     /// The view of both media the window is on, in place of its mail folder
     /// or feed list, which keep their places beneath it. Nil in every route
-    /// stored before this was kept, and in every route yet: no sidebar
-    /// offers one (`SmartView`).
+    /// stored before this was kept, and while the window is on no such view.
     var smartView: SmartView?
+    /// Which medium's place the smart view stands in: the Mail tab's or the
+    /// Feeds tab's on the tab layouts, where each tab has a door to it, and
+    /// the section the split was in on the wide ones. Nil with no smart
+    /// view, and in a route that names none: the window's section then.
+    var smartDoor: ResumeSession.Section?
+    /// The message or feed item open in the smart view's reader.
+    var smartItem: SmartItem?
 
     struct Mail: Codable, Hashable, Sendable {
         var folderPath: String?
@@ -38,6 +44,38 @@ struct AppRoute: Codable, Hashable, Sendable {
     struct Feeds: Codable, Hashable, Sendable {
         var scope: RssItemScope?
         var item: Item?
+    }
+
+    /// The item open in a smart view, in a stored shape of its own, as every
+    /// stored format keeps one for an `ItemRef`: a message by its folder,
+    /// UID and Message-ID, or a feed item by its feed and sort key.
+    struct SmartItem: Codable, Hashable, Sendable {
+        var folderPath: String?
+        var messageUID: UInt32?
+        var messageID: String?
+        var feedID: String?
+        var sortKey: String?
+
+        init(_ ref: ItemRef) {
+            switch ref {
+            case .mail(let message):
+                folderPath = message.folder
+                messageUID = message.uid
+                messageID = message.messageId
+            case .feed(let feedID, let sortKey):
+                self.feedID = feedID
+                self.sortKey = sortKey
+            }
+        }
+
+        /// The item this names; nil for a shape this build cannot read.
+        var ref: ItemRef? {
+            if let folderPath, let messageUID {
+                return .mail(MessageRef(folder: folderPath, uid: messageUID, messageId: messageID))
+            }
+            if let feedID, let sortKey { return .feed(feedID: feedID, sortKey: sortKey) }
+            return nil
+        }
     }
 
     /// A feed item by the pair the resume session stores.
@@ -53,9 +91,10 @@ struct AppRoute: Codable, Hashable, Sendable {
 }
 
 extension AppRoute {
-    /// The item open in the window's section, by the identity the two media
-    /// share.
+    /// The item open in the window: its smart view's while it is on one,
+    /// else its section's, by the identity the two media share.
     var openItem: ItemRef? {
+        if smartView != nil { return smartItem?.ref }
         switch section {
         case .mail: return mail.message.map(ItemRef.mail)
         case .feeds: return feeds.item.map { .feed(feedID: $0.feedID, sortKey: $0.sortKey) }
@@ -63,14 +102,15 @@ extension AppRoute {
     }
 
     private enum StoredKeys: String, CodingKey {
-        case section, mail, feeds, smartView
+        case section, mail, feeds, smartView, smartDoor, smartItem
     }
 
     /// Reads a stored route. The section and the two halves are required,
     /// as they always were. The smart view is not: a route stored before it
     /// was kept has none, and one that names a view this build does not know
     /// (a later build's) reads as none rather than failing the whole route,
-    /// which would cost the window its folder and its open message too.
+    /// which would cost the window its folder and its open message too. Its
+    /// door and its open item are read the same way, and only with a view.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: StoredKeys.self)
         section = try container.decode(ResumeSession.Section.self, forKey: .section)
@@ -78,6 +118,9 @@ extension AppRoute {
         feeds = try container.decode(Feeds.self, forKey: .feeds)
         let name = try? container.decodeIfPresent(String.self, forKey: .smartView)
         smartView = name.flatMap(SmartView.init(rawValue:))
+        guard smartView != nil else { return }
+        smartDoor = (try? container.decodeIfPresent(ResumeSession.Section.self, forKey: .smartDoor)) ?? nil
+        smartItem = (try? container.decodeIfPresent(SmartItem.self, forKey: .smartItem)) ?? nil
     }
 
     func encode(to encoder: Encoder) throws {
@@ -86,6 +129,9 @@ extension AppRoute {
         try container.encode(mail, forKey: .mail)
         try container.encode(feeds, forKey: .feeds)
         try container.encodeIfPresent(smartView, forKey: .smartView)
+        guard smartView != nil else { return }
+        try container.encodeIfPresent(smartDoor, forKey: .smartDoor)
+        try container.encodeIfPresent(smartItem, forKey: .smartItem)
     }
 }
 

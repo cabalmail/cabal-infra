@@ -138,12 +138,75 @@ final class AppRouteSmartViewTests: XCTestCase {
         }
     }
 
+    // MARK: The smart view's door and open item
+
+    /// The view's door and its open item ride with it, in keys of their
+    /// own, and a build from before them reads the rest of the route.
+    func testASmartViewsDoorAndItemRoundTripAndOlderBuildsReadPastThem() throws {
+        var newer = route
+        newer.smartView = .flagged
+        newer.smartDoor = .mail
+        for item in [ItemRef.mail(MessageRef(folder: "Lists/swift", uid: 812, messageId: "<m@x>")),
+                     ItemRef.feed(feedID: "f", sortKey: "2026-11-21#a")] {
+            newer.smartItem = AppRoute.SmartItem(item)
+
+            let data = try JSONEncoder().encode(newer)
+            let decoded = try JSONDecoder().decode(AppRoute.self, from: data)
+
+            XCTAssertEqual(decoded, newer)
+            XCTAssertEqual(decoded.smartItem?.ref, item)
+            XCTAssertEqual(decoded.openItem, item, "the view's open item is the window's")
+            let older = try JSONDecoder().decode(ReleasedRoute.self, from: data)
+            XCTAssertEqual(older, ReleasedRoute(section: route.section, mail: route.mail, feeds: route.feeds))
+        }
+    }
+
+    /// A door or an item with no smart view is not part of a route: neither
+    /// is written, so a route off the view is stored as it always was.
+    func testADoorOrAnItemWithNoSmartViewIsNotStored() throws {
+        var route = route
+        route.smartDoor = .mail
+        route.smartItem = AppRoute.SmartItem(.feed(feedID: "f", sortKey: "k"))
+
+        let written = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(route)) as? [String: Any]
+        )
+
+        XCTAssertNil(written["smartDoor"])
+        XCTAssertNil(written["smartItem"])
+    }
+
+    /// A door or an item this build cannot read costs the view nothing
+    /// else: it opens through the window's section, with nothing open.
+    func testADoorOrAnItemThisBuildCannotReadIsReadAsNone() throws {
+        // An item of another kind, and one that is not an object at all.
+        let items: [Any] = [["event": "e1"], "event:e1", 7]
+        for item in items {
+            var object = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: try stored(smartView: "flagged")) as? [String: Any]
+            )
+            var route = try XCTUnwrap(object["route"] as? [String: Any])
+            route["smartDoor"] = "calendar"
+            route["smartItem"] = item
+            object["route"] = route
+
+            let stored = try XCTUnwrap(
+                StoredRoute.stored(in: try JSONSerialization.data(withJSONObject: object), for: Self.alice),
+                "\(item)"
+            )
+
+            XCTAssertEqual(stored.route.smartView, .flagged, "\(item)")
+            XCTAssertNil(stored.route.smartDoor, "\(item)")
+            XCTAssertNil(stored.route.smartItem?.ref, "\(item)")
+            XCTAssertEqual(stored.route.mail.folderPath, "Lists", "\(item)")
+        }
+    }
+
     // MARK: The window
 
-    /// No sidebar offers a smart view yet, so a window given a stored route
-    /// that names one opens on the route's own place, and its next store
-    /// does not carry the name on.
-    func testAWindowOpensAStoredSmartViewOnTheRoutesPlace() async throws {
+    /// A window given a stored route that names the Flagged view opens on
+    /// it, over the route's own place, and goes on storing it.
+    func testAWindowOpensAStoredSmartViewOverTheRoutesPlace() async throws {
         let suiteName = "AppRouteSmartViewTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -159,12 +222,14 @@ final class AppRouteSmartViewTests: XCTestCase {
             coordinator: { coordinator }, hasClient: { true }, seed: .mail, storedRoute: stored,
             feedsLaunchTarget: { _, _ in nil }
         )
-        XCTAssertNil(navigator.route.smartView)
-        await navigator.mailTreeAppeared(UUID(), isWide: true)
+        XCTAssertEqual(navigator.route.smartView, .flagged)
+        let tree = UUID()
+        await navigator.mailTreeAppeared(tree, isWide: true)
 
         XCTAssertEqual(navigator.selectedFolder?.path, "Archive")
         XCTAssertEqual(navigator.route.mail.folderPath, "Archive")
-        XCTAssertNil(navigator.route.smartView)
+        XCTAssertEqual(navigator.route.smartView, .flagged)
+        XCTAssertTrue(navigator.flaggedIsOpen(in: tree, door: .split))
     }
 
     // MARK: The open item

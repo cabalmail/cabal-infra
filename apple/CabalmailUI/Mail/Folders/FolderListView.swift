@@ -103,7 +103,7 @@ struct FolderListView: View {
     // device-wide half keeps the newline-joined encoding it always had.
     @SceneStorage("cabalmail.window.folder.collapsedPaths")
     private var collapsedPathsScene = ""
-    @AppStorage("cabalmail.folder.collapsedPaths")
+    @AppStorage(DefaultsKey.folderCollapsedPaths)
     private var collapsedPathsDevice: String = ""
     /// The paths this window has collapsed. Non-private for the `+Helpers`
     /// and `+Filter` extensions, like the rest of this view's state.

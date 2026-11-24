@@ -31,7 +31,15 @@ runs:
         PROFILE_B64: ${{ inputs.base64 }}
         PROFILE_EXT: ${{ inputs.extension }}
         ENV_NAME: ${{ inputs.env-name }}
-      run: |
+      # The script's last line writes "$ENV_NAME=$UUID" to GITHUB_ENV, which
+      # zizmor's github-env audit reports (at low confidence) because a
+      # value an attacker controls there can set any variable for the steps
+      # that follow. Neither half is attacker-controlled: ENV_NAME is a
+      # literal in every caller's `with:` block, and UUID is read out of a
+      # provisioning profile that arrives as a repository secret. The
+      # ignore has to sit on the `run:` line: a `#` inside the script is
+      # shell, not a YAML comment, and zizmor does not read it.
+      run: |  # zizmor: ignore[github-env]
         set -euo pipefail
         # ~/Library/MobileDevice/Provisioning Profiles is the canonical
         # install location Xcode reads. The `.mobileprovision` /

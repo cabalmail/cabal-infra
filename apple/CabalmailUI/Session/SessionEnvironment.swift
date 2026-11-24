@@ -29,7 +29,9 @@ struct SessionEnvironment {
         Configuration, SecureStore, SessionInvalidationMonitor
     ) throws -> CabalmailClient
     var makeNavCoordinator: @MainActor (CabalmailClient) -> NavStateCoordinator
-    /// Where the last control domain and username persist.
+    /// Where the last control domain and username persist, and the
+    /// per-install keys a different account's sign-in resets
+    /// (`AccountLeftovers`): the app's own defaults.
     var lastSessionDefaults: UserDefaults
     /// Mirrors the control domain to the embedded Safari extension.
     var publishControlDomain: @MainActor (String) -> Void

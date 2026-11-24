@@ -20,21 +20,29 @@ enum SidebarSelection: Hashable, Sendable {
 }
 
 /// A sidebar entry that lists mail and feed items together.
-///
-/// No sidebar draws one yet: the type is here so a window's route and the
-/// sidebar's selection already have a place for it.
 enum SmartView: String, Codable, Hashable, Sendable, CaseIterable {
     /// Flagged messages and flagged feed items.
     case flagged
+
+    /// The view's name: its sidebar entry, its list's title and its
+    /// window's. "Flagged" is a fixed word, not the built-in flag's name:
+    /// the view lists what carries any flag.
+    var title: String {
+        switch self {
+        case .flagged: return "Flagged"
+        }
+    }
 }
 
 /// How the mail sidebar's list selection maps onto what its window holds: a
-/// mail folder, and on the wide layouts a feed list beside it.
+/// mail folder, on the wide layouts a feed list beside it, and a smart view
+/// over either.
 ///
-/// The window keeps the two apart, as the navigator does (a folder pick and a
-/// feed pick are different transitions, and each ends a search and records
-/// the resume session its own way). The list has one selection. This is the
-/// rule between them, pure so it is tested without a list.
+/// The window keeps them apart, as the navigator does (a folder pick, a
+/// feed pick and a smart view's are different transitions, and each ends a
+/// search and records the resume session its own way). The list has one
+/// selection. This is the rule between them, pure so it is tested without a
+/// list.
 struct SidebarListSelection: Equatable {
     /// Whether feed rows are rows of the list's selection: the Mac
     /// (`HostPlatform.sidebarSelectsFeeds`). Elsewhere they are buttons
@@ -47,15 +55,20 @@ struct SidebarListSelection: Equatable {
         case folder(Folder?)
         /// A feed list.
         case feedScope(RssItemScope)
+        /// A view of both media.
+        case smartView(SmartView)
         /// Nothing: the pick is not one this list can make.
         case nothing
     }
 
-    /// The row the list shows selected. A feed list on screen is the
-    /// selection where the list selects feeds; where it does not, the list
-    /// has no selected row while the window shows feeds, since the window
-    /// holds no folder then.
-    func current(folder: Folder?, feedScope: RssItemScope?) -> SidebarSelection? {
+    /// The row the list shows selected. A smart view the window is on is
+    /// the selection wherever the list offers its row: the folder and the
+    /// feed list keep their places beneath it, and neither is the row. A
+    /// feed list on screen is the selection where the list selects feeds;
+    /// where it does not, the list has no selected row while the window
+    /// shows feeds, since the window holds no folder then.
+    func current(folder: Folder?, feedScope: RssItemScope?, smartView: SmartView? = nil) -> SidebarSelection? {
+        if let smartView { return .smartView(smartView) }
         if selectsFeeds, let feedScope { return .feedScope(feedScope) }
         return folder.map { .mailFolder(path: $0.path) }
     }
@@ -66,10 +79,12 @@ struct SidebarListSelection: Equatable {
     /// A folder row writes the fetched `Folder` for its path, which is the
     /// value the row was drawn from. The list clearing its selection (a
     /// click on the sidebar's empty space) clears the mail folder, as it
-    /// always has; while a feed list is the selection it clears nothing,
-    /// since a feed row was never a selection the list could clear.
+    /// always has; while a feed list or a smart view is the selection it
+    /// clears nothing, since neither was ever a selection the list could
+    /// clear.
     func write(
-        for picked: SidebarSelection?, folders: [Folder], folder: Folder?, feedScope: RssItemScope?
+        for picked: SidebarSelection?, folders: [Folder], folder: Folder?, feedScope: RssItemScope?,
+        smartView: SmartView? = nil
     ) -> Write {
         switch picked {
         case .mailFolder(let path):
@@ -77,9 +92,10 @@ struct SidebarListSelection: Equatable {
             return .folder(folder?.path == path ? folder : Folder(path: path))
         case .feedScope(let scope):
             return selectsFeeds ? .feedScope(scope) : .nothing
-        case .smartView:
-            return .nothing
+        case .smartView(let view):
+            return .smartView(view)
         case nil:
+            if smartView != nil { return .nothing }
             return selectsFeeds && feedScope != nil ? .nothing : .folder(nil)
         }
     }
@@ -90,20 +106,29 @@ struct SidebarListSelection: Equatable {
     ///   - folder: the window's mail folder.
     ///   - feedScope: the window's feed list on the layouts where feeds
     ///     share the sidebar; nil where they do not.
+    ///   - smartView: the smart view the window is on, where the list
+    ///     offers a row for one; nil where it offers none.
     ///   - folders: the sidebar's fetched folders, read when a pick is made.
     func binding(
-        folder: Binding<Folder?>, feedScope: Binding<RssItemScope?>?, folders: @escaping @Sendable () -> [Folder]
+        folder: Binding<Folder?>, feedScope: Binding<RssItemScope?>?, smartView: Binding<SmartView?>? = nil,
+        folders: @escaping @Sendable () -> [Folder]
     ) -> Binding<SidebarSelection?> {
         Binding(
-            get: { current(folder: folder.wrappedValue, feedScope: feedScope?.wrappedValue) },
+            get: {
+                current(
+                    folder: folder.wrappedValue, feedScope: feedScope?.wrappedValue,
+                    smartView: smartView?.wrappedValue
+                )
+            },
             set: { picked in
                 let write = write(
                     for: picked, folders: folders(), folder: folder.wrappedValue,
-                    feedScope: feedScope?.wrappedValue
+                    feedScope: feedScope?.wrappedValue, smartView: smartView?.wrappedValue
                 )
                 switch write {
                 case .folder(let picked): folder.wrappedValue = picked
                 case .feedScope(let scope): feedScope?.wrappedValue = scope
+                case .smartView(let view): smartView?.wrappedValue = view
                 case .nothing: break
                 }
             }

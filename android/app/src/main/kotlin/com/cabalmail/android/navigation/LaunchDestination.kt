@@ -55,6 +55,33 @@ object LaunchDestination {
     }
 
     /**
+     * The list a saved feed position is restored under. [saved] is the
+     * session's scope when it still exists, and [savedNamed] whether the
+     * session named one at all.
+     *
+     * An item is normally opened from its scope's list, and comes back
+     * under it. One opened from the Flagged view has no such list: the
+     * view is no feed scope, so the session names none, or names one left
+     * from before that does not hold the item ([savedHoldsItem]). Such an
+     * item comes back under its own feed's list, where a cross-device
+     * cursor with no scope puts one too. A scope that has departed still
+     * degrades to the feed tree, item or not.
+     */
+    fun feedScope(
+        saved: RssItemScope?,
+        savedNamed: Boolean,
+        item: RssItem?,
+        savedHoldsItem: Boolean,
+    ): RssItemScope? =
+        when {
+            item == null -> saved
+            saved != null && savedHoldsItem -> saved
+            savedNamed && saved == null -> null
+            item.subscriptionId.isNotEmpty() -> RssItemScope.Subscription(item.subscriptionId)
+            else -> null
+        }
+
+    /**
      * The feed-side routes to navigate after switching to the Feeds
      * destination. [scope] is the saved scope only when the caller verified
      * it still exists; [item] is the saved item only when it is still in

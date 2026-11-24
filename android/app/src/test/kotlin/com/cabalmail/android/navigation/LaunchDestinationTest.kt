@@ -6,6 +6,7 @@ import com.cabalmail.kit.models.RssItem
 import com.cabalmail.kit.models.RssItemScope
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -115,6 +116,33 @@ class LaunchDestinationTest {
                 LaunchRoute("feeds/item/f1/2026-01-01T00:00:00+00:00#i1", null),
             ),
             phone,
+        )
+    }
+
+    @Test
+    fun `a saved item comes back under its scope, or under its own feed when it has none`() {
+        val saved = RssItemScope.Folder("news")
+        val item = item.copy(subscriptionId = "s1")
+        val own = RssItemScope.Subscription("s1")
+        // The usual case: opened from its scope's list.
+        assertEquals(saved, LaunchDestination.feedScope(saved, savedNamed = true, item, savedHoldsItem = true))
+        // Opened from the Flagged view, which is no feed scope: nothing was
+        // named, or a list from before that does not hold the item.
+        assertEquals(own, LaunchDestination.feedScope(null, savedNamed = false, item, savedHoldsItem = false))
+        assertEquals(own, LaunchDestination.feedScope(saved, savedNamed = true, item, savedHoldsItem = false))
+        // A scope that has departed still degrades to the feed tree.
+        assertNull(LaunchDestination.feedScope(null, savedNamed = true, item, savedHoldsItem = false))
+        // With no item the scope alone decides.
+        assertEquals(saved, LaunchDestination.feedScope(saved, savedNamed = true, null, savedHoldsItem = false))
+        assertNull(LaunchDestination.feedScope(null, savedNamed = false, null, savedHoldsItem = false))
+        // An item that names no subscription has no list of its own.
+        assertNull(
+            LaunchDestination.feedScope(
+                null,
+                savedNamed = false,
+                item.copy(subscriptionId = ""),
+                savedHoldsItem = false,
+            ),
         )
     }
 

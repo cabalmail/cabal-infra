@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -139,33 +140,18 @@ fun SearchScreen(
                 }
             }
             items(state.results, key = { "${it.folder}/${it.id}" }) { envelope ->
-                // Results span folders, so the dispose resolves against this
-                // row's own source folder rather than the screen's.
-                val disposeIntent = standardDisposeIntent(envelope.folder.orEmpty())
                 Column(modifier = Modifier.animateRowRemoval(this)) {
-                    SwipeRow(
-                        isSeen = envelope.isSeen,
-                        flags = envelope.flags,
+                    CrossFolderMailRow(
+                        envelope = envelope,
+                        bimiLookup = bimiLookup,
+                        mailDomains = mailDomains,
+                        onOpen = { onOpenMessage(envelope) },
+                        onLongClick = { viewModel.toggleDefaultFlag(envelope) },
                         onToggleSeen = { viewModel.toggleSeen(envelope) },
                         onSetFlag = { slot, value -> viewModel.setFlagOn(envelope, slot, value) },
-                        onDispose = {
-                            if (disposeIntent == DisposeIntent.Purge) {
-                                pendingPurge = envelope
-                            } else {
-                                viewModel.dispose(envelope)
-                            }
-                        },
-                        disposeIntent = disposeIntent,
-                    ) {
-                        EnvelopeRow(
-                            envelope = envelope,
-                            onClick = { onOpenMessage(envelope) },
-                            onLongClick = { viewModel.toggleDefaultFlag(envelope) },
-                            folderLabel = envelope.folder,
-                            bimiLookup = bimiLookup,
-                            mailDomains = mailDomains,
-                        )
-                    }
+                        onDispose = { viewModel.dispose(envelope) },
+                        onConfirmPurge = { pendingPurge = envelope },
+                    )
                     HorizontalDivider()
                 }
             }
@@ -204,9 +190,59 @@ fun SearchScreen(
     }
 }
 
+/**
+ * A message's row in a list that spans folders (Search, the Flagged view):
+ * the row names its source folder, and its swipes act there. The dispose
+ * resolves against the row's own folder, not a screen's: inside Trash it
+ * is a purge, which [onConfirmPurge] puts to the user first, and anywhere
+ * else [onDispose] runs at once.
+ */
+@Composable
+internal fun CrossFolderMailRow(
+    envelope: Envelope,
+    bimiLookup: suspend (String) -> String?,
+    mailDomains: List<String>,
+    onOpen: () -> Unit,
+    onLongClick: () -> Unit,
+    onToggleSeen: () -> Unit,
+    onSetFlag: (slot: String, value: Boolean) -> Unit,
+    onDispose: () -> Unit,
+    onConfirmPurge: () -> Unit,
+    /** Whether the message is the one open in a pane beside the list. */
+    highlighted: Boolean = false,
+) {
+    val disposeIntent = standardDisposeIntent(envelope.folder.orEmpty())
+    val rowColor =
+        if (highlighted) {
+            MaterialTheme.colorScheme.primary
+                .copy(alpha = 0.12f)
+                .compositeOver(MaterialTheme.colorScheme.surface)
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
+    SwipeRow(
+        isSeen = envelope.isSeen,
+        flags = envelope.flags,
+        onToggleSeen = onToggleSeen,
+        onSetFlag = onSetFlag,
+        onDispose = { if (disposeIntent == DisposeIntent.Purge) onConfirmPurge() else onDispose() },
+        disposeIntent = disposeIntent,
+        containerColor = rowColor,
+    ) {
+        EnvelopeRow(
+            envelope = envelope,
+            onClick = onOpen,
+            onLongClick = onLongClick,
+            folderLabel = envelope.folder,
+            bimiLookup = bimiLookup,
+            mailDomains = mailDomains,
+        )
+    }
+}
+
 /** "INBOX", "INBOX and Archive", "INBOX, Archive and Sent", "INBOX, Archive, Sent and 2 more". */
 @Composable
-private fun searchScopePhrase(scope: SearchScope.Folders): String =
+internal fun searchScopePhrase(scope: SearchScope.Folders): String =
     when {
         scope.more > 0 ->
             pluralStringResource(

@@ -4,6 +4,11 @@ name: Destroy Terraform Infrastructure
 on:
   workflow_dispatch:
 
+# Read-only by default; the destroy job below widens its own token for
+# the OIDC exchange.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,7 +19,7 @@ jobs:
     # through to development. See CLAUDE.md "Branches and environments".
     - name: require-known-branch
       run: |
-        REF="${{ github.ref_name }}"
+        REF="$GITHUB_REF_NAME"
         case "$REF" in
           main|stage|development) ;;
           *)
@@ -24,6 +29,8 @@ jobs:
         esac
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: generate-versions
       run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" STATE_KMS_KEY_ID="${{ vars.STATE_KMS_KEY_ID }}" ./.github/scripts/make-terraform.sh
     - name: debug-1
@@ -63,6 +70,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
