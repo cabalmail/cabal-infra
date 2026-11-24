@@ -1,4 +1,4 @@
-FROM public.ecr.aws/lambda/python:3.15-arm64@sha256:ed067f2925879a2ea58b55c7cfc121af42f4a1e534188b136f0df68b4016bf24
+FROM public.ecr.aws/lambda/python:3.15-arm64@sha256:6141a1e79ab5cd00fda7e034e6edf64aa9f7ad9715513fb4cf0347675d7ecd9d
 
 RUN pip install --no-cache-dir certbot certbot-dns-route53 boto3 cryptography
 
