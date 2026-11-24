@@ -13,11 +13,10 @@
 
 name: Build NAT AMI
 
+# Read-only by default; the build job grants itself the OIDC token it
+# needs for AWS auth. See docs/aws.md / docs/github.md.
 permissions:
   contents: read
-  # OIDC token for AWS auth (configure-aws-credentials assumes
-  # vars.AWS_DEPLOY_ROLE_ARN). See docs/aws.md / docs/github.md.
-  id-token: write
 
 on:
   workflow_dispatch:
@@ -36,8 +35,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: require-branch-matching-input
+        env:
+          TARGET_ENV: ${{ inputs.environment }}
         run: |
-          REF="${{ github.ref_name }}"
+          REF="$GITHUB_REF_NAME"
           case "$REF" in
             main) ENV_FOR_REF="prod" ;;
             stage) ENV_FOR_REF="stage" ;;
@@ -47,13 +48,18 @@ jobs:
               exit 1
               ;;
           esac
-          if [[ "$ENV_FOR_REF" != "${{ inputs.environment }}" ]]; then
-            echo "::error::Branch '$REF' maps to environment '$ENV_FOR_REF', not '${{ inputs.environment }}'. Re-run from the matching branch."
+          if [[ "$ENV_FOR_REF" != "$TARGET_ENV" ]]; then
+            echo "::error::Branch '$REF' maps to environment '$ENV_FOR_REF', not '$TARGET_ENV'. Re-run from the matching branch."
             exit 1
           fi
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     needs:
       - guard
     # The pipeline build itself takes ~15-25 minutes; its test phase has
@@ -84,8 +90,9 @@ jobs:
           echo "Build version: $BUILD_ARN"
           echo "build_arn=$BUILD_ARN" >> "$GITHUB_OUTPUT"
       - name: wait-for-image
+        env:
+          BUILD_ARN: ${{ steps.start.outputs.build_arn }}
         run: |
-          BUILD_ARN="${{ steps.start.outputs.build_arn }}"
           while true; do
             STATUS=$(aws imagebuilder get-image \
               --image-build-version-arn "$BUILD_ARN" \

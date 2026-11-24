@@ -148,6 +148,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
+          # Kept on purpose: the Claude Code step below commits and pushes
+          # the fix branch from this checkout. Nothing in this job uploads
+          # the workspace.
+          persist-credentials: true
 
       - name: Invoke Claude Code to remediate the batch
         if: steps.alerts.outputs.has_alerts == 'true'
