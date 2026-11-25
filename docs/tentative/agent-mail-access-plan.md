@@ -4,6 +4,27 @@ Status: **tentative** — no roadmap version assigned. This document guides the
 design and eventual implementation of AI-assistant access to Cabalmail
 mailboxes.
 
+> **Progress (2026-11-25):** Phase A's server side is built: the
+> `cabal-agent-grants` table, the `authorize_agent` REQUEST authorizer (result
+> TTL 0), the three grant endpoints and a read-only `mcp` Lambda behind
+> `POST /mcp`. Operator guide: [agent-access.md](../agent-access.md).
+> Deviations from the plan below, all deliberate for a first cut:
+>
+> - **Tools:** `list_folders`, `list_messages` (the plan's `list_envelopes`,
+>   with search filters folded in: unread, from, subject, text, since, before)
+>   and `get_message` (body text plus attachment names and sizes).
+>   `get_attachment` and presigned URLs are deferred, so no S3 access at all.
+> - **Rate limit:** a `mcp/POST` method throttle (5 rps, burst 10) stands in
+>   for the per-token `cabal-rate-limits` counter.
+> - **Grant rows** carry no `use_count`; `last_used_at` is stamped at most once
+>   a minute by the authorizer.
+> - **Management UI:** none yet. Grants are minted, listed and revoked with
+>   `scripts/agent-grant.py` against the Cognito endpoints; the Apple screen is
+>   still to come.
+> - **Wiring:** the authorizer and the mcp Lambda live in
+>   `terraform/infra/modules/app/mcp.tf` with their own narrowly scoped roles,
+>   rather than an `auth_mode` on the `call` module.
+
 ## Goal
 
 Let a user grant an AI assistant (Claude Code, Claude desktop/mobile, the
@@ -184,6 +205,15 @@ Plan:
   the human path to `BODY.PEEK[]` too, making explicit `set_flag` the *only*
   writer of `\Seen` system-wide. That is the cleaner end state; the agent
   requirement doesn't wait for it.
+
+> **Erratum (2026-11-25):** The premise above is wrong. `helper.get_message`
+> opens its folder with `get_imap_client(..., True)`, which selects it with
+> `EXAMINE`, and RFC 3501 forbids an `EXAMINE`d mailbox from changing
+> permanent state, so its `RFC822` fetch does not set `\Seen` today. No human
+> read path has an implicit `\Seen` to lose, and the cache-interplay audit is
+> moot. The Phase A mcp Lambda still fetches `BODY.PEEK[]` on an `EXAMINE`d
+> folder (belt and braces), and it never reads or writes the S3 body cache, so
+> its role needs no S3 access at all.
 
 ### 4. Grant management (human side)
 
