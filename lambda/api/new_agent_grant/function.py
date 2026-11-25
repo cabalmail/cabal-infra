@@ -5,7 +5,8 @@ this response and nowhere else; the table keeps only its SHA-256.
 
 Body (all optional): `label` (required in practice, e.g. "Claude on my
 laptop"), `expires_in_days` (1-365, default 90), `folders` (Phase A: only
-["INBOX"]), `access` (Phase A: only "read_only").
+["INBOX"]), `access` ("read_only", the default, or "read_flag", which also
+lets the agent add the user's own custom flags).
 '''
 import time
 from agent_grants import ( # pylint: disable=import-error

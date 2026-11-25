@@ -229,9 +229,12 @@ resource "aws_cognito_user_pool_client" "extension" {
 # in here, through the Hosted UI, and claude.ai holds a Cognito access token
 # that /mcp's authorizer accepts.
 #
-# The resource server defines the one scope that token carries. mail.read is
+# The resource server defines the scopes that token carries. mail.read is
 # what Phase A grants: read-only, INBOX-only (the folder limit is enforced by
-# authorize_agent and the mcp Lambda, not by the scope string). A short
+# authorize_agent and the mcp Lambda, not by the scope string). mail.flag adds
+# one write on top of it: adding the user's own custom flags (palette slots)
+# to messages, through the MCP add_flag tool; authorize_agent maps a token
+# carrying both to the read_flag access level. A short
 # identifier rather than the MCP URL keeps the access token small; resource
 # binding (RFC 8707) needs managed login, which this pool's domain does not
 # use, so the identifier does not have to match the URL.
@@ -244,11 +247,17 @@ resource "aws_cognito_resource_server" "mcp" {
     scope_name        = local.mcp_read_scope_name
     scope_description = "Read mail in the folders the MCP server allows (INBOX), without changing it"
   }
+
+  scope {
+    scope_name        = local.mcp_flag_scope_name
+    scope_description = "Add your own custom flags to mail in those folders; nothing else"
+  }
 }
 
 locals {
   mcp_resource_server_identifier = "cabal-mcp"
   mcp_read_scope_name            = "mail.read"
+  mcp_flag_scope_name            = "mail.flag"
 
   # The only redirect URI the hosted Claude apps (claude.ai, Desktop, mobile)
   # use for a custom connector's OAuth flow. Claude Code uses a loopback
@@ -260,7 +269,7 @@ locals {
 # Public OAuth client for claude.ai: authorization-code flow with PKCE, no
 # client secret (the user enters only the client id when adding the
 # connector), Hosted UI sign-in with the user's own Cabalmail login and TOTP.
-# Its tokens carry the mail.read scope and nothing else - no openid, no
+# Its tokens carry the mail.read and mail.flag scopes and nothing else - no openid, no
 # aws.cognito.signin.user.admin - so they cannot call Cognito's user APIs, and
 # the REST API's Cognito-authorized routes, which expect an ID token, refuse
 # them.

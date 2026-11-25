@@ -68,8 +68,10 @@ SCOPE = 'cabal-mcp/mail.read'
 RESOURCE = 'https://abc123.execute-api.us-east-1.amazonaws.com/prod/mcp'
 CONFIG = {'issuer': ISSUER, 'client_id': CLIENT_ID, 'scope': SCOPE,
           'resource_url': RESOURCE}
+FLAG_SCOPE = 'cabal-mcp/mail.flag'
 ENV = {'MCP_OAUTH_ISSUER': ISSUER, 'MCP_OAUTH_CLIENT_ID': CLIENT_ID,
-       'MCP_OAUTH_SCOPE': SCOPE, 'MCP_RESOURCE_URL': RESOURCE}
+       'MCP_OAUTH_SCOPE': SCOPE, 'MCP_RESOURCE_URL': RESOURCE,
+       'MCP_OAUTH_FLAG_SCOPE': FLAG_SCOPE}
 
 # --- a throwaway RSA key -----------------------------------------------------
 
@@ -295,7 +297,10 @@ class VerifyTests(_OAuthCase):
         os.environ.update({k: v for k, v in ENV.items() if k != 'MCP_RESOURCE_URL'})
         self.assertIsNone(agent_oauth.oauth_config())
         os.environ['MCP_RESOURCE_URL'] = RESOURCE
-        self.assertEqual(agent_oauth.oauth_config(), CONFIG)
+        self.assertEqual(agent_oauth.oauth_config(), dict(CONFIG, flag_scope=FLAG_SCOPE))
+        # The flag scope is optional: without it OAuth still works, read-only.
+        os.environ.pop('MCP_OAUTH_FLAG_SCOPE')
+        self.assertEqual(agent_oauth.oauth_config(), dict(CONFIG, flag_scope=''))
 
 
 class JwksTests(_OAuthCase):
@@ -399,6 +404,21 @@ class AuthorizerOAuthTests(_OAuthCase):
             'folders': 'INBOX'})
         for value in policy['context'].values():
             self.assertIsInstance(value, str)
+
+    def test_flag_scope_makes_the_token_read_flag(self):
+        token = _token(_claims(scope=f'{SCOPE} {FLAG_SCOPE}'))
+        policy = authorize_agent.handler(_authorizer_event(f'Bearer {token}'), None)
+        self.assertEqual(policy['context']['access'], 'read_flag')
+        self.assertEqual(policy['context']['folders'], 'INBOX')
+
+    def test_flag_scope_alone_is_not_enough(self):
+        self._refused(_authorizer_event(f'Bearer {_token(_claims(scope=FLAG_SCOPE))}'))
+
+    def test_flag_scope_is_ignored_when_not_configured(self):
+        os.environ.pop('MCP_OAUTH_FLAG_SCOPE')
+        token = _token(_claims(scope=f'{SCOPE} {FLAG_SCOPE}'))
+        policy = authorize_agent.handler(_authorizer_event(f'Bearer {token}'), None)
+        self.assertEqual(policy['context']['access'], 'read_only')
 
     def test_invalid_token_is_refused_and_the_log_names_no_token(self):
         token = _token(_claims(client_id='someotherclient'))

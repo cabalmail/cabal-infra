@@ -14,7 +14,9 @@ An access token is admitted only if it is:
 - an RS256 JWT whose signature checks out against one of the pool's published
   signing keys (fetched from the issuer's jwks.json and cached per container);
 - issued by this pool (`iss`), as an access token (`token_use`), to the MCP
-  app client (`client_id`), carrying the MCP read scope, and not expired;
+  app client (`client_id`), carrying the MCP read scope, and not expired
+  (the flag scope, if the token also carries it, lets the holder add custom
+  flags; see can_flag);
 - if it names an audience at all, addressed to this server's /mcp URL. Cognito
   sets `aud` only under resource binding (RFC 8707), which needs managed
   login; without it the client_id and scope checks carry the binding.
@@ -64,14 +66,27 @@ class TokenRejected(Exception):
 
 def oauth_config():
     '''The values an access token must match, from the authorizer's
-    environment, or None when any is unset (OAuth sign-in not configured).'''
+    environment, or None when any is unset (OAuth sign-in not configured).
+
+    `flag_scope` is the one optional value: the scope that, on top of the read
+    scope, lets a token's holder add custom flags. Unset, no token gets that.'''
     config = {
         'issuer': os.environ.get('MCP_OAUTH_ISSUER', ''),
         'client_id': os.environ.get('MCP_OAUTH_CLIENT_ID', ''),
         'scope': os.environ.get('MCP_OAUTH_SCOPE', ''),
         'resource_url': os.environ.get('MCP_RESOURCE_URL', ''),
     }
-    return config if all(config.values()) else None
+    if not all(config.values()):
+        return None
+    config['flag_scope'] = os.environ.get('MCP_OAUTH_FLAG_SCOPE', '')
+    return config
+
+
+def can_flag(claims, config):
+    '''True when a verified token also carries the flag scope.'''
+    flag_scope = config.get('flag_scope')
+    scope = claims.get('scope')
+    return bool(flag_scope) and isinstance(scope, str) and flag_scope in scope.split()
 
 
 def looks_like_jwt(value):

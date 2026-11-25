@@ -93,7 +93,7 @@ The client work queued after the 2026-10 Apple-client rearchitecture lives in [`
 - Watch mode: `cd react/admin && npm run test:watch`
 
 ### Lambda Functions (`lambda/api`)
-- Lint all: `cd lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py push_dispatch/apns.py push_dispatch/fcm.py` (covers the shared modules, every handler, and the handler-sibling modules the `*/function.py` glob misses)
+- Lint all: `cd lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py mcp/mail_text.py push_dispatch/apns.py push_dispatch/fcm.py` (covers the shared modules, every handler, and the handler-sibling modules the `*/function.py` glob misses)
 - Local test: `cd lambda/api/[function_dir] && python -m function`
 
 ### Apple Clients (`apple/`)
@@ -237,8 +237,8 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 | `purge_messages` / `empty_trash` | Permanently delete (expunge) messages; trash folders only |
 | `mark_folder_read` | Mark every unseen message in a folder as read (one SEARCH + batched STORE) |
 | `new_agent_grant` / `list_agent_grants` / `revoke_agent_grant` | Mint, list and revoke the bearer tokens an MCP client presents at `/mcp` (rows in `cabal-agent-grants`, hash only; see `docs/agent-access.md`) |
-| `authorize_agent` | Not a route: the REQUEST Lambda authorizer on `/mcp`, resolving a `cbl_agt_` token to its grant, or verifying a `cabal_mcp_client` Cognito access token (claude.ai OAuth, read-only INBOX) |
-| `mcp` | Read-only MCP server at `POST /mcp` (stateless streamable HTTP, EXAMINE-only IMAP), behind `authorize_agent` rather than Cognito; wired in `terraform/infra/modules/app/mcp.tf` |
+| `authorize_agent` | Not a route: the REQUEST Lambda authorizer on `/mcp`, resolving a `cbl_agt_` token to its grant, or verifying a `cabal_mcp_client` Cognito access token (claude.ai OAuth, INBOX; `read_flag` with the `mail.flag` scope, else read-only) |
+| `mcp` | MCP server at `POST /mcp` (stateless streamable HTTP), behind `authorize_agent` rather than Cognito; wired in `terraform/infra/modules/app/mcp.tf`. Reads use EXAMINE and BODY.PEEK; the one write, `add_flag` (palette slots only, add-only), is offered only to `read_flag` grants. Body/attachment parsing lives in the sibling `mail_text.py` |
 
 ### React App (`react/admin/`)
 

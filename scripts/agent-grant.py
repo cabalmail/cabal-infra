@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mint, list and revoke agent access grants for the read-only /mcp endpoint.
+"""Mint, list and revoke agent access grants for the /mcp endpoint.
 
 An agent (an MCP client such as Claude Code) reaches a mailbox through
 ``POST /mcp`` with a bearer token. Tokens are minted by the mailbox owner
@@ -7,7 +7,9 @@ through the Cognito-authenticated ``/new_agent_grant`` endpoint; this script
 signs in the same way the webmail does and calls it, so no AWS credentials are
 needed. See docs/agent-access.md.
 
-Phase A grants are read-only and cover INBOX only. The token is shown once,
+Grants cover INBOX only and are read-only unless minted with
+``--access read_flag``, which also lets the agent add your own custom flags
+(nothing else). The token is shown once,
 at mint time; the service keeps only its hash, so a lost token is revoked and
 re-minted, never recovered.
 
@@ -133,9 +135,12 @@ def parse_args(argv):
                         help="the environment's control domain (config.json lives on admin.<it>)")
     parser.add_argument("--totp", help="current TOTP code, if the user is MFA-enrolled")
     sub = parser.add_subparsers(dest="command", required=True)
-    mint = sub.add_parser("mint", help="mint a read-only INBOX grant; prints its token once")
+    mint = sub.add_parser("mint", help="mint an INBOX grant; prints its token once")
     mint.add_argument("--label", required=True, help="what the token is for")
     mint.add_argument("--days", type=int, default=90, help="lifetime in days (1-365, default 90)")
+    mint.add_argument("--access", choices=("read_only", "read_flag"), default="read_only",
+                      help="read_only (default), or read_flag to also let the agent add "
+                           "your custom flags")
     sub.add_parser("list", help="list your grants, newest first")
     revoke = sub.add_parser("revoke", help="revoke a grant by its id")
     revoke.add_argument("grant_id")
@@ -158,11 +163,13 @@ def main(argv=None):
 
     if args.command == "mint":
         status, body = http_json(f"{base}/new_agent_grant", "POST",
-                                 {"label": args.label, "expires_in_days": args.days}, headers)
+                                 {"label": args.label, "expires_in_days": args.days,
+                                  "access": args.access}, headers)
         if status != 201:
             fail(f"mint failed ({status}): {body}")
         print(f"{LOG_TAG} minted grant {body['grant_id']} "
-              f"(read-only, INBOX, expires {when(body['expires_at'])})", file=sys.stderr)
+              f"({body.get('access', args.access)}, INBOX, expires {when(body['expires_at'])})",
+              file=sys.stderr)
         print(f"{LOG_TAG} the token below is shown once; store it now.", file=sys.stderr)
         print(body["token"])
         mcp_url = body.get("mcp_url") or f"{base}/mcp"

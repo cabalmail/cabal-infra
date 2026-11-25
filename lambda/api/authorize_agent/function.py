@@ -11,8 +11,9 @@ of two kinds:
   revoked or expired grant is refused.
 - A Cognito access token from the OAuth sign-in claude.ai's custom connectors
   run (agent_oauth.py). It is verified against the pool's signing keys and
-  must have been issued to the MCP app client with the MCP read scope. Phase A
-  grants it what a minted grant gets: read-only, INBOX only.
+  must have been issued to the MCP app client with the MCP read scope. It is
+  INBOX only, and read-only unless it also carries the MCP flag scope, which
+  makes it read_flag (read, plus adding the user's own custom flags).
 
 Anything else, or a token that fails its check, is refused with 401
 ("Unauthorized" is the one exception message API Gateway turns into a 401
@@ -24,6 +25,7 @@ revoking a minted grant takes effect on the next request.
 '''
 import time
 from agent_grants import ( # pylint: disable=import-error
+    ACCESS_READ_FLAG,
     ACCESS_READ_ONLY,
     MINTABLE_FOLDERS,
     grants_table,
@@ -33,6 +35,7 @@ from agent_grants import ( # pylint: disable=import-error
 )
 from agent_oauth import ( # pylint: disable=import-error
     TokenRejected,
+    can_flag,
     looks_like_jwt,
     oauth_config,
     session_id,
@@ -77,8 +80,9 @@ def grant_policy(event, token):
 
 
 def oauth_policy(event, token):
-    '''Admits a Cognito access token from the MCP OAuth sign-in. Its scope is
-    fixed rather than per grant: Phase A's read-only, INBOX-only.'''
+    '''Admits a Cognito access token from the MCP OAuth sign-in. Its folders
+    are fixed (INBOX) rather than per grant; its access level comes from its
+    scopes: read_flag with the flag scope, read_only without.'''
     config = oauth_config()
     if config is None:
         print('[authorize_agent] refused oauth token reason=oauth not configured')
@@ -91,7 +95,7 @@ def oauth_policy(event, token):
     return allow(event, claims['username'], {
         'user': claims['username'],
         'grant_id': session_id(claims),
-        'access': ACCESS_READ_ONLY,
+        'access': ACCESS_READ_FLAG if can_flag(claims, config) else ACCESS_READ_ONLY,
         'folders': ','.join(sorted(MINTABLE_FOLDERS)),
     })
 
