@@ -542,6 +542,33 @@ locals {
       cache     = false
       cache_ttl = 0
     },
+    # Agent access grants (docs/tentative/agent-mail-access-plan.md, Phase A):
+    # the signed-in owner mints, lists and revokes the bearer tokens an MCP
+    # client presents at /mcp. DynamoDB only.
+    new_agent_grant = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    list_agent_grants = {
+      runtime = "python3.13"
+
+      method    = "GET"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
+    revoke_agent_grant = {
+      runtime = "python3.13"
+
+      method    = "POST"
+      memory    = 128
+      cache     = false
+      cache_ttl = 0
+    },
     push_envelope = {
       runtime = "python3.13"
 

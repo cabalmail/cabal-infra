@@ -591,3 +591,56 @@ resource "aws_dynamodb_table" "rss_user_item_state" {
     enabled = true
   }
 }
+
+/**
+* Agent access grants (docs/tentative/agent-mail-access-plan.md, Phase A).
+* One row per bearer token an agent (an MCP client) presents at /mcp. The
+* token itself is never stored: the hash key is its SHA-256 hex, so a read of
+* this table yields nothing an attacker can present. Minted, listed and
+* revoked by the new_agent_grant / list_agent_grants / revoke_agent_grant
+* endpoints (Cognito-authenticated, the owner's own rows only, via user-index);
+* read on every /mcp request by the authorize_agent Lambda authorizer.
+*
+* TTL on expires_at reaps expired grants (an expired row is already refused by
+* the authorizer; the reaper only tidies). Outside the backup plan like
+* cabal-user-preferences: a lost grant is re-minted in a minute, and restoring
+* one from a backup would resurrect a credential its owner may have revoked.
+*/
+
+#tfsec:ignore:aws-dynamodb-table-customer-key
+resource "aws_dynamodb_table" "agent_grants" {
+  name                        = "cabal-agent-grants"
+  billing_mode                = "PAY_PER_REQUEST"
+  hash_key                    = "token_hash"
+  deletion_protection_enabled = true
+
+  attribute {
+    name = "token_hash"
+    type = "S"
+  }
+  attribute {
+    name = "user"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name = "user-index"
+    key_schema {
+      attribute_name = "user"
+      key_type       = "HASH"
+    }
+    projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+  point_in_time_recovery {
+    enabled = true
+  }
+}
