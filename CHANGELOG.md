@@ -24,7 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grant row. Minted `cbl_agt_` tokens keep working and remain the way in for
   Claude Code. New Terraform outputs `mcp_url` and `mcp_oauth_client_id`
   give the two values claude.ai asks for. The agent mail access plan moved
-  from `docs/tentative/` to `docs/1.x/`.
+  from `docs/tentative/` to `docs/1.x/`. Deploying this release takes two
+  infra workflow runs: the AWS provider leaves `authorize_agent`'s OAuth
+  environment variables out of the plan that creates `cabal_mcp_client`,
+  because the new client ID is not yet known, so after one run the
+  authorizer refuses every access token as "oauth not configured" and
+  claude.ai reports "Authorization failed" right after a successful sign-in.
+  The second run's plan sets them.
 
 ## [1.62.0] - 2026-11-25
 
