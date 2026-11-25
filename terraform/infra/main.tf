@@ -250,9 +250,16 @@ module "admin" {
   # the extension can drive the Hosted UI code flow.
   extension_client_id = module.pool.extension_client_id
   user_pool_domain    = module.pool.user_pool_domain
-  imap_pool_enabled   = var.imap_pool_enabled
-  quiesced            = var.quiesced
-  access_logs_bucket  = module.s3_access_logs.bucket
+
+  # MCP OAuth sign-in (docs/agent-access.md, "Connect claude.ai"): the
+  # public app client and scope /mcp's authorizer accepts Cognito access
+  # tokens for, and that the discovery documents advertise.
+  mcp_client_id  = module.pool.mcp_client_id
+  mcp_read_scope = module.pool.mcp_read_scope
+
+  imap_pool_enabled  = var.imap_pool_enabled
+  quiesced           = var.quiesced
+  access_logs_bucket = module.s3_access_logs.bucket
 
   # Private-IMAP replumb: the API Lambdas attach to the VPC and dial the imap
   # task over its Cloud Map name instead of the public IMAPS listener.

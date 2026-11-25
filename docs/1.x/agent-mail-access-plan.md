@@ -4,6 +4,11 @@ Status: **tentative** — no roadmap version assigned. This document guides the
 design and eventual implementation of AI-assistant access to Cabalmail
 mailboxes.
 
+> **Erratum (2026-11-25):** the status line above is out of date. The plan
+> moved from `docs/tentative/` to `docs/1.x/` once Phase A shipped and the
+> OAuth sign-in from Phase C was built; the Progress notes below are the
+> current record.
+
 > **Progress (2026-11-25):** Phase A's server side is built: the
 > `cabal-agent-grants` table, the `authorize_agent` REQUEST authorizer (result
 > TTL 0), the three grant endpoints and a read-only `mcp` Lambda behind
@@ -313,6 +318,23 @@ changes.
   (reuse the push-dispatch fan-out to notify a webhook/queue instead of
   polling); a `send` grant level with recipient allowlists and hard rate
   caps, only if draft-only proves insufficient.
+
+> **Progress (2026-11-25):** the OAuth candidate is built, pulled forward
+> because claude.ai custom connectors take no static `Authorization` header.
+> `cabal_mcp_client` is a public Cognito app client (code flow with PKCE, no
+> secret) whose only scope is `cabal-mcp/mail.read`, with claude.ai's callback
+> as its one redirect URI. Cognito publishes no `code_challenge_methods_supported`
+> and serves no RFC 9728 document, so the admin site serves both discovery
+> documents as static JSON (`/.well-known/oauth-protected-resource` and an
+> RFC 8414 `/.well-known/oauth-authorization-server` that points at the
+> Hosted UI endpoints). An API-wide `UNAUTHORIZED` gateway response adds the
+> `WWW-Authenticate: Bearer resource_metadata=...` challenge that starts the
+> flow. `authorize_agent` now also accepts a Cognito access token carrying that
+> scope, verified locally against the pool's JWKS; such a token is read-only and
+> INBOX-only, with no grant row. Minted `cbl_agt_` grants keep working and stay
+> the way in for Claude Code, since Cognito needs exact redirect URIs and offers
+> neither dynamic client registration nor client ID metadata documents. User
+> guide: [agent-access.md](../agent-access.md#connect-claudeai).
 
 ## Open questions
 

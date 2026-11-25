@@ -47,3 +47,13 @@ output "sms_enabled" {
   value       = local.sms_enabled
   description = "True when a 10DLC campaign registration id is configured and the pool is wired for SMS-based phone verification. Consumed by the app module so /config.js can tell clients to hide the phone-number field and consent checkbox when off. See docs/sms-10dlc.md."
 }
+
+output "mcp_client_id" {
+  value       = aws_cognito_user_pool_client.mcp.id
+  description = "ID of the public OAuth (PKCE) app client claude.ai's custom connector signs in with for the MCP server"
+}
+
+output "mcp_read_scope" {
+  value       = one(aws_cognito_resource_server.mcp.scope_identifiers)
+  description = "The full scope string (resource-server identifier/scope) an MCP access token must carry"
+}

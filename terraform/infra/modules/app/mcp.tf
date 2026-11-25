@@ -1,4 +1,4 @@
-# Read-only MCP endpoint for agents (docs/tentative/agent-mail-access-plan.md,
+# Read-only MCP endpoint for agents (docs/1.x/agent-mail-access-plan.md,
 # Phase A; operator guide in docs/agent-access.md).
 #
 #   POST /mcp  ->  authorize_agent (REQUEST authorizer, bearer token)
@@ -6,12 +6,16 @@
 #
 # The route sits on the same REST API and stage as the Cognito endpoints but
 # authenticates differently: an MCP client cannot run the Cognito SRP + TOTP
-# dance, so it presents a long-lived `cbl_agt_...` bearer token minted by the
-# owner through new_agent_grant. The authorizer looks the token's hash up in
-# cabal-agent-grants and hands the grant (user, id, access, folders) to the
-# mcp Lambda in requestContext.authorizer. Neither function is built by the
-# call module, because that module hard-wires COGNITO_USER_POOLS and a policy
-# sized for the full mail surface; these two get roles scoped to what they do.
+# dance, so it presents one of two bearer tokens. Either a long-lived
+# `cbl_agt_...` token minted by the owner through new_agent_grant, which the
+# authorizer looks up by hash in cabal-agent-grants; or a Cognito access token
+# from the OAuth sign-in claude.ai's custom connectors run (the cabal_mcp_client
+# app client in modules/user_pool), which the authorizer verifies against the
+# pool's signing keys. Either way it hands the grant (user, id, access,
+# folders) to the mcp Lambda in requestContext.authorizer. Neither function is
+# built by the call module, because that module hard-wires COGNITO_USER_POOLS
+# and a policy sized for the full mail surface; these two get roles scoped to
+# what they do.
 
 # -- Authorizer --------------------------------------------------
 
@@ -86,9 +90,21 @@ resource "aws_lambda_function" "authorize_agent" {
   handler          = "function.handler"
   runtime          = "python3.13"
   architectures    = ["arm64"]
-  # One GetItem and at most one conditional UpdateItem.
+  # One GetItem and at most one conditional UpdateItem, or for an OAuth
+  # token at most one fetch of the pool's signing keys (cached per container).
   timeout     = 10
   memory_size = 128
+
+  # What an OAuth access token must match (see local.mcp_oauth below). A
+  # minted cbl_agt_ token ignores all four.
+  environment {
+    variables = {
+      MCP_OAUTH_ISSUER    = local.mcp_oauth.cognito_issuer
+      MCP_OAUTH_CLIENT_ID = var.mcp_client_id
+      MCP_OAUTH_SCOPE     = var.mcp_read_scope
+      MCP_RESOURCE_URL    = local.mcp_oauth.resource_url
+    }
+  }
 
   logging_config {
     log_format = "Text"
@@ -307,5 +323,105 @@ locals {
     aws_api_gateway_resource.mcp,
     aws_api_gateway_method.mcp,
     aws_api_gateway_integration.mcp,
+    aws_api_gateway_gateway_response.unauthorized,
   ])
+}
+
+# -- OAuth sign-in (claude.ai custom connectors) -----------------
+#
+# claude.ai's custom connectors authenticate with OAuth, not with a static
+# Authorization header, so the server has to tell the client where to sign in.
+# The MCP authorization spec does that in three hops:
+#
+#   1. An unauthenticated request gets a 401 whose WWW-Authenticate header
+#      points at the protected resource metadata (RFC 9728).
+#   2. That document names /mcp's exact URL and the authorization server.
+#   3. The authorization server's metadata (RFC 8414) gives the authorize and
+#      token endpoints and says S256 PKCE is supported.
+#
+# Cognito is the authorization server, but its own discovery document omits
+# code_challenge_methods_supported, which MCP clients check before they start,
+# so Cabalmail publishes the RFC 8414 document itself: its endpoints are
+# Cognito's Hosted UI and token endpoint, and its issuer is the admin origin
+# it is served from (an RFC 8414 issuer must match the URL its metadata is
+# fetched from). Both documents are static, so they are S3 objects on the
+# admin origin, beside the other /.well-known documents in s3.tf.
+locals {
+  mcp_oauth = {
+    # What the user pastes into claude.ai. RFC 9728 requires the metadata's
+    # `resource` to match it exactly, path included.
+    resource_url = "https://${aws_api_gateway_rest_api.gateway.id}.execute-api.${var.region}.amazonaws.com/${var.stage_name}/mcp"
+    admin_origin = "https://admin.${var.control_domain}"
+    hosted_ui    = "https://${var.user_pool_domain}.auth.${var.region}.amazoncognito.com"
+    # The `iss` claim on every token the pool signs.
+    cognito_issuer = "https://cognito-idp.${var.region}.amazonaws.com/${var.user_pool_id}"
+  }
+
+  mcp_protected_resource_metadata = jsonencode({
+    resource                 = local.mcp_oauth.resource_url
+    authorization_servers    = [local.mcp_oauth.admin_origin]
+    scopes_supported         = [var.mcp_read_scope]
+    bearer_methods_supported = ["header"]
+    resource_name            = "Cabalmail"
+  })
+
+  # No registration_endpoint: Cognito has no dynamic client registration, so
+  # the user enters cabal_mcp_client's id in the connector's settings. No
+  # offline_access in scopes_supported either: Cognito issues a refresh token
+  # on every code grant and would refuse the scope as unknown.
+  mcp_authorization_server_metadata = jsonencode({
+    issuer                                     = local.mcp_oauth.admin_origin
+    authorization_endpoint                     = "${local.mcp_oauth.hosted_ui}/oauth2/authorize"
+    token_endpoint                             = "${local.mcp_oauth.hosted_ui}/oauth2/token"
+    revocation_endpoint                        = "${local.mcp_oauth.hosted_ui}/oauth2/revoke"
+    jwks_uri                                   = "${local.mcp_oauth.cognito_issuer}/.well-known/jwks.json"
+    response_types_supported                   = ["code"]
+    grant_types_supported                      = ["authorization_code", "refresh_token"]
+    code_challenge_methods_supported           = ["S256"]
+    token_endpoint_auth_methods_supported      = ["none"]
+    revocation_endpoint_auth_methods_supported = ["none"]
+    scopes_supported                           = [var.mcp_read_scope]
+  })
+}
+
+resource "aws_s3_object" "mcp_protected_resource_metadata" {
+  bucket        = var.bucket
+  key           = "/.well-known/oauth-protected-resource"
+  content_type  = "application/json"
+  cache_control = "no-cache"
+  content       = local.mcp_protected_resource_metadata
+  etag          = md5(local.mcp_protected_resource_metadata)
+}
+
+resource "aws_s3_object" "mcp_authorization_server_metadata" {
+  bucket        = var.bucket
+  key           = "/.well-known/oauth-authorization-server"
+  content_type  = "application/json"
+  cache_control = "no-cache"
+  content       = local.mcp_authorization_server_metadata
+  etag          = md5(local.mcp_authorization_server_metadata)
+}
+
+# Hop 1. A REQUEST authorizer cannot set response headers, so the 401 is
+# shaped here, as a gateway response. Gateway responses belong to the whole
+# REST API, not one route, so every 401 the API returns carries this header,
+# including the Cognito authorizer's on the other routes. That should be
+# harmless: the header only names a discovery document, no client in this repo
+# reads WWW-Authenticate or handles an authentication challenge, a Bearer
+# challenge prompts no browser dialog, and the body keeps API Gateway's
+# default shape. A missing
+# Authorization header is refused by API Gateway before authorize_agent runs,
+# and lands here too, which is exactly the probe claude.ai starts with.
+resource "aws_api_gateway_gateway_response" "unauthorized" {
+  rest_api_id   = aws_api_gateway_rest_api.gateway.id
+  response_type = "UNAUTHORIZED"
+  status_code   = "401"
+
+  response_templates = {
+    "application/json" = "{\"message\":$context.error.messageString}"
+  }
+
+  response_parameters = {
+    "gatewayresponse.header.WWW-Authenticate" = "'Bearer resource_metadata=\"${local.mcp_oauth.admin_origin}/.well-known/oauth-protected-resource\"'"
+  }
 }

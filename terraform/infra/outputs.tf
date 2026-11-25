@@ -43,3 +43,13 @@ output "front_door_cf_id" {
   value       = module.front_door.cloudfront_distribution_id
   description = "CloudFront distribution ID for the front door site. Use with aws cloudfront create-invalidation when content is updated."
 }
+
+output "mcp_url" {
+  value       = module.admin.mcp_url
+  description = "Read-only MCP server URL. Enter it as the server URL when adding Cabalmail as a claude.ai custom connector (docs/agent-access.md)."
+}
+
+output "mcp_oauth_client_id" {
+  value       = module.pool.mcp_client_id
+  description = "Public Cognito app client for MCP OAuth sign-in. Enter it as the OAuth Client ID on claude.ai and leave the client secret blank (docs/agent-access.md)."
+}

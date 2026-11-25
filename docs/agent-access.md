@@ -1,8 +1,8 @@
 # Agent access (read-only MCP)
 
-Cabalmail exposes one mailbox to an AI agent through a read-only [Model Context Protocol](https://modelcontextprotocol.io) server at `POST /mcp` on the existing API. An MCP client such as Claude Code connects with a bearer token that the mailbox owner mints, and gets three tools: list folders, list or filter messages, and read a message. It cannot send, reply, move, delete, flag or mark anything, and reading a message does not mark it read.
+Cabalmail exposes one mailbox to an AI agent through a read-only [Model Context Protocol](https://modelcontextprotocol.io) server at `POST /mcp` on the existing API. An MCP client connects in one of two ways: Claude Code and other clients that take a static header use a bearer token the mailbox owner mints, and claude.ai (web, desktop and mobile) signs in with the owner's Cabalmail login over OAuth. Either way it gets three tools: list folders, list or filter messages, and read a message. It cannot send, reply, move, delete, flag or mark anything, and reading a message does not mark it read.
 
-This is Phase A of the [agent mail access plan](./tentative/agent-mail-access-plan.md), which holds the design rationale and what comes next.
+This is Phase A of the [agent mail access plan](./1.x/agent-mail-access-plan.md), plus the OAuth sign-in from its Phase C. The plan holds the design rationale and what comes next.
 
 ## What an agent can do
 
@@ -21,6 +21,8 @@ MCP client --(POST /mcp, Authorization: Bearer cbl_agt_...)--> API Gateway
   --> authorize_agent (REQUEST authorizer)  looks the token's hash up in cabal-agent-grants
   --> mcp Lambda                            EXAMINE-only IMAP as the grant's user
 ```
+
+Requests from claude.ai carry a Cognito access token instead of a `cbl_agt_` token; see [Connect claude.ai](#connect-claudeai) for that path. Everything after the authorizer is the same.
 
 - **Tokens** look like `cbl_agt_` followed by 43 URL-safe characters. Only the SHA-256 of a token is stored, as the hash key of `cabal-agent-grants`, so the plaintext is shown once at mint time and can never be recovered. A lost token is revoked and a new one minted.
 - **Grants** are per Cognito user, at most 10 live at a time, and expire after 1 to 365 days (default 90). Phase A mints only `read_only` grants on `INBOX`.
@@ -56,9 +58,34 @@ claude mcp add --transport http cabalmail \
 
 Any MCP client that accepts a static bearer header works the same way. The URL is the API's invoke URL (the `invokeUrl` in `https://admin.<control-domain>/config.json`) with `/mcp` appended.
 
+### Connect claude.ai
+
+claude.ai custom connectors cannot send a static `Authorization` header, so claude.ai signs in through the Cognito Hosted UI instead, with the same username, password and TOTP code as the webmail. No token is minted for it.
+
+1. Find the two values. After an apply, the infra workflow's run summary lists them as the Terraform outputs `mcp_url` and `mcp_oauth_client_id`. The client ID is also under the user pool's app clients in the Cognito console, as `cabal_mcp_client`.
+2. In claude.ai, open **Settings > Connectors**, choose **Add custom connector**, and enter:
+   - **Name:** `Cabalmail` (any name works).
+   - **Remote MCP server URL:** the `mcp_url` value, `https://<api-id>.execute-api.<region>.amazonaws.com/<stage>/mcp`.
+   - Under **Advanced settings**, **OAuth Client ID:** the `mcp_oauth_client_id` value. Leave **OAuth Client Secret** empty: the client is public and uses PKCE.
+3. Choose **Connect**. claude.ai opens the Cabalmail sign-in page on `<pool domain>.auth.<region>.amazoncognito.com`; sign in there. The connector then shows the three tools.
+
+A connector added on claude.ai on the web is also available in the Claude desktop and mobile apps. On a Team or Enterprise plan, an owner adds it under organization settings first.
+
+How the sign-in works:
+
+- A request to `/mcp` without a valid token gets a 401 whose `WWW-Authenticate` header points to `https://admin.<control-domain>/.well-known/oauth-protected-resource` (RFC 9728). That document names `https://admin.<control-domain>` as the authorization server, whose `/.well-known/oauth-authorization-server` document (RFC 8414) points at the Hosted UI's authorize, token and revoke endpoints. Both are static JSON on the admin site, because Cognito serves neither document in the form MCP clients need.
+- `cabal_mcp_client` allows only the authorization code flow, only claude.ai's callback (`https://claude.ai/api/mcp/auth_callback`) as a redirect URI, and only the scope `cabal-mcp/mail.read`. It has no `openid` or admin scope, and the rest of the API, which expects ID tokens, refuses its tokens.
+- `authorize_agent` verifies the access token's signature against the pool's published keys and checks its issuer, `token_use`, client ID, expiry and scope. A token that passes is read-only on INBOX, the same as a Phase A grant. It has no row in `cabal-agent-grants`, so it does not appear in `agent-grant.py list`.
+- Access tokens last 15 minutes and claude.ai refreshes them quietly. The refresh token lasts 7 days, after which claude.ai asks you to sign in again.
+
+To disconnect, remove the connector in claude.ai. To cut off a session you no longer control, an operator runs `aws cognito-idp admin-user-global-sign-out --user-pool-id <pool id> --username <user>`, which revokes the user's refresh tokens on every client, the webmail and native apps included. An access token already issued keeps working for up to 15 minutes, because the authorizer checks it locally rather than asking Cognito on every call.
+
+Claude Code cannot use this sign-in, because Cognito needs every redirect URI registered in advance and Claude Code's local callback port varies. Keep using a minted token there.
+
 ## Operating it
 
-- **Audit log.** The mcp Lambda writes one JSON line per tool call to `/cabal/lambda/mcp`: grant id, user, tool, folder, message id, outcome and duration. It never logs message content or search terms. Refused tokens are logged by the authorizer in `/cabal/lambda/authorize_agent` by grant id only, never by token.
+- **Audit log.** The mcp Lambda writes one JSON line per tool call to `/cabal/lambda/mcp`: grant id, user, tool, folder, message id, outcome and duration. It never logs message content or search terms. Refused tokens are logged by the authorizer in `/cabal/lambda/authorize_agent` by grant id only, never by token, and a refused OAuth token by its reason (for example `wrong client` or `expired`). Calls made over OAuth log the grant id as `oauth-` followed by the token's session id.
+- **claude.ai says the connector needs attention.** Its refresh token expired or was revoked; choose **Connect** again and sign in. If sign-in itself fails, check that the user has TOTP set up, since the pool's sign-in trigger applies to the Hosted UI too.
 - **A token stopped working.** Run `agent-grant.py list`: the grant shows as `revoked` or `expired`, or is gone (expired rows are removed by the table's TTL). Mint a new one.
 - **IMAP maintenance.** While `/cabal/maintenance/imap` is active, tool calls return an error result with the retry hint rather than failing the request.
 - **Backups.** `cabal-agent-grants` is deliberately outside the backup plan: a lost grant is re-minted in a minute, and a restore could bring back a token its owner revoked.
