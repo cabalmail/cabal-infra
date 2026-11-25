@@ -76,7 +76,7 @@ Users can author ordered mail-handling rules (file, flag, mark read, forward, au
 
 # Agent access
 
-An AI agent can read one mailbox through a read-only MCP server at `POST /mcp`, using a bearer token the mailbox owner mints and can revoke at any time. Phase A grants cover INBOX only and offer three tools (list folders, list or filter messages, read a message); nothing an agent can call sends mail or changes the mailbox, and reading does not mark mail read. See [Agent access](./agent-access.md) for minting tokens, connecting Claude Code, the security model and the audit log.
+An AI agent can read one mailbox through a read-only MCP server at `POST /mcp`, using a bearer token the mailbox owner mints and can revoke at any time, or, from claude.ai, by signing in with the owner's Cabalmail login over OAuth. Phase A grants cover INBOX only and offer three tools (list folders, list or filter messages, read a message); nothing an agent can call sends mail or changes the mailbox, and reading does not mark mail read. See [Agent access](./agent-access.md) for minting tokens, connecting Claude Code or claude.ai, the security model and the audit log.
 
 # Synced settings
 

@@ -2253,7 +2253,7 @@ Open implementation-time items, scoped per phase:
     grant anything the mail body view withholds (scripts, remote
     content policy, link handling).
 12. **Agent access.** The tentative
-    [`agent-mail-access-plan.md`](../tentative/agent-mail-access-plan.md)
+    [`agent-mail-access-plan.md`](./agent-mail-access-plan.md)
     proposes scoped, token-based MCP access to a user's mailbox. Feeds
     are an obvious second scope for the same grant model ("read my
     feeds, never mark them read"). Nothing in this plan should make

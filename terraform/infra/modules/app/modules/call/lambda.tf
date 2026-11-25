@@ -61,7 +61,7 @@ ${local.rss_table_resources}
 RSS
   rss_statements      = var.rss_access ? local.rss_statements_body : ""
 
-  # Agent-grant endpoints (docs/tentative/agent-mail-access-plan.md, Phase A)
+  # Agent-grant endpoints (docs/1.x/agent-mail-access-plan.md, Phase A)
   # get cabal-agent-grants and its user-index, as their own statement, and only
   # they do: the table holds the hashes of live agent bearer tokens, so no
   # mail endpoint should be able to read or write it. No DeleteItem - revoke

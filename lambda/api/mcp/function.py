@@ -1,6 +1,6 @@
 '''Model Context Protocol endpoint: read-only mailbox access for AI assistants.
 
-Phase A of docs/tentative/agent-mail-access-plan.md; operator and user notes in
+Phase A of docs/1.x/agent-mail-access-plan.md; operator and user notes in
 docs/agent-access.md.
 
 Transport: MCP's streamable HTTP in stateless mode. Each POST carries one

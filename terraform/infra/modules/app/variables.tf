@@ -27,6 +27,16 @@ variable "user_pool_domain" {
   description = "Hosted-UI domain prefix of the Cognito user pool (without the .auth.<region>.amazoncognito.com suffix), surfaced through config.js for the browser extension's Hosted UI flow."
 }
 
+variable "mcp_client_id" {
+  type        = string
+  description = "ID of the public OAuth app client claude.ai's custom connector signs in with. authorize_agent accepts Cognito access tokens issued to this client on /mcp."
+}
+
+variable "mcp_read_scope" {
+  type        = string
+  description = "Full scope string (resource-server identifier/scope) a Cognito access token must carry for /mcp, e.g. cabal-mcp/mail.read."
+}
+
 variable "region" {
   type        = string
   description = "The AWS region."

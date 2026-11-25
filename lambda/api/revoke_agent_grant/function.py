@@ -1,6 +1,6 @@
 '''Revokes one of the caller's agent access grants.
 
-Phase A of docs/tentative/agent-mail-access-plan.md. The row is kept with a
+Phase A of docs/1.x/agent-mail-access-plan.md. The row is kept with a
 `revoked_at` stamp, so the user's list still shows what the grant was and when
 it was last used; its TTL removes it at the original expiry. The /mcp
 authorizer caches nothing, so the next request that presents the token is
