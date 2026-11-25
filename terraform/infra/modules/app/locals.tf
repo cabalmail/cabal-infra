@@ -542,7 +542,7 @@ locals {
       cache     = false
       cache_ttl = 0
     },
-    # Agent access grants (docs/tentative/agent-mail-access-plan.md, Phase A):
+    # Agent access grants (docs/1.x/agent-mail-access-plan.md, Phase A):
     # the signed-in owner mints, lists and revokes the bearer tokens an MCP
     # client presents at /mcp. DynamoDB only.
     new_agent_grant = {

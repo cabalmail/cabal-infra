@@ -1,7 +1,7 @@
 '''Lists the caller's agent access grants, newest first. Never returns token
 material: neither the plaintext (which is not stored) nor its hash.
 
-Phase A of docs/tentative/agent-mail-access-plan.md.'''
+Phase A of docs/1.x/agent-mail-access-plan.md.'''
 import time
 from agent_grants import caller, public_view, response, user_grants # pylint: disable=import-error
 

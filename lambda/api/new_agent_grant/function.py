@@ -1,6 +1,6 @@
 '''Mints an agent access grant: a bearer token an AI assistant presents to /mcp.
 
-Phase A of docs/tentative/agent-mail-access-plan.md. The plaintext token is in
+Phase A of docs/1.x/agent-mail-access-plan.md. The plaintext token is in
 this response and nowhere else; the table keeps only its SHA-256.
 
 Body (all optional): `label` (required in practice, e.g. "Claude on my

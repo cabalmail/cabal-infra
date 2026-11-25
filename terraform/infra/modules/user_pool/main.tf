@@ -222,3 +222,80 @@ resource "aws_cognito_user_pool_client" "extension" {
   # Same rationale as cabal_admin_client above.
   enable_token_revocation = true
 }
+
+# OAuth sign-in for the read-only MCP server (docs/agent-access.md,
+# "Connect claude.ai"). claude.ai's custom connectors cannot send a static
+# Authorization header, so instead of a minted cbl_agt_ token the user signs
+# in here, through the Hosted UI, and claude.ai holds a Cognito access token
+# that /mcp's authorizer accepts.
+#
+# The resource server defines the one scope that token carries. mail.read is
+# what Phase A grants: read-only, INBOX-only (the folder limit is enforced by
+# authorize_agent and the mcp Lambda, not by the scope string). A short
+# identifier rather than the MCP URL keeps the access token small; resource
+# binding (RFC 8707) needs managed login, which this pool's domain does not
+# use, so the identifier does not have to match the URL.
+resource "aws_cognito_resource_server" "mcp" {
+  identifier   = local.mcp_resource_server_identifier
+  name         = "Cabalmail MCP"
+  user_pool_id = aws_cognito_user_pool.users.id
+
+  scope {
+    scope_name        = local.mcp_read_scope_name
+    scope_description = "Read mail in the folders the MCP server allows (INBOX), without changing it"
+  }
+}
+
+locals {
+  mcp_resource_server_identifier = "cabal-mcp"
+  mcp_read_scope_name            = "mail.read"
+
+  # The only redirect URI the hosted Claude apps (claude.ai, Desktop, mobile)
+  # use for a custom connector's OAuth flow. Claude Code uses a loopback
+  # redirect on a random port, which Cognito's exact-match callback list
+  # cannot express, so Claude Code keeps using a minted token.
+  mcp_oauth_callback_urls = ["https://claude.ai/api/mcp/auth_callback"]
+}
+
+# Public OAuth client for claude.ai: authorization-code flow with PKCE, no
+# client secret (the user enters only the client id when adding the
+# connector), Hosted UI sign-in with the user's own Cabalmail login and TOTP.
+# Its tokens carry the mail.read scope and nothing else - no openid, no
+# aws.cognito.signin.user.admin - so they cannot call Cognito's user APIs, and
+# the REST API's Cognito-authorized routes, which expect an ID token, refuse
+# them.
+resource "aws_cognito_user_pool_client" "mcp" {
+  name         = "cabal_mcp_client"
+  user_pool_id = aws_cognito_user_pool.users.id
+
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = aws_cognito_resource_server.mcp.scope_identifiers
+  supported_identity_providers         = ["COGNITO"]
+  callback_urls                        = local.mcp_oauth_callback_urls
+  explicit_auth_flows                  = ["ALLOW_REFRESH_TOKEN_AUTH"]
+
+  # The connector writes no attributes; the shared list keeps this client
+  # from granting more than cabal_admin_client does.
+  write_attributes = local.user_write_attributes
+
+  # authorize_agent verifies the access token locally and cannot see a
+  # Cognito revocation, so the access token's lifetime is the longest a
+  # revoked sign-in keeps working: fifteen minutes. claude.ai refreshes ahead
+  # of expiry. The refresh token matches the browser extension's, the other
+  # public client in this pool; after a week the user signs in again.
+  # Refresh-token rotation is not on: Cognito requires the client to give up
+  # ALLOW_REFRESH_TOKEN_AUTH for it, and the extension client sets the
+  # precedent for a public client without it.
+  access_token_validity  = 15
+  id_token_validity      = 15
+  refresh_token_validity = 7
+  token_validity_units {
+    access_token  = "minutes"
+    id_token      = "minutes"
+    refresh_token = "days"
+  }
+
+  enable_token_revocation       = true
+  prevent_user_existence_errors = "ENABLED"
+}

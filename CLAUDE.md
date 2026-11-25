@@ -237,7 +237,7 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 | `purge_messages` / `empty_trash` | Permanently delete (expunge) messages; trash folders only |
 | `mark_folder_read` | Mark every unseen message in a folder as read (one SEARCH + batched STORE) |
 | `new_agent_grant` / `list_agent_grants` / `revoke_agent_grant` | Mint, list and revoke the bearer tokens an MCP client presents at `/mcp` (rows in `cabal-agent-grants`, hash only; see `docs/agent-access.md`) |
-| `authorize_agent` | Not a route: the REQUEST Lambda authorizer on `/mcp`, resolving a `cbl_agt_` token to its grant |
+| `authorize_agent` | Not a route: the REQUEST Lambda authorizer on `/mcp`, resolving a `cbl_agt_` token to its grant, or verifying a `cabal_mcp_client` Cognito access token (claude.ai OAuth, read-only INBOX) |
 | `mcp` | Read-only MCP server at `POST /mcp` (stateless streamable HTTP, EXAMINE-only IMAP), behind `authorize_agent` rather than Cognito; wired in `terraform/infra/modules/app/mcp.tf` |
 
 ### React App (`react/admin/`)

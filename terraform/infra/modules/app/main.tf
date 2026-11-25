@@ -253,7 +253,7 @@ resource "aws_api_gateway_method_settings" "cache_settings" {
 # The /mcp route (mcp.tf): a tighter throttle than the `*/*` default. Each
 # call opens an IMAP session, and the caller is an agent loop rather than a
 # person, so this is the per-grant rate cap Phase A of
-# docs/tentative/agent-mail-access-plan.md settles for until grants carry
+# docs/1.x/agent-mail-access-plan.md settles for until grants carry
 # their own. Lives here rather than in mcp.tf so
 # test_api_gateway_method_overrides.py holds it to the shared policy.
 resource "aws_api_gateway_method_settings" "mcp_settings" {

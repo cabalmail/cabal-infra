@@ -1,7 +1,7 @@
 '''Agent access grants: the token format, its hash, and the cabal-agent-grants
 row shape shared by the grant-management endpoints and the /mcp authorizer.
 
-Phase A of docs/tentative/agent-mail-access-plan.md. A grant is a bearer token
+Phase A of docs/1.x/agent-mail-access-plan.md. A grant is a bearer token
 a user mints for an AI assistant. Only the token's SHA-256 is stored; the
 plaintext is returned once, at mint time, and never again.
 

@@ -593,7 +593,7 @@ resource "aws_dynamodb_table" "rss_user_item_state" {
 }
 
 /**
-* Agent access grants (docs/tentative/agent-mail-access-plan.md, Phase A).
+* Agent access grants (docs/1.x/agent-mail-access-plan.md, Phase A).
 * One row per bearer token an agent (an MCP client) presents at /mcp. The
 * token itself is never stored: the hash key is its SHA-256 hex, so a read of
 * this table yields nothing an attacker can present. Minted, listed and
