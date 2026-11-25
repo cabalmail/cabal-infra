@@ -97,14 +97,6 @@ resource "aws_lambda_function" "authorize_agent" {
 
   # What an OAuth access token must match (see local.mcp_oauth below). A
   # minted cbl_agt_ token ignores all four.
-  #
-  # The AWS provider (seen on 6.73.0) silently drops this whole block from
-  # the plan while any value in it is still unknown, so the apply that
-  # first creates module.pool's MCP client leaves the function without these
-  # variables and every OAuth token is refused ("oauth not configured"). The
-  # next plan, with the client ID known, picks the block up. On a fresh
-  # stack, or after anything here is replaced, run the infra workflow a
-  # second time.
   environment {
     variables = {
       MCP_OAUTH_ISSUER    = local.mcp_oauth.cognito_issuer
