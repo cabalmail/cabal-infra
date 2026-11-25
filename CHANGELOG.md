@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.64.0] - 2026-11-25
+
+### Added
+- **Attachments and custom flags on the MCP server.** `get_attachment`
+  returns an attachment or inline image by the part number `get_message` now
+  lists: JPEG, PNG, GIF and WebP images up to 3 MB as MCP image content, text
+  attachments as text. `list_flags` shows the owner's custom flags by label,
+  and messages now report theirs. `add_flag` adds one of the owner's custom
+  flags (palette slots only, add-only, at most 50 messages a call) and is
+  offered only to grants with the new `read_flag` access level: a minted
+  grant with `--access read_flag`, or a claude.ai sign-in carrying the new
+  `cabal-mcp/mail.flag` scope. Read-only grants stay read-only. The mcp
+  Lambda gains `GetItem` on `cabal-user-preferences` to read the palette.
+
+### Fixed
+- **MCP message bodies from badly built senders.** `get_message` no longer
+  shows a stylesheet in place of the text when a sender's plain-text
+  alternative was generated with its CSS left in (it uses the HTML part
+  instead, or strips the rules), and no longer starts the body with
+  `Content-Type:` lines when a sender nested a second MIME header block in
+  the text part (the block is removed and its encoding applied). Body text
+  now has `\n` line endings.
+
 ## [1.63.0] - 2026-11-25
 
 ### Added
