@@ -62,11 +62,13 @@ Any MCP client that accepts a static bearer header works the same way. The URL i
 
 claude.ai custom connectors cannot send a static `Authorization` header, so claude.ai signs in through the Cognito Hosted UI instead, with the same username, password and TOTP code as the webmail. No token is minted for it.
 
-1. Find the two values. After an apply, the infra workflow's run summary lists them as the Terraform outputs `mcp_url` and `mcp_oauth_client_id`. The client ID is also under the user pool's app clients in the Cognito console, as `cabal_mcp_client`.
+1. Find the two values.
+   - **Server URL:** the `invokeUrl` in `https://admin.<control-domain>/config.json`, with `/mcp` appended. Don't copy the `mcp_url` output from the infra workflow's run summary: the region is a masked secret in CI, so it shows there as `***`. Locally, `terraform output mcp_url` prints it in full.
+   - **Client ID:** the `mcp_oauth_client_id` output on the infra workflow's run summary, or the `cabal_mcp_client` entry under the user pool's app clients in the Cognito console.
 2. In claude.ai, open **Settings > Connectors**, choose **Add custom connector**, and enter:
    - **Name:** `Cabalmail` (any name works).
-   - **Remote MCP server URL:** the `mcp_url` value, `https://<api-id>.execute-api.<region>.amazonaws.com/<stage>/mcp`.
-   - Under **Advanced settings**, **OAuth Client ID:** the `mcp_oauth_client_id` value. Leave **OAuth Client Secret** empty: the client is public and uses PKCE.
+   - **Remote MCP server URL:** the server URL from step 1, `https://<api-id>.execute-api.<region>.amazonaws.com/<stage>/mcp`.
+   - Under **Advanced settings**, **OAuth Client ID:** the client ID from step 1. Leave **OAuth Client Secret** empty: the client is public and uses PKCE.
 3. Choose **Connect**. claude.ai opens the Cabalmail sign-in page on `<pool domain>.auth.<region>.amazoncognito.com`; sign in there. The connector then shows the three tools.
 
 A connector added on claude.ai on the web is also available in the Claude desktop and mobile apps. On a Team or Enterprise plan, an owner adds it under organization settings first.
