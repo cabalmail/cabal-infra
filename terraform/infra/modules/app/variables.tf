@@ -37,6 +37,11 @@ variable "mcp_read_scope" {
   description = "Full scope string (resource-server identifier/scope) a Cognito access token must carry for /mcp, e.g. cabal-mcp/mail.read."
 }
 
+variable "mcp_flag_scope" {
+  type        = string
+  description = "Full scope string that, beside mcp_read_scope, lets a Cognito access token add the user's custom flags through /mcp's add_flag tool, e.g. cabal-mcp/mail.flag."
+}
+
 variable "region" {
   type        = string
   description = "The AWS region."

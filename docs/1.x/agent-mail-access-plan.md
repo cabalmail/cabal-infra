@@ -336,6 +336,16 @@ changes.
 > neither dynamic client registration nor client ID metadata documents. User
 > guide: [agent-access.md](../agent-access.md#connect-claudeai).
 
+> **Progress (2026-11-25):** the first write from Phase B is built, narrower
+> than `set_flags`: `add_flag` adds one of the owner's custom flags (a palette
+> slot, `cabal-flag-01..20`) to messages, and nothing else (no removal, no
+> system flags). It comes with a new access level, `read_flag`, mintable on a
+> grant and carried by the new OAuth scope `cabal-mcp/mail.flag`; read-only
+> grants are not offered the tool. Also built: `get_attachment` (images as MCP
+> image content, text as text, nothing else) in place of presigned URLs, so the
+> mcp Lambda still has no S3 access, and `list_flags`. `move_messages`, flag
+> removal and wider folder scope remain open.
+
 ## Open questions
 
 1. **Multi-user addresses.** Grants are per-mailbox (per Cognito user), and

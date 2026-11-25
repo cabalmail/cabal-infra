@@ -252,10 +252,11 @@ module "admin" {
   user_pool_domain    = module.pool.user_pool_domain
 
   # MCP OAuth sign-in (docs/agent-access.md, "Connect claude.ai"): the
-  # public app client and scope /mcp's authorizer accepts Cognito access
+  # public app client and scopes /mcp's authorizer accepts Cognito access
   # tokens for, and that the discovery documents advertise.
   mcp_client_id  = module.pool.mcp_client_id
   mcp_read_scope = module.pool.mcp_read_scope
+  mcp_flag_scope = module.pool.mcp_flag_scope
 
   imap_pool_enabled  = var.imap_pool_enabled
   quiesced           = var.quiesced

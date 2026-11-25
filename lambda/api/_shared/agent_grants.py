@@ -32,10 +32,13 @@ _GRANT_ID_LEN = 16
 _GRANT_ID_RE = re.compile(r'^[0-9a-f]{16}$')
 
 ACCESS_READ_ONLY = 'read_only'
+# Read, plus adding the user's own custom flags (palette slots) through the
+# MCP add_flag tool; nothing else changes. The first step of Phase B.
+ACCESS_READ_FLAG = 'read_flag'
 ACCESS_READ_WRITE = 'read_write'
-# Phase A ships read-only grants only. read_write is accepted by the data model
-# so the row shape does not change in Phase B, but minting one is refused.
-MINTABLE_ACCESS = (ACCESS_READ_ONLY,)
+# read_write is accepted by the data model so the row shape does not change
+# when the rest of Phase B (moving mail) lands, but minting one is refused.
+MINTABLE_ACCESS = (ACCESS_READ_ONLY, ACCESS_READ_FLAG)
 
 # Phase A ships INBOX-only grants. The row carries a folder list so widening
 # scope later is a validation change, not a schema change.
@@ -110,7 +113,7 @@ def validate_expiry_days(value):
 
 
 def validate_access(value):
-    '''The grant's access level. Only read_only can be minted in Phase A.'''
+    '''The grant's access level: read_only (the default) or read_flag.'''
     if value is None:
         return ACCESS_READ_ONLY
     if value not in MINTABLE_ACCESS:

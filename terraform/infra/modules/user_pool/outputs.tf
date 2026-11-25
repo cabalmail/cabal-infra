@@ -53,7 +53,18 @@ output "mcp_client_id" {
   description = "ID of the public OAuth (PKCE) app client claude.ai's custom connector signs in with for the MCP server"
 }
 
+# Both scope strings are built from locals rather than read back from
+# aws_cognito_resource_server.mcp.scope_identifiers: that attribute is unknown
+# at plan time whenever the resource server changes, and an unknown value in a
+# Lambda's environment block makes the AWS provider drop the whole block from
+# the plan (the authorizer's MCP_OAUTH_* settings were once silently left
+# unapplied that way, by an unknown client ID).
 output "mcp_read_scope" {
-  value       = one(aws_cognito_resource_server.mcp.scope_identifiers)
+  value       = "${local.mcp_resource_server_identifier}/${local.mcp_read_scope_name}"
   description = "The full scope string (resource-server identifier/scope) an MCP access token must carry"
+}
+
+output "mcp_flag_scope" {
+  value       = "${local.mcp_resource_server_identifier}/${local.mcp_flag_scope_name}"
+  description = "The full scope string that, beside the read scope, lets an MCP access token add the user's custom flags"
 }

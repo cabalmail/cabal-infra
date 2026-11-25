@@ -1,8 +1,9 @@
-# Read-only MCP endpoint for agents (docs/1.x/agent-mail-access-plan.md,
-# Phase A; operator guide in docs/agent-access.md).
+# MCP endpoint for agents (docs/1.x/agent-mail-access-plan.md, Phase A and
+# the add-flag step of Phase B; operator guide in docs/agent-access.md).
 #
 #   POST /mcp  ->  authorize_agent (REQUEST authorizer, bearer token)
-#              ->  mcp (stateless streamable-HTTP JSON-RPC, EXAMINE-only IMAP)
+#              ->  mcp (stateless streamable-HTTP JSON-RPC; EXAMINE for reads,
+#                       a read-write SELECT only for add_flag)
 #
 # The route sits on the same REST API and stage as the Cognito endpoints but
 # authenticates differently: an MCP client cannot run the Cognito SRP + TOTP
@@ -103,6 +104,9 @@ resource "aws_lambda_function" "authorize_agent" {
       MCP_OAUTH_CLIENT_ID = var.mcp_client_id
       MCP_OAUTH_SCOPE     = var.mcp_read_scope
       MCP_RESOURCE_URL    = local.mcp_oauth.resource_url
+      # Optional, unlike the four above: a token that also carries this
+      # scope gets the read_flag access level (adding custom flags).
+      MCP_OAUTH_FLAG_SCOPE = var.mcp_flag_scope
     }
   }
 
@@ -163,10 +167,11 @@ resource "aws_iam_role" "mcp" {
   })
 }
 
-# Deliberately narrower than the call module's policy: no DynamoDB, no S3
-# message cache, no Route 53, SNS, SQS or Cognito. The server only opens
-# EXAMINE (read-only) IMAP sessions, so the SSM parameters helper.py reads at
-# import and per call are the only AWS data it needs.
+# Deliberately narrower than the call module's policy: no S3 message cache,
+# no Route 53, SNS, SQS or Cognito, and of DynamoDB only GetItem on the
+# preferences table, for the user's flag palette (the labels of their custom
+# flags, and the slots add_flag may set). Besides that, the SSM parameters
+# helper.py reads at import and per call are the only AWS data it needs.
 resource "aws_iam_role_policy" "mcp" {
   #checkov:skip=CKV_AWS_290:the only unconstrained write actions are the EC2 ENI trio for VPC-attached Lambda networking - Lambda-managed interface ARNs only exist at runtime (mirrors AWSLambdaVPCAccessExecutionRole)
   #checkov:skip=CKV_AWS_355:same statement - ec2:Describe* has no resource-level scoping and the ENI create/delete targets are runtime values
@@ -183,6 +188,12 @@ resource "aws_iam_role_policy" "mcp" {
           "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/master_password",
           "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/cabal/maintenance/imap",
         ]
+      },
+      {
+        # Read-only: the palette is the user's to edit, never the agent's.
+        Effect   = "Allow"
+        Action   = ["dynamodb:GetItem"]
+        Resource = "arn:aws:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/cabal-user-preferences"
       },
       {
         Effect = "Allow"
@@ -256,9 +267,10 @@ resource "aws_lambda_function" "mcp" {
   # outside the call module, so it carries its own copy (as append_sent does).
   environment {
     variables = {
-      CONTROL_DOMAIN     = var.control_domain
-      IMAP_INTERNAL_HOST = var.imap_internal_host
-      IMAP_POOL_ENABLED  = var.imap_pool_enabled ? "true" : "false"
+      CONTROL_DOMAIN              = var.control_domain
+      IMAP_INTERNAL_HOST          = var.imap_internal_host
+      IMAP_POOL_ENABLED           = var.imap_pool_enabled ? "true" : "false"
+      USER_PREFERENCES_TABLE_NAME = "cabal-user-preferences"
     }
   }
 
@@ -360,7 +372,7 @@ locals {
   mcp_protected_resource_metadata = jsonencode({
     resource                 = local.mcp_oauth.resource_url
     authorization_servers    = [local.mcp_oauth.admin_origin]
-    scopes_supported         = [var.mcp_read_scope]
+    scopes_supported         = [var.mcp_read_scope, var.mcp_flag_scope]
     bearer_methods_supported = ["header"]
     resource_name            = "Cabalmail"
   })
@@ -380,7 +392,7 @@ locals {
     code_challenge_methods_supported           = ["S256"]
     token_endpoint_auth_methods_supported      = ["none"]
     revocation_endpoint_auth_methods_supported = ["none"]
-    scopes_supported                           = [var.mcp_read_scope]
+    scopes_supported                           = [var.mcp_read_scope, var.mcp_flag_scope]
   })
 }
 
