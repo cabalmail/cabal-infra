@@ -60,6 +60,28 @@ ${local.rss_table_resources}
         },
 RSS
   rss_statements      = var.rss_access ? local.rss_statements_body : ""
+
+  # Agent-grant endpoints (docs/tentative/agent-mail-access-plan.md, Phase A)
+  # get cabal-agent-grants and its user-index, as their own statement, and only
+  # they do: the table holds the hashes of live agent bearer tokens, so no
+  # mail endpoint should be able to read or write it. No DeleteItem - revoke
+  # stamps revoked_at and the TTL reaps the row.
+  agent_grants_statements_body = <<GRANTS
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:Query",
+                "dynamodb:UpdateItem"
+            ],
+            "Resource": [
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-agent-grants",
+                "arn:aws:dynamodb:${var.region}:${var.account}:table/cabal-agent-grants/index/user-index"
+            ]
+        },
+GRANTS
+  agent_grants_statements      = var.agent_grants_access ? local.agent_grants_statements_body : ""
 }
 
 resource "aws_lambda_permission" "api_exec" {
@@ -200,6 +222,7 @@ ${local.cache_object_actions}
             ]
         },
 ${local.rss_statements}
+${local.agent_grants_statements}
         {
             "Effect": "Allow",
             "Action": "sns:Publish",
