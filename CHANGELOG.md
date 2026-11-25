@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.62.0] - 2026-11-25
+
+### Added
+- **Read-only MCP server for AI agents.** `POST /mcp` lets an MCP client
+  such as Claude Code read one mailbox with three tools (`list_folders`,
+  `list_messages` with unread/from/subject/text/date filters, and
+  `get_message`), authenticated by a `cbl_agt_` bearer token instead of
+  Cognito. The owner mints, lists and revokes tokens through the new
+  `new_agent_grant`, `list_agent_grants` and `revoke_agent_grant` endpoints
+  (or `scripts/agent-grant.py`); only each token's SHA-256 is stored, in
+  the new `cabal-agent-grants` table. A REQUEST Lambda authorizer
+  (`authorize_agent`, result TTL 0, so revocation is immediate) resolves the
+  token to its grant, and the `mcp` Lambda opens folders with `EXAMINE` and
+  fetches `BODY.PEEK[]`, so reading never marks mail read; its role has no
+  DynamoDB or S3 access. Phase A grants cover INBOX only and expire within a
+  year. See `docs/agent-access.md`.
+
+### Changed
+- **Compose 1.13 and Material 3 1.5 for the Android client.** Compose BOM
+  2026.11.01, with AGP 9.5.2, KSP 2.3.14 and Gradle 9.9.2 from the same
+  dependabot group. Compose 1.13 requires `compileSdk` 37.1, so both modules
+  now compile against it; `targetSdk` and `minSdk` are unchanged. Material 3
+  1.5 removed `MenuAnchorType` and made `ExposedDropdownMenu` an extension
+  that has to be imported, so the six files with an exposed dropdown use
+  `ExposedDropdownMenuAnchorType` and the new import. No behaviour change
+  is intended.
+
 ## [1.61.0] - 2026-11-24
 
 ### Added
