@@ -59,12 +59,16 @@ output "mcp_client_id" {
 # Lambda's environment block makes the AWS provider drop the whole block from
 # the plan (the authorizer's MCP_OAUTH_* settings were once silently left
 # unapplied that way, by an unknown client ID).
-output "mcp_read_scope" {
-  value       = "${local.mcp_resource_server_identifier}/${local.mcp_read_scope_name}"
-  description = "The full scope string (resource-server identifier/scope) an MCP access token must carry"
-}
-
-output "mcp_flag_scope" {
-  value       = "${local.mcp_resource_server_identifier}/${local.mcp_flag_scope_name}"
-  description = "The full scope string that, beside the read scope, lets an MCP access token add the user's custom flags"
+#
+# The two are one object, passed as one module argument, on purpose: a second
+# pool-to-app argument changed checkov's graph rendering enough that it stopped
+# resolving var.sinkhole in the ecs module and reported a phantom
+# CKV_AWS_382 on the count-gated sinkhole egress rule (terraform/infra/
+# BASELINE.md, "OAC migration").
+output "mcp_scopes" {
+  value = {
+    read = "${local.mcp_resource_server_identifier}/${local.mcp_read_scope_name}"
+    flag = "${local.mcp_resource_server_identifier}/${local.mcp_flag_scope_name}"
+  }
+  description = "The full MCP scope strings (resource-server identifier/scope): read, which every MCP access token must carry, and flag, which beside it lets the token add the user's custom flags"
 }

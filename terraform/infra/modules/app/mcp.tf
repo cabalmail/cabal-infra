@@ -102,11 +102,11 @@ resource "aws_lambda_function" "authorize_agent" {
     variables = {
       MCP_OAUTH_ISSUER    = local.mcp_oauth.cognito_issuer
       MCP_OAUTH_CLIENT_ID = var.mcp_client_id
-      MCP_OAUTH_SCOPE     = var.mcp_read_scope
+      MCP_OAUTH_SCOPE     = var.mcp_scopes.read
       MCP_RESOURCE_URL    = local.mcp_oauth.resource_url
       # Optional, unlike the four above: a token that also carries this
       # scope gets the read_flag access level (adding custom flags).
-      MCP_OAUTH_FLAG_SCOPE = var.mcp_flag_scope
+      MCP_OAUTH_FLAG_SCOPE = var.mcp_scopes.flag
     }
   }
 
@@ -372,7 +372,7 @@ locals {
   mcp_protected_resource_metadata = jsonencode({
     resource                 = local.mcp_oauth.resource_url
     authorization_servers    = [local.mcp_oauth.admin_origin]
-    scopes_supported         = [var.mcp_read_scope, var.mcp_flag_scope]
+    scopes_supported         = [var.mcp_scopes.read, var.mcp_scopes.flag]
     bearer_methods_supported = ["header"]
     resource_name            = "Cabalmail"
   })
@@ -392,7 +392,7 @@ locals {
     code_challenge_methods_supported           = ["S256"]
     token_endpoint_auth_methods_supported      = ["none"]
     revocation_endpoint_auth_methods_supported = ["none"]
-    scopes_supported                           = [var.mcp_read_scope, var.mcp_flag_scope]
+    scopes_supported                           = [var.mcp_scopes.read, var.mcp_scopes.flag]
   })
 }
 
