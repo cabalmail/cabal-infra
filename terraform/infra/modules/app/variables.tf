@@ -32,9 +32,12 @@ variable "mcp_client_id" {
   description = "ID of the public OAuth app client claude.ai's custom connector signs in with. authorize_agent accepts Cognito access tokens issued to this client on /mcp."
 }
 
-variable "mcp_read_scope" {
-  type        = string
-  description = "Full scope string (resource-server identifier/scope) a Cognito access token must carry for /mcp, e.g. cabal-mcp/mail.read."
+variable "mcp_scopes" {
+  type = object({
+    read = string
+    flag = string
+  })
+  description = "Full scope strings (resource-server identifier/scope) for /mcp: read, which a Cognito access token must carry (e.g. cabal-mcp/mail.read), and flag, which beside it lets the token add the user's custom flags through add_flag (e.g. cabal-mcp/mail.flag)."
 }
 
 variable "region" {

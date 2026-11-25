@@ -174,11 +174,13 @@ class TokenTests(unittest.TestCase):
                       'cbl_agt_' + 'a' * 42 + '!', ' cbl_agt_' + 'a' * 43):
             self.assertFalse(agent_grants.is_token_shaped(value), value)
 
-    def test_phase_a_scope_is_read_only_and_inbox_only(self):
+    def test_scope_is_read_only_by_default_and_inbox_only(self):
         self.assertEqual(agent_grants.validate_access(None), 'read_only')
+        self.assertEqual(agent_grants.validate_access('read_flag'), 'read_flag')
         self.assertEqual(agent_grants.validate_folders(None), ['INBOX'])
-        with self.assertRaises(ValueError):
-            agent_grants.validate_access('read_write')
+        for access in ('read_write', 'READ_FLAG', 'admin', ''):
+            with self.assertRaises(ValueError):
+                agent_grants.validate_access(access)
         for folders in (['Archive'], ['INBOX', 'Sent'], [], 'INBOX'):
             with self.assertRaises(ValueError):
                 agent_grants.validate_folders(folders)
@@ -231,7 +233,14 @@ class GrantEndpointTests(_GrantCase):
         self.assertEqual(listed['grants'][0]['grant_id'], body['grant_id'])
         self.assertTrue(listed['grants'][0]['live'])
 
-    def test_mint_refuses_phase_b_scope(self):
+    def test_a_read_flag_grant_reaches_the_mcp_lambda_as_read_flag(self):
+        status, body = self.mint(access='read_flag')
+        self.assertEqual(status, 201)
+        self.assertEqual(body['access'], 'read_flag')
+        policy = authorize_agent.handler(_authorizer_event(f'Bearer {body["token"]}'), None)
+        self.assertEqual(policy['context']['access'], 'read_flag')
+
+    def test_mint_refuses_wider_scope(self):
         for body in ({'access': 'read_write'}, {'folders': ['Archive']},
                      {'expires_in_days': 400}, {'label': ''}):
             status, _ = self.mint(**body)

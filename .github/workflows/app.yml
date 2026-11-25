@@ -669,9 +669,9 @@ jobs:
         python-version: '3.13'
 
     - name: pylint
-      # push_dispatch/apns.py is the one handler-sibling module shipped in a
-      # zip; the */function.py glob misses it, so name it explicitly.
-      run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py push_dispatch/apns.py push_dispatch/fcm.py
+      # Handler-sibling modules shipped in a zip (mcp/mail_text.py and
+      # push_dispatch's) are missed by the */function.py glob, so name them.
+      run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py mcp/mail_text.py push_dispatch/apns.py push_dispatch/fcm.py
 
     - name: build
       env:
