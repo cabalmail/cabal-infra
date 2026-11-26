@@ -77,9 +77,7 @@ extension RssStore {
     /// search by filters alone is a plain read of the items. Only subscribed
     /// feeds are read, as every list reads them, so the search can find
     /// nothing that All Feeds does not list.
-    private func searchStatement(
-        _ search: ItemSearch
-    ) throws -> (source: String, clauses: [String], binds: [SQLiteDatabase.Value])? {
+    private func searchStatement(_ search: ItemSearch) throws -> SearchStatement? {
         guard search.hasPredicate else { return nil }
         let feedIds = try feedIds(in: .all)
         guard !feedIds.isEmpty else { return nil }
@@ -110,7 +108,14 @@ extension RssStore {
             clauses.append("\(Self.publishedDay) < ?")
             binds.append(.init(Self.utcDay(before)))
         }
-        return (source, clauses, binds)
+        return SearchStatement(source: source, clauses: clauses, binds: binds)
+    }
+
+    /// What a search reads with: the tables, the conditions and their binds.
+    private struct SearchStatement {
+        var source: String
+        var clauses: [String]
+        var binds: [SQLiteDatabase.Value]
     }
 
     private static let publishedDay = "substr(i.published_at, 1, 10)"

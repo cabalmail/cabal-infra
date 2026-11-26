@@ -38,6 +38,8 @@ struct MailContentColumn<Header: View>: View {
     var search: MessageListViewModel?
     /// Whether the search field is engaged, so its results take the column.
     var isSearching = false
+    /// The article open from the search's feed results.
+    var searchArticle: Binding<RssItem?> = .constant(nil)
     /// The folder whose messages the column lists.
     let folder: Folder?
     /// The open message.
@@ -77,16 +79,18 @@ struct MailContentColumn<Header: View>: View {
             case .search:
                 if let search {
                     // Global search owns the column while its field is
-                    // engaged. Stable `.id` so it isn't torn down per
-                    // keystroke; the reader still opens each result against
-                    // its true mailbox (`MailReaderChoice`).
-                    MessageListView(
-                        scope: .search,
-                        injectedSearchModel: search,
+                    // engaged: the scope control, and under it the results
+                    // of both media or of one. The reader opens each
+                    // message against its true mailbox (`MailReaderChoice`).
+                    SearchResultsView(
+                        model: search,
                         selection: selection,
+                        article: searchArticle,
+                        front: SearchFront.wide(
+                            showsFlagged: flagged != nil, hasFeedList: feedList != nil, hasFolder: folder != nil
+                        ),
                         onSelectionCountChanged: onSelectionCountChanged
                     )
-                    .id("search")
                 }
             case .folder:
                 if let folder {

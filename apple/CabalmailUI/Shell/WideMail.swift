@@ -94,7 +94,7 @@ struct WideMail {
     /// Whether the reader column shows the feed reader rather than mail's:
     /// a feed item open from the Flagged view, or the feed list's own.
     var readerShowsFeeds: Bool {
-        if isSearching { return false }
+        if isSearching { return searchArticle != nil }
         if flaggedOpen {
             if case .feed = flaggedItem { return true }
             return false
@@ -107,7 +107,17 @@ struct WideMail {
     /// search is currently active.
     var isSearching: Bool {
         guard let model = state.searchModel else { return false }
+        // A search of feeds alone by its filters has no term in the field
+        // and no mail results: what holds the column then is that it was
+        // submitted.
         return searchFieldFocus.wrappedValue || !model.searchQuery.isEmpty || model.isSearchActive
+            || navigator.searchPlace.submitted != nil
+    }
+
+    /// The article open from the search's feed results, which the reader
+    /// column shows in the open message's place.
+    var searchArticle: RssItem? {
+        isSearching ? navigator.searchPlace.openArticle : nil
     }
 
     // MARK: Bindings
@@ -126,7 +136,23 @@ struct WideMail {
     var envelopeSelection: Binding<Envelope?> {
         Binding(
             get: { selectedEnvelope },
-            set: { navigator.selectMessage($0, isSearching: isSearching, from: tree) }
+            set: {
+                // A search shows a message or an article, never both.
+                if isSearching, $0 != nil { navigator.searchPlace.openArticle = nil }
+                navigator.selectMessage($0, isSearching: isSearching, from: tree)
+            }
+        )
+    }
+
+    /// The search results' open article. Opening one closes the message
+    /// the reader had, as opening a message closes the article.
+    var searchArticleSelection: Binding<RssItem?> {
+        Binding(
+            get: { searchArticle },
+            set: { item in
+                if item != nil { navigator.selectMessage(nil, isSearching: true, from: tree) }
+                navigator.searchPlace.openArticle = item
+            }
         )
     }
 
@@ -239,6 +265,7 @@ struct WideMail {
         let model = state.searchModel
         model?.searchQuery = ""
         searchFieldFocus.wrappedValue = false
+        navigator.searchPlace.searchEnded()
     }
 
     /// The `@` button: opens and closes the addresses inspector through
@@ -332,6 +359,7 @@ struct WideMail {
             },
             search: state.searchModel,
             isSearching: isSearching,
+            searchArticle: searchArticleSelection,
             folder: selectedFolder,
             selection: envelopeSelection,
             onSelectionCountChanged: { setListSelectionCount($0) },
@@ -352,7 +380,9 @@ struct WideMail {
         mailPlaceholder: MailChrome, feedPlaceholder: FeedChrome
     ) -> some View {
         Group {
-            if showsFlagged {
+            if let searchArticle {
+                FeedReaderColumn(item: searchArticle, placeholderChrome: feedPlaceholder)
+            } else if showsFlagged {
                 FlaggedReaderColumn(item: flaggedItem, placeholderChrome: mailPlaceholder)
             } else if selectedFeedScope != nil, !isSearching {
                 FeedReaderColumn(item: selectedFeedItem, placeholderChrome: feedPlaceholder)
@@ -375,7 +405,9 @@ struct WideMail {
         return GlobalSearchField(
             query: Binding(get: { model?.searchQuery ?? "" }, set: { model?.searchQuery = $0 }),
             isFocused: searchFieldFocus,
-            onSubmit: { Task { await model?.runSearch() } }
+            // Return runs the search over the scope's media (`SearchPlace`).
+            onSubmit: { [navigator] in Task { await navigator.searchPlace.submit() } },
+            onClear: { [navigator] in navigator.searchPlace.searchEnded() }
         )
     }
 
@@ -418,10 +450,12 @@ private struct WideMailReporting: ViewModifier {
             selectionCount: open.messageCount(else: mail.listSelectionCount),
             isOpen: open.hasMessage(else: mail.selectedEnvelope != nil), covered: covered
         )
+        // While a search has the columns, the feed item a Feeds menu
+        // command acts on is the article open from its results.
+        let hasItem = mail.isSearching
+            ? mail.searchArticle != nil : open.hasFeedItem(else: mail.selectedFeedItem != nil)
         let item = LaptopAddressesPolicy.reported(
-            selectionCount: open.hasFeedItem(else: mail.selectedFeedItem != nil) ? 1 : 0,
-            isOpen: open.hasFeedItem(else: mail.selectedFeedItem != nil),
-            covered: covered
+            selectionCount: hasItem ? 1 : 0, isOpen: hasItem, covered: covered
         )
         return content
             // Keep the Message menu's commands validated against what they'd

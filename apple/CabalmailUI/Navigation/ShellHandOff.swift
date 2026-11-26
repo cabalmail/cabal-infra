@@ -20,6 +20,11 @@ struct ShellHandOff: Equatable {
     /// rebuilt feed list takes `takeItemForHandOff()`.
     private(set) var searchResult: Envelope?
 
+    /// The article the window has open from its search's feed results,
+    /// carried the same way and by the same rules: the search shows either
+    /// a message or an article, so holding one lets go of the other.
+    private(set) var searchArticle: RssItem?
+
     /// What the navigator does after a change of layout.
     enum Step: Equatable {
         case nothing
@@ -43,6 +48,21 @@ struct ShellHandOff: Equatable {
     /// the window is no longer reading a result.
     mutating func searchResultChanged(_ envelope: Envelope?) {
         searchResult = envelope
+        searchArticle = nil
+    }
+
+    /// The article open from the search's feed results, reported as a
+    /// message is; closing it leaves a message result alone.
+    mutating func searchArticleChanged(_ item: RssItem?) {
+        searchArticle = item
+        if item != nil { searchResult = nil }
+    }
+
+    /// The new layout's search surface takes the article the swap kept,
+    /// once, as it takes a message.
+    mutating func takeSearchArticle() -> RssItem? {
+        defer { searchArticle = nil }
+        return searchArticle
     }
 
     /// The new layout's search surface takes what the swap kept, once: a
@@ -85,6 +105,7 @@ struct ShellHandOff: Equatable {
             }
             guard searchIsEngaged else {
                 searchResult = nil
+                searchArticle = nil
                 return .nothing
             }
             return .showTab(.search)
@@ -93,6 +114,7 @@ struct ShellHandOff: Equatable {
             if tab == .settings { settingsSheetOpen = true }
             if tab != .search, searchIsEngaged {
                 searchResult = nil
+                searchArticle = nil
                 return .endLeftoverSearch
             }
         }
