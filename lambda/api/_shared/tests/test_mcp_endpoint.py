@@ -726,6 +726,41 @@ class ListMessagesFlagTests(_ImapCase):
         self.assertIn('[mcp] palette read failed: RuntimeError', lines)
 
 
+class HasAttachmentsTests(_ImapCase):
+    '''has_attachments follows the Apple and Android paperclip: a part with
+    an attachment disposition or an application type counts; images shown
+    inline in the body do not.'''
+
+    def _flag_for(self, structure):
+        self.quiet()
+        self.install(FakeImap(uids=[1], fetch={1: {
+            b'ENVELOPE': _envelope('Digest', 'digest@example.com'),
+            b'FLAGS': (), b'BODYSTRUCTURE': structure, b'RFC822.SIZE': 10}}))
+        _, payload = _tool_payload(function.handler(_event(_call('list_messages')), None))
+        return payload['messages'][0]['has_attachments']
+
+    def test_inline_images_do_not_count(self):
+        image = (b'image', b'jpeg', (b'name', b'scan.jpg'), b'<scan1>', None,
+                 b'base64', 10, None, (b'inline', (b'filename', b'scan.jpg')))
+        related = ((b'text', b'html', None, None, None, b'7bit', 10, 1), image,
+                   b'related')
+        self.assertFalse(self._flag_for(related))
+
+    def test_a_file_without_a_disposition_counts(self):
+        pdf = (b'application', b'pdf', (b'name', b'a.pdf'), None, None,
+               b'base64', 10, None, None)
+        self.assertTrue(self._flag_for(((b'text', b'plain'), pdf, b'mixed')))
+
+    def test_an_attachment_disposition_counts(self):
+        image = (b'image', b'png', None, None, None, b'base64', 10, None,
+                 (b'attachment', (b'filename', b'b.png')))
+        self.assertTrue(self._flag_for(((b'text', b'plain'), image, b'mixed')))
+
+    def test_plain_text_has_none(self):
+        self.assertFalse(self._flag_for((b'text', b'plain', None, None, None,
+                                         b'7bit', 10, 1)))
+
+
 class BodyRepairTests(_ImapCase):
     def _get(self, raw, **arguments):
         self.quiet()
