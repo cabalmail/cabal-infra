@@ -4,6 +4,32 @@ Status: **tentative** — no roadmap version assigned. This document guides the
 design and eventual implementation of AI-assistant access to Cabalmail
 mailboxes.
 
+> **Erratum (2026-11-25):** the status line above is out of date. The plan
+> moved from `docs/tentative/` to `docs/1.x/` once Phase A shipped and the
+> OAuth sign-in from Phase C was built; the Progress notes below are the
+> current record.
+
+> **Progress (2026-11-25):** Phase A's server side is built: the
+> `cabal-agent-grants` table, the `authorize_agent` REQUEST authorizer (result
+> TTL 0), the three grant endpoints and a read-only `mcp` Lambda behind
+> `POST /mcp`. Operator guide: [agent-access.md](../agent-access.md).
+> Deviations from the plan below, all deliberate for a first cut:
+>
+> - **Tools:** `list_folders`, `list_messages` (the plan's `list_envelopes`,
+>   with search filters folded in: unread, from, subject, text, since, before)
+>   and `get_message` (body text plus attachment names and sizes).
+>   `get_attachment` and presigned URLs are deferred, so no S3 access at all.
+> - **Rate limit:** a `mcp/POST` method throttle (5 rps, burst 10) stands in
+>   for the per-token `cabal-rate-limits` counter.
+> - **Grant rows** carry no `use_count`; `last_used_at` is stamped at most once
+>   a minute by the authorizer.
+> - **Management UI:** none yet. Grants are minted, listed and revoked with
+>   `scripts/agent-grant.py` against the Cognito endpoints; the Apple screen is
+>   still to come.
+> - **Wiring:** the authorizer and the mcp Lambda live in
+>   `terraform/infra/modules/app/mcp.tf` with their own narrowly scoped roles,
+>   rather than an `auth_mode` on the `call` module.
+
 ## Goal
 
 Let a user grant an AI assistant (Claude Code, Claude desktop/mobile, the
@@ -185,6 +211,15 @@ Plan:
   writer of `\Seen` system-wide. That is the cleaner end state; the agent
   requirement doesn't wait for it.
 
+> **Erratum (2026-11-25):** The premise above is wrong. `helper.get_message`
+> opens its folder with `get_imap_client(..., True)`, which selects it with
+> `EXAMINE`, and RFC 3501 forbids an `EXAMINE`d mailbox from changing
+> permanent state, so its `RFC822` fetch does not set `\Seen` today. No human
+> read path has an implicit `\Seen` to lose, and the cache-interplay audit is
+> moot. The Phase A mcp Lambda still fetches `BODY.PEEK[]` on an `EXAMINE`d
+> folder (belt and braces), and it never reads or writes the S3 body cache, so
+> its role needs no S3 access at all.
+
 ### 4. Grant management (human side)
 
 Three new entries in the existing `local.lambdas` map — standard Cognito
@@ -283,6 +318,33 @@ changes.
   (reuse the push-dispatch fan-out to notify a webhook/queue instead of
   polling); a `send` grant level with recipient allowlists and hard rate
   caps, only if draft-only proves insufficient.
+
+> **Progress (2026-11-25):** the OAuth candidate is built, pulled forward
+> because claude.ai custom connectors take no static `Authorization` header.
+> `cabal_mcp_client` is a public Cognito app client (code flow with PKCE, no
+> secret) whose only scope is `cabal-mcp/mail.read`, with claude.ai's callback
+> as its one redirect URI. Cognito publishes no `code_challenge_methods_supported`
+> and serves no RFC 9728 document, so the admin site serves both discovery
+> documents as static JSON (`/.well-known/oauth-protected-resource` and an
+> RFC 8414 `/.well-known/oauth-authorization-server` that points at the
+> Hosted UI endpoints). An API-wide `UNAUTHORIZED` gateway response adds the
+> `WWW-Authenticate: Bearer resource_metadata=...` challenge that starts the
+> flow. `authorize_agent` now also accepts a Cognito access token carrying that
+> scope, verified locally against the pool's JWKS; such a token is read-only and
+> INBOX-only, with no grant row. Minted `cbl_agt_` grants keep working and stay
+> the way in for Claude Code, since Cognito needs exact redirect URIs and offers
+> neither dynamic client registration nor client ID metadata documents. User
+> guide: [agent-access.md](../agent-access.md#connect-claudeai).
+
+> **Progress (2026-11-25):** the first write from Phase B is built, narrower
+> than `set_flags`: `add_flag` adds one of the owner's custom flags (a palette
+> slot, `cabal-flag-01..20`) to messages, and nothing else (no removal, no
+> system flags). It comes with a new access level, `read_flag`, mintable on a
+> grant and carried by the new OAuth scope `cabal-mcp/mail.flag`; read-only
+> grants are not offered the tool. Also built: `get_attachment` (images as MCP
+> image content, text as text, nothing else) in place of presigned URLs, so the
+> mcp Lambda still has no S3 access, and `list_flags`. `move_messages`, flag
+> removal and wider folder scope remain open.
 
 ## Open questions
 

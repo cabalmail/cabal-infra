@@ -28,6 +28,9 @@ name: Lint
 #                tests, ktlint, Android Lint with warnings-as-errors — the
 #                same single gradle invocation android.yml's test job runs at
 #                merge time, so the two can't drift.
+#   - Workflows: zizmor over .github/ (new for the PR gate; nothing else
+#                audits the workflows' own triggers, permissions and
+#                template expansions). Policy in .github/zizmor.yml.
 #
 # This is lint-only: no AWS credentials, no Terraform backend, no deploy. The
 # Terraform scanners read the committed source directly (exactly as the
@@ -61,9 +64,12 @@ jobs:
       react: ${{ steps.filter.outputs.react }}
       rust: ${{ steps.filter.outputs.rust }}
       kotlin: ${{ steps.filter.outputs.kotlin }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: filter
       id: filter
       # On pull_request, dorny/paths-filter diffs against the PR base branch
@@ -124,6 +130,13 @@ jobs:
           kotlin:
             - 'android/**'
             - '.github/workflows/lint.yml'
+          workflows:
+            # Everything zizmor collects from .github/, plus its config.
+            # lint.yml is under workflows/, so it needs no entry of its own.
+            - '.github/workflows/**'
+            - '.github/actions/**'
+            - '.github/dependabot.yml'
+            - '.github/zizmor.yml'
 
   # ---------------------------------------------------------------------------
   # Terraform. One job per tool, fanned out over both stacks via the matrix.
@@ -144,6 +157,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: check-suppression-justifications
       run: ./.github/scripts/check-suppression-justifications.sh terraform/${{ matrix.stack }}
     - name: check-iam-resource-scope
@@ -188,6 +203,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: install-tflint
       uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337  # v6.3.2
       with:
@@ -215,6 +232,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: trivy
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
@@ -246,6 +265,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: setup-terraform
       # Same pinned action and wrapper-off setting as infra.yml's three
       # setup-terraform steps; nothing here consumes the wrapper's outputs.
@@ -271,6 +292,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: setup-python
       uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
       with:
@@ -278,7 +301,7 @@ jobs:
     - name: install-pylint
       run: pip install pylint
     - name: pylint-api
-      run: cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py push_dispatch/apns.py push_dispatch/fcm.py
+      run: cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py mcp/mail_text.py push_dispatch/apns.py push_dispatch/fcm.py
     - name: pylint-counter
       run: pylint --rcfile ./lambda/api/.pylintrc ./lambda/counter/*/function.py
     - name: unittest-shared
@@ -337,6 +360,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: platform-conditionals
       # The ratchet on platform `#if`s in apple/CabalmailUI: none outside
       # Shell/ and Platform/ beyond the allowlist, which only shrinks
@@ -358,6 +383,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: setup-node
       uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
       with:
@@ -389,6 +416,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: install-system-deps
       # blueprint-compiler and the GTK dev packages are hard build
       # requirements (build.rs compiles resources/*.blp with no .ui fallback);
@@ -409,14 +438,14 @@ jobs:
       # check that quietly did not run is the failure the step exists to
       # prevent. Pinned to the same version linux.yml installs; a test in
       # linux/xtask/tests/workflow_contract.rs fails if the two drift.
-      uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39  # v2.90.3
+      uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f  # v2.90.6
       with:
         tool: cargo-deny@0.20.2
     - name: install-cargo-llvm-cov
       # Same bargain as cargo-deny: the gate's coverage step runs this binary,
       # and a missing one is fatal wherever CI is set. Pinned to the version
       # linux.yml installs, held there by the same contract test.
-      uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39  # v2.90.3
+      uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f  # v2.90.6
       with:
         tool: cargo-llvm-cov@0.9.1
     - name: cache-cargo
@@ -451,8 +480,10 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: setup-java
-      uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78  # v6.2.0
+      uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880  # v6.3.0
       with:
         distribution: temurin
         java-version: '21'
@@ -476,3 +507,67 @@ jobs:
       run: scripts/sync-vendored.sh
     - name: gradle-gate
       run: ./gradlew :kit:test :app:testDebugUnitTest ktlintCheck lint
+
+  # ---------------------------------------------------------------------------
+  # Workflows. zizmor statically audits every workflow, composite action and
+  # dependabot.yml under .github/ for the ways a workflow gets taken over:
+  # dangerous triggers (pull_request_target, workflow_run, issue_comment),
+  # expressions expanded into `run:` scripts, write permissions granted more
+  # widely than the job that uses them, credentials left in a checkout. New
+  # for the PR gate; no deploy workflow runs it. The policy - what the floor
+  # enforces, the few findings that are ignored and why - is in
+  # .github/zizmor.yml, which zizmor finds by itself, so
+  # `pip install zizmor==<pin> && zizmor --offline --min-severity=medium .github/`
+  # gives the same answer locally.
+  #
+  # --offline: only the audits that read the files. The online ones ask the
+  # GitHub API about the pinned actions (known-vulnerable or impostor
+  # commits), so their answer can change with nothing in the repository
+  # changing; Dependabot's github-actions updater and alerts cover that ground.
+  # ---------------------------------------------------------------------------
+  zizmor:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
+    - name: setup-python
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+      with:
+        python-version: '3.12'
+    - name: install-zizmor
+      # Pinned like checkov above, so gate strictness only changes by a
+      # deliberate bump: a new release can add audits or re-grade old ones.
+      run: pip install zizmor==1.33.0
+    - name: dangerous-triggers-canary
+      # Proves the audit this job exists for is live: under the checked-in
+      # config and the same severity floor, each trigger the audit covers
+      # must still be reported. Without it a config edit that disables or
+      # down-grades the rule, or a zizmor bump that re-grades it below the
+      # floor, would turn the gate into a no-op that stays green.
+      run: |
+        set -euo pipefail
+        dir="$(mktemp -d)"
+        for trigger in pull_request_target workflow_run issue_comment; do
+          printf 'on: %s\npermissions: {}\njobs:\n  noop:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n' \
+            "$trigger" > "$dir/$trigger.yml"
+          # zizmor exits non-zero on a finding, which is the expected
+          # outcome here; the JSON is what gets checked.
+          zizmor --offline --no-progress --min-severity=medium \
+            --config .github/zizmor.yml --format=json "$dir/$trigger.yml" \
+            > "$dir/$trigger.json" 2> "$dir/$trigger.log" || true
+          if ! jq -e 'any(.[]; .ident == "dangerous-triggers")' "$dir/$trigger.json" > /dev/null; then
+            echo "::error::zizmor did not report dangerous-triggers for 'on: $trigger' under .github/zizmor.yml. The gate no longer enforces it."
+            cat "$dir/$trigger.log"
+            exit 1
+          fi
+          echo "dangerous-triggers reported for on: $trigger"
+        done
+    - name: zizmor
+      # Exits non-zero on any finding at or above the floor that
+      # .github/zizmor.yml does not ignore. --strict-collection makes a
+      # workflow zizmor cannot parse a failure, not a skipped file.
+      run: zizmor --offline --no-progress --min-severity=medium --strict-collection .github/

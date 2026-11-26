@@ -68,12 +68,15 @@ on:
       - '.github/scripts/deploy-lambda-zip.sh'
       - '.github/scripts/render-front-door.py'
 
+# Read-only by default. AWS auth is via GitHub OIDC
+# (aws-actions/configure-aws-credentials assumes
+# vars.AWS_DEPLOY_ROLE_ARN), and minting that token needs
+# `id-token: write`; each job that assumes the role grants it to itself,
+# so setup and approval never hold it. A job-level block replaces this
+# one outright, which is why those repeat `contents: read`. See
+# docs/aws.md / docs/github.md.
 permissions:
   contents: read
-  # AWS auth is via GitHub OIDC (aws-actions/configure-aws-credentials
-  # assumes vars.AWS_DEPLOY_ROLE_ARN); the runner needs to mint an OIDC
-  # token. See docs/aws.md / docs/github.md.
-  id-token: write
 
 # Serialize per-ref so back-to-back app deploys roll services in order
 # rather than racing each other. Phase 3 of
@@ -104,6 +107,11 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        # Kept on purpose: on a push, the changed-paths step below has
+        # dorny/paths-filter `git fetch` the commit before the push from
+        # this checkout. Nothing in this job uploads the workspace.
+        persist-credentials: true
 
     # Guard against per-tier filter drift: if a Dockerfile gains a
     # COPY/ADD of a file under docker/ that its tier's changed-paths
@@ -444,6 +452,11 @@ jobs:
     needs: [setup, approval]
     if: needs.setup.outputs.docker == 'true' && needs.setup.outputs.changed_tiers != '[]'
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     strategy:
       fail-fast: false
@@ -452,9 +465,15 @@ jobs:
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+      # The steps below read these from the environment rather than
+      # expanding the expressions into their scripts.
+      TIER: ${{ matrix.tier }}
+      IMAGE_TAG: ${{ needs.setup.outputs.image_tag }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
@@ -476,17 +495,18 @@ jobs:
       uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
     - name: build-and-push
+      env:
+        REGISTRY: ${{ steps.ecr.outputs.registry }}
       run: |
-        IMAGE="${{ steps.ecr.outputs.registry }}/cabal-${{ matrix.tier }}"
-        TAG="${{ needs.setup.outputs.image_tag }}"
+        IMAGE="${REGISTRY}/cabal-${TIER}"
         # Provenance attestations (buildx default, mode=min) are pushed to
         # ECR alongside the image as the SLSA build record. Do not re-add
         # --provenance=false: the manifest-list interop issue that once
         # required it is resolved. See docs/0.10.x/supply-chain-hardening-plan.md.
         docker buildx build \
           --platform linux/arm64 \
-          -f docker/${{ matrix.tier }}/Dockerfile \
-          -t "${IMAGE}:${TAG}" \
+          -f "docker/${TIER}/Dockerfile" \
+          -t "${IMAGE}:${IMAGE_TAG}" \
           --push \
           docker/
 
@@ -502,8 +522,8 @@ jobs:
       if: matrix.tier == 'imap'
       run: |
         ./.github/scripts/prepull-image.sh \
-          "${{ matrix.tier }}" \
-          "${{ needs.setup.outputs.image_tag }}"
+          "${TIER}" \
+          "${IMAGE_TAG}"
 
     # Out-of-band ECS deploy: clones running task def, rewrites the
     # image tag for cabal-${tier}, registers a new revision, and rolls
@@ -518,8 +538,8 @@ jobs:
     - name: deploy
       run: |
         ./.github/scripts/deploy-ecs-service.sh \
-          "${{ matrix.tier }}" \
-          "${{ needs.setup.outputs.image_tag }}"
+          "${TIER}" \
+          "${IMAGE_TAG}"
 
     # The cloudwatch-exporter image is consumed by two ECS services:
     # the primary (cabal-cloudwatch-exporter) handles the home region,
@@ -530,8 +550,8 @@ jobs:
       if: matrix.tier == 'cloudwatch-exporter'
       run: |
         ./.github/scripts/deploy-ecs-service.sh \
-          "${{ matrix.tier }}" \
-          "${{ needs.setup.outputs.image_tag }}" \
+          "${TIER}" \
+          "${IMAGE_TAG}" \
           cabal-mail \
           cabal-cloudwatch-exporter-us-east-1
 
@@ -543,13 +563,18 @@ jobs:
     - name: report-ecr-scan
       run: |
         ./.github/scripts/ecr-scan-report.sh \
-          "${{ matrix.tier }}" \
-          "${{ needs.setup.outputs.image_tag }}"
+          "${TIER}" \
+          "${IMAGE_TAG}"
 
   lambda-certbot:
     needs: [setup, approval]
     if: needs.setup.outputs.lambda_certbot == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -557,6 +582,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
@@ -611,6 +638,11 @@ jobs:
     # fetch_bimi, must keep a pure-python pip closure; build-api-one.sh fails
     # its build otherwise.
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -618,6 +650,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
@@ -635,9 +669,9 @@ jobs:
         python-version: '3.13'
 
     - name: pylint
-      # push_dispatch/apns.py is the one handler-sibling module shipped in a
-      # zip; the */function.py glob misses it, so name it explicitly.
-      run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py push_dispatch/apns.py push_dispatch/fcm.py
+      # Handler-sibling modules shipped in a zip (mcp/mail_text.py and
+      # push_dispatch's) are missed by the */function.py glob, so name them.
+      run: pip install pylint && cd ./lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py mcp/mail_text.py push_dispatch/apns.py push_dispatch/fcm.py
 
     - name: build
       env:
@@ -727,6 +761,11 @@ jobs:
     if: needs.setup.outputs.lambda_counter == 'true'
     # arm64, like the pool triggers it builds (see lambda-api).
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -734,6 +773,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
@@ -771,6 +812,11 @@ jobs:
     needs: [setup, approval]
     if: needs.setup.outputs.react == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -778,6 +824,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
@@ -829,6 +877,11 @@ jobs:
     needs: [setup, approval]
     if: needs.setup.outputs.front_door == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -836,6 +889,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
@@ -910,6 +965,11 @@ jobs:
       || contains(needs.setup.outputs.changed_tiers, '"smtp-in"')
       || contains(needs.setup.outputs.changed_tiers, '"smtp-out"'))))
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     timeout-minutes: 20
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
@@ -918,6 +978,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
 
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0

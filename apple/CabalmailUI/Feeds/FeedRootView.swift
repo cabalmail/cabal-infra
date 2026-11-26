@@ -22,23 +22,55 @@ struct FeedRootView: View {
     private var selectedScope: RssItemScope? { navigator.feeds.scope(in: tree) }
     private var selectedItem: RssItem? { navigator.feeds.item(in: tree) }
 
+    /// Whether the content and reader columns draw the Flagged view, which
+    /// was opened from this tab's sidebar. Still true once a collapsed
+    /// stack has backed out of it, so the view slides away whole.
+    private var flaggedHere: Bool { navigator.flaggedOccupies(tree, door: .feeds) }
+    private var flaggedOpen: Bool { navigator.flaggedIsOpen(in: tree, door: .feeds) }
+    private var flaggedItem: FlaggedRow? { navigator.flaggedItem(in: tree, door: .feeds) }
+    private var menuReport: FlaggedMenuReport { FlaggedMenuReport(showsFlagged: flaggedHere, item: flaggedItem) }
+
+    /// The sidebar's selected feed list: none while the window is on the
+    /// Flagged view, whose own row is lit then.
     private var scopeSelection: Binding<RssItemScope?> {
-        Binding(get: { selectedScope }, set: { navigator.selectFeedScope($0) })
+        Binding(get: { flaggedOpen ? nil : selectedScope }, set: { navigator.selectFeedScope($0) })
+    }
+
+    private var flaggedSelection: Binding<FlaggedRow?> {
+        Binding(get: { flaggedItem }, set: { navigator.selectFlaggedItem($0, from: tree, door: .feeds) })
     }
 
     private var itemSelection: Binding<RssItem?> {
         Binding(get: { selectedItem }, set: { navigator.selectFeedItem($0, from: tree) })
     }
 
+    /// While the Flagged view is in the stack the column is that view's
+    /// (`SceneNavigator.setFlaggedColumn`).
     private var columnSelection: Binding<NavigationSplitViewColumn> {
-        Binding(get: { navigator.feeds.column(in: tree) }, set: { navigator.setFeedColumn($0, from: tree) })
+        Binding(
+            get: { navigator.flaggedColumn(in: tree, door: .feeds) ?? navigator.feeds.column(in: tree) },
+            set: { column in
+                if !navigator.setFlaggedColumn(column, from: tree, door: .feeds) {
+                    navigator.setFeedColumn(column, from: tree)
+                }
+            }
+        )
     }
 
     var body: some View {
         NavigationSplitView(preferredCompactColumn: columnSelection) {
-            FeedSidebarList(selection: scopeSelection)
+            FeedSidebarList(
+                selection: scopeSelection,
+                flagged: FlaggedEntry(isSelected: flaggedOpen) { navigator.showFlagged(from: tree, door: .feeds) }
+            )
         } content: {
-            if let selectedScope {
+            if flaggedHere {
+                FlaggedListView(
+                    selection: flaggedSelection,
+                    takeParked: { [navigator, tree] in navigator.takeParkedFlaggedItem(in: tree, door: .feeds) }
+                )
+                .id("flagged#\(navigator.flaggedPlace.state.visit)")
+            } else if let selectedScope {
                 // A pick from the list's scope-switch menu lands on the same
                 // state a sidebar tap does, so the sidebar highlight and the
                 // resume record follow it.
@@ -54,7 +86,9 @@ struct FeedRootView: View {
                                        description: Text("Pick a feed or folder from the sidebar."))
             }
         } detail: {
-            if let selectedItem {
+            if flaggedHere {
+                FlaggedReaderColumn(item: flaggedItem)
+            } else if let selectedItem {
                 FeedItemDetailView(item: selectedItem)
                     .id(selectedItem.id)
             } else {
@@ -66,9 +100,9 @@ struct FeedRootView: View {
         // hardware-keyboard menu reaches this tab); the section itself is
         // the tab bar's to report.
         .reportsFeedMenuAvailability(
-            selectedCount: selectedItem == nil ? 0 : 1,
-            hasOpenItem: selectedItem != nil,
-            hasScope: selectedScope != nil
+            selectedCount: menuReport.hasFeedItem(else: selectedItem != nil) ? 1 : 0,
+            hasOpenItem: menuReport.hasFeedItem(else: selectedItem != nil),
+            hasScope: selectedScope != nil && !flaggedHere
         )
         // The window's first feed landing, or a layout swap's hand-off.
         .task { await navigator.feedTreeAppeared(tree) }

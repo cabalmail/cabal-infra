@@ -38,10 +38,10 @@ on:
     # Mondays 06:17 UTC, on the default branch.
     - cron: '17 6 * * 1'
 
+# Read-only by default; the analyze job grants itself
+# `security-events: write` for the SARIF upload.
 permissions:
   contents: read
-  # codeql-action/analyze uploads SARIF to code scanning.
-  security-events: write
   # dorny/paths-filter lists the PR's changed files via the pulls API on
   # pull_request events.
   pull-requests: read
@@ -63,6 +63,8 @@ jobs:
     - name: checkout
       if: github.event_name == 'pull_request'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: filter
       id: filter
       if: github.event_name == 'pull_request'
@@ -129,6 +131,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.languages != '[]'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # codeql-action/analyze uploads SARIF to code scanning.
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
@@ -136,6 +142,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: setup-linux-rust
       # The Rust extractor resolves the workspace through cargo, so give it
       # the toolchain linux/rust-toolchain.toml pins (and the registry cache)
@@ -146,14 +154,14 @@ jobs:
       with:
         cache-key: codeql
     - name: init
-      uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       with:
         languages: ${{ matrix.language }}
         # None of the four languages needs a build for extraction; this is
         # what default setup used as well.
         build-mode: none
     - name: analyze
-      uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       with:
         category: /language:${{ matrix.language }}
 

@@ -47,3 +47,28 @@ output "sms_enabled" {
   value       = local.sms_enabled
   description = "True when a 10DLC campaign registration id is configured and the pool is wired for SMS-based phone verification. Consumed by the app module so /config.js can tell clients to hide the phone-number field and consent checkbox when off. See docs/sms-10dlc.md."
 }
+
+output "mcp_client_id" {
+  value       = aws_cognito_user_pool_client.mcp.id
+  description = "ID of the public OAuth (PKCE) app client claude.ai's custom connector signs in with for the MCP server"
+}
+
+# Both scope strings are built from locals rather than read back from
+# aws_cognito_resource_server.mcp.scope_identifiers: that attribute is unknown
+# at plan time whenever the resource server changes, and an unknown value in a
+# Lambda's environment block makes the AWS provider drop the whole block from
+# the plan (the authorizer's MCP_OAUTH_* settings were once silently left
+# unapplied that way, by an unknown client ID).
+#
+# The two are one object, passed as one module argument, on purpose: a second
+# pool-to-app argument changed checkov's graph rendering enough that it stopped
+# resolving var.sinkhole in the ecs module and reported a phantom
+# CKV_AWS_382 on the count-gated sinkhole egress rule (terraform/infra/
+# BASELINE.md, "OAC migration").
+output "mcp_scopes" {
+  value = {
+    read = "${local.mcp_resource_server_identifier}/${local.mcp_read_scope_name}"
+    flag = "${local.mcp_resource_server_identifier}/${local.mcp_flag_scope_name}"
+  }
+  description = "The full MCP scope strings (resource-server identifier/scope): read, which every MCP access token must carry, and flag, which beside it lets the token add the user's custom flags"
+}

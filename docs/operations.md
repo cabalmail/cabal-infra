@@ -74,6 +74,10 @@ The address-suggesting browser extension (Chrome + Safari) lets users mint a fre
 
 Users can author ordered mail-handling rules (file, flag, mark read, forward, auto-reply, delete) in the native clients' Settings; the imap tier compiles them into per-user procmail and applies them to every arriving message ahead of default delivery. User input never becomes procmail syntax directly — a hardened compiler validates, escapes, and sandboxes everything, and a golden-file self-test gates the image build and container start. See [Mail rules](./mail-rules.md) for the user-facing behavior, the limits, the "why didn't my rule fire" checklist, and where the compiled rules, logs, metrics, and alarms live.
 
+# Agent access
+
+An AI agent can read one mailbox through a read-only MCP server at `POST /mcp`, using a bearer token the mailbox owner mints and can revoke at any time, or, from claude.ai, by signing in with the owner's Cabalmail login over OAuth. Phase A grants cover INBOX only and offer three tools (list folders, list or filter messages, read a message); nothing an agent can call sends mail or changes the mailbox, and reading does not mark mail read. See [Agent access](./agent-access.md) for minting tokens, connecting Claude Code or claude.ai, the security model and the audit log.
+
 # Synced settings
 
 A user's settings (reading and composing behaviour, the flag list, each list's remembered filter) follow the account between devices through one row per user, behind `/get_preferences` and `/set_preferences`. The server merges each write per key and counts a version on the row; a write may say which version it was built on, and is refused with the current row when the row has moved on. [Synced settings](./settings-sync.md) is the contract for a client of the two endpoints.

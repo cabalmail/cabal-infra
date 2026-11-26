@@ -93,7 +93,7 @@ The client work queued after the 2026-10 Apple-client rearchitecture lives in [`
 - Watch mode: `cd react/admin && npm run test:watch`
 
 ### Lambda Functions (`lambda/api`)
-- Lint all: `cd lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py push_dispatch/apns.py push_dispatch/fcm.py` (covers the shared modules, every handler, and the handler-sibling modules the `*/function.py` glob misses)
+- Lint all: `cd lambda/api && pylint --rcfile .pylintrc _shared/*.py */function.py mcp/mail_text.py push_dispatch/apns.py push_dispatch/fcm.py` (covers the shared modules, every handler, and the handler-sibling modules the `*/function.py` glob misses)
 - Local test: `cd lambda/api/[function_dir] && python -m function`
 
 ### Apple Clients (`apple/`)
@@ -176,6 +176,8 @@ The client work queued after the 2026-10 Apple-client rearchitecture lives in [`
 | `dependabot.yml` | Schedule (daily) | Dependency update PRs. |
 Deploy workflows select environment based on branch: `main`=prod, `stage`=stage, `development`=development. Other branches do not trigger deploys (see "Branches and environments" above).
 
+`lint.yml`'s `zizmor` job audits everything under `.github/` on any PR that touches it and fails on a finding of medium severity or above; `.github/zizmor.yml` holds the policy and the few ignores. Run it before pushing a workflow change: `pip install zizmor==1.33.0 && zizmor --offline --min-severity=medium .github/`. What it asks of a workflow edit: no `pull_request_target`, `workflow_run` or `issue_comment` trigger; a dispatch input, `github.ref_name` or a computed matrix value reaches a `run:` script through `env:`, never as `${{ }}` inside the script; write scopes (`id-token`, `security-events`, `contents`) go on the job that uses them, and a job-level `permissions:` block replaces the workflow's, so repeat the read scopes the job still needs; every `actions/checkout` sets `persist-credentials: false` unless a later step pushes or fetches with the token, and then `true` with the reason in a comment. Fix a finding rather than ignoring it; an ignore needs its reason beside it.
+
 ## Architecture Details
 
 ### Domain Model
@@ -234,6 +236,9 @@ Response format: `{"statusCode": N, "body": json.dumps({...})}`. User extracted 
 | `move_messages` / `set_flag` | IMAP message operations |
 | `purge_messages` / `empty_trash` | Permanently delete (expunge) messages; trash folders only |
 | `mark_folder_read` | Mark every unseen message in a folder as read (one SEARCH + batched STORE) |
+| `new_agent_grant` / `list_agent_grants` / `revoke_agent_grant` | Mint, list and revoke the bearer tokens an MCP client presents at `/mcp` (rows in `cabal-agent-grants`, hash only; see `docs/agent-access.md`) |
+| `authorize_agent` | Not a route: the REQUEST Lambda authorizer on `/mcp`, resolving a `cbl_agt_` token to its grant, or verifying a `cabal_mcp_client` Cognito access token (claude.ai OAuth, INBOX; `read_flag` with the `mail.flag` scope, else read-only) |
+| `mcp` | MCP server at `POST /mcp` (stateless streamable HTTP), behind `authorize_agent` rather than Cognito; wired in `terraform/infra/modules/app/mcp.tf`. Reads use EXAMINE and BODY.PEEK; the one write, `add_flag` (palette slots only, add-only), is offered only to `read_flag` grants. Body/attachment parsing lives in the sibling `mail_text.py` |
 
 ### React App (`react/admin/`)
 

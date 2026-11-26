@@ -78,6 +78,10 @@ module "cabal_method" {
   rss_fetch_queue_arn = aws_sqs_queue.rss_fetch.arn
   rss_fetch_queue_url = aws_sqs_queue.rss_fetch.url
   rss_cache_bucket    = aws_s3_bucket.rss_cache.bucket
+
+  # The agent-grant endpoints mint, list and revoke /mcp bearer tokens, and
+  # only they touch cabal-agent-grants (see mcp.tf).
+  agent_grants_access = contains(["new_agent_grant", "list_agent_grants", "revoke_agent_grant"], each.key)
 }
 
 resource "aws_api_gateway_deployment" "deployment" {
@@ -85,7 +89,11 @@ resource "aws_api_gateway_deployment" "deployment" {
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_rest_api.gateway,
-      [for k, v in local.lambdas : module.cabal_method[k].hash_key]
+      [for k, v in local.lambdas : module.cabal_method[k].hash_key],
+      # The /mcp route (mcp.tf) is defined outside the call module, so its
+      # pieces are hashed here; without them a change to the route would not
+      # redeploy the stage.
+      local.mcp_route_hash_key
     ]))
   }
   lifecycle {
@@ -240,4 +248,25 @@ resource "aws_api_gateway_method_settings" "cache_settings" {
     data_trace_enabled = local.method_observability.data_trace_enabled
     logging_level      = local.method_observability.logging_level
   }
+}
+
+# The /mcp route (mcp.tf): a tighter throttle than the `*/*` default. Each
+# call opens an IMAP session, and the caller is an agent loop rather than a
+# person, so this is the per-grant rate cap Phase A of
+# docs/1.x/agent-mail-access-plan.md settles for until grants carry
+# their own. Lives here rather than in mcp.tf so
+# test_api_gateway_method_overrides.py holds it to the shared policy.
+resource "aws_api_gateway_method_settings" "mcp_settings" {
+  #checkov:skip=CKV_AWS_225:response caching is wrong for /mcp - every POST is a distinct JSON-RPC call over a live mailbox, and a cache keyed without the bearer token could serve one grant another grant's result (BASELINE.md: caching undesirable for a mailbox API)
+  rest_api_id = aws_api_gateway_rest_api.gateway.id
+  stage_name  = aws_api_gateway_stage.api_stage.stage_name
+  method_path = "mcp/POST"
+  settings {
+    metrics_enabled        = local.method_observability.metrics_enabled
+    data_trace_enabled     = local.method_observability.data_trace_enabled
+    logging_level          = local.method_observability.logging_level
+    throttling_rate_limit  = 5
+    throttling_burst_limit = 10
+  }
+  depends_on = [aws_api_gateway_account.apigw_account]
 }

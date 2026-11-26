@@ -133,3 +133,9 @@ variable "rss_cache_bucket" {
   default     = ""
   description = "Name of the rss-cache bucket; used only when rss_access is set."
 }
+
+variable "agent_grants_access" {
+  type        = bool
+  default     = false
+  description = "Grant this endpoint GetItem/PutItem/Query/UpdateItem on cabal-agent-grants and its user-index (docs/1.x/agent-mail-access-plan.md, Phase A). Set for the *_agent_grant(s) endpoints only."
+}

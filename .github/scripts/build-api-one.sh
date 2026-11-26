@@ -69,6 +69,17 @@ fi
 if grep -qE '^[[:space:]]*(from|import)[[:space:]]+admin_limits' function.py 2>/dev/null; then
   cp ../_shared/admin_limits.py ./build/admin_limits.py
 fi
+# The agent-grant endpoints and the /mcp authorizer share agent_grants (token
+# format, hashing, the cabal-agent-grants row shape); stdlib(+boto3) only, like
+# admin_limits.py.
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+agent_grants' function.py 2>/dev/null; then
+  cp ../_shared/agent_grants.py ./build/agent_grants.py
+fi
+# The /mcp authorizer verifies Cognito access tokens from the MCP OAuth
+# sign-in through agent_oauth; stdlib only, like agent_grants.py.
+if grep -qE '^[[:space:]]*(from|import)[[:space:]]+agent_oauth' function.py 2>/dev/null; then
+  cp ../_shared/agent_oauth.py ./build/agent_oauth.py
+fi
 # The address-mutation handlers publish the address_changed SNS event through
 # address_events; stdlib(+boto3) only, like admin_limits.py, so it ships even in
 # the zips whose requirements.txt is empty.

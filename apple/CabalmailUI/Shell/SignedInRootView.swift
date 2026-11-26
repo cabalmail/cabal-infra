@@ -231,7 +231,8 @@ struct SignedInRootView: View {
             isWide: shellLayout.isWideSplit,
             splitShowsFeeds: navigator.splitShowsFeeds,
             compactTab: navigator.compactTab,
-            folderName: navigator.selectedFolder?.name
+            folderName: navigator.selectedFolder?.name,
+            showsFlagged: navigator.flaggedIsInFront
         )
     }
 

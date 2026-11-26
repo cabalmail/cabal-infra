@@ -62,21 +62,25 @@ on:
       - '.github/scripts/put-sms-resource-policy.sh'
       - '.github/scripts/annotate-terraform-outputs.sh'
 
+# Read-only by default; the two write scopes are granted per job, to the
+# jobs that use them. A job-level block replaces this one outright, which
+# is why those repeat the two read scopes.
+#
+#   - security-events: write - the scanner jobs (checkov / tflint /
+#     trivy, both stacks) upload SARIF to GitHub code scanning via
+#     github/codeql-action/upload-sarif (Phase 1 of
+#     docs/0.10.x/iac-quality-gates-plan.md). This repo is public, so
+#     code scanning is available without GitHub Advanced Security.
+#   - id-token: write - AWS auth is via GitHub OIDC
+#     (aws-actions/configure-aws-credentials assumes
+#     vars.AWS_DEPLOY_ROLE_ARN); the plan / apply / post_apply jobs mint
+#     the token. See docs/aws.md / docs/github.md.
 permissions:
   contents: read
   # wait-for-app-deploy.sh (plan job) queries the GitHub Actions API for
   # the sibling app.yml run on this commit so the Terraform plan orders
   # itself behind any concurrent image roll. Read-only.
   actions: read
-  # Phase 1 of docs/0.10.x/iac-quality-gates-plan.md: the scanner jobs
-  # (checkov / tflint / trivy, both stacks) upload SARIF to GitHub code
-  # scanning via github/codeql-action/upload-sarif. This repo is public,
-  # so code scanning is available without GitHub Advanced Security.
-  security-events: write
-  # AWS auth is via GitHub OIDC (aws-actions/configure-aws-credentials
-  # assumes vars.AWS_DEPLOY_ROLE_ARN); the AWS jobs need to mint an OIDC
-  # token. See docs/aws.md / docs/github.md.
-  id-token: write
 
 # Serialize Terraform applies per ref so back-to-back pushes do not
 # race for the state lock. cancel-in-progress: false because we never
@@ -98,6 +102,11 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        # Kept on purpose: on a push, dorny/paths-filter below does a
+        # `git fetch` from this checkout to diff against the base.
+        # Nothing in this job uploads the workspace.
+        persist-credentials: true
     - name: filter
       id: filter
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
@@ -128,6 +137,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: generate-backend
       run: env TF_MODULE=dns TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" STATE_KMS_KEY_ID="${{ vars.STATE_KMS_KEY_ID }}" ./.github/scripts/make-terraform.sh
     - name: store-artifact
@@ -149,9 +160,16 @@ jobs:
     needs: bootstrap_build
     if: ${{ !cancelled() && needs.bootstrap_build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # upload-sarif publishes this job's findings to code scanning.
+      security-events: write
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: check-suppression-justifications
       run: ./.github/scripts/check-suppression-justifications.sh terraform/dns
     - name: check-iam-resource-scope
@@ -175,7 +193,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       with:
         sarif_file: results.sarif
         category: checkov-dns
@@ -191,6 +209,11 @@ jobs:
     needs: bootstrap_build
     if: ${{ !cancelled() && needs.bootstrap_build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # upload-sarif publishes this job's findings to code scanning.
+      security-events: write
     defaults:
       run:
         working-directory: ./terraform/dns
@@ -201,6 +224,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: install-tflint
       uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337  # v6.3.2
       with:
@@ -222,7 +247,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       with:
         sarif_file: terraform/dns/tflint.sarif
         category: tflint-dns
@@ -231,9 +256,16 @@ jobs:
     needs: bootstrap_build
     if: ${{ !cancelled() && needs.bootstrap_build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # upload-sarif publishes this job's findings to code scanning.
+      security-events: write
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: trivy
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
@@ -254,7 +286,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       with:
         sarif_file: trivy-dns.sarif
         category: trivy-dns
@@ -268,6 +300,12 @@ jobs:
   bootstrap_plan:
     needs: bootstrap_build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     outputs:
       exit_code: ${{ steps.plan-terraform.outputs.exit_code }}
     defaults:
@@ -279,6 +317,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
@@ -352,6 +392,12 @@ jobs:
     # this job should skip too.
     if: ${{ needs.bootstrap_approval.result == 'success' && needs.bootstrap_plan.outputs.exit_code == '2' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     defaults:
       run:
         working-directory: ./terraform/dns
@@ -361,6 +407,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
@@ -413,6 +461,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: generate-backend
       run: env TF_MODULE=infra TF_ENVIRONMENT="${{ vars.TF_VAR_ENVIRONMENT }}" STATE_KMS_KEY_ID="${{ vars.STATE_KMS_KEY_ID }}" ./.github/scripts/make-terraform.sh
     - name: store-artifact
@@ -449,9 +499,16 @@ jobs:
     needs: build
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # upload-sarif publishes this job's findings to code scanning.
+      security-events: write
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: check-suppression-justifications
       run: ./.github/scripts/check-suppression-justifications.sh terraform/infra
     - name: check-iam-resource-scope
@@ -485,7 +542,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       with:
         sarif_file: results.sarif
         category: checkov-infra
@@ -504,6 +561,11 @@ jobs:
     needs: build
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # upload-sarif publishes this job's findings to code scanning.
+      security-events: write
     defaults:
       run:
         working-directory: ./terraform/infra
@@ -514,6 +576,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: install-tflint
       uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337  # v6.3.2
       with:
@@ -536,7 +600,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       with:
         sarif_file: terraform/infra/tflint.sarif
         category: tflint-infra
@@ -545,9 +609,16 @@ jobs:
     needs: build
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # upload-sarif publishes this job's findings to code scanning.
+      security-events: write
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: trivy
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
       with:
@@ -568,7 +639,7 @@ jobs:
       # step's own result is the gate; the upload only surfaces findings.
       if: success() || failure()
       continue-on-error: true
-      uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
+      uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea  # v4.39.4
       with:
         sarif_file: trivy-infra.sarif
         category: trivy-infra
@@ -583,6 +654,12 @@ jobs:
     needs: build
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     outputs:
       exit_code: ${{ steps.plan-terraform.outputs.exit_code }}
     defaults:
@@ -608,6 +685,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
@@ -658,17 +737,21 @@ jobs:
       # legacy parameter anyway via the sentinel fallback in main.tf.
       # Sinkhole and monitoring tiers are left alone; pin those by hand
       # if an exotic rollback ever needs it.
+      env:
+        # Passed through the environment, never expanded into the script:
+        # the dispatch input is free text.
+        PIN_IMAGE_TAG: ${{ inputs.image_tag }}
       run: |
         aws ssm put-parameter \
           --name "/cabal/deployed_image_tag" \
-          --value "${{ inputs.image_tag }}" \
+          --value "${PIN_IMAGE_TAG}" \
           --type String \
           --overwrite
         for tier in imap smtp-in smtp-out; do
           if aws ssm get-parameter --name "/cabal/deployed_image_tag/${tier}" >/dev/null 2>&1; then
             aws ssm put-parameter \
               --name "/cabal/deployed_image_tag/${tier}" \
-              --value "${{ inputs.image_tag }}" \
+              --value "${PIN_IMAGE_TAG}" \
               --type String \
               --overwrite
           fi
@@ -758,6 +841,12 @@ jobs:
     # expression resolve to empty and skip apply on every real change.
     if: ${{ !cancelled() && needs.approval.result == 'success' && needs.plan.outputs.exit_code == '2' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     outputs:
       applied: ${{ steps.apply-terraform.outcome }}
     defaults:
@@ -783,6 +872,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:
@@ -878,6 +969,12 @@ jobs:
     needs: apply
     if: ${{ !cancelled() && needs.apply.result == 'success' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      # This job assumes the AWS deploy role: configure-aws-credentials
+      # exchanges the OIDC token for it (vars.AWS_DEPLOY_ROLE_ARN).
+      id-token: write
     environment: ${{ github.ref_name == 'main' && 'prod' || ( github.ref_name == 'stage' && 'stage' || 'development' ) }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -885,6 +982,8 @@ jobs:
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      with:
+        persist-credentials: false
     - name: configure-aws-credentials
       uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
       with:

@@ -5,6 +5,194 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.64.0] - 2026-11-25
+
+### Added
+- **Attachments and custom flags on the MCP server.** `get_attachment`
+  returns an attachment or inline image by the part number `get_message` now
+  lists: JPEG, PNG, GIF and WebP images up to 3 MB as MCP image content, text
+  attachments as text. `list_flags` shows the owner's custom flags by label,
+  and messages now report theirs. `add_flag` adds one of the owner's custom
+  flags (palette slots only, add-only, at most 50 messages a call) and is
+  offered only to grants with the new `read_flag` access level: a minted
+  grant with `--access read_flag`, or a claude.ai sign-in carrying the new
+  `cabal-mcp/mail.flag` scope. Read-only grants stay read-only. The mcp
+  Lambda gains `GetItem` on `cabal-user-preferences` to read the palette.
+
+### Fixed
+- **MCP message bodies from badly built senders.** `get_message` no longer
+  shows a stylesheet in place of the text when a sender's plain-text
+  alternative was generated with its CSS left in (it uses the HTML part
+  instead, or strips the rules), and no longer starts the body with
+  `Content-Type:` lines when a sender nested a second MIME header block in
+  the text part (the block is removed and its encoding applied). Body text
+  now has `\n` line endings.
+
+## [1.63.0] - 2026-11-25
+
+### Added
+- **OAuth sign-in for the MCP server, for claude.ai custom connectors.**
+  claude.ai can now connect to `POST /mcp` by signing in through the Cognito
+  Hosted UI, since its custom connectors cannot send a static
+  `Authorization` header. A new public app client, `cabal_mcp_client`
+  (authorization code with PKCE, claude.ai's callback only, no secret), is
+  limited to a new resource-server scope, `cabal-mcp/mail.read`. The admin
+  site serves static RFC 9728 protected-resource and RFC 8414
+  authorization-server documents under `/.well-known/`, and an API-wide
+  `UNAUTHORIZED` gateway response adds the
+  `WWW-Authenticate: Bearer resource_metadata=...` challenge that starts the
+  flow. `authorize_agent` verifies these access tokens locally against the
+  pool's JWKS (signature, issuer, `token_use`, client, expiry, scope) and
+  grants them the same read-only INBOX access as a Phase A grant, with no
+  grant row. Minted `cbl_agt_` tokens keep working and remain the way in for
+  Claude Code. New Terraform outputs `mcp_url` and `mcp_oauth_client_id`
+  give the two values claude.ai asks for. The agent mail access plan moved
+  from `docs/tentative/` to `docs/1.x/`. Deploying this release takes two
+  infra workflow runs: the AWS provider leaves `authorize_agent`'s OAuth
+  environment variables out of the plan that creates `cabal_mcp_client`,
+  because the new client ID is not yet known, so after one run the
+  authorizer refuses every access token as "oauth not configured" and
+  claude.ai reports "Authorization failed" right after a successful sign-in.
+  The second run's plan sets them.
+
+## [1.62.0] - 2026-11-25
+
+### Added
+- **Read-only MCP server for AI agents.** `POST /mcp` lets an MCP client
+  such as Claude Code read one mailbox with three tools (`list_folders`,
+  `list_messages` with unread/from/subject/text/date filters, and
+  `get_message`), authenticated by a `cbl_agt_` bearer token instead of
+  Cognito. The owner mints, lists and revokes tokens through the new
+  `new_agent_grant`, `list_agent_grants` and `revoke_agent_grant` endpoints
+  (or `scripts/agent-grant.py`); only each token's SHA-256 is stored, in
+  the new `cabal-agent-grants` table. A REQUEST Lambda authorizer
+  (`authorize_agent`, result TTL 0, so revocation is immediate) resolves the
+  token to its grant, and the `mcp` Lambda opens folders with `EXAMINE` and
+  fetches `BODY.PEEK[]`, so reading never marks mail read; its role has no
+  DynamoDB or S3 access. Phase A grants cover INBOX only and expire within a
+  year. See `docs/agent-access.md`.
+
+### Changed
+- **Compose 1.13 and Material 3 1.5 for the Android client.** Compose BOM
+  2026.11.01, with AGP 9.5.2, KSP 2.3.14 and Gradle 9.9.2 from the same
+  dependabot group. Compose 1.13 requires `compileSdk` 37.1, so both modules
+  now compile against it; `targetSdk` and `minSdk` are unchanged. Material 3
+  1.5 removed `MenuAnchorType` and made `ExposedDropdownMenu` an extension
+  that has to be imported, so the six files with an exposed dropdown use
+  `ExposedDropdownMenuAnchorType` and the new import. No behaviour change
+  is intended.
+
+## [1.61.0] - 2026-11-24
+
+### Added
+- Android: **Flagged view for mail and feeds.** A "Flagged" row at the top
+  of the mail folder list and of the feed list opens one list of every
+  flagged message and flagged feed item, newest first, each under its
+  medium's glyph and opening in its own reader. Once Settings > Flags
+  holds a flag of your own, a pill above the list narrows it to one flag
+  for the visit. Messages come from the server's search of every
+  subscribed folder but Trash, 200 at a time; while more are still to
+  load, the list stops at the day the messages have reached, so no feed
+  item shows below a gap in the mail. Offline, flagged feed items are
+  listed alone and a line says flagged mail needs a connection. On a
+  tablet or an unfolded phone the list and the open message or article
+  sit side by side. Android leg L4 of
+  `docs/1.x/post-wave-3/android-parity.md`, built ahead of the Apple
+  view.
+- Apple: **Flagged view for mail and feeds.** "Flagged" lists every
+  flagged message and flagged feed item together, newest first, each
+  marked as a message or a feed item and opening in its own reader. It is
+  the first row of the sidebar on the Mac and in the iPad's split, a row
+  at the top of the Mail tab's folders and of the Feeds tab's list on
+  iPhone, and a row at the top of the Folders tab and of the Feeds tab on
+  Vision Pro. It shows whatever carries any flag; once Settings > Flags
+  holds a flag of your own, a pill above the list narrows it to one flag
+  for the visit and carries how many items that is. Messages come from
+  the server's search of every subscribed folder but Trash, 200 at a
+  time; while more are still to load, the list stops at the day the
+  messages have reached, so no feed item shows below a gap in the mail.
+  Offline, flagged feed items are listed alone under a line saying
+  flagged mail needs a connection, and the mail loads by itself when the
+  connection returns. A row keeps its own swipes, and a message's dispose
+  acts in the folder the message is in: Restore inside Archive. A row
+  whose flag is cleared leaves the list at once, message or feed item,
+  and setting the flag again in the open reader brings it back. On the
+  Mac, the Message and Feeds menus' Mark as Read/Unread and Flag/Unflag,
+  and the Message menu's Move, act on the item open from the list. A
+  window the system restores comes back on the view with its message or
+  article open, and so does one whose layout changes (an iPhone Duo
+  closing or opening, an iPad window narrowing). B5.2 of
+  `docs/1.x/post-wave-3/flags-and-cross-media.md`, built on the server's
+  search ahead of the SQLite mail store's flagged query.
+
+### Fixed
+- Apple: **A different account starts without the last one's leftovers.**
+  When another account signs in on a device, the folder and feed groups
+  start expanded, Settings > Debug Log starts empty, and the notification
+  "Choose folders" list is back to Inbox; whether notifications are on,
+  and the Inbox, All or Chosen choice, stay as the device had them. The
+  same account signing back in keeps all of it. A folder list, or a
+  failed subscribe or unsubscribe, that answers after Sign Out no longer
+  writes the signed-out account's subscribed folders back, where they
+  decided the next account's unsubscribed-folder banner until its own
+  folder list arrived (#2561).
+- Apple: **Signing in on another server no longer inherits the last
+  server's mail.** After a session expired at launch (or the app was force
+  quit), signing in with the same username on a different server kept the
+  last server's saved mail on screen offline and sent its unsent mail
+  through the new server. A different server now counts as a different
+  account, so its sign-in starts from an empty cache; the same server
+  retyped with `https://`, spaces or capitals is still the same account.
+  The comparison is one Kit type, `AccountIdentity` (the server
+  normalized, the username exact). A sign-in that arrives while a session
+  is already signed in is now refused instead of replacing that session
+  without ending it; no screen offers one, and switching accounts stays
+  Sign Out, then Sign In (#2559, #2560).
+- Apple: **A sign-out wipe that fails now says so.** Every step of the
+  wipe that clears an account's local data at sign-out (saved message
+  lists and bodies, drafts, the outbox, feeds, the saved address and
+  folder lists) discarded its error, and the two mail caches hid a failed
+  removal even from the wipe, so a wipe that left the last account's mail
+  on the device looked the same as one that worked. Each step that fails
+  now writes an error line to the unified log and to Settings > Debug
+  Log, naming what was not cleared, and a sign-out that works writes
+  none. The wipe is still best-effort: one failed step does not stop the
+  rest, and nothing retries here.
+
+### Security
+- **Linux client: `url` 2.5.9 for RUSTSEC-2026-0592.** `url` 2.5.8 and
+  earlier overflowed the stack in `Url::origin()` on a URL with deeply
+  nested `blob:` prefixes, which aborts the process. The client reaches
+  `url` only through `reqwest`, so this is a lockfile bump
+  (`linux/Cargo.lock`: `url` 2.5.8 to 2.5.9, and `form_urlencoded` 1.2.2
+  to 1.2.3 with it) and no source change. The advisory had turned the
+  `cargo deny` step of the Linux gate red for any pull request that runs
+  it.
+- **zizmor audit of the GitHub Actions workflows on every pull request.**
+  `lint.yml` gains a `zizmor` job (zizmor 1.33.0, offline audits) that runs
+  when a workflow, a composite action, `dependabot.yml` or the new
+  `.github/zizmor.yml` changes and fails on any finding of medium severity
+  or above, which covers the `dangerous-triggers` audit
+  (`pull_request_target`, `workflow_run`, `issue_comment`; no workflow uses
+  one, and a canary step proves the audit still fires under the checked-in
+  config). The workflows were brought to zero findings at that floor
+  first. Dispatch inputs and `github.ref_name` are no longer expanded into
+  `run:` scripts in `destroy_terraform.yml`, `nat_ami_build.yml`,
+  `quiesce.yml`, `release.yml` and `infra.yml`'s image-tag pin, nor are the
+  computed matrix values in `app.yml`'s docker job and `apple.yml`'s Kit
+  tests: each is read from the environment. `id-token: write` and
+  `security-events: write` moved from the workflow level to the jobs that
+  assume the AWS role or upload SARIF (`app.yml`, `infra.yml`,
+  `nat_ami_build.yml`, `quiesce.yml`, `codeql.yml`), and
+  `destroy_terraform.yml` gets an explicit read-only default. Every
+  `actions/checkout` now states `persist-credentials`: `false` everywhere
+  except the five whose job pushes or fetches with the token afterwards,
+  which say `true` with the reason. None of the findings was reachable
+  without write access to the repository. Two are ignored rather than
+  fixed, each with its reason beside it: Dependabot's missing cooldown,
+  and a low-confidence `github-env` report on the provisioning-profile
+  action, whose inputs are a literal and a secret.
+
 ## [1.60.0] - 2026-11-22
 
 ### Added
