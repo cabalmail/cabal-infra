@@ -286,4 +286,52 @@ final class SearchPlaceTests: XCTestCase {
         XCTAssertEqual(place.scope, .all, "the search and its scope carry")
         XCTAssertEqual(fixture.articleKeys, ["new", "old"])
     }
+
+
+    func testASearchByFiltersAloneIsInProgressWithNoTermInTheField() async throws {
+        try await fixture.store.setRead(feedId: "f1", sortKey: "2026-03-02T12:00:00Z#old", true)
+        place.noteFront(.feeds)
+        model.search.filters.unread = true
+
+        await fixture.submit("")
+
+        XCTAssertEqual(place.submitted, "")
+        XCTAssertEqual(fixture.articleKeys, ["new", "other"], "every unread article, by the filter alone")
+        XCTAssertTrue(place.searchInProgress, "nothing is typed and mail is not searched, and it is still a search")
+        place.noteFront(.mail)
+        XCTAssertEqual(place.scope, .feeds)
+    }
+
+    func testTheFeedHalfAnswersTheSubmittedTermNotTheTextTypedSince() async throws {
+        await fixture.submit("ferry")
+
+        model.searchQuery = "harbour"
+
+        XCTAssertEqual(place.feedPlan, .search(RssStore.ItemSearch(text: "ferry")))
+        XCTAssertEqual(fixture.sections().feeds, .rows(total: 2))
+    }
+
+    // MARK: What the sections list
+
+    func testAllListsTheFirstFiveArticlesAndFeedsListsThemAll() async throws {
+        try await fixture.addFerryArticles(7)
+
+        await fixture.submit("ferry")
+        XCTAssertEqual(SearchFeedSectionRows.rows(of: place).count, 5)
+        XCTAssertEqual(SearchFeedSectionRows.rows(of: place).first?.itemId, "new", "the newest five")
+
+        await place.pick(.feeds)
+        XCTAssertEqual(SearchFeedSectionRows.rows(of: place).count, 9)
+    }
+
+    func testTheFiltersBadgeCountsOnlyWhatTheScopeOffers() {
+        var filters = MessageSearchFilters()
+        filters.from = "port@example.com"
+        filters.hasAttachment = true
+        filters.unread = true
+
+        XCTAssertEqual(SearchResultsControls.activeFilters(filters, scope: .all), 3)
+        XCTAssertEqual(SearchResultsControls.activeFilters(filters, scope: .feeds), 1,
+                       "under Feeds the sheet offers Unread, not From or Has attachment")
+    }
 }

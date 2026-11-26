@@ -254,4 +254,19 @@ final class SearchArticleHandOffTests: XCTestCase {
 
         XCTAssertEqual(navigator.searchPlace.scope, .feeds, "Search is not a medium to open over")
     }
+
+
+    func testSearchOpenedOverTheFlaggedViewOpensOnAll() async throws {
+        let navigator = try makeNavigator()
+        try search(in: navigator)
+        navigator.layoutChanged(wasWide: false, isWide: false)
+        let tabs = UUID()
+        await navigator.mailTreeAppeared(tabs, isWide: false)
+        navigator.showFlagged(from: tabs, door: .mail)
+        XCTAssertTrue(navigator.flaggedIsInFront)
+
+        navigator.selectTab(.search)
+
+        XCTAssertEqual(navigator.searchPlace.scope, .all, "the view in front lists both media")
+    }
 }
