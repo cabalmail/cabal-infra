@@ -41,11 +41,11 @@ final class FeedSearchSession {
     }
 
     /// Reads `search` from the top. The rows of the search before it stay
-    /// on screen until this one's land, unless it is a different search.
+    /// on screen until this one's land, unless it is a different search,
+    /// whose section then draws nothing until its own rows are read.
     func run(_ search: RssStore.ItemSearch, in feeds: FlaggedFeedStore) async {
         if search != self.search {
             rows = []
-            total = 0
             loaded = false
         }
         self.search = search

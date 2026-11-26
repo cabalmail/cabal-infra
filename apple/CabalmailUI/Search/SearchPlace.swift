@@ -65,13 +65,15 @@ final class SearchPlace {
     }
 
     /// A pick of the control. A search already submitted is run for the
-    /// medium the new scope adds, if that half does not hold it.
+    /// medium the new scope adds: the mail half if it does not hold the
+    /// term, and the feed half in any case, since it is a read of the
+    /// device and the filters may have changed under Mail.
     func pick(_ scope: SearchScope) async {
         scopeState.pick(scope)
         guard submitted != nil else { return }
         if scope.includesMail, !mailIsCurrent {
             await submit()
-        } else if scope.includesFeeds, !feedsAreCurrent {
+        } else if scope.includesFeeds {
             await runFeeds()
         }
     }
@@ -137,10 +139,6 @@ final class SearchPlace {
     private var mailHasRun: Bool {
         guard let model else { return false }
         return model.isSearchActive || model.isLoading
-    }
-
-    private var feedsAreCurrent: Bool {
-        feedPlan?.search == feeds.search
     }
 
     private func runFeeds() async {

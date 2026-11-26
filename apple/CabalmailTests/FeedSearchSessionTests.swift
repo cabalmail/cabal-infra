@@ -165,7 +165,6 @@ final class FeedSearchSessionTests: XCTestCase {
         XCTAssertEqual(session.total, 3)
     }
 
-
     func testAMarkAfterTwoPagesKeepsBothPages() async throws {
         try await fixture.addFerryArticles(60)
         await session.run(ferry, in: fixture.feeds)
@@ -176,5 +175,9 @@ final class FeedSearchSessionTests: XCTestCase {
 
         XCTAssertEqual(session.rows.count, 60, "the rows the user has paged in are still there")
         XCTAssertEqual(session.rows.first?.isRead, true)
+    }
+
+    func testAPageIsFifty() {
+        XCTAssertEqual(FeedSearchSession.pageSize, 50, "the mail search's page, so the two sections fill alike")
     }
 }

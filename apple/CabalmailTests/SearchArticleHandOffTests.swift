@@ -255,7 +255,6 @@ final class SearchArticleHandOffTests: XCTestCase {
         XCTAssertEqual(navigator.searchPlace.scope, .feeds, "Search is not a medium to open over")
     }
 
-
     func testSearchOpenedOverTheFlaggedViewOpensOnAll() async throws {
         let navigator = try makeNavigator()
         try search(in: navigator)
@@ -268,5 +267,28 @@ final class SearchArticleHandOffTests: XCTestCase {
         navigator.selectTab(.search)
 
         XCTAssertEqual(navigator.searchPlace.scope, .all, "the view in front lists both media")
+    }
+
+    func testALayoutReportThatChangesNothingLeavesTheArticleOpen() async throws {
+        let (navigator, _) = try await readingAnArticleWide()
+
+        // A resize within the wide layout reports again: wide before, wide after.
+        navigator.layoutChanged(wasWide: true, isWide: true)
+
+        XCTAssertEqual(navigator.searchPlace.openArticle, article)
+        XCTAssertNil(navigator.takeHandedOffSearchArticle(), "nothing was handed on: no layout was left")
+    }
+
+    func testATabPickThatIsNotSearchNotesNothing() async throws {
+        let navigator = try makeNavigator()
+        try search(in: navigator)
+        navigator.selectTab(.feeds)
+        navigator.selectTab(.search)
+        XCTAssertEqual(navigator.searchPlace.scope, .feeds)
+        // Search is left for Mail, then Addresses: neither is a search opening.
+        navigator.selectTab(.mail)
+        navigator.selectTab(.addresses)
+
+        XCTAssertEqual(navigator.searchPlace.scope, .feeds, "the scope moves only when Search is opened")
     }
 }

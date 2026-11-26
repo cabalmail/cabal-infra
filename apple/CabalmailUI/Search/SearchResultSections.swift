@@ -23,6 +23,7 @@ struct SearchMailSectionRows: View {
         case .failed(let offline):
             HStack {
                 Text(SearchSectionWords.mailFailed(offline: offline))
+                    .accessibilityIdentifier("search.mail.failed")
                 Spacer()
                 Button("Retry") {
                     Task { await place.retryMail() }
@@ -30,7 +31,7 @@ struct SearchMailSectionRows: View {
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("search.mail.retry")
             }
-            .searchSectionNote("search.mail.failed")
+            .searchSectionNoteStyle()
         case .empty:
             Text(SearchSectionWords.mailEmpty)
                 .searchSectionNote("search.mail.empty")
@@ -67,6 +68,7 @@ struct SearchFeedSectionRows: View {
         case .blocked(let filters):
             VStack(alignment: .leading, spacing: 6) {
                 Text(SearchSectionWords.feedsBlocked(by: filters))
+                    .accessibilityIdentifier("search.feeds.blocked")
                 Button("Clear those filters") {
                     model.search.filters = FeedSearchPlan.clearingMailOnly(model.search.filters)
                     Task { await place.submit() }
@@ -74,7 +76,7 @@ struct SearchFeedSectionRows: View {
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("search.feeds.clearMailFilters")
             }
-            .searchSectionNote("search.feeds.blocked")
+            .searchSectionNoteStyle()
         case .unreadable:
             Text(SearchSectionWords.feedsUnreadable)
                 .searchSectionNote("search.feeds.unreadable")
@@ -209,9 +211,15 @@ struct SearchResultsControls: View {
 extension View {
     /// A line that stands in a section in place of rows, or under them.
     func searchSectionNote(_ identifier: String) -> some View {
+        searchSectionNoteStyle()
+            .accessibilityIdentifier(identifier)
+    }
+
+    /// A note's look alone, for one that holds a button: an identifier on
+    /// the row would be stamped on the button too, over its own.
+    func searchSectionNoteStyle() -> some View {
         appFont(.footnote)
             .foregroundStyle(.secondary)
             .listRowSeparator(.hidden)
-            .accessibilityIdentifier(identifier)
     }
 }
