@@ -86,7 +86,7 @@ private struct FeedMenuAvailabilityReporter: ViewModifier {
     @Environment(\.windowCommands) private var commands
     @Environment(\.commandTab) private var tab
     @State private var reporter = UUID()
-    /// Nil while this surface hosts no feed reader (a compact `MailRootView`).
+    /// Nil while this surface hosts no feed reader.
     let availability: FeedMenuAvailability?
 
     func body(content: Content) -> some View {
@@ -105,8 +105,8 @@ private struct FeedMenuAvailabilityReporter: ViewModifier {
 
 private struct ActiveSectionReporter: ViewModifier {
     @Environment(\.windowCommands) private var commands
-    /// Nil for a layout that does not decide the section (a `MailRootView`
-    /// that hosts no feeds): it leaves the last answer alone.
+    /// Nil for a layout that does not decide the section: it leaves the last
+    /// answer alone.
     let section: ResumeSession.Section?
 
     func body(content: Content) -> some View {
@@ -118,7 +118,7 @@ private struct ActiveSectionReporter: ViewModifier {
 
 extension View {
     /// Publishes what the `Feeds` menu can act on from this surface — the one
-    /// that owns both the feed scope and the item selection (`MailRootView`
+    /// that owns both the feed scope and the item selection (`WideMail`
     /// on the wide layouts, `FeedRootView` on the compact ones). `hosts` is
     /// false for a layout that does not show feeds here at all.
     func reportsFeedMenuAvailability(
