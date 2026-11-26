@@ -9,7 +9,7 @@ extension NavStateCoordinator {
     /// Where the mail UI should land at launch: the session's folder (INBOX
     /// when there is none) and, if a message was open, a cursor for the
     /// window to park so its list selects it after its initial load. The
-    /// folder is provisional — `MailRootView` swaps the fetched `Folder` in
+    /// folder is provisional — `SceneNavigator` swaps the fetched `Folder` in
     /// when the list arrives and falls back to INBOX if it no longer exists.
     /// `listAnchor` is where the folder's list was scrolled when the app
     /// last went away, for the window to park beside the message.

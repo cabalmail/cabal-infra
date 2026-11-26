@@ -119,6 +119,8 @@ public actor EnvelopeCache {
     private let directory: URL
     private let fileManager: FileManager
     private var changeContinuations: [UUID: AsyncStream<ChangeEvent>.Continuation] = [:]
+    /// Set by `close()`: nothing is written from then on.
+    private var isClosed = false
 
     public init(directory: URL, fileManager: FileManager = .default) throws {
         self.directory = directory
@@ -178,7 +180,17 @@ public actor EnvelopeCache {
         emit(.upserted(envelopes: Array(snapshot.envelopes.values), folder: folder))
     }
 
+    /// Ends this cache's writing for good. The account's sign-out, or
+    /// another account's sign-in, removes the directory next, and whoever
+    /// still holds this cache must not put a snapshot back where the next
+    /// session's cache opens. Returning from here means no write is under
+    /// way either: the cache is an actor and its writes do not suspend.
+    func close() {
+        isClosed = true
+    }
+
     private func write(_ snapshot: Snapshot, for folder: String) throws {
+        guard !isClosed else { throw MailStoreError.closed }
         let url = fileURL(for: folder)
         let data = try JSONEncoder().encode(snapshot)
         try data.write(to: url, options: .atomic)
@@ -197,6 +209,8 @@ public actor EnvelopeCache {
     /// snapshots could not be removed, after doing the rest, so the wipe
     /// can report that they are still on disk.
     public func clearAll() throws {
+        // A closed cache's directory belongs to whoever closed it.
+        guard !isClosed else { return }
         let failure = WipeReport.remove(directory, using: fileManager)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         emit(.cleared)

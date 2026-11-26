@@ -36,6 +36,11 @@ final class SessionHarness {
     /// The account each client was asked for, oldest first: one entry per
     /// `makeClient` call, the failed ones included.
     private(set) var clientAccounts: [AccountIdentity?] = []
+    /// The cache root's launch step and the client builds, in the order
+    /// they ran: "prepare <server> <username>" ("prepare none" with no
+    /// remembered account) and "makeClient". Kept apart from `events`,
+    /// which the characterization suites compare whole.
+    private(set) var storageTrail: [String] = []
     /// The answer to every configuration load.
     var configurationResult: Result<Configuration, Error>
     /// When set, building a client throws this instead.
@@ -133,6 +138,7 @@ final class SessionHarness {
             makeClient: { [weak self] configuration, store, monitor, account in
                 guard let self else { throw CabalmailError.notConfigured }
                 record("makeClient")
+                storageTrail.append("makeClient")
                 clientAccounts.append(account)
                 if let makeClientFailure { throw makeClientFailure }
                 let client = try makeClient(configuration: configuration, store: store, monitor: monitor)
@@ -148,7 +154,11 @@ final class SessionHarness {
             },
             lastSessionDefaults: defaults,
             publishControlDomain: { [weak self] in self?.record("publishControlDomain \($0)") },
-            hooks: hooks()
+            hooks: hooks(),
+            prepareAccountStorage: { [weak self] remembered in
+                let account = remembered.map { "\($0.server) \($0.username)" } ?? "none"
+                self?.storageTrail.append("prepare \(account)")
+            }
         )
     }
 

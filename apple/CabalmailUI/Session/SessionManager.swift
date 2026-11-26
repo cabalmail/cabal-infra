@@ -127,6 +127,9 @@ public final class SessionManager {
     /// meanwhile must not shut down: the submit may still wire it.
     @ObservationIgnored private var mfaSubmitting: CabalmailClient?
 
+    /// The cache root's launch step, run before the first client is built.
+    @ObservationIgnored private let launchStorage = LaunchStorageStep()
+
     public init() {
         pollers.client = { [weak self] in self?.client }
         pollers.inboxUnreadChanged = { [weak self] in self?.owner.inboxUnreadChanged($0) }
@@ -138,6 +141,7 @@ public final class SessionManager {
     /// anyway used to replace the session without ending it (#2559).
     func signIn(controlDomain: String, username: String, password: String) async {
         await teardownGate.awaitTeardown()
+        await prepareAccountStorage()
         guard !refusesSignInOverASession() else { return }
         status = .signingIn
         mfaError = nil
@@ -235,6 +239,9 @@ public final class SessionManager {
     /// password step.
     func restoreIfPossible() async {
         await teardownGate.awaitTeardown()
+        // Here rather than only where the client is built, so a launch with
+        // nobody signed in tidies the cache root too.
+        await prepareAccountStorage()
         guard client == nil else { return }
         switch status {
         case .signingIn, .mfaCodeRequired, .restoring, .signedIn:
@@ -485,6 +492,8 @@ extension SessionManager {
         standbyBuild = StandbyBuild(restoreTookPart: forRestore)
         let generation = teardownGate.generation
         do {
+            // A background launch's borrow can be the first to get here.
+            await prepareAccountStorage()
             let configuration = try await sessionEnvironment.loadConfiguration(domain)
             let built = try sessionEnvironment.makeClient(
                 configuration, secureStore, sessionInvalidation,
@@ -512,6 +521,21 @@ extension SessionManager {
             waiter.resume(with: result)
         }
         return build
+    }
+
+    /// Runs the cache root's launch step if this process has not yet: the
+    /// remembered account keeps its saved mail and takes over what a build
+    /// from before the account directory left, and everything else under
+    /// `accounts/` goes. Every path that builds a client comes through here
+    /// first, and the ones that ask while it runs wait for it
+    /// (`LaunchStorageStep`). The account is the one remembered when it
+    /// runs, which a sign-in has not changed yet.
+    private func prepareAccountStorage() async {
+        await launchStorage.run { [self] in
+            await sessionEnvironment.prepareAccountStorage(
+                AccountIdentity(controlDomain: controlDomain, username: lastUsername)
+            )
+        }
     }
 
     /// Takes `standby` out of the lending slot, for the caller to wire or
@@ -775,6 +799,12 @@ extension SessionManager {
         self.controlDomain = controlDomain
         self.lastUsername = username
         await wireSession(client: newClient, username: username)
+        // Only now that the sign-in has succeeded: any other account's
+        // directory of saved mail goes. One is left when its session ended
+        // without a wipe, and the wipe above cannot reach it. A sign-in
+        // that is refused removes nothing, so a mistyped username cannot
+        // take the real account's mail.
+        await newClient.removeOtherAccountsData()
     }
 }
 
