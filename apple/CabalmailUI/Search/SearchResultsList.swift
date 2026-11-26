@@ -45,10 +45,11 @@ struct SearchResultsList: View {
             }
         }
         .navigationTitle("Search")
+        .inlineNavigationTitle()
         .toolbar {
-            // New Message keeps the slot the mail and feed lists give it,
-            // so the primary action never moves between them.
-            ToolbarItem(placement: .listBar(.primaryAction, leads: listBarItemsLead)) { composeButton }
+            // New Message keeps the slot the mail results give it, so it
+            // does not move as the control goes between Mail and the rest.
+            ToolbarItem(placement: .listCompose(leads: listBarItemsLead)) { composeButton }
                 .keepsInBar()
         }
         .task {

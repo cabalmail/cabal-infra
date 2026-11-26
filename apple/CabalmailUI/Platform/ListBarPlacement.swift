@@ -19,4 +19,16 @@ extension ToolbarItemPlacement {
         return placement
         #endif
     }
+
+    /// Where a list's New Message button sits, as the mail and feed lists
+    /// place theirs: the window toolbar's primary action on the Mac, and the
+    /// list bar's own next slot elsewhere, so the button does not change
+    /// places when another list takes the column.
+    static func listCompose(leads: Bool) -> ToolbarItemPlacement {
+        #if os(macOS)
+        return .primaryAction
+        #else
+        return listBar(.automatic, leads: leads)
+        #endif
+    }
 }
