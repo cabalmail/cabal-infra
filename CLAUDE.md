@@ -33,6 +33,18 @@ The `development` environment is a warm spare. It runs only when:
 
 Otherwise leave it quiesced. All work goes `stage` -> `main` with one deliberate promotion step. See [docs/quiesce.md](docs/quiesce.md).
 
+### Draft pull requests
+
+A draft pull request must not be merged yet, whatever the reason: the work is unfinished, its checks have not passed, or it is finished and waiting on something else (a release that has to be promoted first, a soak, another PR). Draft status is what the maintainer reads when deciding whether to merge, so it carries that one meaning and no weaker one.
+
+- A PR that a session opened, that is not a draft and whose checks pass is ready to merge. Mark a PR ready (`gh pr ready`) only when that is true. Until then open it with `gh pr create --draft`, or do not open it yet.
+- A PR may be opened as a draft early so that its checks run, and may stay a draft after they pass.
+- When a draft waits for a reason other than unfinished work, say so in the first line of its description: why it waits and what lifts it, for example "Draft until the release that carries the account directory is promoted". Without that line a held draft looks like an abandoned one.
+- Mark a held PR ready only after checking on GitHub that what it waited for has happened.
+- If a problem turns up after a PR was marked ready, convert it back to a draft (`gh pr ready --undo`) and say why in a comment.
+
+This covers the PRs sessions open. Dependabot's PRs and other contributors' PRs are never drafts, so their state says nothing about readiness.
+
 ### Promotion to prod
 
 The only route to `main` is promoting `stage`. The promotion is a formal release step: from a clean `stage` tree, `make promote VERSION=...` collates the pending changelog fragments, commits and pushes `stage`, and opens the `stage` -> `main` PR; merging that PR is a deliberate manual act, and `release.yml` tags and publishes the GitHub release on merge. Never label the release PR (`no-changelog` or anything else): the changelog gates skip it by its branch names, and a label added while they run cancels the in-flight run and leaves a cancelled check on the commit, which the release dashboard counts as failing. See [docs/releasing.md](docs/releasing.md).
