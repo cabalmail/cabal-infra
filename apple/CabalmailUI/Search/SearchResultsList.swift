@@ -81,13 +81,17 @@ struct SearchResultsList: View {
                 Section {
                     SearchMailSectionRows(status: sections.mail, model: model, place: place, actions: actions)
                 } header: {
-                    SearchSectionHeader(title: SearchSectionWords.mailTitle, count: sections.mailCount)
+                    FormSectionHeader {
+                        SearchSectionHeader(title: SearchSectionWords.mailTitle, count: sections.mailCount)
+                    }
                 }
             }
             Section {
                 SearchFeedSectionRows(status: sections.feeds, model: model, place: place, actions: actions)
             } header: {
-                SearchSectionHeader(title: SearchSectionWords.feedsTitle, count: sections.feedCount)
+                FormSectionHeader {
+                    SearchSectionHeader(title: SearchSectionWords.feedsTitle, count: sections.feedCount)
+                }
             }
         }
         .listStyle(.plain)
