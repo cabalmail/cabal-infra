@@ -10,6 +10,11 @@ import Synchronization
 /// drafts, the address list and the feed store stay in the root, shared by
 /// whoever is signed in and emptied at sign-out as before; the address list
 /// is meant to follow in a later phase.
+///
+/// A directory lives as long as its account is the one this install
+/// remembers. Sign-out removes it, and so does another account's sign-in
+/// once it has succeeded, and a launch that remembers another account or
+/// none (`AccountDirectoryMaintenance.swift`).
 public enum AccountDirectory {
     /// The directory in the cache root that holds one directory per account.
     public static let containerName = "accounts"
@@ -26,6 +31,31 @@ public enum AccountDirectory {
     static func legacyCacheDirectories(in root: URL) -> [URL] {
         ["envelopes", "bodies", "folders"].map { root.appendingPathComponent($0, isDirectory: true) }
     }
+
+    /// What a directory being deleted has in its name. An account's name is
+    /// hex, so no account's directory carries it.
+    static let beingDeletedMarker = ".deleting-"
+
+    static func isBeingDeleted(_ name: String) -> Bool {
+        name.contains(beingDeletedMarker)
+    }
+
+    /// A new name beside `directory` for it to be deleted under. Removing a
+    /// directory takes a file at a time and can stop half way; a rename is
+    /// one step, so the account's name is free of the old mail at once and
+    /// whatever a failed removal leaves is found by this name at the next
+    /// launch (`prepareAtLaunch(root:remembered:)`).
+    static func beingDeletedURL(for directory: URL) -> URL {
+        directory.deletingLastPathComponent().appendingPathComponent(
+            directory.lastPathComponent + beingDeletedMarker + UUID().uuidString, isDirectory: true
+        )
+    }
+}
+
+/// What a write to a closed store throws: its account signed out, or
+/// another one signed in, and its directory is gone.
+enum MailStoreError: Error {
+    case closed
 }
 
 /// The mail caches a client reads and writes and the Spotlight indexer fed
@@ -51,6 +81,17 @@ struct MailStores: Sendable {
         #else
         spotlightIndexer = searchableIndex.map { SpotlightIndexer(index: $0) }
         #endif
+    }
+
+    /// Ends the stores for good, before their directory is removed: nothing
+    /// more is indexed, and no cache writes again, so a client still held
+    /// cannot put the account's mail back on disk. Returns once no write is
+    /// under way.
+    func close() async {
+        await spotlightIndexer?.stop()
+        await envelopeCache.close()
+        await bodyCache.close()
+        await folderStateCache.close()
     }
 
     /// Feeds the indexer from the envelope cache's change stream, and from
@@ -83,16 +124,26 @@ struct MailStores: Sendable {
 /// An account's stores are kept while a client holds a lease on them. A
 /// client gives its lease up when it is shut down (or deallocated), and the
 /// last one to go takes the Spotlight feed with it; the next client of that
-/// account then opens stores afresh. That matters at sign-out, which stops
-/// the indexer for good.
+/// account then opens stores afresh.
+///
+/// Stores whose directory is removed are retired at once, whoever still
+/// holds a lease: at the account's sign-out (`AccountStoreLease
+/// .removeAccountDirectory()`) and when another account's sign-in or a
+/// launch removes the directory (`removeAccountDirectories(in:except:)`).
+/// They are closed first, and the next client of that account opens new
+/// ones, so a sign-in straight after a sign-out never gets closed stores.
 ///
 /// A `Mutex`, not an actor, because `CabalmailClient.make` is synchronous.
-/// The directory is made and removed while it is held, so a sign-in that
-/// starts as an abandoned one is let go sees one or the other, never half.
+/// A directory is made, renamed and looked up while it is held, so a
+/// sign-in that starts as an abandoned one is let go, or as a sign-out
+/// takes the directory, sees one state or the other, never half.
 final class AccountStoreRegistry: Sendable {
     static let shared = AccountStoreRegistry()
 
     private struct Entry: Sendable {
+        /// Which opening of the account's stores this is. A lease on stores
+        /// that were retired says nothing about the ones opened since.
+        let id = UUID()
         let stores: MailStores
         let directory: URL
         /// The account directory did not exist when these stores opened it.
@@ -103,6 +154,10 @@ final class AccountStoreRegistry: Sendable {
 
     private let entries = Mutex<[String: Entry]>([:])
 
+    private static func key(_ directory: URL) -> String {
+        directory.standardizedFileURL.path
+    }
+
     /// The stores of `account` in the cache root `root`, opened if no
     /// client holds them yet. Opening them creates the account directory.
     func lease(
@@ -112,21 +167,17 @@ final class AccountStoreRegistry: Sendable {
         searchableIndex: SearchableIndexing?
     ) throws -> AccountStoreLease {
         let directory = AccountDirectory.url(for: account, in: root)
-        let key = directory.standardizedFileURL.path
-        let stores = try entries.withLock { entries in
+        let key = Self.key(directory)
+        let entry = try entries.withLock { entries in
             var entry = try entries[key] ?? Self.open(
                 directory, bodyCacheCapacityBytes: bodyCacheCapacityBytes, searchableIndex: searchableIndex
             )
             entry.leases += 1
             entries[key] = entry
-            return entry.stores
+            return entry
         }
         return AccountStoreLease(
-            stores: stores,
-            legacyDirectories: AccountDirectory.legacyCacheDirectories(in: root),
-            release: { [weak self] removingNewDirectory in
-                self?.release(key: key, removingNewDirectory: removingNewDirectory)
-            }
+            stores: entry.stores, registry: self, root: root, account: account, key: key, entryID: entry.id
         )
     }
 
@@ -146,10 +197,11 @@ final class AccountStoreRegistry: Sendable {
     /// sharing. `removingNewDirectory`: that client was a sign-in that did
     /// not finish, so if these stores made the account directory and nobody
     /// else holds them, the directory goes too. It can only hold what this
-    /// run cached, and a later sign-in makes it again.
-    private func release(key: String, removingNewDirectory: Bool) {
+    /// run cached, and a later sign-in makes it again. Nothing to do when
+    /// the stores the lease was on have been retired.
+    fileprivate func release(key: String, entryID: UUID, removingNewDirectory: Bool) {
         entries.withLock { entries in
-            guard var entry = entries[key] else { return }
+            guard var entry = entries[key], entry.id == entryID else { return }
             entry.leases -= 1
             guard entry.leases <= 0 else {
                 entries[key] = entry
@@ -163,6 +215,85 @@ final class AccountStoreRegistry: Sendable {
             }
         }
     }
+
+    /// The account signed out: its stores, already closed, are retired and
+    /// its directory is renamed for deletion, in one step. Returns what is
+    /// left to remove: nil when the directory is already gone, or when the
+    /// account's stores have been opened again since the lease's were
+    /// retired, and the directory is theirs.
+    fileprivate func retire(key: String, entryID: UUID, directory: URL) -> URL? {
+        entries.withLock { entries in
+            if let entry = entries[key] {
+                guard entry.id == entryID else { return nil }
+                entries[key] = nil
+                entry.spotlightFeed?.cancel()
+            }
+            return Self.renameForDeletion(directory)
+        }
+    }
+
+    /// Removes every directory in the root's `accounts/` but `kept`'s: the
+    /// other accounts', and whatever a removal that failed left under a
+    /// being-deleted name. With no `kept`, all of them. Stores open on one
+    /// that goes are closed and retired first.
+    ///
+    /// Run at launch for the remembered account, and after a sign-in has
+    /// succeeded for the account that signed in. Never for a sign-in that
+    /// may still be refused: a mistyped username would take the real
+    /// account's saved mail.
+    func removeAccountDirectories(in root: URL, except kept: AccountIdentity?) async {
+        let container = root.appendingPathComponent(AccountDirectory.containerName, isDirectory: true)
+        let keptName = kept?.directoryName
+        let keptKey = kept.map { Self.key(AccountDirectory.url(for: $0, in: root)) }
+        let prefix = Self.key(container) + "/"
+        let retired = entries.withLock { entries in
+            entries.keys
+                .filter { $0.hasPrefix(prefix) && $0 != keptKey }
+                .compactMap { entries.removeValue(forKey: $0) }
+        }
+        for entry in retired {
+            entry.spotlightFeed?.cancel()
+            await entry.stores.close()
+        }
+        // A directory with stores open on it now was opened since: a
+        // sign-in under way, which removes the others itself if it succeeds.
+        let doomed: [URL] = entries.withLock { entries in
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: container.path)) ?? []
+            return names.filter { $0 != keptName }.compactMap { name -> URL? in
+                let directory = container.appendingPathComponent(name, isDirectory: true)
+                if AccountDirectory.isBeingDeleted(name) { return directory }
+                guard entries[Self.key(directory)] == nil else { return nil }
+                return Self.renameForDeletion(directory)
+            }
+        }
+        for directory in doomed {
+            Self.remove(directory, named: "saved mail of an account that is not signed in")
+        }
+    }
+
+    /// Renames `directory` to a being-deleted name. Returns where it is
+    /// now: the new name, the old one if the rename failed (it is removed
+    /// in place then), or nil if there is no such directory.
+    private static func renameForDeletion(_ directory: URL) -> URL? {
+        let renamed = AccountDirectory.beingDeletedURL(for: directory)
+        do {
+            try FileManager.default.moveItem(at: directory, to: renamed)
+            return renamed
+        } catch CocoaError.fileNoSuchFile, CocoaError.fileReadNoSuchFile {
+            return nil
+        } catch {
+            CabalmailLog.warn("AccountDirectory", "a directory to delete could not be renamed first: \(error)")
+            return directory
+        }
+    }
+
+    /// Removes a directory of saved mail, saying so if any of it is left.
+    /// The next launch tries again, if it is under a being-deleted name.
+    fileprivate static func remove(_ directory: URL, named name: String) {
+        if let error = WipeReport.remove(directory, using: .default) {
+            WipeReport.failed(name, error)
+        }
+    }
 }
 
 /// One client's hold on its account's shared stores
@@ -172,17 +303,29 @@ final class AccountStoreLease: Sendable {
     /// Where the caches were before the account directory, for the wipes.
     let legacyDirectories: [URL]
 
-    private let onRelease: @Sendable (_ removingNewDirectory: Bool) -> Void
+    private let registry: AccountStoreRegistry
+    private let root: URL
+    private let account: AccountIdentity
+    /// What the registry knows the stores by, and which opening of them.
+    private let key: String
+    private let entryID: UUID
     private let isReleased = Mutex(false)
 
     fileprivate init(
         stores: MailStores,
-        legacyDirectories: [URL],
-        release: @escaping @Sendable (_ removingNewDirectory: Bool) -> Void
+        registry: AccountStoreRegistry,
+        root: URL,
+        account: AccountIdentity,
+        key: String,
+        entryID: UUID
     ) {
         self.stores = stores
-        self.legacyDirectories = legacyDirectories
-        self.onRelease = release
+        self.legacyDirectories = AccountDirectory.legacyCacheDirectories(in: root)
+        self.registry = registry
+        self.root = root
+        self.account = account
+        self.key = key
+        self.entryID = entryID
     }
 
     deinit {
@@ -196,6 +339,25 @@ final class AccountStoreLease: Sendable {
             return released
         }
         guard !wasReleased else { return }
-        onRelease(removingNewDirectory)
+        registry.release(key: key, entryID: entryID, removingNewDirectory: removingNewDirectory)
+    }
+
+    /// The account's sign-out: closes its stores, for every client that
+    /// shares them, and removes its directory. The directory is renamed to
+    /// a being-deleted name in one step and removed under that name, so a
+    /// removal that fails leaves nothing under the account's name; it is
+    /// reported, and the next launch removes what is left. The lease itself
+    /// is still given up by `release()`.
+    func removeAccountDirectory() async {
+        await stores.close()
+        let directory = AccountDirectory.url(for: account, in: root)
+        guard let doomed = registry.retire(key: key, entryID: entryID, directory: directory) else { return }
+        AccountStoreRegistry.remove(doomed, named: "saved message lists, bodies and folder list")
+    }
+
+    /// This account has signed in: every other account's directory goes
+    /// (`AccountStoreRegistry.removeAccountDirectories(in:except:)`).
+    func removeOtherAccountDirectories() async {
+        await registry.removeAccountDirectories(in: root, except: account)
     }
 }

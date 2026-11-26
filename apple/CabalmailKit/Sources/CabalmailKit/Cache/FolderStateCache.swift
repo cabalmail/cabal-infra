@@ -28,6 +28,9 @@ public actor FolderStateCache {
     /// delete put the deleted folder back.
     public private(set) var generation = 0
 
+    /// Set by `close()`: nothing is saved from then on.
+    private var isClosed = false
+
     public init(directory: URL? = nil) {
         self.fileURL = directory?.appendingPathComponent("folders.json")
     }
@@ -137,6 +140,15 @@ public actor FolderStateCache {
         }
     }
 
+    /// Ends this cache's saving for good (`EnvelopeCache.close()`). A save
+    /// after it would make the account's directory again, after the
+    /// sign-out that removed it. An answer already on its way is dropped
+    /// like one that crosses `clear()`.
+    func close() {
+        generation += 1
+        isClosed = true
+    }
+
     private func load() -> Saved {
         guard let fileURL, let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode(Saved.self, from: data) else {
@@ -146,7 +158,7 @@ public actor FolderStateCache {
     }
 
     private func save(_ state: Saved) {
-        guard let fileURL else { return }
+        guard let fileURL, !isClosed else { return }
         do {
             try FileManager.default.createDirectory(
                 at: fileURL.deletingLastPathComponent(),
