@@ -40,6 +40,12 @@ public actor CabalmailClient {
     /// the optional.
     public nonisolated let spotlightIndexer: SpotlightIndexer?
 
+    /// This client's hold on the stores it shares with its account's other
+    /// clients (`AccountStoreRegistry`): the envelope, body and folder-state
+    /// caches and the Spotlight indexer above. Given up by `shutdown()`. Nil
+    /// for a client built without an account, which shares nothing.
+    nonisolated let accountLease: AccountStoreLease?
+
     #if canImport(Network)
     /// Retained so Reachability observers and the send queue's drain task
     /// outlive initialization. Phase 7 — the offline banner streams from
@@ -56,7 +62,8 @@ public actor CabalmailClient {
 
     /// The task feeding `spotlightIndexer` from the envelope cache's change
     /// stream and from the feed sync's writes; `shutdown()` cancels it. Nil
-    /// when there is no indexer.
+    /// when there is no indexer, and for a client with an account, whose
+    /// shared indexer has one feed for all its clients.
     private nonisolated let spotlightBinding: Task<Void, Never>?
 
     /// Set by `shutdown()`.
@@ -93,6 +100,7 @@ public actor CabalmailClient {
         self.outbox = outbox
         self.folderStateCache = folderStateCache
         self.spotlightIndexer = nil
+        self.accountLease = nil
         self.spotlightBinding = nil
         self.rss = nil
         self.rssStore = nil
@@ -119,6 +127,16 @@ public actor CabalmailClient {
     /// `searchableIndex` stands in for the device's Spotlight index, which
     /// is what a client gets without one; a test passes a recording fake.
     ///
+    /// `account` is whose client this is. With one, the envelope, body and
+    /// folder-state caches open in that account's own directory under
+    /// `cacheDirectory` (`AccountDirectory`) and are the same objects, with
+    /// one Spotlight indexer, for every client of that account in the
+    /// process. The app always passes one: the server and username typed at
+    /// sign-in, the remembered ones at a restore. Without one the three open
+    /// in `cacheDirectory` itself and belong to this client alone, which is
+    /// how they were before accounts had directories. The outbox, drafts,
+    /// address list and feed store are in `cacheDirectory` either way.
+    ///
     /// As of issue #371 the IMAP and SMTP work happens behind the Lambda
     /// API rather than via direct mail-protocol sockets — `imapClient` is
     /// an `ApiBackedImapClient`, and `send(_:)` posts to `/send`.
@@ -127,6 +145,7 @@ public actor CabalmailClient {
         secureStore: SecureStore,
         httpTransport: HTTPTransport = URLSessionHTTPTransport(),
         cacheDirectory: URL,
+        account: AccountIdentity? = nil,
         bodyCacheCapacityBytes: UInt64 = 200 * 1024 * 1024,
         sessionInvalidation: SessionInvalidationMonitor? = nil,
         searchableIndex: SearchableIndexing? = nil
@@ -145,33 +164,33 @@ public actor CabalmailClient {
         )
         let imap = ApiBackedImapClient(api: api, host: configuration.imapHost)
         let addresses = AddressCache(directory: cacheDirectory.appendingPathComponent("addresses"))
-        let envelopes = try EnvelopeCache(directory: cacheDirectory.appendingPathComponent("envelopes"))
-        let bodies = try MessageBodyCache(
-            directory: cacheDirectory.appendingPathComponent("bodies"),
-            capacityBytes: bodyCacheCapacityBytes
+        let lease = try account.map {
+            try AccountStoreRegistry.shared.lease(
+                root: cacheDirectory,
+                account: $0,
+                bodyCacheCapacityBytes: bodyCacheCapacityBytes,
+                searchableIndex: searchableIndex
+            )
+        }
+        let mail = try lease?.stores ?? MailStores(
+            directory: cacheDirectory,
+            bodyCacheCapacityBytes: bodyCacheCapacityBytes,
+            searchableIndex: searchableIndex
         )
         let drafts = try DraftStore(directory: cacheDirectory.appendingPathComponent("drafts"))
         let outbox = try Outbox(directory: cacheDirectory.appendingPathComponent("outbox"))
-        let folderState = FolderStateCache(directory: cacheDirectory.appendingPathComponent("folders"))
         // A broken feed cache must not stop mail: recreate it, else no feeds.
         let rssStore = RssStore.openRecovering(directory: cacheDirectory.appendingPathComponent("rss"))
-        #if canImport(CoreSpotlight)
-        let spotlight: SpotlightIndexer? = SpotlightIndexer(index: searchableIndex ?? LiveSearchableIndex())
-        #else
-        let spotlight: SpotlightIndexer? = searchableIndex.map { SpotlightIndexer(index: $0) }
-        #endif
         return CabalmailClient(
             configuration: configuration,
             authService: auth,
             apiClient: api,
             imapClient: imap,
             addressCache: addresses,
-            envelopeCache: envelopes,
-            bodyCache: bodies,
+            mail: mail,
+            accountLease: lease,
             draftStore: drafts,
             outbox: outbox,
-            folderStateCache: folderState,
-            spotlightIndexer: spotlight,
             rss: api,
             rssStore: rssStore,
             observeReachability: true
@@ -188,12 +207,10 @@ public actor CabalmailClient {
         apiClient: ApiClient,
         imapClient: ImapClient,
         addressCache: AddressCache,
-        envelopeCache: EnvelopeCache,
-        bodyCache: MessageBodyCache,
+        mail: MailStores,
+        accountLease: AccountStoreLease?,
         draftStore: DraftStore,
         outbox: Outbox,
-        folderStateCache: FolderStateCache,
-        spotlightIndexer: SpotlightIndexer?,
         rss: RssClient?,
         rssStore: RssStore?,
         observeReachability: Bool
@@ -203,12 +220,14 @@ public actor CabalmailClient {
         self.apiClient = apiClient
         self.imapClient = imapClient
         self.addressCache = addressCache
-        self.envelopeCache = envelopeCache
-        self.bodyCache = bodyCache
+        self.envelopeCache = mail.envelopeCache
+        self.bodyCache = mail.bodyCache
         self.draftStore = draftStore
         self.outbox = outbox
-        self.folderStateCache = folderStateCache
+        self.folderStateCache = mail.folderStateCache
+        let spotlightIndexer = mail.spotlightIndexer
         self.spotlightIndexer = spotlightIndexer
+        self.accountLease = accountLease
         self.rss = rss
         self.rssStore = rssStore
         // Built from the same feed client, so the two can't disagree. The
@@ -217,21 +236,9 @@ public actor CabalmailClient {
             rssStore.map { RssSyncEngine(client: rss, store: $0, itemIndex: spotlightIndexer?.feeds) }
         }
         self.metricKitCollector = .shared
-        if let spotlightIndexer {
-            // Feed the indexer from the envelope cache's change stream, and
-            // from what the feed sync tells it, until `shutdown()` cancels
-            // this task. The task holds the cache, so the stream does not
-            // end on its own while the process runs.
-            let cache = envelopeCache
-            self.spotlightBinding = Task {
-                await withTaskGroup(of: Void.self) { group in
-                    group.addTask { await spotlightIndexer.bind(to: cache) }
-                    group.addTask { await spotlightIndexer.feeds.bind() }
-                }
-            }
-        } else {
-            self.spotlightBinding = nil
-        }
+        // The indexer's feed, until `shutdown()` cancels it. An account's
+        // shared indexer already has one, started with its stores.
+        self.spotlightBinding = accountLease == nil ? mail.startSpotlightFeed() : nil
         if observeReachability {
             let reach = Reachability()
             self.reachability = reach
@@ -258,6 +265,8 @@ public actor CabalmailClient {
     /// Stops what the client runs on its own once the app lets it go: the
     /// send queue's drains (`SendQueue.stop()`), so a client nobody holds
     /// can't drain the outbox the app's current client drains, and the
+    /// Spotlight feed. A client with an account gives up its hold on the
+    /// account's shared stores, and the last such client to go ends their
     /// Spotlight feed. API calls, the caches and the outbox itself keep
     /// working for anyone still holding the client; a message `send(_:)`
     /// queues afterwards stays queued. Idempotent.
@@ -265,6 +274,7 @@ public actor CabalmailClient {
         guard !isShutDown else { return }
         isShutDown = true
         spotlightBinding?.cancel()
+        accountLease?.release()
         #if canImport(Network)
         sendQueueBinding?.cancel()
         await sendQueue?.stop()

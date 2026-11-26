@@ -24,9 +24,12 @@ struct SessionEnvironment {
     /// The store the session's Cognito tokens persist through.
     var makeSecureStore: @MainActor () -> SecureStore
     /// The session client over a configuration and secure store, reporting
-    /// refused credentials to the monitor.
+    /// refused credentials to the monitor. The account is whose client it
+    /// is, so its caches open in that account's directory: the server and
+    /// username typed at a sign-in, the remembered ones at a restore or for
+    /// a lent client. Nil only when no username was typed.
     var makeClient: @MainActor (
-        Configuration, SecureStore, SessionInvalidationMonitor
+        Configuration, SecureStore, SessionInvalidationMonitor, AccountIdentity?
     ) throws -> CabalmailClient
     var makeNavCoordinator: @MainActor (CabalmailClient) -> NavStateCoordinator
     /// Where the last control domain and username persist, and the
@@ -41,12 +44,13 @@ struct SessionEnvironment {
         SessionEnvironment(
             loadConfiguration: { try await ConfigLoader.load(controlDomain: $0, cache: ConfigurationCache()) },
             makeSecureStore: { liveSecureStore() },
-            makeClient: { configuration, secureStore, monitor in
+            makeClient: { configuration, secureStore, monitor, account in
                 let cacheDirectory = try liveCacheDirectory()
                 return try CabalmailClient.make(
                     configuration: configuration,
                     secureStore: secureStore,
                     cacheDirectory: cacheDirectory,
+                    account: account,
                     sessionInvalidation: monitor
                 )
             },
@@ -75,8 +79,8 @@ extension SessionEnvironment {
     }
 
     /// Returns the application-support cache directory for this app, creating
-    /// it if needed. Per-folder subdirectories are created by the cache
-    /// actors themselves.
+    /// it if needed. The stores make their own subdirectories in it, and an
+    /// account's caches their account directory (`AccountDirectory`).
     static func liveCacheDirectory() throws -> URL {
         let base = try FileManager.default.url(
             for: .applicationSupportDirectory,

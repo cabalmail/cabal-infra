@@ -150,7 +150,8 @@ public final class SessionManager {
             // after this sign-in can still restore (see `restoreIfPossible`).
             let configuration = try await sessionEnvironment.loadConfiguration(controlDomain)
             let newClient = try sessionEnvironment.makeClient(
-                configuration, sessionEnvironment.makeSecureStore(), sessionInvalidation
+                configuration, sessionEnvironment.makeSecureStore(), sessionInvalidation,
+                AccountIdentity(controlDomain: controlDomain, username: username)
             )
             built = newClient
             let result = try await newClient.authService.signIn(username: username, password: password)
@@ -167,10 +168,10 @@ public final class SessionManager {
                 client: newClient, controlDomain: controlDomain, username: username
             )
         } catch let error as CabalmailError {
-            letGo(of: built)
+            letGo(of: built, signInAbandoned: true)
             status = .error(SignInErrorText.message(for: error))
         } catch {
-            letGo(of: built)
+            letGo(of: built, signInAbandoned: true)
             status = .error(error.localizedDescription)
         }
     }
@@ -255,7 +256,7 @@ public final class SessionManager {
             // Offline, the last good config.json stands in for the fetch so
             // the cached mail, Outbox and feeds stay reachable at launch.
             let newClient = try await storedAccountClient(
-                domain: domain, secureStore: secureStore, forRestore: true
+                domain: domain, username: username, secureStore: secureStore, forRestore: true
             )
             built = newClient
             // Validates the keychain contents: a fresh ID token passes; an
@@ -460,7 +461,7 @@ extension SessionManager {
         guard !domain.isEmpty, !username.isEmpty else { return nil }
         let secureStore = sessionEnvironment.makeSecureStore()
         guard (try? secureStore.get(SecureStoreKey.authTokens)) != nil else { return nil }
-        let lent = try await storedAccountClient(domain: domain, secureStore: secureStore)
+        let lent = try await storedAccountClient(domain: domain, username: username, secureStore: secureStore)
         // A session wired while the build ran lends its own client; one that
         // ended took the build with it.
         if let client { return client }
@@ -474,7 +475,7 @@ extension SessionManager {
     /// the restore still decides, wiring it or ending the session it built
     /// (#1827), as it did with a client it built alone.
     private func storedAccountClient(
-        domain: String, secureStore: SecureStore, forRestore: Bool = false
+        domain: String, username: String, secureStore: SecureStore, forRestore: Bool = false
     ) async throws -> CabalmailClient {
         if let standby { return standby }
         if standbyBuild != nil {
@@ -485,7 +486,10 @@ extension SessionManager {
         let generation = teardownGate.generation
         do {
             let configuration = try await sessionEnvironment.loadConfiguration(domain)
-            let built = try sessionEnvironment.makeClient(configuration, secureStore, sessionInvalidation)
+            let built = try sessionEnvironment.makeClient(
+                configuration, secureStore, sessionInvalidation,
+                AccountIdentity(controlDomain: domain, username: username)
+            )
             let build = finishStandbyBuild(.success(built))
             if teardownGate.generation == generation, client == nil {
                 standby = built
@@ -524,10 +528,20 @@ extension SessionManager {
     /// signed in, or at a sign-out with no session wired, is marked ended
     /// like a session's (#1892). Never the wired client or the one being
     /// lent.
-    private func letGo(of dropped: CabalmailClient?) {
+    ///
+    /// `signInAbandoned`: the client was built for an interactive sign-in
+    /// that did not finish, so the account directory it made, if it made
+    /// one, goes with it (`CabalmailClient.abandonSignIn()`).
+    private func letGo(of dropped: CabalmailClient?, signInAbandoned: Bool = false) {
         guard let dropped, dropped !== client, dropped !== standby else { return }
         teardownGate.markEnded(dropped)
-        Task { await dropped.shutdown() }
+        Task {
+            if signInAbandoned {
+                await dropped.abandonSignIn()
+            } else {
+                await dropped.shutdown()
+            }
+        }
     }
 }
 
@@ -690,7 +704,7 @@ extension SessionManager {
             if case .server(let code, _) = error, code == "CodeMismatchException" {
                 // A challenge abandoned while the code was checked is not
                 // coming back for this client.
-                if pendingMfa?.client !== pending.client { letGo(of: pending.client) }
+                if pendingMfa?.client !== pending.client { letGo(of: pending.client, signInAbandoned: true) }
                 status = .mfaCodeRequired(method)
                 mfaError = "That code did not match. Please try again."
                 return
@@ -720,14 +734,14 @@ extension SessionManager {
     /// is still being checked: that submit may yet wire it, and lets it go
     /// itself if it fails.
     private func abandonPendingMfa() {
-        if let parked = pendingMfa?.client, parked !== mfaSubmitting { letGo(of: parked) }
+        if let parked = pendingMfa?.client, parked !== mfaSubmitting { letGo(of: parked, signInAbandoned: true) }
         pendingMfa = nil
     }
 
     /// A failed submit's client goes, whether or not it is still parked.
     private func abandonSubmittedMfa(_ submitted: CabalmailClient) {
         if pendingMfa?.client === submitted { pendingMfa = nil }
-        letGo(of: submitted)
+        letGo(of: submitted, signInAbandoned: true)
     }
 
     /// Whether a session is wired, which is what refuses a sign-in (#2559);
