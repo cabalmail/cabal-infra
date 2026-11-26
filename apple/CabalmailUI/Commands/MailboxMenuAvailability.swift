@@ -20,7 +20,8 @@ import SwiftUI
 ///   the Message menu gives an empty selection.
 public struct MailboxMenuAvailability: Equatable, Sendable {
     /// How many mail surfaces are mounted in the window. Each one that hosts a
-    /// `MessageListView` (`MailRootView`, the Search tab) reports both edges.
+    /// `MessageListView` (a shell's mail surface, the Search tab) reports both
+    /// edges.
     /// A count rather than a flag because a layout swap mounts the new surface
     /// before the old one goes.
     private(set) var mountedMailSurfaces = 0
