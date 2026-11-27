@@ -55,11 +55,45 @@ final class SearchScopeStateTests: XCTestCase {
         var state = SearchScopeState()
         state.noteFront(.feeds, searchInProgress: false)
 
-        state.layoutChanged()
+        state.layoutChanged(searchInProgress: true)
         XCTAssertEqual(state.scope, .feeds, "the search the layout carries is still on Feeds")
 
         state.searchEnded()
         XCTAssertEqual(state.scope, .all, "what was in front of the old layout says nothing of the new one")
+    }
+
+    func testAChangeOfLayoutWithNoSearchLeavesNothingInFront() {
+        var state = SearchScopeState()
+        state.noteFront(.feeds, searchInProgress: false)
+
+        state.layoutChanged(searchInProgress: false)
+
+        XCTAssertEqual(state.scope, .all)
+    }
+
+    func testWithNoSearchTheScopeIsWhateverIsInFrontNow() {
+        var state = SearchScopeState()
+        state.noteFront(.mail, searchInProgress: false)
+        state.pick(.all)
+        state.searchEnded()
+
+        // Nothing is said while the search is under way or as it ends:
+        // what comes in front afterwards is still what the next opens on.
+        state.noteFront(.feeds, searchInProgress: false)
+        XCTAssertEqual(state.scope, .feeds)
+        state.noteFront(.all, searchInProgress: false)
+        XCTAssertEqual(state.scope, .all)
+    }
+
+    func testASearchStillOverWhatItBeganOverHoldsThatWhenSomethingElseComesInFront() {
+        var state = SearchScopeState()
+        state.noteFront(.feeds, searchInProgress: false)
+
+        state.noteFront(.feeds, searchInProgress: true)
+        state.noteFront(.mail, searchInProgress: true)
+        state.noteFront(.all, searchInProgress: true)
+
+        XCTAssertEqual(state.scope, .feeds)
     }
 
     // MARK: What is in front

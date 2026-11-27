@@ -59,9 +59,27 @@ final class SearchPlace {
     // MARK: The scope
 
     /// What is in front of the search, as the scope a search begun now
-    /// opens on (`SearchFront`). One in progress keeps the scope it has.
+    /// opens on (`SearchFront`). One under way keeps the scope it has.
     func noteFront(_ front: SearchScope) {
-        scopeState.noteFront(front, searchInProgress: searchInProgress)
+        scopeState.noteFront(front, searchInProgress: holdsScope)
+    }
+
+    /// Whether a search holds the scope against what comes in front: a
+    /// term typed, or a search submitted. Not `searchInProgress`: the mail
+    /// half's rows outlive a search by a turn when it is ended (the list
+    /// clears them from a task), and a pick in the sidebar ends the search
+    /// and moves what is in front in that same turn.
+    private var holdsScope: Bool {
+        submitted != nil || model.map { !$0.searchQuery.isEmpty } ?? false
+    }
+
+    /// The mail half began a search this place did not submit: its own
+    /// filter sheet's Apply, or a pill. The place answers to the same
+    /// term, so the search holds its scope and a pick of All or Feeds has
+    /// something to run.
+    func mailSearchBegan() {
+        guard submitted == nil, let model else { return }
+        submitted = model.search.submittedQuery
     }
 
     /// A pick of the control. A search already submitted is run for the
@@ -123,7 +141,7 @@ final class SearchPlace {
     /// (`ShellHandOff`), and what was in front is forgotten.
     func leaveLayout() -> RssItem? {
         defer { openArticle = nil }
-        scopeState.layoutChanged()
+        scopeState.layoutChanged(searchInProgress: holdsScope)
         return openArticle
     }
 

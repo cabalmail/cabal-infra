@@ -61,6 +61,26 @@ struct SearchRowActions {
         }
     }
 
+    // MARK: The open message
+
+    /// The message a Message menu command acts on while the sectioned
+    /// results are up: the open one, as the model holds it now, so a second
+    /// press undoes the first. Nil under Mail, whose own list answers the
+    /// menu on its selection.
+    func commandTarget(_ open: Envelope?) -> Envelope? {
+        guard place.scope != .mail, let open else { return nil }
+        let ref = model.rowRef(for: open)
+        return model.envelopes.first { model.rowRef(for: $0) == ref } ?? open
+    }
+
+    /// Moves a message to the folder picked for it. True when it has left
+    /// the results, which is when a reader showing it closes.
+    func move(_ envelope: Envelope, to destination: String) async -> Bool {
+        let ref = model.rowRef(for: envelope)
+        await model.moveTo(envelope, destination: destination)
+        return model.index(of: ref) == nil
+    }
+
     // MARK: An article
 
     func feedSwipe(_ action: FeedSwipeAction, item: RssItem) -> SwipeActionSpec? {

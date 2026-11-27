@@ -21,42 +21,51 @@ enum SearchScope: String, CaseIterable, Identifiable, Sendable {
     var includesFeeds: Bool { self != .mail }
 }
 
-/// The scope a window's search is on, and the medium that was in front
-/// when it began.
+/// The scope a window's search is on, and the medium in front of it.
 ///
 /// A search opens on the medium in front, and on All where that is
 /// ambiguous (flags-and-cross-media.md, decision 17). A pick of the control
 /// lasts until that search is cleared and is stored nowhere; the next
 /// search opens on the medium in front again.
+///
+/// The scope is read, not written: with no search under way it is whatever
+/// is in front now, so a window that says what is in front only before a
+/// search begins, or only after one has ended, is answered the same. A
+/// search under way holds the scope it began on, or a pick since.
 struct SearchScopeState: Equatable {
-    private(set) var scope: SearchScope = .all
     /// What a search begun now would open on.
     private(set) var front: SearchScope = .all
+    /// The scope the search under way holds: what was in front when it
+    /// began, once something else has come in front, or a pick. Nil with
+    /// no search, and while a search is still over what it began over.
+    private var held: SearchScope?
+
+    var scope: SearchScope { held ?? front }
 
     /// The window says what is in front of its search: the list the wide
-    /// layouts' field is engaged over, or the tab the Search tab was opened
-    /// from. A search already in progress keeps its scope; with none, the
+    /// layouts' field stands over, or the tab the Search tab was opened
+    /// from. A search under way keeps the scope it has; with none, the
     /// scope follows.
     mutating func noteFront(_ front: SearchScope, searchInProgress: Bool) {
+        if searchInProgress, held == nil { held = self.front }
         self.front = front
-        if !searchInProgress { scope = front }
     }
 
     /// A pick of the control.
     mutating func pick(_ scope: SearchScope) {
-        self.scope = scope
+        held = scope
     }
 
     /// The search was cleared: the pick goes with it.
     mutating func searchEnded() {
-        scope = front
+        held = nil
     }
 
     /// The window changed layout shell. A search it carries keeps its
     /// scope; what was in front of the old layout says nothing of the new
     /// one, so the next search opens on All until the new layout says.
-    mutating func layoutChanged() {
-        front = .all
+    mutating func layoutChanged(searchInProgress: Bool) {
+        noteFront(.all, searchInProgress: searchInProgress)
     }
 }
 

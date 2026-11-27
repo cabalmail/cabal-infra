@@ -368,6 +368,7 @@ struct WideMail {
             // dismisses the split's folder panel the same way.
             onSwitchFolder: { sidebarSelection.wrappedValue = $0 },
             onLeadingToolbarWidthChanged: onLeadingToolbarWidthChanged,
+            onSearchFrontChanged: { [navigator] in navigator.searchPlace.noteFront($0) },
             header: header
         )
     }

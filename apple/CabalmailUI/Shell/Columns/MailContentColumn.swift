@@ -52,6 +52,11 @@ struct MailContentColumn<Header: View>: View {
     /// of the column's toolbar section, which the toolbar search field is
     /// sized around (`ToolbarSearchFieldWidth`).
     var onLeadingToolbarWidthChanged: (CGFloat) -> Void = { _ in }
+    /// What a search begun over this column would open on, for a shell
+    /// whose search field stands over it. The Mail tab's stack has no
+    /// field: its Search tab is told when it is opened
+    /// (`SceneNavigator.selectTab`).
+    var onSearchFrontChanged: (SearchScope) -> Void = { _ in }
     @ViewBuilder let header: () -> Header
 
     var body: some View {
@@ -59,6 +64,15 @@ struct MailContentColumn<Header: View>: View {
             header()
             list
         }
+        // Said whenever it changes, a search or none: the Mac's results
+        // are not up until a term is typed, which is too late to ask what
+        // the search began over.
+        .onChange(of: searchFront, initial: true) { _, front in onSearchFrontChanged(front) }
+    }
+
+    /// What a search begun over this column opens on (`SearchFront`).
+    private var searchFront: SearchScope {
+        SearchFront.wide(showsFlagged: flagged != nil, hasFeedList: feedList != nil, hasFolder: folder != nil)
     }
 
     @ViewBuilder
@@ -86,9 +100,6 @@ struct MailContentColumn<Header: View>: View {
                         model: search,
                         selection: selection,
                         article: searchArticle,
-                        front: SearchFront.wide(
-                            showsFlagged: flagged != nil, hasFeedList: feedList != nil, hasFolder: folder != nil
-                        ),
                         onSelectionCountChanged: onSelectionCountChanged
                     )
                 }
