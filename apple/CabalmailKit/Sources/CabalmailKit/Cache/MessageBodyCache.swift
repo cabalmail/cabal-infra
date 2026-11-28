@@ -11,6 +11,8 @@ public actor MessageBodyCache {
     public let directory: URL
     public let capacityBytes: UInt64
     private let fileManager: FileManager
+    /// Set by `close()`: nothing is written from then on.
+    private var isClosed = false
 
     public init(directory: URL, capacityBytes: UInt64 = 200 * 1024 * 1024, fileManager: FileManager = .default) throws {
         self.directory = directory
@@ -29,6 +31,7 @@ public actor MessageBodyCache {
     }
 
     public func store(folder: String, uidValidity: UInt32, uid: UInt32, bytes: Data) throws {
+        guard !isClosed else { throw MailStoreError.closed }
         let url = url(folder: folder, uidValidity: uidValidity, uid: uid)
         try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try bytes.write(to: url, options: .atomic)
@@ -60,9 +63,18 @@ public actor MessageBodyCache {
     /// Throws when the bodies could not be removed, after recreating the
     /// directory, so the wipe can report that they are still on disk.
     public func clearAll() throws {
+        // A closed cache's directory belongs to whoever closed it.
+        guard !isClosed else { return }
         let failure = WipeReport.remove(directory, using: fileManager)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         if let failure { throw failure }
+    }
+
+    /// Ends this cache's writing for good (`EnvelopeCache.close()`). A
+    /// store after it would make the account's directory again, after the
+    /// sign-out that removed it.
+    func close() {
+        isClosed = true
     }
 
     // MARK: - Internals

@@ -197,8 +197,8 @@ private struct SharedLocalData {
         let build = world.appState.sessionManager.sessionEnvironment.makeClient
         let caches = mail
         let queue = outbox
-        world.appState.sessionManager.sessionEnvironment.makeClient = { configuration, store, monitor in
-            let built = try build(configuration, store, monitor)
+        world.appState.sessionManager.sessionEnvironment.makeClient = { configuration, store, monitor, account in
+            let built = try build(configuration, store, monitor, account)
             return CabalmailClient(
                 configuration: built.configuration,
                 authService: built.authService,

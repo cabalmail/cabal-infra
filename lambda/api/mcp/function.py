@@ -169,9 +169,12 @@ TOOLS = [
         'title': 'List messages',
         'description': (
             'Lists messages in a folder, newest first, with sender, '
-            'recipients, subject, date and whether each is unread. Optional '
-            'filters narrow the list; all given filters must match. Use '
-            'offset to page. Returns message ids for get_message.'
+            'recipients, subject, date, whether each is unread and whether '
+            'it has attachments. has_attachments counts files sent with the '
+            'message, not images shown inline in its body, which '
+            'get_message lists too. Optional filters narrow the list; all '
+            'given filters must match. Use offset to page. Returns message '
+            'ids for get_message.'
         ),
         'inputSchema': {
             'type': 'object',
@@ -908,8 +911,16 @@ def summarize_envelope(uid, data, labels=None):
     }
 
 
+_ATTACHMENT_MARKERS = (b'attachment', b'application')
+
+
 def _has_attachment(structure):
-    '''True when a BODYSTRUCTURE names a part with an attachment disposition.'''
+    '''True when a BODYSTRUCTURE holds a string equal (ignoring case) to
+    `attachment` (a part's disposition) or `application` (a part's type, which
+    catches a file sent with no disposition). This is the rule the Apple and
+    Android clients use for their paperclip, so an assistant and the apps
+    agree. Images shown inline in the body do not count, as RFC 2183 means
+    by an inline disposition; get_message still lists them.'''
     if structure is None:
         return False
     stack = [structure]
@@ -917,7 +928,7 @@ def _has_attachment(structure):
         node = stack.pop()
         if isinstance(node, (list, tuple)):
             for child in node:
-                if isinstance(child, bytes) and child.lower() == b'attachment':
+                if isinstance(child, bytes) and child.lower() in _ATTACHMENT_MARKERS:
                     return True
                 stack.append(child)
     return False
