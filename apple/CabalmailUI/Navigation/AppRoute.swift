@@ -101,6 +101,17 @@ extension AppRoute {
         }
     }
 
+    /// Whether `restore` names the message open in the window's smart view.
+    /// The resume session records that message as open in its own folder,
+    /// which is where another device resumes it; in this window it is the
+    /// view's to show, not that folder's list's to open. Matched on
+    /// Message-ID where both carry one, else on UID, as a parked restore is.
+    func smartViewHolds(_ restore: NavState) -> Bool {
+        guard smartView != nil, let open = smartItem?.ref?.message, open.folder == restore.folder else { return false }
+        if let waiting = restore.messageID, let held = open.messageId { return waiting == held }
+        return restore.uid == open.uid
+    }
+
     private enum StoredKeys: String, CodingKey {
         case section, mail, feeds, smartView, smartDoor, smartItem
     }

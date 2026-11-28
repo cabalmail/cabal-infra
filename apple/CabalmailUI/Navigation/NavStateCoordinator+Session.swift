@@ -21,6 +21,13 @@ extension NavStateCoordinator {
         let messageRestore: NavState?
         var listAnchor: ListAnchor?
         var isFallback = false
+
+        /// The same landing with no message for the folder's list to open.
+        var folderAlone: MailLaunchTarget {
+            MailLaunchTarget(
+                folderPath: folderPath, messageRestore: nil, listAnchor: listAnchor, isFallback: isFallback
+            )
+        }
     }
 
     /// Where the feed reader should land: a scope, and the item that was open
