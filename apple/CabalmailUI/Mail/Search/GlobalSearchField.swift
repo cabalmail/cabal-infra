@@ -12,12 +12,14 @@ struct GlobalSearchField: View {
     @Binding var query: String
     @FocusState.Binding var isFocused: Bool
     let onSubmit: () -> Void
+    /// The clear button was pressed: the search ends for both media.
+    var onClear: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Search all mail", text: $query)
+            TextField("Search", text: $query)
                 .textFieldStyle(.plain)
                 .focused($isFocused)
                 .onSubmit(onSubmit)
@@ -28,6 +30,7 @@ struct GlobalSearchField: View {
                     // focus then swaps the content column back to the folder.
                     query = ""
                     isFocused = false
+                    onClear()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)

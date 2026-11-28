@@ -84,6 +84,8 @@ final class SceneNavigator {
 
     /// The window's search model (`searchModel(client:preferences:mailStore:)`).
     @ObservationIgnored private var search: MessageListViewModel?
+    /// The search's scope and its feed half, beside that model (`SearchPlace`).
+    let searchPlace = SearchPlace()
 
     /// The window's folder list: its selection and place (`FolderListHold`).
     let listHold = FolderListHold()
@@ -239,6 +241,8 @@ final class SceneNavigator {
         if isWide, let result = shellHandOff.takeSearchResult() {
             move { $0.openMessage(result, isSearching: true) }
         }
+        // An article it was reading there is the search place's to show.
+        if isWide { searchPlace.openArticle = shellHandOff.takeSearchArticle() }
         guard let coordinator = coordinator() else { return }
         if isWide, route.section == .feeds {
             if feeds.scope != nil {
@@ -769,6 +773,7 @@ extension SceneNavigator {
             scope: .search, client: client, preferences: preferences, mailStore: mailStore
         )
         search = model
+        searchPlace.attach(model)
         return model
     }
 }
@@ -802,7 +807,9 @@ extension SceneNavigator {
     func layoutChanged(wasWide: Bool, isWide: Bool) {
         layoutIsWide = isWide
         if wasWide != isWide { listHold.leaveLayout(wide: wasWide) }
-        let engaged = search.map { !$0.searchQuery.isEmpty || $0.isSearchActive } ?? false
+        // The split's open article is handed on as its open message is.
+        if wasWide != isWide, let article = searchPlace.leaveLayout() { shellHandOff.searchArticleChanged(article) }
+        let engaged = searchPlace.searchInProgress
         switch shellHandOff.layoutChanged(wasWide: wasWide, isWide: isWide, tab: compactTab, searchIsEngaged: engaged) {
         case .nothing: break
         case .showTab(let tab): showTab(tab)
@@ -810,6 +817,7 @@ extension SceneNavigator {
             // Now, not in a task: the split's landing takes the model next.
             search?.filterTab = .all
             search?.search.clear()
+            searchPlace.searchEnded()
         }
     }
 
@@ -826,6 +834,10 @@ extension SceneNavigator {
     func takeHandedOffSearchResult() -> Envelope? {
         shellHandOff.takeSearchResult()
     }
+
+    /// The Search tab's open article, reported and taken as its open message is.
+    func searchTabArticleChanged(_ item: RssItem?) { shellHandOff.searchArticleChanged(item) }
+    func takeHandedOffSearchArticle() -> RssItem? { shellHandOff.takeSearchArticle() }
 
     /// The split's Settings sheet was dismissed.
     func settingsSheetDismissed() {

@@ -132,7 +132,9 @@ struct TabShell: View {
            tab.role(in: .tabs, barsAreVertical: barsAreVertical) == .search {
             searchBackdrop = backdrop(over: leaving)
         }
-        navigator.showTab(tab)
+        // Through `selectTab`, which notes the tab Search opens over as
+        // the medium its search opens on.
+        navigator.selectTab(tab)
     }
 
     /// The Search tab's stand-in for `tab`, or nil where Search doesn't open

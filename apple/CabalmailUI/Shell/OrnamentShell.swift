@@ -36,7 +36,7 @@ struct OrnamentShell: View {
     /// launch that ended in the feed reader opens on Feeds. Each tab's content
     /// names its tab (`commandTab`), so only the tab in front answers the menus.
     private var selection: Binding<CompactTab> {
-        Binding(get: { navigator.compactTab }, set: { navigator.showTab($0) })
+        Binding(get: { navigator.compactTab }, set: { navigator.selectTab($0) })
     }
 
     /// The Folders tab's selection: the window's folder. A pick there also

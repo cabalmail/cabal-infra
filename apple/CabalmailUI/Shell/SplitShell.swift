@@ -538,15 +538,12 @@ extension SplitShell {
     /// than wide (`ListColumnPolicy.overlaysReader`).
     private var listOverlays: Bool { listColumnLayout.overlaysReader }
 
-    /// What the reader has open, the section's message or feed item; nil for
-    /// nothing. The feed item only while the reader shows it: a search in
-    /// the Feeds section opens mail results (`WideMail.reader`). A message
-    /// by its folder too, so a search result with another folder's UID is a
-    /// new open.
+    /// What the reader has open; nil for nothing (`OpenReading`).
     private var openReading: String? {
-        if mail.showsFlagged { return mail.flaggedItem.map { "flagged:\($0.ref)" } }
-        if readerShowsFeeds { return mail.selectedFeedItem.map { "item:\($0.id)" } }
-        return mail.selectedEnvelope.map { "message:\($0.folder ?? "")#\($0.uid)" }
+        OpenReading(
+            searchArticle: mail.searchArticle, flaggedShown: mail.showsFlagged, flaggedItem: mail.flaggedItem,
+            readerShowsFeeds: readerShowsFeeds, feedItem: mail.selectedFeedItem, envelope: mail.selectedEnvelope
+        ).key
     }
 
     /// Whether the reader shows the feed reader rather than mail, by the
@@ -614,7 +611,7 @@ extension SplitShell {
         // The Flagged list's rows and its open row are the window's, so
         // there is nothing to hand the list that mounts next.
         if mail.showsFlagged { return }
-        if readerShowsFeeds {
+        if readerShowsFeeds, !mail.isSearching {
             feedListHold.move()
         } else {
             navigator.listMoves(isSearching: mail.isSearching)

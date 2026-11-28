@@ -24,6 +24,11 @@ struct SearchFiltersSheet: View {
     /// the sidebar selection, while the iPhone / visionOS search tab has no
     /// anchor, so it hides the toggle and always searches cross-folder.
     let allowFolderScope: Bool
+    /// Whether to offer the filters only a message can pass: the
+    /// recipients, the subject, Has attachment and the folder scope. A
+    /// search of feeds alone leaves them out, and they keep whatever they
+    /// hold (`FeedSearchPlan`).
+    let mailFilters: Bool
     /// Fires when the user taps Apply. The sheet hands the modified
     /// snapshot back to the caller, which assigns to the view-model's
     /// `MailSearchSession.filters` and re-runs the search.
@@ -42,12 +47,14 @@ struct SearchFiltersSheet: View {
         filters: Binding<MessageSearchFilters>,
         currentFolderName: String,
         allowFolderScope: Bool = true,
+        mailFilters: Bool = true,
         onApply: @escaping (MessageSearchFilters) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self._filters = filters
         self.currentFolderName = currentFolderName
         self.allowFolderScope = allowFolderScope
+        self.mailFilters = mailFilters
         self.onApply = onApply
         self.onCancel = onCancel
         let initial = filters.wrappedValue
@@ -112,30 +119,32 @@ struct SearchFiltersSheet: View {
     #if os(macOS)
     private var macContent: some View {
         MacSheetForm {
-            MacSheetSection(caption: "Recipients") {
-                // The two fields share a caption, so each keeps a visible
-                // label — in a column inside the margins rather than one the
-                // Form hangs off the sheet's edge.
-                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 8, verticalSpacing: 8) {
-                    GridRow {
-                        Text("From")
-                            .gridColumnAlignment(.trailing)
-                        fromField
+            if mailFilters {
+                MacSheetSection(caption: "Recipients") {
+                    // The two fields share a caption, so each keeps a visible
+                    // label — in a column inside the margins rather than one the
+                    // Form hangs off the sheet's edge.
+                    Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 8, verticalSpacing: 8) {
+                        GridRow {
+                            Text("From")
+                                .gridColumnAlignment(.trailing)
+                            fromField
+                        }
+                        GridRow {
+                            Text("To")
+                            toField
+                        }
                     }
-                    GridRow {
-                        Text("To")
-                        toField
-                    }
-                }
-                .labelsHidden()
-                .textFieldStyle(.roundedBorder)
-            }
-            MacSheetSection(caption: "Subject") {
-                // The caption already says "Subject"; hidden, the field's
-                // own title survives for VoiceOver.
-                subjectField
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
+                }
+                MacSheetSection(caption: "Subject") {
+                    // The caption already says "Subject"; hidden, the field's
+                    // own title survives for VoiceOver.
+                    subjectField
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                }
             }
             MacSheetSection(caption: "Date range") {
                 // Each picker stays on its checkbox's row, dimmed until the
@@ -156,7 +165,7 @@ struct SearchFiltersSheet: View {
             MacSheetSection(caption: "Flags") {
                 flagToggles
             }
-            if allowFolderScope {
+            if allowFolderScope, mailFilters {
                 MacSheetSection(caption: "Scope") {
                     folderScopeToggle
                     Text(folderScopeFooter)
@@ -170,12 +179,14 @@ struct SearchFiltersSheet: View {
     #else
     private var formContent: some View {
         Form {
-            Section(formHeader: "Recipients") {
-                fromField
-                toField
-            }
-            Section(formHeader: "Subject") {
-                subjectField
+            if mailFilters {
+                Section(formHeader: "Recipients") {
+                    fromField
+                    toField
+                }
+                Section(formHeader: "Subject") {
+                    subjectField
+                }
             }
             Section(formHeader: "Date range") {
                 Toggle("Since", isOn: $sinceEnabled)
@@ -190,7 +201,7 @@ struct SearchFiltersSheet: View {
             Section(formHeader: "Flags") {
                 flagToggles
             }
-            if allowFolderScope {
+            if allowFolderScope, mailFilters {
                 Section {
                     folderScopeToggle
                 } footer: {
@@ -254,7 +265,9 @@ struct SearchFiltersSheet: View {
         // The server's flag, under the name its entry has in Settings >
         // Flags.
         Toggle(FlagToggle.systemFlagName(in: preferences.flagPalette), isOn: $draft.flagged)
-        Toggle("Has attachment", isOn: $draft.hasAttachment)
+        if mailFilters {
+            Toggle("Has attachment", isOn: $draft.hasAttachment)
+        }
     }
 
     private var folderScopeToggle: some View {

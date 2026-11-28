@@ -26,6 +26,8 @@ struct SearchView: View {
     /// bind its `searchQuery`; injected into the list.
     @State private var model: MessageListViewModel?
     @State private var selectedEnvelope: Envelope?
+    /// The article open from the feed results, pushed as a message is.
+    @State private var selectedArticle: RssItem?
     /// The list's selection count, for the Message menu (`wideList` reports it).
     @State private var selectionCount = 0
 
@@ -55,11 +57,16 @@ struct SearchView: View {
             }
             // On the group, not the list, so the field is there whichever of
             // the three is showing: the backdrop is what the field opens over.
-            .searchable(text: query, prompt: "Search all mail")
+            .searchable(text: query, prompt: "Search")
             .searchFocused($searchFieldFocused)
             .onSubmit(of: .search) {
-                guard let model else { return }
-                Task { await model.runSearch() }
+                // Over the scope's media: mail, feeds or both (`SearchPlace`).
+                guard model != nil else { return }
+                Task { await navigator.searchPlace.submit() }
+            }
+            .navigationDestination(item: $selectedArticle) { item in
+                FeedItemDetailView(item: item)
+                    .id(item.id)
             }
             .navigationDestination(item: $selectedEnvelope) { envelope in
                 if let model {
@@ -88,11 +95,17 @@ struct SearchView: View {
         // What the Message menu acts on while this tab is in front: the
         // results' selection and the reader pushed over them.
         .reportsMessageMenuAvailability(selectedCount: selectionCount, hasOpenMessage: selectedEnvelope != nil)
+        .reportsFeedMenuAvailability(
+            selectedCount: selectedArticle == nil ? 0 : 1, hasOpenItem: selectedArticle != nil, hasScope: false
+        )
         // What this tab has open, for the next layout swap to hand to the
         // split's reader (#2184). Reported rather than held by the navigator:
         // the push is this view's own `navigationDestination`.
         .onChange(of: selectedEnvelope) { _, open in
             navigator.searchTabResultChanged(open)
+        }
+        .onChange(of: selectedArticle) { _, open in
+            navigator.searchTabArticleChanged(open)
         }
         .task {
             // The window's, shared with its regular split's search so a
@@ -120,9 +133,11 @@ struct SearchView: View {
     }
 
     private var backdropStandsIn: Bool {
+        // A search of feeds alone never reaches the mail model, so the
+        // window's own record of a submitted search counts too.
         SearchBackdrop.standsIn(
             submittedQuery: model?.search.submittedQuery ?? "",
-            isSearchActive: model?.isSearchActive ?? false
+            isSearchActive: (model?.isSearchActive ?? false) || navigator.searchPlace.submitted != nil
         )
     }
 
@@ -144,10 +159,10 @@ struct SearchView: View {
     }
 
     private func searchList(model: MessageListViewModel) -> some View {
-        MessageListView(
-            scope: .search,
-            injectedSearchModel: model,
+        SearchResultsView(
+            model: model,
             selection: $selectedEnvelope,
+            article: $selectedArticle,
             onSelectionCountChanged: { selectionCount = $0 }
         )
         .onAppear {
@@ -158,6 +173,9 @@ struct SearchView: View {
             // search already on screen.
             if selectedEnvelope == nil, let handedOff = navigator.takeHandedOffSearchResult() {
                 selectedEnvelope = handedOff
+            }
+            if selectedArticle == nil, let handedOff = navigator.takeHandedOffSearchArticle() {
+                selectedArticle = handedOff
             }
             // The tab has one thing to type into, so opening it is the whole
             // of the intent — unless a previous search is still on screen,
