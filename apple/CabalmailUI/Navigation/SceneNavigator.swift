@@ -341,7 +341,14 @@ final class SceneNavigator {
     /// resume, a tree that starts on its folder list stays there: no folder,
     /// so nothing to reconcile and nothing recorded until the user picks one.
     private func landOnSessionFolder(_ coordinator: NavStateCoordinator, stored: AppRoute.Mail = AppRoute.Mail()) {
-        guard let target = coordinator.mailLaunchTarget(stored: stored, for: mail.gate) else { return }
+        guard let landing = coordinator.mailLaunchTarget(stored: stored, for: mail.gate) else { return }
+        // A message the window's smart view has open is the view's to show,
+        // and to carry across a change of layout. The session names it as
+        // open in its own folder; scheduled for that folder's list as well,
+        // it waited beneath the view and opened there once the view was
+        // left (#2577). The folder is still the landing's.
+        let heldByView = landing.messageRestore.map(route.smartViewHolds) ?? false
+        let target = heldByView ? landing.folderAlone : landing
         awaitingLaunchReconcile = true
         recorder.recording?.armProvisionalLanding()
         restores.park(target, priming: recorder.recording)
